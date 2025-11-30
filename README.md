@@ -1,16 +1,12 @@
-# karbeat
+# Karbeat
 
-A new Flutter project.
+A simple Digital Audio Workstation that will be cross-platform. we prioritize our application to work effectively on Windows and Android.
 
-## Getting Started
+## Words
 
-This project is a starting point for a Flutter application.
+Thanks to our contributors:
+- Haidar Wibowo: Creator + Lead Developer + Audio Engineer
 
-A few resources to get you started if this is your first Flutter project:
+## REFERENCES
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Unfortunately for info and documentation, we still haven't thought about it. So be patient!.
