@@ -64,6 +64,8 @@ pub fn load_audio_file(path_string: String) -> Result<AudioWaveform> {
         .make(&track.codec_params, &dec_opts)
         .context("unsupported codec")?;
 
+    let source_channel_count = track.codec_params.channels.unwrap_or_default().count();
+
     let mut all_samples: Vec<f32> = Vec::new();
     let mut _total_frames = 0;
     loop {
@@ -94,8 +96,33 @@ pub fn load_audio_file(path_string: String) -> Result<AudioWaveform> {
                     SampleBuffer::<f32>::new(decoded.capacity() as u64, *decoded.spec());
                 sample_buf.copy_interleaved_ref(decoded);
 
+                let samples = sample_buf.samples();
+
+                match source_channel_count {
+                    1 => {
+                        all_samples.reserve(samples.len() * 2);
+                        for &sample in samples {
+                            all_samples.push(sample); // Left
+                            all_samples.push(sample); // Right
+                        }
+                    },
+                    2 => {
+                        all_samples.extend_from_slice(samples);
+                    },
+                    _ => {
+                        // This is currently not handled properly. we assumed that the Left and right would be first 2 channels,
+                        // TODO: Handle this Gracefully
+                        let channels = source_channel_count;
+                        for frame in samples.chunks(channels) {
+                            if frame.len() >= 2 {
+                                all_samples.push(frame[0]);
+                                all_samples.push(frame[1]);
+                            }
+                        }
+                    }
+                }
+
                 // Append to main vector
-                all_samples.extend_from_slice(sample_buf.samples());
                 _total_frames += frame;
             }
             Err(SymphoniaError::DecodeError(_)) => continue, // Skip bad frames
@@ -103,14 +130,8 @@ pub fn load_audio_file(path_string: String) -> Result<AudioWaveform> {
         }
     }
 
-    // We divide by channel count because all_samples is interleaved (L, R, L, R)
-    // If we have 100 floats and 2 channels, we have 50 "Audio Frames" (Samples).
-    let total_frames = if channel_count > 0 {
-        all_samples.len() as u64 / channel_count as u64
-    } else {
-        0
-    };
-
+    let final_channel_count = 2;
+    let total_frames = all_samples.len() as u64 / final_channel_count as u64;
     let duration_seconds = if sample_rate > 0 {
         total_frames as f64 / sample_rate as f64
     } else {
@@ -121,7 +142,7 @@ pub fn load_audio_file(path_string: String) -> Result<AudioWaveform> {
         buffer: Arc::new(all_samples),
         file_path: path_string,
         sample_rate,
-        channel_count: channel_count as u8,
+        channels: final_channel_count as u16,
         duration: duration_seconds,
         trim_end: total_frames,
         ..Default::default()

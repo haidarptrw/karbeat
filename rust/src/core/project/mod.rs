@@ -1,6 +1,6 @@
 // src/core/project/mod.rs
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{cmp::Ordering, collections::HashMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +23,7 @@ pub struct ApplicationState {
     pub pattern_pool: HashMap<u32, Pattern>,
 
     // Tracks contain Clips, but Clips are just "Containers"
-    pub tracks: HashMap<u32, Track>,
+    pub tracks: HashMap<u32, KarbeatTrack>,
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
@@ -36,12 +36,12 @@ pub struct ApplicationState {
 
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Track {
+pub struct KarbeatTrack {
     pub id: u32,
     pub name: String,
     pub color: String,
-    pub track_type: TrackType,
-    pub clips: Vec<Clip>,
+    track_type: TrackType,
+    clips: Vec<Clip>,
 
     // This tells the engine: "Any audio/midi generated on this track 
     // gets sent to Mixer Channel X".
@@ -101,9 +101,35 @@ pub struct Clip {
     pub id: u32,
     /// Refer to where it sits on the global timeline
     pub start_time: u64,
-    pub pattern_id: u32,
+    pub pattern_id: Option<u32>,
+    pub asset_id: Option<u32>,
     pub offset_start: u64,
     pub loop_length: u64
+}
+
+impl PartialEq for Clip {
+    fn eq(&self, other: &Self) -> bool {
+        // Clips are equal if they have the same start_time and id
+        self.start_time == other.start_time && self.id == other.id
+    }
+}
+
+impl Eq for Clip {}
+
+impl PartialOrd for Clip {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        // Primary ordering by start_time, then by id for tie-breaking
+        match self.start_time.cmp(&other.start_time) {
+            Ordering::Equal => Some(self.id.cmp(&other.id)),
+            ordering => Some(ordering),
+        }
+    }
+}
+
+impl Ord for Clip {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -181,6 +207,29 @@ pub struct AudioHardwareConfig {
     pub sample_rate: u32,
     pub buffer_size: u32,
     pub cpu_load: f32, // For UI monitoring
+}
+
+impl KarbeatTrack {
+    pub fn clips(&self) -> &[Clip]  {
+        return &self.clips;
+    }
+    pub fn track_type(&self) -> &TrackType {
+        return &self.track_type;
+    }
+    pub fn add_clip(&mut self, clip: Clip) {
+        let pos = match self.clips.binary_search(&clip) {
+            Ok(index) => index,
+            Err(index) => index,
+        };
+
+        self.clips.insert(pos, clip);
+    }
+
+    /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
+    pub fn add_clips_bulk(&mut self, new_clips: Vec<Clip>) {
+        self.clips.extend(new_clips);
+        self.clips.sort(); 
+    }
 }
 
 

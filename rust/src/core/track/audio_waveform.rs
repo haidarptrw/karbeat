@@ -10,7 +10,7 @@ pub struct AudioWaveform {
     pub buffer: Arc<Vec<f32>>,
     pub file_path: String,
     pub sample_rate: u32,
-    pub channel_count: u8,
+    pub channels: u16,
     pub duration: f64,
     pub root_note: u8,
     pub fine_tune: i16,
@@ -27,7 +27,7 @@ impl Default for AudioWaveform {
             buffer: Arc::new(Vec::new()),
             file_path: String::new(),
             sample_rate: 44100, 
-            channel_count: 2, 
+            channels: 2, 
             duration: 0.0, 
             root_note: 60, // C5
             fine_tune: 0, 
@@ -37,4 +37,11 @@ impl Default for AudioWaveform {
             normalized: false,
         }
     }
+}
+
+// UI Data Structure for Audio Waveform window information (to change vol, pitch fine tune, normalization, panning, adsr envelope, 
+// play the audio when pressing the waveform etc)
+
+pub struct AudioWaveformUi {
+    pub waveform: AudioWaveform
 }
