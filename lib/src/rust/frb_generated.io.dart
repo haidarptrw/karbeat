@@ -3,7 +3,11 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/audio.dart';
+import 'api/project.dart';
 import 'api/simple.dart';
+import 'api/transport.dart';
+import 'core/project.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -19,53 +23,366 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   @protected
+  int dco_decode_CastedPrimitive_u_64(dynamic raw);
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>
+  dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw);
+
+  @protected
+  AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
+    dynamic raw,
+  );
+
+  @protected
+  bool dco_decode_bool(dynamic raw);
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw);
+
+  @protected
+  UiProjectState dco_decode_box_autoadd_ui_project_state(dynamic raw);
+
+  @protected
+  double dco_decode_f_32(dynamic raw);
+
+  @protected
+  double dco_decode_f_64(dynamic raw);
+
+  @protected
+  int dco_decode_i_16(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(int, AudioWaveformUiForSourceList)>
+  dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+
+  @protected
+  List<UiTrack> dco_decode_list_ui_track(dynamic raw);
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>?
+  dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
+
+  @protected
+  AudioWaveformUiForAudioProperties?
+  dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+    dynamic raw,
+  );
+
+  @protected
+  UiProjectState? dco_decode_opt_box_autoadd_ui_project_state(dynamic raw);
+
+  @protected
+  ProjectMetadata dco_decode_project_metadata(dynamic raw);
+
+  @protected
+  (int, AudioWaveformUiForSourceList)
+  dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+
+  @protected
+  (int, int) dco_decode_record_u_8_u_8(dynamic raw);
+
+  @protected
+  TrackType dco_decode_track_type(dynamic raw);
+
+  @protected
+  TransportState dco_decode_transport_state(dynamic raw);
+
+  @protected
+  int dco_decode_u_16(dynamic raw);
+
+  @protected
+  int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
+
+  @protected
   int dco_decode_u_8(dynamic raw);
+
+  @protected
+  UiProjectState dco_decode_ui_project_state(dynamic raw);
+
+  @protected
+  UiTrack dco_decode_ui_track(dynamic raw);
 
   @protected
   void dco_decode_unit(dynamic raw);
 
   @protected
+  int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>
+  sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
-  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+  AudioWaveformUiForAudioProperties
+  sse_decode_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  );
 
   @protected
-  int sse_decode_u_8(SseDeserializer deserializer);
-
-  @protected
-  void sse_decode_unit(SseDeserializer deserializer);
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  );
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  AudioWaveformUiForAudioProperties
+  sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiProjectState sse_decode_box_autoadd_ui_project_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_16(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
+
+  @protected
+  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<(int, AudioWaveformUiForSourceList)>
+  sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
+
+  @protected
+  Map<int, AudioWaveformUiForSourceList>?
+  sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AudioWaveformUiForAudioProperties?
+  sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiProjectState? sse_decode_opt_box_autoadd_ui_project_state(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectMetadata sse_decode_project_metadata(SseDeserializer deserializer);
+
+  @protected
+  (int, AudioWaveformUiForSourceList)
+  sse_decode_record_u_32_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
+
+  @protected
+  TrackType sse_decode_track_type(SseDeserializer deserializer);
+
+  @protected
+  TransportState sse_decode_transport_state(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_16(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_8(SseDeserializer deserializer);
+
+  @protected
+  UiProjectState sse_decode_ui_project_state(SseDeserializer deserializer);
+
+  @protected
+  UiTrack sse_decode_ui_track(SseDeserializer deserializer);
+
+  @protected
+  void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
+    Map<int, AudioWaveformUiForSourceList> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_prim_u_8_strict(
-      Uint8List self, SseSerializer serializer);
+  void sse_encode_audio_waveform_ui_for_audio_properties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  );
 
   @protected
-  void sse_encode_u_8(int self, SseSerializer serializer);
+  void sse_encode_audio_waveform_ui_for_source_list(
+    AudioWaveformUiForSourceList self,
+    SseSerializer serializer,
+  );
 
   @protected
-  void sse_encode_unit(void self, SseSerializer serializer);
+  void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_project_state(
+    UiProjectState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_16(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_bool(bool self, SseSerializer serializer);
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_8_strict(
+    Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
+    List<(int, AudioWaveformUiForSourceList)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
+    Map<int, AudioWaveformUiForSourceList>? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+    AudioWaveformUiForAudioProperties? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_project_state(
+    UiProjectState? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_metadata(
+    ProjectMetadata self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
+    (int, AudioWaveformUiForSourceList) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_8_u_8((int, int) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_track_type(TrackType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_transport_state(
+    TransportState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_u_16(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_8(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_project_state(
+    UiProjectState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_track(UiTrack self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_unit(void self, SseSerializer serializer);
 }
 
 // Section: wire_class
@@ -76,9 +393,9 @@ class RustLibWire implements BaseWire {
 
   /// Holds the symbol lookup function.
   final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
-      _lookup;
+  _lookup;
 
   /// The symbols are looked up in [dynamicLibrary].
   RustLibWire(ffi.DynamicLibrary dynamicLibrary)
-      : _lookup = dynamicLibrary.lookup;
+    : _lookup = dynamicLibrary.lookup;
 }

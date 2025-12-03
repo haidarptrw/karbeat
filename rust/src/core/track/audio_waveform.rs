@@ -9,6 +9,7 @@ pub struct AudioWaveform {
     #[serde(skip)]
     pub buffer: Arc<Vec<f32>>,
     pub file_path: String,
+    pub name: String,
     pub sample_rate: u32,
     pub channels: u16,
     pub duration: f64,
@@ -18,6 +19,7 @@ pub struct AudioWaveform {
     pub trim_end: u64,
     pub is_looping: bool,
     pub normalized: bool,
+    pub muted: bool,
 }
 
 
@@ -26,6 +28,7 @@ impl Default for AudioWaveform {
         Self { 
             buffer: Arc::new(Vec::new()),
             file_path: String::new(),
+            name: "Sample".to_string(),
             sample_rate: 44100, 
             channels: 2, 
             duration: 0.0, 
@@ -35,13 +38,8 @@ impl Default for AudioWaveform {
             trim_end: 0, 
             is_looping: false, 
             normalized: false,
+            muted: false,
         }
     }
 }
 
-// UI Data Structure for Audio Waveform window information (to change vol, pitch fine tune, normalization, panning, adsr envelope, 
-// play the audio when pressing the waveform etc)
-
-pub struct AudioWaveformUi {
-    pub waveform: AudioWaveform
-}

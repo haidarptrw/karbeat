@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/state/app_state.dart';
 
 /// Toolbar Menu Group
 class KarbeatToolbarMenuGroup {
-  final String id;
+  final ToolbarMenuContextGroup id;
   final String title;
   final IconData icon;
   /// Define list of actions with type [KarbeatToolbarMenuAction]
@@ -33,7 +34,7 @@ class KarbeatToolbarMenuAction {
   });
 }
 
-typedef KarbeatToolbarMenuActionCallback = void Function();
+typedef KarbeatToolbarMenuActionCallback = void Function(BuildContext, KarbeatState);
 
 /// Factory for toolbar menu group
 /// 
@@ -41,7 +42,7 @@ typedef KarbeatToolbarMenuActionCallback = void Function();
 class KarbeatToolbarMenuGroupFactory {
   static KarbeatToolbarMenuGroup createProjectMenuGroup() =>
       KarbeatToolbarMenuGroup(
-        id: "project",
+        id: ToolbarMenuContextGroup.project,
         icon: Icons.work,
         title: "Project",
         actions: [
@@ -57,7 +58,7 @@ class KarbeatToolbarMenuGroupFactory {
 
   static KarbeatToolbarMenuGroup createEditMenuGroup() =>
       KarbeatToolbarMenuGroup(
-        id: 'edit',
+        id: ToolbarMenuContextGroup.edit,
         icon: Icons.edit,
         title: 'Edit',
         actions: [
@@ -68,7 +69,7 @@ class KarbeatToolbarMenuGroupFactory {
 
   static KarbeatToolbarMenuGroup createViewMenuGroup() =>
       KarbeatToolbarMenuGroup(
-        id: 'view',
+        id: ToolbarMenuContextGroup.view,
         title: 'View',
         icon: Icons.visibility,
         actions: [

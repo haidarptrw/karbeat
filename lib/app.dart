@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:karbeat/features/main_screen.dart';
+import 'package:karbeat/features/screens/main_screen.dart';
 
 class KarbeatApp extends StatelessWidget {
   const KarbeatApp({super.key});
@@ -7,7 +7,9 @@ class KarbeatApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: MainScreen(),
+      title: 'Karbeat DAW',
+      theme: ThemeData.dark(),
+      home: const MainScreen(),
     );
   }
 }

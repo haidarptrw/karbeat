@@ -7,10 +7,13 @@ use rtrb::Consumer;
 use triple_buffer::Output;
 
 use crate::{
-    audio::render_state::AudioRenderState, commands::AudioCommand, core::{
-        project::{Clip, Note, Pattern, TrackType},
+    audio::render_state::AudioRenderState,
+    commands::AudioCommand,
+    core::{
+        project::{Clip, Pattern},
         track::audio_waveform::AudioWaveform,
-    }
+    },
+    APP_STATE,
 };
 
 pub struct AudioEngine {
@@ -23,12 +26,12 @@ pub struct AudioEngine {
     playhead_samples: u64,
 
     // Polyphony: Map <TrackID, List of Active Voices>
-    active_voices: HashMap<u32, Vec<Voice>>,
-    
+    active_voices: HashMap<Option<u32>, Vec<Voice>>,
+
     // Real-time Command Queue
     command_consumer: Consumer<AudioCommand>,
 
-    // For one shot 
+    // For one shot
     preview_voices: Vec<PreviewVoice>,
 }
 
@@ -51,12 +54,12 @@ pub struct AudioVoice {
     // Where in the output buffer do we start writing? (0 to buffer_len)
     pub output_offset_samples: usize,
     // Where in the source WAV file do we start reading?
-    pub source_read_index: u64,
+    pub source_read_index: f64,
 }
 
 pub struct PreviewVoice {
     pub waveform: AudioWaveform,
-    pub current_frame: u64,
+    pub current_frame: f64,
     pub is_finished: bool,
     pub volume: f32,
 }
@@ -65,7 +68,7 @@ impl PreviewVoice {
     pub fn new(waveform: AudioWaveform, volume: f32) -> Self {
         Self {
             waveform,
-            current_frame: 0,
+            current_frame: 0.0,
             is_finished: false,
             volume,
         }
@@ -73,7 +76,11 @@ impl PreviewVoice {
 }
 
 impl AudioEngine {
-    pub fn new(state_consumer: Output<AudioRenderState>, command_consumer: Consumer<AudioCommand>, sample_rate: u32) -> Self {
+    pub fn new(
+        state_consumer: Output<AudioRenderState>,
+        command_consumer: Consumer<AudioCommand>,
+        sample_rate: u32,
+    ) -> Self {
         Self {
             state_consumer,
             command_consumer,
@@ -81,7 +88,7 @@ impl AudioEngine {
             sample_rate,
             playhead_samples: 0,
             active_voices: HashMap::new(),
-            preview_voices: Vec::new()
+            preview_voices: Vec::new(),
         }
     }
 
@@ -93,7 +100,7 @@ impl AudioEngine {
         while let Ok(cmd) = self.command_consumer.pop() {
             match cmd {
                 AudioCommand::PlayOneShot(waveform) => {
-                    // Start playing immediately
+                    self.preview_voices.clear();
                     self.preview_voices.push(PreviewVoice::new(waveform, 1.0));
                 }
                 AudioCommand::StopAllPreviews => {
@@ -110,12 +117,12 @@ impl AudioEngine {
 
         if self.current_state.is_playing {
             let frame_count = output_buffer.len() / channels;
-    
+
             // sequencer
             self.resolve_sequencer_events(frame_count);
-    
+
             self.render_voices_to_buffer(output_buffer, channels);
-    
+
             self.playhead_samples += frame_count as u64;
             // Cleanup previous active voices
             for voices in self.active_voices.values_mut() {
@@ -132,10 +139,21 @@ impl AudioEngine {
 
     fn render_voices_to_buffer(&mut self, output: &mut [f32], channels: usize) {
         let buffer_frames = output.len() / channels;
-        for (_mixer_id, voices) in &mut self.active_voices {
+        for (mixer_id_opt, voices) in &mut self.active_voices {
             // PLACEHOLDER: voice volume
             // TODO: Lookup MixerChannel volume here
-            let vol = 1.0;
+            let vol = match mixer_id_opt {
+                Some(id) => {
+                    // TODO: Lookup MixerChannel volume using *id
+                    // let channel = self.current_state.mixer.get(id);
+                    // channel.volume
+                    1.0 
+                },
+                None => {
+                    // Direct to Master (No mixer processing)
+                    1.0
+                }
+            };
 
             for voice in voices.iter_mut() {
                 match voice {
@@ -168,44 +186,85 @@ impl AudioEngine {
                     }
                     Voice::Audio(audio_voice) => {
                         let src_channels = audio_voice.waveform.channels as usize;
-                        let src_len = audio_voice.waveform.buffer.len() / src_channels;
+                        let buffer_len = audio_voice.waveform.buffer.len();
+
+                        // Calculate step size (Pitch/Speed ratio)
+                        let step =
+                            audio_voice.waveform.sample_rate as f64 / self.sample_rate as f64;
 
                         for frame_idx in audio_voice.output_offset_samples..buffer_frames {
                             let frames_written =
                                 (frame_idx - audio_voice.output_offset_samples) as u64;
 
-                            let mut read_idx = audio_voice.source_read_index + frames_written;
+                            // 1. Calculate precise floating point position
+                            let mut read_pos_f64 =
+                                audio_voice.source_read_index + (frames_written as f64 * step);
 
-                            if audio_voice.waveform.is_looping && audio_voice.waveform.trim_end > 0
-                            {
-                                if read_idx >= audio_voice.waveform.trim_end {
-                                    read_idx = audio_voice.waveform.trim_start
-                                        + (read_idx - audio_voice.waveform.trim_end);
+                            // 2. Handle Looping / Trimming Limits
+                            let trim_end = audio_voice.waveform.trim_end as f64;
+                            let trim_start = audio_voice.waveform.trim_start as f64;
+                            let max_len = (buffer_len / src_channels) as f64;
+
+                            // Safety clamp for end of buffer
+                            let end_bound = if trim_end > 0.0 && trim_end < max_len {
+                                trim_end
+                            } else {
+                                max_len
+                            };
+
+                            if audio_voice.waveform.is_looping && trim_end > 0.0 {
+                                if read_pos_f64 >= end_bound {
+                                    let remainder = read_pos_f64 - end_bound;
+                                    read_pos_f64 = trim_start + remainder;
                                 }
                             } else {
-                                // Stop if end of file or trim_end
-                                if read_idx >= audio_voice.waveform.trim_end
-                                    || read_idx as usize >= src_len
-                                {
+                                if read_pos_f64 >= end_bound - 1.0 {
                                     break;
                                 }
                             }
 
-                            // Read sample interleaved L/R
-                            let buffer_idx = (read_idx as usize) * src_channels;
+                            // 3. Prepare Interpolation Data
+                            let index_int = read_pos_f64 as usize; // Floor
+                            let alpha = (read_pos_f64 - index_int as f64) as f32; // Fraction (0.0 to 0.99)
 
-                            if buffer_idx + 1 < audio_voice.waveform.buffer.len() {
-                                let left = audio_voice.waveform.buffer[buffer_idx];
-                                let right = if src_channels > 1 {
-                                    audio_voice.waveform.buffer[buffer_idx + 1]
+                            // 4. Calculate Next Index (for looking ahead)
+                            let next_index_int = if index_int + 1 >= end_bound as usize {
+                                if audio_voice.waveform.is_looping {
+                                    trim_start as usize
                                 } else {
-                                    left
+                                    index_int // Clamp to end if not looping (prevents crash)
+                                }
+                            } else {
+                                index_int + 1
+                            };
+
+                            // 5. Fetch Samples & Interpolate
+                            let base_idx = index_int * src_channels;
+                            let next_base_idx = next_index_int * src_channels;
+
+                            if next_base_idx + (src_channels - 1) < buffer_len {
+                                // Get Left Channel
+                                let curr_l = audio_voice.waveform.buffer[base_idx];
+                                let next_l = audio_voice.waveform.buffer[next_base_idx];
+                                let val_l = lerp(curr_l, next_l, alpha);
+
+                                // Get Right Channel
+                                let (curr_r, next_r) = if src_channels > 1 {
+                                    (
+                                        audio_voice.waveform.buffer[base_idx + 1],
+                                        audio_voice.waveform.buffer[next_base_idx + 1],
+                                    )
+                                } else {
+                                    (curr_l, next_l) // Mono to Stereo
                                 };
+                                let val_r = lerp(curr_r, next_r, alpha);
+
+                                // 6. Mix to Output
                                 if channels > 0 {
-                                    output[frame_idx * channels] += left * vol;
+                                    output[frame_idx * channels] += val_l * vol;
                                 }
                                 if channels > 1 {
-                                    output[frame_idx * channels + 1] += right * vol;
+                                    output[frame_idx * channels + 1] += val_r * vol;
                                 }
                             }
                         }
@@ -237,48 +296,45 @@ impl AudioEngine {
                     continue;
                 }
 
-                match track.track_type() {
-                    TrackType::Midi => {
-                        if let Some(pattern_id) = clip.pattern_id {
-                            if let Some(pattern) = current_state.patterns.get(&pattern_id) {
-                                Self::process_pattern_in_clip(
-                                    active_voices,
-                                    *sample_rate,
-                                    current_state.tempo,
-                                    track.target_mixer_channel_id,
-                                    clip,
-                                    pattern,
-                                    start_time,
-                                    end_time,
-                                );
-                            }
+                match &clip.source {
+                    crate::core::project::KarbeatSource::Audio(asset_id) => {
+                        if let Some(waveform) = current_state.assets.get(asset_id) {
+                            Self::process_audio_clip(
+                                active_voices,
+                                track.target_mixer_channel_id,
+                                clip,
+                                waveform,
+                                start_time,
+                                end_time,
+                            );
                         }
                     }
-                    TrackType::Audio => {
-                        if let Some(asset_id) = clip.asset_id {
-                            // Assuming AudioRenderState has 'assets' map
-                            if let Some(waveform) = current_state.assets.get(&asset_id) {
-                                Self::process_audio_clip(
-                                    active_voices,
-                                    track.target_mixer_channel_id,
-                                    clip,
-                                    waveform,
-                                    start_time,
-                                    end_time,
-                                );
-                            }
+                    crate::core::project::KarbeatSource::Midi(pattern_id) => {
+                        if let Some(pattern) = current_state.patterns.get(pattern_id) {
+                            Self::process_pattern_in_clip(
+                                active_voices,
+                                *sample_rate,
+                                current_state.tempo,
+                                track.target_mixer_channel_id,
+                                clip,
+                                pattern,
+                                start_time,
+                                end_time,
+                            );
                         }
                     }
-                    _ => {} // Bus tracks don't have clips usually
-                };
+                    crate::core::project::KarbeatSource::Automation(_) => {
+                        // TODO: Implementing Automation
+                    }
+                }
             }
         }
     }
 
     // --- HELPER: AUDIO CLIP PROCESSING ---
     fn process_audio_clip(
-        active_voices: &mut HashMap<u32, Vec<Voice>>,
-        mixer_id: u32,
+        active_voices: &mut HashMap<Option<u32>, Vec<Voice>>,
+        mixer_id: Option<u32>,
         clip: &Clip,
         waveform: &AudioWaveform,
         buffer_start: u64,
@@ -302,7 +358,11 @@ impl AudioEngine {
             0
         };
 
-        let source_read_idx = time_elapsed_in_clip + clip.offset_start;
+        let app_state = APP_STATE.read().unwrap();
+        let ratio = waveform.sample_rate as f64 / app_state.audio_config.sample_rate as f64;
+
+        let source_elapsed_frames = time_elapsed_in_clip as f64 * ratio;
+        let source_read_idx = source_elapsed_frames + clip.offset_start as f64;
 
         // 3. Create Transient Voice
         // We push this to the voice list. The renderer will consume it immediately.
@@ -315,12 +375,11 @@ impl AudioEngine {
         }));
     }
 
-    // --- HELPER: MIDI PATTERN PROCESSING ---
     fn process_pattern_in_clip(
-        active_voices: &mut HashMap<u32, Vec<Voice>>,
+        active_voices: &mut HashMap<Option<u32>, Vec<Voice>>,
         sample_rate: u32,
         tempo: f32,
-        mixer_id: u32,
+        mixer_id: Option<u32>,
         clip: &Clip,
         pattern: &Pattern,
         buffer_start: u64,
@@ -373,43 +432,77 @@ impl AudioEngine {
     fn render_previews_to_buffer(&mut self, output: &mut [f32], channels: usize) {
         let buffer_frames = output.len() / channels;
 
-        // println!("Render previews to buffer...");
-
         for voice in &mut self.preview_voices {
-            if voice.is_finished { continue; }
+            if voice.is_finished {
+                continue;
+            }
 
             let src_channels = voice.waveform.channels as usize;
-            
-            // Iterate Output Buffer
+            let buffer_len = voice.waveform.buffer.len();
+            let step = voice.waveform.sample_rate as f64 / self.sample_rate as f64;
+
             for i in 0..buffer_frames {
-                // Determine read position
-                let current_idx = voice.current_frame + voice.waveform.trim_start;
-                
-                // Check Bounds
-                if current_idx >= voice.waveform.trim_end || 
-                   current_idx >= (voice.waveform.buffer.len() / src_channels) as u64 
-                {
+                let current_pos_f64 = voice.current_frame + voice.waveform.trim_start as f64;
+
+                let trim_end = voice.waveform.trim_end as f64;
+                let max_len = (buffer_len / src_channels) as f64;
+                let end_bound = if trim_end > 0.0 && trim_end < max_len {
+                    trim_end
+                } else {
+                    max_len
+                };
+
+                if current_pos_f64 >= end_bound - 1.0 {
                     voice.is_finished = true;
                     break;
                 }
 
-                // Read Logic
-                let buffer_idx = (current_idx as usize) * src_channels;
-                
-                if buffer_idx + 1 < voice.waveform.buffer.len() {
-                    let left = voice.waveform.buffer[buffer_idx];
-                    let right = if src_channels > 1 { voice.waveform.buffer[buffer_idx+1] } else { left };
+                // Interpolation Logic
+                let index_int = current_pos_f64 as usize;
+                let alpha = (current_pos_f64 - index_int as f64) as f32;
 
-                    // Mix Additively (On top of whatever is already in buffer)
-                    if channels > 0 { output[i*channels]     += left * voice.volume; }
-                    if channels > 1 { output[i*channels + 1] += right * voice.volume; }
+                let next_index_int = if index_int + 1 >= end_bound as usize {
+                    index_int
+                } else {
+                    index_int + 1
+                };
+
+                let base_idx = index_int * src_channels;
+                let next_base_idx = next_index_int * src_channels;
+
+                if next_base_idx + (src_channels - 1) < buffer_len {
+                    let curr_l = voice.waveform.buffer[base_idx];
+                    let next_l = voice.waveform.buffer[next_base_idx];
+                    let val_l = lerp(curr_l, next_l, alpha);
+
+                    let (curr_r, next_r) = if src_channels > 1 {
+                        (
+                            voice.waveform.buffer[base_idx + 1],
+                            voice.waveform.buffer[next_base_idx + 1],
+                        )
+                    } else {
+                        (curr_l, next_l)
+                    };
+                    let val_r = lerp(curr_r, next_r, alpha);
+
+                    if channels > 0 {
+                        output[i * channels] += val_l * voice.volume;
+                    }
+                    if channels > 1 {
+                        output[i * channels + 1] += val_r * voice.volume;
+                    }
                 }
 
-                voice.current_frame += 1;
+                voice.current_frame += step;
             }
         }
 
-        // Cleanup
         self.preview_voices.retain(|v| !v.is_finished);
     }
+}
+
+/// Basic Linear Interpolation
+#[inline(always)]
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
 }
