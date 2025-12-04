@@ -14,6 +14,9 @@ part 'project.freezed.dart';
 Future<UiProjectState?> getUiState() =>
     RustLib.instance.api.crateApiProjectGetUiState();
 
+Future<ProjectMetadata> getProjectMetadata() =>
+    RustLib.instance.api.crateApiProjectGetProjectMetadata();
+
 Future<TransportState> getTransportState() =>
     RustLib.instance.api.crateApiProjectGetTransportState();
 
@@ -23,9 +26,13 @@ Future<Map<int, AudioWaveformUiForSourceList>?> getSourceList() =>
 Future<void> addAudioSource({required String filePath}) =>
     RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
 
-Future<void> addNewTrack({required String trackType}) =>
+/// Add new track to the track list. Throws an error, so it must handled gracefully
+Future<void> addNewTrack({required TrackType trackType}) =>
     RustLib.instance.api.crateApiProjectAddNewTrack(trackType: trackType);
 
+/// Get all tracks on the session/project.
+///
+/// Returns Map<u32, UiTrack> upon success, and Error when it fails
 Future<Map<int, UiTrack>> getTracks() =>
     RustLib.instance.api.crateApiProjectGetTracks();
 

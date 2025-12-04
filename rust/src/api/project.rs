@@ -168,6 +168,15 @@ pub fn get_ui_state() -> Option<UiProjectState> {
     Some(project_state)
 }
 
+pub fn get_project_metadata() -> Result<ProjectMetadata, String> {
+    let Ok(app) = APP_STATE.read() else {
+        return Err("Failed to acquire read lock on APP_STATE".to_string());
+    };
+
+    let metadata = app.metadata.clone();
+    Ok(metadata)
+}
+
 pub fn get_transport_state() -> Result<TransportState, String> {
     let Ok(app) = APP_STATE.read() else {
         return Err("Failed to acquire read lock on APP_STATE".to_string());
@@ -218,7 +227,8 @@ pub fn add_audio_source(file_path: &str) {
     broadcast_state_change();
 }
 
-pub fn add_new_track(track_type: String) -> Result<(), String> {
+/// Add new track to the track list. Throws an error, so it must handled gracefully
+pub fn add_new_track(track_type: TrackType) -> Result<(), String> {
     {
         let mut app = match APP_STATE.write() {
             Ok(a) => a,
@@ -229,13 +239,16 @@ pub fn add_new_track(track_type: String) -> Result<(), String> {
                 ))
             }
         };
-        let track_type_concrete = track_type.parse::<TrackType>()?;
-        app.add_new_track(track_type_concrete);
+        app.add_new_track(track_type);
+        println!("[add_new_track] successfully add new track")
     }
     broadcast_state_change();
     Ok(())
 }
 
+/// Get all tracks on the session/project.
+/// 
+/// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
     let app = APP_STATE
         .read()

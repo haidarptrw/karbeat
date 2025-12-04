@@ -287,7 +287,7 @@ impl Default for AudioHardwareConfig {
             selected_input_device: Default::default(),
             selected_output_device: Default::default(),
             sample_rate: 44100,
-            buffer_size: 1024,
+            buffer_size: 256,
             cpu_load: Default::default(),
         }
     }

@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -29,7 +31,7 @@ class KarbeatState extends ChangeNotifier {
     timeSignature: (4, 4),
   );
 
-  List<UiTrack> _tracks = [];
+  Map<int, UiTrack> _tracks = {};
   Map<int, AudioWaveformUiForSourceList> _audioSources = {};
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
@@ -49,7 +51,7 @@ class KarbeatState extends ChangeNotifier {
   bool get isPlaying => _transportState.isPlaying;
   bool get isLooping => _transportState.isLooping;
   double get tempo => _metadata.bpm;
-  List<UiTrack> get tracks => _tracks;
+  Map<int, UiTrack> get tracks => _tracks;
   Map<int, AudioWaveformUiForSourceList> get audioSources => _audioSources;
   ToolSelection get selectedTool => _selectedTool;
   WorkspaceView get currentView => _currentView;
@@ -60,16 +62,28 @@ class KarbeatState extends ChangeNotifier {
   Map<int, int> trackIdHeightMap = {};
 
   // ================ SYNCHRONIZATION ======================
-  /// Syncs the core project structure (Tracks, Metadata)
-  /// Call this when: Loading project, Adding tracks, changing BPM
-  Future<void> syncProjectState() async {
-    // Call Rust API (get_ui_state returns Option<UiProjectState>)
-    final newState = await getUiState();
+  // / Syncs the core project structure (Tracks, Metadata)
+  // / Call this when: Loading project, Adding tracks, changing BPM
+  // Future<void> syncProjectState() async {
+  //   // Call Rust API (get_ui_state returns Option<UiProjectState>)
 
-    if (newState != null) {
-      _metadata = newState.metadata;
-      _tracks = newState.tracks;
+  //   final newState = await getUiState();
+
+  //   if (newState != null) {
+  //     _metadata = newState.metadata;
+  //     _tracks = newState.tracks;
+  //     notifyListeners();
+  //   }
+  // }
+
+  /// Syncs only the track state
+  Future<void> syncTrackState() async {
+    try {
+      final newState = await getTracks();
+      _tracks = newState;
       notifyListeners();
+    } catch(e) {
+      log("error when syncing the track state: $e");
     }
   }
 
@@ -82,7 +96,18 @@ class KarbeatState extends ChangeNotifier {
       _transportState = newState;
       notifyListeners();
     } catch (e) {
-      print("Transport sync failed: $e");
+      log("Transport sync failed: $e");
+    }
+  }
+
+  /// Syncs only the metadata (Project name, BPM, Time signature)
+  Future<void> syncMetadataState() async {
+    try {
+      final newState = await getProjectMetadata();
+      _metadata = newState;
+      notifyListeners();
+    } catch (e) {
+      log("failed when syncing metadata: $e");
     }
   }
 
@@ -91,48 +116,56 @@ class KarbeatState extends ChangeNotifier {
   Future<void> syncSourceList() async {
     final sources = await getSourceList();
     if (sources != null) {
-      // Rust returns HashMap<u32, ...>, Dart converts to Map<int, ...>
       _audioSources = Map.from(sources);
       notifyListeners();
     }
   }
 
   // =============== ACTIONS ===============
+
   /// Loads an audio file and refreshes the source list
   Future<void> addAudioFile(String path) async {
-    // 1. Call Rust to load
     await addAudioSource(filePath: path);
-
-    // 2. Refresh List
     await syncSourceList();
   }
 
-  void togglePlay() {
-    // Optimistic UI Update (Immediate feedback)
-    final newPlaying = !_transportState.isPlaying;
-    _transportState = _transportState.copyWith(isPlaying: newPlaying);
-    notifyListeners();
-
-    // Send Command to Rust (Assuming you have setPlaying exposed)
-    setPlaying(val: newPlaying);
+  Future<void> addTrack(TrackType type) async {
+    try {
+      await addNewTrack(trackType: type);
+      await syncTrackState();
+    } catch (e) {
+      log("Failed to add track: $e");
+    }
   }
 
-  void stop() {
-    _transportState = _transportState.copyWith(
-      isPlaying: false,
-      playheadPositionSamples: 0,
-    );
-    notifyListeners();
-
-    setPlaying(val: false);
-    setPlayhead(val: 0);
+  Future<void> togglePlay() async {
+    try {
+      final newPlaying = !_transportState.isPlaying;
+      await setPlaying(val: newPlaying);
+      await syncTransportState();
+    } catch (e) {
+      log("Failed to toggle play: $e");
+    }
   }
 
-  void toggleLoop() {
-    final newLooping = !_transportState.isLooping;
-    _transportState = _transportState.copyWith(isLooping: newLooping);
-    notifyListeners();
-    setLooping(val: newLooping);
+  Future<void> stop() async {
+    try {
+      await setPlaying(val: false);
+      await setPlayhead(val: 0);
+      await syncTransportState();
+    } catch (e) {
+      log("Failed to stop play: $e");
+    }
+  }
+
+  Future<void> toggleLoop() async {
+    try {
+      final newLooping = !_transportState.isLooping;
+      await setLooping(val: newLooping);
+      await syncTransportState();
+    } catch (e) {
+      log("Failed to toggle loop: $e");
+    }
   }
 
   void selectTool(ToolSelection tool) {

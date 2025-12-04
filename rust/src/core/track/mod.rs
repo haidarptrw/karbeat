@@ -11,6 +11,7 @@ impl ApplicationState {
         let new_track_id = self.track_counter;
         let new_track = KarbeatTrack {
             track_type,
+            id: new_track_id,
             ..Default::default()
         };
         self.tracks.insert(new_track_id, Arc::new(new_track));
