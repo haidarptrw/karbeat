@@ -6,8 +6,10 @@
 import '../core/project.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`
 
 Future<UiProjectState?> getUiState() =>
     RustLib.instance.api.crateApiProjectGetUiState();
@@ -23,6 +25,9 @@ Future<void> addAudioSource({required String filePath}) =>
 
 Future<void> addNewTrack({required String trackType}) =>
     RustLib.instance.api.crateApiProjectAddNewTrack(trackType: trackType);
+
+Future<Map<int, UiTrack>> getTracks() =>
+    RustLib.instance.api.crateApiProjectGetTracks();
 
 class AudioWaveformUiForAudioProperties {
   final Float32List previewBuffer;
@@ -91,6 +96,27 @@ class AudioWaveformUiForAudioProperties {
           muted == other.muted;
 }
 
+class AudioWaveformUiForClip {
+  final String name;
+  final Float32List previewBuffer;
+
+  const AudioWaveformUiForClip({
+    required this.name,
+    required this.previewBuffer,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ previewBuffer.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioWaveformUiForClip &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          previewBuffer == other.previewBuffer;
+}
+
 class AudioWaveformUiForSourceList {
   final String name;
   final bool muted;
@@ -107,6 +133,54 @@ class AudioWaveformUiForSourceList {
           runtimeType == other.runtimeType &&
           name == other.name &&
           muted == other.muted;
+}
+
+class UiClip {
+  final String name;
+  final int id;
+  final int startTime;
+  final UiClipSource source;
+  final int offsetStart;
+  final int loopLength;
+
+  const UiClip({
+    required this.name,
+    required this.id,
+    required this.startTime,
+    required this.source,
+    required this.offsetStart,
+    required this.loopLength,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      id.hashCode ^
+      startTime.hashCode ^
+      source.hashCode ^
+      offsetStart.hashCode ^
+      loopLength.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiClip &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          id == other.id &&
+          startTime == other.startTime &&
+          source == other.source &&
+          offsetStart == other.offsetStart &&
+          loopLength == other.loopLength;
+}
+
+@freezed
+sealed class UiClipSource with _$UiClipSource {
+  const UiClipSource._();
+
+  const factory UiClipSource.audio(AudioWaveformUiForClip field0) =
+      UiClipSource_Audio;
+  const factory UiClipSource.none() = UiClipSource_None;
 }
 
 class UiProjectState {
@@ -131,15 +205,18 @@ class UiTrack {
   final int id;
   final String name;
   final TrackType trackType;
+  final List<UiClip> clips;
 
   const UiTrack({
     required this.id,
     required this.name,
     required this.trackType,
+    required this.clips,
   });
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ trackType.hashCode;
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ trackType.hashCode ^ clips.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -148,5 +225,6 @@ class UiTrack {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
-          trackType == other.trackType;
+          trackType == other.trackType &&
+          clips == other.clips;
 }

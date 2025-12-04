@@ -82,7 +82,6 @@ pub fn init_engine() {
     let (state_in, state_out) =
         triple_buffer::TripleBuffer::new(&AudioRenderState::default()).split();
 
-    // Store the Producer globally
     *RENDER_STATE_PRODUCER.lock().unwrap() = Some(state_in);
 
     // Capacity 128 is plenty for manual clicks
@@ -92,14 +91,11 @@ pub fn init_engine() {
     let mut guard = COMMAND_SENDER.lock().unwrap();
     *guard = Some(cmd_prod);
 
-    // 3. Start Audio
-    // Pass both 'state_out' and 'cmd_cons' to the engine
     match start_audio_stream(state_out, cmd_cons) {
         Ok(_) => {
             println!("Audio Engine Successfully initialized");
 
-            // 3. SEND STARTUP BEEP
-            // We use the guard we just locked to ensure it's ready
+            // SEND STARTUP BEEP
             if let Some(producer) = guard.as_mut() {
                 let beep_waveform = generate_startup_beep();
                 // Push the command directly to the ring buffer

@@ -1,5 +1,7 @@
 // src/core/track/mod.rs
 
+use std::sync::Arc;
+
 use crate::core::project::{ApplicationState, KarbeatTrack, TrackType};
 
 pub mod audio_waveform;
@@ -11,7 +13,7 @@ impl ApplicationState {
             track_type,
             ..Default::default()
         };
-        self.tracks.insert(new_track_id, new_track);
+        self.tracks.insert(new_track_id, Arc::new(new_track));
 
         // increment track_counter
         self.track_counter += 1;

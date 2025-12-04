@@ -19,12 +19,12 @@ pub struct ApplicationState {
     pub metadata: ProjectMetadata,
     pub mixer: MixerState,
     pub transport: TransportState,
-    pub asset_library: AssetLibrary,
+    pub asset_library: Arc<AssetLibrary>,
     // All musical data lives here. The timeline just references these.
-    pub pattern_pool: HashMap<u32, Pattern>,
+    pub pattern_pool: HashMap<u32, Arc<Pattern>>,
 
     // Tracks contain Clips, but Clips are just "Containers"
-    pub tracks: HashMap<u32, KarbeatTrack>,
+    pub tracks: HashMap<u32, Arc<KarbeatTrack>>,
     pub track_counter: u32,
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
@@ -42,7 +42,7 @@ pub struct KarbeatTrack {
     pub name: String,
     pub color: String,
     pub track_type: TrackType,
-    pub clips: Vec<Clip>,
+    pub clips: Arc<Vec<Clip>>,
 
     // This tells the engine: "Any audio/midi generated on this track
     // gets sent to Mixer Channel X".
@@ -82,13 +82,13 @@ impl std::str::FromStr for TrackType {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum KarbeatSource {
     /// Points to an Asset ID in AssetLibrary
-    Audio(u32),
+    Audio(Arc<AudioWaveform>),
 
     /// Points to a Pattern ID in PatternPool
-    Midi(u32),
+    Midi(Arc<Pattern>),
 
     /// Points to an Automation ID (Future implementation)
     Automation(u32),
@@ -186,8 +186,8 @@ impl Ord for Clip {
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct MixerState {
     // Map Track ID -> Mixer Channel
-    pub channels: HashMap<u32, MixerChannel>,
-    pub master_bus: MixerChannel,
+    pub channels: HashMap<u32, Arc<MixerChannel>>,
+    pub master_bus: Arc<MixerChannel>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -199,7 +199,7 @@ pub struct MixerChannel {
     pub inverted_phase: bool,
 
     // The effects chain (EQ, Compressor) comes AFTER the generator
-    pub effects: Vec<PluginInstance>,
+    pub effects: Arc<Vec<PluginInstance>>,
 }
 
 impl Default for MixerChannel {
@@ -210,7 +210,7 @@ impl Default for MixerChannel {
             mute: Default::default(),
             solo: Default::default(),
             inverted_phase: Default::default(),
-            effects: Default::default(),
+            effects: Arc::new(Vec::new()),
         }
     }
 }
@@ -310,11 +310,13 @@ impl KarbeatTrack {
         };
 
         if is_valid {
-            let pos = match self.clips.binary_search(&clip) {
+            let clips_vec = Arc::make_mut(&mut self.clips);
+            
+            let pos = match clips_vec.binary_search(&clip) {
                 Ok(index) => index,
                 Err(index) => index,
             };
-            self.clips.insert(pos, clip);
+            clips_vec.insert(pos, clip);
         } else {
             // In a real app, maybe return Result<Error>
             eprintln!("Warning: Mismatched Clip Source for Track Type");
@@ -323,7 +325,8 @@ impl KarbeatTrack {
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
     pub fn add_clips_bulk(&mut self, new_clips: Vec<Clip>) {
-        self.clips.extend(new_clips);
-        self.clips.sort();
+        let clips_vec = Arc::make_mut(&mut self.clips);
+        clips_vec.extend(new_clips);
+        clips_vec.sort();
     }
 }

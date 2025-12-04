@@ -75,13 +75,14 @@ impl AudioLoader for ApplicationState {
             }
         };
         let id = self.asset_library.next_id;
-        self.asset_library.next_id += 1;
+        let mut asset_library = Arc::make_mut(&mut self.asset_library);
+        asset_library.next_id += 1;
 
-        self.asset_library.sample_paths.insert(
+        asset_library.sample_paths.insert(
             id, 
             PathBuf::from(&path)
         );
-        self.asset_library.source_map.insert(
+        asset_library.source_map.insert(
             id, 
             Arc::new(waveform)
         );

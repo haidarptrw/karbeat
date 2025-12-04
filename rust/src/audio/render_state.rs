@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::core::{project::{ApplicationState, KarbeatTrack, MixerChannel, Pattern}, track::audio_waveform::AudioWaveform};
+use crate::core::{project::{ApplicationState, AssetLibrary, KarbeatTrack, MixerChannel, Pattern}, track::audio_waveform::AudioWaveform};
 
 #[derive(Default, Clone)]
 pub struct AudioRenderState {
@@ -9,23 +9,19 @@ pub struct AudioRenderState {
     pub sample_rate: u32,
 
     // Flattened data for quick access
-    pub tracks:  Vec<KarbeatTrack>,
-    pub patterns: HashMap<u32, Pattern>,
-    pub mixer_channels: HashMap<u32, MixerChannel>,
-    pub assets: HashMap<u32, AudioWaveform>,
+    pub tracks:  Vec<Arc<KarbeatTrack>>,
+    pub patterns: HashMap<u32, Arc<Pattern>>,
+    pub mixer_channels: HashMap<u32, Arc<MixerChannel>>,
+    pub master_bus: Arc<MixerChannel>,
+    pub asset_library: Arc<AssetLibrary>,
 }
 
 impl From<&ApplicationState> for AudioRenderState {
-    fn from(app: &ApplicationState) -> Self {
+fn from(app: &ApplicationState) -> Self {
         // 1. Flatten Tracks (Sort by ID to keep order deterministic)
-        let mut tracks: Vec<KarbeatTrack> = app.tracks.values().cloned().collect();
+        // FIX: Changed type from Vec<KarbeatTrack> to Vec<Arc<KarbeatTrack>>
+        let mut tracks: Vec<Arc<KarbeatTrack>> = app.tracks.values().cloned().collect();
         tracks.sort_by_key(|t| t.id);
-
-        // 2. Map Assets
-        // AssetLibrary holds Arc<AudioWaveform>, so cloning is cheap!
-        let assets = app.asset_library.source_map.iter()
-            .map(|(k, v)| (*k, (**v).clone()))
-            .collect();
 
         Self {
             is_playing: app.transport.is_playing,
@@ -34,7 +30,8 @@ impl From<&ApplicationState> for AudioRenderState {
             tracks,
             patterns: app.pattern_pool.clone(),
             mixer_channels: app.mixer.channels.clone(),
-            assets,
+            master_bus: app.mixer.master_bus.clone(),
+            asset_library: app.asset_library.clone(),
         }
     }
 }

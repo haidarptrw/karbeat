@@ -22,7 +22,7 @@ pub struct AudioEngine {
     current_state: AudioRenderState,
 
     // Timeline
-    sample_rate: u32,
+    sample_rate: u64,
     playhead_samples: u64,
 
     // Polyphony: Map <TrackID, List of Active Voices>
@@ -79,7 +79,7 @@ impl AudioEngine {
     pub fn new(
         state_consumer: Output<AudioRenderState>,
         command_consumer: Consumer<AudioCommand>,
-        sample_rate: u32,
+        sample_rate: u64,
     ) -> Self {
         Self {
             state_consumer,
@@ -147,8 +147,8 @@ impl AudioEngine {
                     // TODO: Lookup MixerChannel volume using *id
                     // let channel = self.current_state.mixer.get(id);
                     // channel.volume
-                    1.0 
-                },
+                    1.0
+                }
                 None => {
                     // Direct to Master (No mixer processing)
                     1.0
@@ -295,33 +295,29 @@ impl AudioEngine {
                 if clip_end < start_time {
                     continue;
                 }
-
                 match &clip.source {
-                    crate::core::project::KarbeatSource::Audio(asset_id) => {
-                        if let Some(waveform) = current_state.assets.get(asset_id) {
-                            Self::process_audio_clip(
-                                active_voices,
-                                track.target_mixer_channel_id,
-                                clip,
-                                waveform,
-                                start_time,
-                                end_time,
-                            );
-                        }
+                    crate::core::project::KarbeatSource::Audio(waveform) => {
+                        Self::process_audio_clip(
+                            active_voices,
+                            track.target_mixer_channel_id,
+                            clip,
+                            waveform,
+                            start_time,
+                            end_time,
+                            sample_rate.to_owned(),
+                        );
                     }
-                    crate::core::project::KarbeatSource::Midi(pattern_id) => {
-                        if let Some(pattern) = current_state.patterns.get(pattern_id) {
-                            Self::process_pattern_in_clip(
-                                active_voices,
-                                *sample_rate,
-                                current_state.tempo,
-                                track.target_mixer_channel_id,
-                                clip,
-                                pattern,
-                                start_time,
-                                end_time,
-                            );
-                        }
+                    crate::core::project::KarbeatSource::Midi(pattern) => {
+                        Self::process_pattern_in_clip(
+                            active_voices,
+                            *sample_rate,
+                            current_state.tempo,
+                            track.target_mixer_channel_id,
+                            clip,
+                            pattern,
+                            start_time,
+                            end_time,
+                        );
                     }
                     crate::core::project::KarbeatSource::Automation(_) => {
                         // TODO: Implementing Automation
@@ -339,6 +335,7 @@ impl AudioEngine {
         waveform: &AudioWaveform,
         buffer_start: u64,
         buffer_end: u64,
+        sample_rate: u64,
     ) {
         // 1. Calculate Intersection
         // Where does this clip start within THIS buffer?
@@ -358,8 +355,7 @@ impl AudioEngine {
             0
         };
 
-        let app_state = APP_STATE.read().unwrap();
-        let ratio = waveform.sample_rate as f64 / app_state.audio_config.sample_rate as f64;
+        let ratio = waveform.sample_rate as f64 / sample_rate as f64;
 
         let source_elapsed_frames = time_elapsed_in_clip as f64 * ratio;
         let source_read_idx = source_elapsed_frames + clip.offset_start as f64;
@@ -377,7 +373,7 @@ impl AudioEngine {
 
     fn process_pattern_in_clip(
         active_voices: &mut HashMap<Option<u32>, Vec<Voice>>,
-        sample_rate: u32,
+        sample_rate: u64,
         tempo: f32,
         mixer_id: Option<u32>,
         clip: &Clip,

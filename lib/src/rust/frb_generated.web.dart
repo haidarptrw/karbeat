@@ -32,11 +32,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
 
   @protected
+  Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
   AudioWaveformUiForAudioProperties
   dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw);
+
+  @protected
+  AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw);
 
   @protected
   AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
@@ -49,6 +55,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   AudioWaveformUiForAudioProperties
   dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw);
+
+  @protected
+  AudioWaveformUiForClip dco_decode_box_autoadd_audio_waveform_ui_for_clip(
+    dynamic raw,
+  );
 
   @protected
   UiProjectState dco_decode_box_autoadd_ui_project_state(dynamic raw);
@@ -76,6 +87,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
 
   @protected
+  List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
+
+  @protected
+  List<UiClip> dco_decode_list_ui_clip(dynamic raw);
+
+  @protected
   List<UiTrack> dco_decode_list_ui_track(dynamic raw);
 
   @protected
@@ -99,6 +116,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
 
   @protected
+  (int, UiTrack) dco_decode_record_u_32_ui_track(dynamic raw);
+
+  @protected
   (int, int) dco_decode_record_u_8_u_8(dynamic raw);
 
   @protected
@@ -120,6 +140,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_u_8(dynamic raw);
 
   @protected
+  UiClip dco_decode_ui_clip(dynamic raw);
+
+  @protected
+  UiClipSource dco_decode_ui_clip_source(dynamic raw);
+
+  @protected
   UiProjectState dco_decode_ui_project_state(dynamic raw);
 
   @protected
@@ -138,11 +164,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
   AudioWaveformUiForAudioProperties
   sse_decode_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(
     SseDeserializer deserializer,
   );
 
@@ -157,6 +193,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   AudioWaveformUiForAudioProperties
   sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AudioWaveformUiForClip sse_decode_box_autoadd_audio_waveform_ui_for_clip(
     SseDeserializer deserializer,
   );
 
@@ -190,6 +231,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, UiTrack)> sse_decode_list_record_u_32_ui_track(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
+
+  @protected
   List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
 
   @protected
@@ -219,6 +268,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  (int, UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer);
+
+  @protected
   (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
 
   @protected
@@ -240,6 +292,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_u_8(SseDeserializer deserializer);
 
   @protected
+  UiClip sse_decode_ui_clip(SseDeserializer deserializer);
+
+  @protected
+  UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer);
+
+  @protected
   UiProjectState sse_decode_ui_project_state(SseDeserializer deserializer);
 
   @protected
@@ -258,11 +316,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_Map_u_32_ui_track_None(
+    Map<int, UiTrack> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
   void sse_encode_audio_waveform_ui_for_audio_properties(
     AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_audio_waveform_ui_for_clip(
+    AudioWaveformUiForClip self,
     SseSerializer serializer,
   );
 
@@ -278,6 +348,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
     AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_audio_waveform_ui_for_clip(
+    AudioWaveformUiForClip self,
     SseSerializer serializer,
   );
 
@@ -318,6 +394,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_ui_track(
+    List<(int, UiTrack)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
 
   @protected
@@ -351,6 +436,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_u_32_ui_track(
+    (int, UiTrack) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_u_8_u_8((int, int) self, SseSerializer serializer);
 
   @protected
@@ -373,6 +464,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_clip(UiClip self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_project_state(

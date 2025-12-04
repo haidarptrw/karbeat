@@ -1,12 +1,13 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
+use rodio::source;
 use serde::Serialize;
 
 use crate::{
     broadcast_state_change,
     core::{
         file_manager::loader::AudioLoader,
-        project::{ProjectMetadata, TrackType, TransportState},
+        project::{Clip, KarbeatSource, KarbeatTrack, ProjectMetadata, TrackType, TransportState},
         track::audio_waveform::AudioWaveform,
     },
     utils::audio_utils::downsample,
@@ -25,6 +26,50 @@ pub struct UiTrack {
     pub id: u32,
     pub name: String,
     pub track_type: TrackType,
+    pub clips: Vec<UiClip>,
+}
+
+impl From<&KarbeatTrack> for UiTrack {
+    fn from(value: &KarbeatTrack) -> Self {
+        Self {
+            id: value.id,
+            name: value.name.clone(),
+            track_type: value.track_type.clone(),
+            clips: value.clips.iter().map(|c| UiClip::from(c)).collect()
+        }
+    }
+}
+
+pub struct UiClip {
+    pub name: String,
+    pub id: u32,
+    pub start_time: u64,
+    pub source: UiClipSource,
+    pub offset_start: u64,
+    pub loop_length: u64,
+}
+
+pub enum UiClipSource {
+    Audio(AudioWaveformUiForClip),
+    None, // represent clip with empty source, this is placeholder, as this will be removed when I already implement MIDI Pattern and automation
+}
+
+impl From<&Clip> for UiClip {
+    fn from(value: &Clip) -> Self {
+        // Map source to either AudioWaveform, midi
+        let source = match &value.source {
+            KarbeatSource::Audio(audio_waveform) => UiClipSource::Audio(audio_waveform.as_ref().into()),
+            _ => UiClipSource::None,
+        };
+        Self {
+            name: value.name.clone(),
+            id: value.id,
+            start_time: value.start_time,
+            source: source,
+            offset_start: value.offset_start,
+            loop_length: value.loop_length
+        }
+    }
 }
 
 // UI Data Structure for Audio Waveform window information (to change vol, pitch fine tune, normalization, panning, adsr envelope,
@@ -51,6 +96,11 @@ pub struct AudioWaveformUiForAudioProperties {
     pub is_looping: bool,
     pub normalized: bool,
     pub muted: bool, // this only affects when play stream, not when doing preview sound
+}
+
+pub struct AudioWaveformUiForClip {
+    pub name: String,
+    pub preview_buffer: Vec<f32>,
 }
 
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
@@ -82,6 +132,15 @@ impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
     }
 }
 
+impl From<&AudioWaveform> for AudioWaveformUiForClip {
+    fn from(value: &AudioWaveform) -> Self {
+        Self {
+            preview_buffer: downsample(value.buffer.as_ref()),
+            name: value.name.clone()
+        }
+    }
+}
+
 // ============================ APIs ==================================
 
 pub fn get_ui_state() -> Option<UiProjectState> {
@@ -98,6 +157,7 @@ pub fn get_ui_state() -> Option<UiProjectState> {
             .tracks
             .values()
             .map(|t| UiTrack {
+                clips: t.clips.iter().map(|e| UiClip::from(e)).collect(),
                 id: t.id,
                 name: t.name.clone(),
                 track_type: t.track_type().clone(),
@@ -174,4 +234,19 @@ pub fn add_new_track(track_type: String) -> Result<(), String> {
     }
     broadcast_state_change();
     Ok(())
+}
+
+pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
+    let app = APP_STATE
+        .read()
+        .map_err(|e| format!("Error acquiring read lock of APP_STATE: {}", e))?;
+
+    // convert the tracks into UI-Friendly type
+    let return_data = app
+        .tracks
+        .iter()
+        .map(|(id, track_arc)| (*id, UiTrack::from(track_arc.as_ref())))
+        .collect();
+
+    Ok(return_data)
 }
