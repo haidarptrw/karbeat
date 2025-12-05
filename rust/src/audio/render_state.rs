@@ -28,7 +28,7 @@ impl From<&ApplicationState> for AudioRenderState {
         Self {
             is_playing: app.transport.is_playing,
             is_looping: app.transport.is_looping,
-            tempo: app.metadata.bpm,
+            tempo: app.transport.bpm,
             sample_rate: app.audio_config.sample_rate,
             tracks,
             patterns: app.pattern_pool.clone(),

@@ -2,6 +2,7 @@ import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/menu_group.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/core/project.dart';
@@ -20,6 +21,8 @@ class KarbeatState extends ChangeNotifier {
     playheadPositionSamples: 0,
     loopStartSamples: 0,
     loopEndSamples: 0,
+    bpm: 67.0,
+    timeSignature: (4, 4),
   );
 
   ProjectMetadata _metadata = ProjectMetadata(
@@ -27,8 +30,14 @@ class KarbeatState extends ChangeNotifier {
     author: "User",
     version: "1.0.0",
     createdAt: 0, // Assuming u64
-    bpm: 120.0,
-    timeSignature: (4, 4),
+  );
+
+  AudioHardwareConfig _hardwareConfig = AudioHardwareConfig(
+    selectedInputDevice: '',
+    selectedOutputDevice: '',
+    sampleRate: 44100,
+    bufferSize: 256,
+    cpuLoad: 0,
   );
 
   Map<int, UiTrack> _tracks = {};
@@ -45,20 +54,24 @@ class KarbeatState extends ChangeNotifier {
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
 
+  /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
+  int gridSize = 4;
+
   // ============== GETTERS =================
   TransportState get transport => _transportState;
   ProjectMetadata get metadata => _metadata;
   bool get isPlaying => _transportState.isPlaying;
   bool get isLooping => _transportState.isLooping;
-  double get tempo => _metadata.bpm;
+  double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
   Map<int, AudioWaveformUiForSourceList> get audioSources => _audioSources;
   ToolSelection get selectedTool => _selectedTool;
   WorkspaceView get currentView => _currentView;
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
+  AudioHardwareConfig get hardwareConfig => _hardwareConfig;
 
   // =============== GLOBAL UI STATE ==========================
-  double horizontalZoomLevel = 10;
+  double horizontalZoomLevel = 1000;
   Map<int, int> trackIdHeightMap = {};
 
   // ================ SYNCHRONIZATION ======================
@@ -82,7 +95,7 @@ class KarbeatState extends ChangeNotifier {
       final newState = await getTracks();
       _tracks = newState;
       notifyListeners();
-    } catch(e) {
+    } catch (e) {
       log("error when syncing the track state: $e");
     }
   }
@@ -118,6 +131,16 @@ class KarbeatState extends ChangeNotifier {
     if (sources != null) {
       _audioSources = Map.from(sources);
       notifyListeners();
+    }
+  }
+
+  Future<void> syncAudioHardwareConfigState() async {
+    try {
+      final newState = await getAudioConfig();
+      _hardwareConfig = newState;
+      notifyListeners();
+    } catch (e) {
+      log("Failed to sync audio hardware state: $e");
     }
   }
 
@@ -196,26 +219,33 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void setGridSize(int newSize) {
+    if (gridSize != newSize) {
+      gridSize = newSize;
+      notifyListeners();
+    }
+  }
 }
 
 // --- EXTENSION FOR COPYWITH (Helper) ---
-extension TransportStateCopyWith on TransportState {
-  TransportState copyWith({
-    bool? isPlaying,
-    bool? isRecording,
-    bool? isLooping,
-    int? playheadPositionSamples,
-    int? loopStartSamples,
-    int? loopEndSamples,
-  }) {
-    return TransportState(
-      isPlaying: isPlaying ?? this.isPlaying,
-      isRecording: isRecording ?? this.isRecording,
-      isLooping: isLooping ?? this.isLooping,
-      playheadPositionSamples:
-          playheadPositionSamples ?? this.playheadPositionSamples,
-      loopStartSamples: loopStartSamples ?? this.loopStartSamples,
-      loopEndSamples: loopEndSamples ?? this.loopEndSamples,
-    );
-  }
-}
+// extension TransportStateCopyWith on TransportState {
+//   TransportState copyWith({
+//     bool? isPlaying,
+//     bool? isRecording,
+//     bool? isLooping,
+//     int? playheadPositionSamples,
+//     int? loopStartSamples,
+//     int? loopEndSamples,
+//   }) {
+//     return TransportState(
+//       isPlaying: isPlaying ?? this.isPlaying,
+//       isRecording: isRecording ?? this.isRecording,
+//       isLooping: isLooping ?? this.isLooping,
+//       playheadPositionSamples:
+//           playheadPositionSamples ?? this.playheadPositionSamples,
+//       loopStartSamples: loopStartSamples ?? this.loopStartSamples,
+//       loopEndSamples: loopEndSamples ?? this.loopEndSamples,
+//     );
+//   }
+// }

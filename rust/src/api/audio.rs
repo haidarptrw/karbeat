@@ -1,6 +1,5 @@
 use crate::{
-    api::project::AudioWaveformUiForAudioProperties, broadcast_state_change,
-    commands::AudioCommand, APP_STATE, COMMAND_SENDER,
+    APP_STATE, COMMAND_SENDER, api::project::AudioWaveformUiForAudioProperties, broadcast_state_change, commands::AudioCommand, core::project::AudioHardwareConfig
 };
 
 // 1. GETTER: Fetch details + Downsampled Buffer for UI
@@ -41,5 +40,13 @@ pub fn stop_all_previews() {
             println!("Stop all preview sounds");
         }
     }
+}
+
+pub fn get_audio_config() -> Result<AudioHardwareConfig, String>{
+    let Ok(app_state) = APP_STATE.read() else {
+        return Err("failed to acquire Lock State".to_string());
+    };
+
+    Ok(app_state.audio_config.clone())
 }
 

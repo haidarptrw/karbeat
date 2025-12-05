@@ -115,7 +115,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
 impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
     fn from(value: &AudioWaveform) -> Self {
         Self {
-            preview_buffer: downsample(value.buffer.as_ref()),
+            preview_buffer: downsample(value.buffer.as_ref(), 1000),
             file_path: value.file_path.clone(),
             name: value.name.clone(),
             sample_rate: value.sample_rate,
@@ -135,7 +135,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
 impl From<&AudioWaveform> for AudioWaveformUiForClip {
     fn from(value: &AudioWaveform) -> Self {
         Self {
-            preview_buffer: downsample(value.buffer.as_ref()),
+            preview_buffer: downsample(value.buffer.as_ref(), 500),
             name: value.name.clone()
         }
     }

@@ -100,8 +100,6 @@ pub struct ProjectMetadata {
     pub author: String,
     pub version: String,
     pub created_at: u64,
-    pub bpm: f32,
-    pub time_signature: (u8, u8),
 }
 
 impl Default for ProjectMetadata {
@@ -111,13 +109,12 @@ impl Default for ProjectMetadata {
             author: Default::default(),
             version: Default::default(),
             created_at: Default::default(),
-            bpm: 67.0,
-            time_signature: (4, 4),
+
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TransportState {
     pub is_playing: bool,
     pub is_recording: bool,
@@ -125,7 +122,28 @@ pub struct TransportState {
     pub playhead_position_samples: u64,
     pub loop_start_samples: u64,
     pub loop_end_samples: u64,
+
+    // general state
+    pub bpm: f32,
+    pub time_signature: (u8, u8),
 }
+
+impl Default for TransportState {
+    fn default() -> Self {
+        Self {
+            bpm: 67.0,
+            time_signature: (4, 4),
+            is_playing: Default::default(),
+            is_recording: Default::default(),
+            is_looping: Default::default(),
+            playhead_position_samples: Default::default(),
+            loop_start_samples: Default::default(),
+            loop_end_samples: Default::default(),
+        }
+    }
+}
+
+
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Pattern {

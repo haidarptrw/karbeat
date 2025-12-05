@@ -38,6 +38,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
+  AudioHardwareConfig dco_decode_audio_hardware_config(dynamic raw);
+
+  @protected
   AudioWaveformUiForAudioProperties
   dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw);
 
@@ -170,6 +173,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  AudioHardwareConfig sse_decode_audio_hardware_config(
+    SseDeserializer deserializer,
+  );
 
   @protected
   AudioWaveformUiForAudioProperties
@@ -323,6 +331,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_audio_hardware_config(
+    AudioHardwareConfig self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_audio_waveform_ui_for_audio_properties(

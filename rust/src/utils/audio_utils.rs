@@ -9,8 +9,7 @@
 /// ========================================================
 /// 
 /// Total output size = TARGET_BINS * 4
-pub fn downsample(buffer: &[f32]) -> Vec<f32> {
-    const TARGET_BINS: usize = 1000; // 1000 horizontal pixels
+pub fn downsample(buffer: &[f32], target_bins: usize) -> Vec<f32> {
     const CHANNELS: usize = 2;       // We assume interleaved stereo input
 
     if buffer.is_empty() {
@@ -20,7 +19,7 @@ pub fn downsample(buffer: &[f32]) -> Vec<f32> {
     let total_frames = buffer.len() / CHANNELS;
     
     // Safety: If buffer is tiny, just return it directly (padded if mono)
-    if total_frames <= TARGET_BINS {
+    if total_frames <= target_bins {
         let mut raw_out = Vec::with_capacity(buffer.len() * 2);
         for chunk in buffer.chunks(CHANNELS) {
             // Push L
@@ -34,10 +33,10 @@ pub fn downsample(buffer: &[f32]) -> Vec<f32> {
         return raw_out;
     }
 
-    let frames_per_bin = total_frames / TARGET_BINS;
-    let mut out = Vec::with_capacity(TARGET_BINS * 4);
+    let frames_per_bin = total_frames / target_bins;
+    let mut out = Vec::with_capacity(target_bins * 4);
 
-    for bin_idx in 0..TARGET_BINS {
+    for bin_idx in 0..target_bins {
         let start_frame = bin_idx * frames_per_bin;
         let end_frame = (start_frame + frames_per_bin).min(total_frames);
 

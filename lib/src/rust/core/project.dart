@@ -6,31 +6,57 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+class AudioHardwareConfig {
+  final String selectedInputDevice;
+  final String selectedOutputDevice;
+  final int sampleRate;
+  final int bufferSize;
+  final double cpuLoad;
+
+  const AudioHardwareConfig({
+    required this.selectedInputDevice,
+    required this.selectedOutputDevice,
+    required this.sampleRate,
+    required this.bufferSize,
+    required this.cpuLoad,
+  });
+
+  @override
+  int get hashCode =>
+      selectedInputDevice.hashCode ^
+      selectedOutputDevice.hashCode ^
+      sampleRate.hashCode ^
+      bufferSize.hashCode ^
+      cpuLoad.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioHardwareConfig &&
+          runtimeType == other.runtimeType &&
+          selectedInputDevice == other.selectedInputDevice &&
+          selectedOutputDevice == other.selectedOutputDevice &&
+          sampleRate == other.sampleRate &&
+          bufferSize == other.bufferSize &&
+          cpuLoad == other.cpuLoad;
+}
+
 class ProjectMetadata {
   final String name;
   final String author;
   final String version;
   final int createdAt;
-  final double bpm;
-  final (int, int) timeSignature;
 
   const ProjectMetadata({
     required this.name,
     required this.author,
     required this.version,
     required this.createdAt,
-    required this.bpm,
-    required this.timeSignature,
   });
 
   @override
   int get hashCode =>
-      name.hashCode ^
-      author.hashCode ^
-      version.hashCode ^
-      createdAt.hashCode ^
-      bpm.hashCode ^
-      timeSignature.hashCode;
+      name.hashCode ^ author.hashCode ^ version.hashCode ^ createdAt.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -40,9 +66,7 @@ class ProjectMetadata {
           name == other.name &&
           author == other.author &&
           version == other.version &&
-          createdAt == other.createdAt &&
-          bpm == other.bpm &&
-          timeSignature == other.timeSignature;
+          createdAt == other.createdAt;
 }
 
 enum TrackType { audio, midi, automation }
@@ -54,6 +78,8 @@ class TransportState {
   final int playheadPositionSamples;
   final int loopStartSamples;
   final int loopEndSamples;
+  final double bpm;
+  final (int, int) timeSignature;
 
   const TransportState({
     required this.isPlaying,
@@ -62,6 +88,8 @@ class TransportState {
     required this.playheadPositionSamples,
     required this.loopStartSamples,
     required this.loopEndSamples,
+    required this.bpm,
+    required this.timeSignature,
   });
 
   @override
@@ -71,7 +99,9 @@ class TransportState {
       isLooping.hashCode ^
       playheadPositionSamples.hashCode ^
       loopStartSamples.hashCode ^
-      loopEndSamples.hashCode;
+      loopEndSamples.hashCode ^
+      bpm.hashCode ^
+      timeSignature.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -83,5 +113,7 @@ class TransportState {
           isLooping == other.isLooping &&
           playheadPositionSamples == other.playheadPositionSamples &&
           loopStartSamples == other.loopStartSamples &&
-          loopEndSamples == other.loopEndSamples;
+          loopEndSamples == other.loopEndSamples &&
+          bpm == other.bpm &&
+          timeSignature == other.timeSignature;
 }
