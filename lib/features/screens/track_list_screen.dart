@@ -56,11 +56,14 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   late LinkedScrollControllerGroup _verticalControllers;
   late ScrollController _headerController;
   late ScrollController _timelineController;
-  
+
   // Horizontal Scrolling (Ruler <-> Tracks)
   late LinkedScrollControllerGroup _horizontalControllers;
-  late ScrollController _rulerController;        // Controller 1: Top Ruler
-  late ScrollController _trackContentController; // Controller 2: Bottom Conten
+  late ScrollController _rulerController; // Controller 1: Top Ruler
+  late ScrollController _trackContentController; // Controller 2: Bottom Content
+
+  // Local state for ghost clip
+  Offset? _mousePos;
 
   @override
   void initState() {
@@ -88,100 +91,253 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     // Calculate total height to ensure both lists have exactly same extent
     // +1 for the Add Button row
     final int itemCount = widget.tracks.length + 1;
+    final state = context.read<KarbeatState>();
+    final isPlacing = context.select<KarbeatState, bool>((s) => s.isPlacing);
 
-    return Row(
+    return Stack(
       children: [
-        // --- LEFT: TRACK HEADERS ---
-        SizedBox(
-          width: widget.headerWidth,
-          child: Column(
-            children: [
-              // Optional: Fixed Header Row (e.g. "Name", "Mute")
-              Container(
-                height: 30,
-                color: Colors.grey.shade800,
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(left: 10),
-                child: const Text(
-                  "Tracks",
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  controller: _headerController, // Controller 1
-                  padding: EdgeInsets.zero,
-                  itemCount: itemCount,
-                  itemBuilder: (context, index) {
-                    if (index == widget.tracks.length) {
-                      return _buildAddButton();
-                    }
-                    return _buildTrackHeader(widget.tracks[index]);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // --- DIVIDER ---
-        Container(width: 1, color: Colors.black),
-
-        // --- RIGHT: TIMELINE ---
-        Expanded(
-          child: Column(
-            children: [
-              // Optional: Time Ruler Header (Horizontal Scrollable)
-              // We would need another sync controller for the ruler + body horizontal scroll.
-              Container(
-                height: 30,
-                color: Colors.grey.shade800,
-                width: double.infinity,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  controller: _rulerController,
-                  physics: const ClampingScrollPhysics(),
-                  child: SizedBox(
-                    width: 50000, // Matches track list width
+        Row(
+          children: [
+            // --- LEFT: TRACK HEADERS ---
+            SizedBox(
+              width: widget.headerWidth,
+              child: Column(
+                children: [
+                  // Optional: Fixed Header Row (e.g. "Name", "Mute")
+                  Container(
                     height: 30,
-                    child: _TimelineRuler(
-                      scrollController: _rulerController,
+                    color: Colors.grey.shade800,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.only(left: 10),
+                    child: const Text(
+                      "Tracks",
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ),
-                ),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal, // Horizontal Scroll
-                  controller: _trackContentController,
-                  // Physics to match desktop feel
-                  physics: const ClampingScrollPhysics(),
-                  child: SizedBox(
-                    width: 50000, // TODO: Bind to project duration
+                  Expanded(
                     child: ListView.builder(
-                      controller:
-                          _timelineController, // Controller 2 (Synced Vertically)
+                      controller: _headerController, // Controller 1
                       padding: EdgeInsets.zero,
                       itemCount: itemCount,
                       itemBuilder: (context, index) {
                         if (index == widget.tracks.length) {
-                          // Empty space matching Add Button height
-                          return SizedBox(height: 60);
+                          return _buildAddButton();
                         }
-                        return KarbeatTrackSlot(
-                          trackId: widget.tracks[index].id,
-                          height: widget.itemHeight,
-                          horizontalScrollController: _trackContentController,
-                        );
+                        return _buildTrackHeader(widget.tracks[index]);
                       },
                     ),
                   ),
+                ],
+              ),
+            ),
+
+            // --- DIVIDER ---
+            Container(width: 1, color: Colors.black),
+
+            // --- RIGHT: TIMELINE ---
+            Expanded(
+              child: Column(
+                children: [
+                  // Optional: Time Ruler Header (Horizontal Scrollable)
+                  // We would need another sync controller for the ruler + body horizontal scroll.
+                  Container(
+                    height: 30,
+                    color: Colors.grey.shade800,
+                    width: double.infinity,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      controller: _rulerController,
+                      physics: const ClampingScrollPhysics(),
+                      child: SizedBox(
+                        width: 50000, // Matches track list width
+                        height: 30,
+                        child: _TimelineRuler(
+                          scrollController: _rulerController,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: MouseRegion(
+                      cursor: isPlacing
+                          ? SystemMouseCursors.move
+                          : SystemMouseCursors.basic,
+                      onHover: null,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onPanUpdate: null,
+                        onTapDown: isPlacing
+                            ? (details) {
+                                setState(() {
+                                  _mousePos = details.localPosition;
+                                });
+                                _updatePlacementTarget(state);
+                              }
+                            : null,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          controller: _trackContentController,
+                          // Physics to match desktop feel
+                          physics: const ClampingScrollPhysics(),
+                          child: SizedBox(
+                            width: 50000, // TODO: Bind to project duration
+                            child: ListView.builder(
+                              controller:
+                                  _timelineController, // Controller 2 (Synced Vertically)
+                              padding: EdgeInsets.zero,
+                              itemCount: itemCount,
+                              itemBuilder: (context, index) {
+                                if (index == widget.tracks.length) {
+                                  // Empty space matching Add Button height
+                                  return SizedBox(height: 60);
+                                }
+                                return KarbeatTrackSlot(
+                                  trackId: widget.tracks[index].id,
+                                  height: widget.itemHeight,
+                                  horizontalScrollController:
+                                      _trackContentController,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (isPlacing && _mousePos != null) _buildGhostClip(context),
+        if (isPlacing)
+          Positioned(
+            bottom: 30,
+            right: 30,
+            child: Row(
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'cancel_place',
+                  label: const Text("Cancel"),
+                  icon: const Icon(Icons.close),
+                  backgroundColor: Colors.redAccent,
+                  onPressed: () => state.cancelPlacement(),
+                ),
+                const SizedBox(width: 16),
+                FloatingActionButton.extended(
+                  onPressed: () => state.confirmPlacement(),
+                  label: const Text('Confirm'),
+                  heroTag: 'confirm_place',
+                  icon: Icon(Icons.check),
+                  backgroundColor: Colors.greenAccent,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _updatePlacementTarget(KarbeatState state) {
+    if (_mousePos == null) return;
+
+    // 1. Calculate Absolute Y (Mouse + Scroll)
+    double scrollY = 0;
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+    double absoluteY = _mousePos!.dy + scrollY;
+
+    // 2. Determine Track Index
+    int trackIndex = (absoluteY / widget.itemHeight).floor();
+    trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
+    final targetTrack = widget.tracks[trackIndex];
+
+    // 3. Calculate Absolute X (Mouse + Scroll)
+    double scrollX = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    double absoluteX = _mousePos!.dx + scrollX;
+
+    if (absoluteX < 0) absoluteX = 0;
+
+    // 4. Convert X Pixels -> Samples
+    final zoomLevel = context.read<KarbeatState>().horizontalZoomLevel;
+    double samples = absoluteX * zoomLevel;
+
+    // 5. Update State
+    state.updatePlacementTarget(targetTrack.id, samples);
+  }
+
+  Widget _buildGhostClip(BuildContext context) {
+    // We map the absolute coordinates back to screen coordinates
+    // This is essentially just drawing where the mouse is, but snapped to rows
+
+    // We need logic to snap the ghost Y to the row, but let X float
+    // 1. Get current Scroll Offset Y to align grid
+    double scrollY = 0;
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+    double absoluteY = _mousePos!.dy + scrollY;
+    int trackIndex = (absoluteY / widget.itemHeight).floor();
+    trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
+
+    double top = (trackIndex * widget.itemHeight) - scrollY;
+
+    // Offset by header height (approx) + Header Row
+    top += 30;
+
+    // Left position is just mouse X offset by header width
+    double left = widget.headerWidth + _mousePos!.dx;
+
+    // Safety check to keep it in timeline area
+    if (left < widget.headerWidth) left = widget.headerWidth;
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: 150, // Preview width
+      height: widget.itemHeight - 4,
+      child: GestureDetector(
+        // ENABLE Dragging on the ghost itself
+        onPanUpdate: (details) {
+          setState(() {
+            // Update _mousePos relative to the drag delta
+            if (_mousePos != null) {
+              _mousePos = _mousePos! + details.delta;
+            }
+          });
+          // Update the logic state
+          final state = context.read<KarbeatState>();
+          _updatePlacementTarget(state);
+        },
+        child: Opacity(
+          opacity: 0.7,
+          // REMOVE IgnorePointer so it can catch the Drag events
+          child: MouseRegion(
+            cursor: SystemMouseCursors.move, // Indicate draggable
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.cyanAccent.withAlpha(100),
+                border: Border.all(color: Colors.cyanAccent, width: 2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Center(
+                child: Text(
+                  "Place Here",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -325,7 +481,7 @@ class _TimelineRuler extends StatelessWidget {
       child: CustomPaint(
         // FIX 1: Set explicit size to Zero so it fills parent constraints (50,000)
         // instead of trying to be Infinite.
-        size: Size.zero, 
+        size: Size.zero,
         painter: _TimelineRulerPainter(
           zoomLevel: zoomLevel,
           tempo: tempo,
@@ -385,13 +541,13 @@ class _TimelineRulerPainter extends CustomPainter {
       // When a controller is attached to multiple views, .offset throws.
       // We must access specific positions. Since they are synced, taking the first is fine.
       final position = scrollController.positions.first;
-      
+
       final offset = position.pixels;
-      final viewportWidth = position.hasViewportDimension 
-          ? position.viewportDimension 
+      final viewportWidth = position.hasViewportDimension
+          ? position.viewportDimension
           : 1000.0;
 
-      const double buffer = 200.0; 
+      const double buffer = 200.0;
       startPixel = (offset - buffer).clamp(0.0, double.infinity);
       endPixel = offset + viewportWidth + buffer;
     }
@@ -409,9 +565,9 @@ class _TimelineRulerPainter extends CustomPainter {
       if (currentX >= startPixel) {
         // A. Draw Major Tick
         canvas.drawLine(
-          Offset(currentX, 15), 
-          Offset(currentX, size.height), 
-          majorTickPaint
+          Offset(currentX, 15),
+          Offset(currentX, size.height),
+          majorTickPaint,
         );
 
         // B. Draw Bar Number
@@ -427,12 +583,12 @@ class _TimelineRulerPainter extends CustomPainter {
       if (pixelsPerBeat > 5.0) {
         for (int i = 1; i < beatsPerBar; i++) {
           double beatX = currentX + (pixelsPerBeat * i);
-          
+
           if (beatX >= startPixel && beatX < endPixel && beatX < size.width) {
             canvas.drawLine(
-              Offset(beatX, 22), 
-              Offset(beatX, size.height), 
-              minorTickPaint
+              Offset(beatX, 22),
+              Offset(beatX, size.height),
+              minorTickPaint,
             );
           }
         }
@@ -446,8 +602,8 @@ class _TimelineRulerPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _TimelineRulerPainter oldDelegate) {
     return oldDelegate.zoomLevel != zoomLevel ||
-           oldDelegate.tempo != tempo ||
-           oldDelegate.sampleRate != sampleRate ||
-           oldDelegate.scrollController != scrollController;
+        oldDelegate.tempo != tempo ||
+        oldDelegate.sampleRate != sampleRate ||
+        oldDelegate.scrollController != scrollController;
   }
 }

@@ -66,14 +66,51 @@ class SourceListScreen extends StatelessWidget {
                     "ID: $id",
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
-                  trailing: IconButton(
-                    icon: Icon(
-                      sourceUi.muted ? Icons.volume_off : Icons.volume_up,
-                      color: sourceUi.muted ? Colors.red : Colors.green,
-                    ),
-                    onPressed: () {
-                      // TODO: Source Action (Drag and Drop to track timeline)
-                    },
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          sourceUi.muted ? Icons.volume_off : Icons.volume_up,
+                          color: sourceUi.muted ? Colors.red : Colors.green,
+                        ),
+                        onPressed: () {
+                          // TODO: Source Action (Drag and Drop to track timeline)
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, color: Colors.white),
+                        onSelected: (value) {
+                          if (value == 'place') {
+                            // Trigger Placement Mode
+                            context.read<KarbeatState>().startPlacement(id);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'place',
+                            child: Row(
+                              children: [
+                                Icon(Icons.input, color: Colors.black54),
+                                SizedBox(width: 8),
+                                Text("Put clip in timeline"),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text("Delete Source"),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                   onTap: () {
                     Navigator.of(context).push(

@@ -9,7 +9,8 @@ use triple_buffer::Input;
 
 use crate::{
     audio::{backend::start_audio_stream, render_state::AudioRenderState},
-    commands::AudioCommand, core::{project::ApplicationState, track::audio_waveform::AudioWaveform},
+    commands::AudioCommand,
+    core::{project::ApplicationState, track::audio_waveform::AudioWaveform},
 };
 
 pub mod api;
@@ -22,29 +23,38 @@ pub static COMMAND_SENDER: Lazy<Mutex<Option<Producer<AudioCommand>>>> =
     Lazy::new(|| Mutex::new(None));
 
 // SOURCE OF TRUTH For UI/Editing
-pub static APP_STATE: Lazy<Arc<RwLock<ApplicationState>>> = Lazy::new(|| {
-    Arc::new(RwLock::new(ApplicationState::default()))
-});
+pub static APP_STATE: Lazy<Arc<RwLock<ApplicationState>>> =
+    Lazy::new(|| Arc::new(RwLock::new(ApplicationState::default())));
 
 // Audio Bridge
 // This input sits behind a Mutex, waiting for us to push updates
-pub static RENDER_STATE_PRODUCER: Lazy<Mutex<Option<Input<AudioRenderState>>>> = 
+pub static RENDER_STATE_PRODUCER: Lazy<Mutex<Option<Input<AudioRenderState>>>> =
     Lazy::new(|| Mutex::new(None));
+
+static mut SEQUENCE_ID: u32 = 0;
 
 /// Broadcast changes in ApplicationState to AudioRenderState (things that
 /// is used by the Audio Thread)
 pub fn broadcast_state_change() {
     // if read failed, we do nothing
-    let Ok(app )= APP_STATE.read() else {return;};
+    let Ok(app) = APP_STATE.read() else {
+        return;
+    };
     let render_state = AudioRenderState::from(&*app);
+
     drop(app); // Drop the read lock immediately so we don't hold it while waiting for the producer
-    
+
     // Publish to Audio Thread
     if let Ok(mut guard) = RENDER_STATE_PRODUCER.lock() {
         if let Some(producer) = guard.as_mut() {
-            producer.write(render_state);
-            producer.publish(); // Instant swap
+            {
+                let mut input = producer.input_buffer_publisher();
+                *input = render_state;
+            }
+            // producer.publish();
         }
+    } else {
+        println!("Error when publishing");
     }
 }
 
@@ -79,19 +89,33 @@ fn generate_startup_beep() -> AudioWaveform {
 }
 
 pub fn init_engine() {
+    let initial_state = {
+        let app = APP_STATE.read().unwrap();
+        AudioRenderState::from(&*app)
+    };
+
+    println!(
+        "✨ Init Engine with Buffer Size: {}",
+        initial_state.buffer_size
+    );
     let (state_in, state_out) =
-        triple_buffer::TripleBuffer::new(&AudioRenderState::default()).split();
+        triple_buffer::TripleBuffer::new(&initial_state).split();
 
-    *RENDER_STATE_PRODUCER.lock().unwrap() = Some(state_in);
-
+    {
+        let mut render_state_guard = RENDER_STATE_PRODUCER.lock().unwrap();
+        *render_state_guard = Some(state_in);
+    }
     // Capacity 128 is plenty for manual clicks
     let (cmd_prod, cmd_cons) = RingBuffer::new(128);
 
     // Store Producer globally
-    let mut guard = COMMAND_SENDER.lock().unwrap();
-    *guard = Some(cmd_prod);
+    let mut guard;
+    {
+        guard = COMMAND_SENDER.lock().unwrap();
+        *guard = Some(cmd_prod);
+    }
 
-    match start_audio_stream(state_out, cmd_cons) {
+    match start_audio_stream(state_out, cmd_cons, initial_state) {
         Ok(_) => {
             println!("Audio Engine Successfully initialized");
 
@@ -102,7 +126,7 @@ pub fn init_engine() {
                 let _ = producer.push(AudioCommand::PlayOneShot(beep_waveform));
                 println!("Startup beep command sent");
             }
-        },
+        }
         Err(e) => eprintln!("Failed to start audio engine: {}", e),
     }
 }

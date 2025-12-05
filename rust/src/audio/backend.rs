@@ -11,11 +11,13 @@ use rtrb::{Consumer, RingBuffer};
 use triple_buffer::Output;
 
 use crate::{
-    audio::{engine::AudioEngine, render_state::AudioRenderState},
+    audio::{engine::AudioEngine, event::PlaybackPosition, render_state::AudioRenderState},
     commands::AudioCommand,
 };
 
 static STREAM_GUARD: Lazy<Mutex<Option<cpal::Stream>>> = Lazy::new(|| Mutex::new(None));
+
+pub static POSITION_CONSUMER: Mutex<Option<rtrb::Consumer<PlaybackPosition>>> = Mutex::new(None);
 
 struct AudioContext {
     engine: AudioEngine,
@@ -104,7 +106,16 @@ fn set_host() -> cpal::Host {
 pub fn start_audio_stream(
     mut state_consumer: Output<AudioRenderState>,
     command_consumer: Consumer<AudioCommand>,
+    initial_state: AudioRenderState,
 ) -> Result<()> {
+
+    {
+        let mut guard = STREAM_GUARD.lock().unwrap();
+        if guard.is_some() {
+            println!("🛑 Stopping previous audio stream...");
+            *guard = None; // This drops the stream, stopping the audio thread
+        }
+    }
     let host = set_host();
 
     let device = host
@@ -145,7 +156,12 @@ pub fn start_audio_stream(
         buffer_size = 512; // or return Err
     }
 
-    let engine = AudioEngine::new(state_consumer, command_consumer, sample_rate);
+    let (pos_producer, pos_consumer) = RingBuffer::<PlaybackPosition>::new(100);
+
+    // 2. Store Consumer globally (or pass to your API stream handler)
+    *POSITION_CONSUMER.lock().unwrap() = Some(pos_consumer);
+
+    let engine = AudioEngine::new(state_consumer, command_consumer, pos_producer, sample_rate, initial_state);
 
     let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 

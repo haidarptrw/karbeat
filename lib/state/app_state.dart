@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 
@@ -76,6 +77,17 @@ class KarbeatState extends ChangeNotifier {
   double horizontalZoomLevel = 1000;
   Map<int, int> trackIdHeightMap = {};
 
+   // =============== PLACEMENT MODE STATE =====================
+  int? _placingSourceId; // The ID of the source we are moving
+  int? get placingSourceId => _placingSourceId;
+  
+  // Track where the user wants to drop it
+  double _placementTimeSamples = 0.0;
+  int _placementTrackId = -1;
+
+  bool get isPlacing => _placingSourceId != null;
+
+
   // ================ SYNCHRONIZATION ======================
   // / Syncs the core project structure (Tracks, Metadata)
   // / Call this when: Loading project, Adding tracks, changing BPM
@@ -145,6 +157,7 @@ class KarbeatState extends ChangeNotifier {
       log("Failed to sync audio hardware state: $e");
     }
   }
+
 
   // =============== ACTIONS ===============
 
@@ -228,26 +241,51 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     }
   }
-}
 
-// --- EXTENSION FOR COPYWITH (Helper) ---
-// extension TransportStateCopyWith on TransportState {
-//   TransportState copyWith({
-//     bool? isPlaying,
-//     bool? isRecording,
-//     bool? isLooping,
-//     int? playheadPositionSamples,
-//     int? loopStartSamples,
-//     int? loopEndSamples,
-//   }) {
-//     return TransportState(
-//       isPlaying: isPlaying ?? this.isPlaying,
-//       isRecording: isRecording ?? this.isRecording,
-//       isLooping: isLooping ?? this.isLooping,
-//       playheadPositionSamples:
-//           playheadPositionSamples ?? this.playheadPositionSamples,
-//       loopStartSamples: loopStartSamples ?? this.loopStartSamples,
-//       loopEndSamples: loopEndSamples ?? this.loopEndSamples,
-//     );
-//   }
-// }
+    // ============= PLACEMENT MODE LOGIC =================
+  
+  void startPlacement(int sourceId) {
+    _placingSourceId = sourceId;
+    // Switch view to track list immediately so user can place it
+    navigateTo(WorkspaceView.trackList);
+    notifyListeners();
+  }
+
+  /// Updates the target location without notifying all listeners
+  /// (Use setState in the UI for visual feedback to avoid global rebuilds)
+  void updatePlacementTarget(int trackId, double timeSamples) {
+    _placementTrackId = trackId;
+    _placementTimeSamples = timeSamples;
+  }
+
+  Future<void> confirmPlacement() async {
+    if (_placingSourceId != null && _placementTrackId != -1) {
+      try {
+        await createClip(
+          sourceId: _placingSourceId!,
+          sourceType: UiSourceType.audio, // Assuming Audio for now
+          trackId: _placementTrackId,
+          startTime: _placementTimeSamples.toInt(),
+        );
+        
+        // Refresh tracks to see the new clip
+        await syncTrackState();
+        
+        // Reset mode
+        _placingSourceId = null;
+        _placementTrackId = -1;
+        notifyListeners();
+        
+      } catch (e) {
+        log("Error creating clip: $e");
+        // Optionally show error to user via a global key or snackbar service
+      }
+    }
+  }
+
+  void cancelPlacement() {
+    _placingSourceId = null;
+    _placementTrackId = -1;
+    notifyListeners();
+  }
+}

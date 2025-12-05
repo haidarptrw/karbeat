@@ -3,6 +3,7 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import '../audio/event.dart';
 import '../core/project.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -20,3 +21,6 @@ Future<void> stopAllPreviews() =>
 
 Future<AudioHardwareConfig> getAudioConfig() =>
     RustLib.instance.api.crateApiAudioGetAudioConfig();
+
+Stream<PlaybackPosition> createPositionStream() =>
+    RustLib.instance.api.crateApiAudioCreatePositionStream();

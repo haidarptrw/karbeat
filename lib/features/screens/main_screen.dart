@@ -5,7 +5,10 @@ import 'package:karbeat/features/header/control_panel.dart';
 import 'package:karbeat/features/screens/source_list_screen.dart';
 import 'package:karbeat/features/screens/track_list_screen.dart';
 import 'package:karbeat/features/side_panel/side_panel.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/utils/formatter.dart';
 import 'package:provider/provider.dart';
 
 class MainScreen extends StatelessWidget {
@@ -176,7 +179,7 @@ class _MainContent extends StatelessWidget {
             bottom: false,
             child: Container(
               color: Colors.grey.shade50,
-              child: const _ControlPanel(), // Extracted widget
+              child: const _ControlPanel(),
             ),
           ),
           Expanded(
@@ -187,7 +190,7 @@ class _MainContent extends StatelessWidget {
                   case WorkspaceView.trackList:
                     return TrackListScreen();
                   case WorkspaceView.source:
-                    return SourceListScreen(); // The new screen
+                    return SourceListScreen();
                   // case WorkspaceView.pianoRoll:
                   //   return const Center(child: Text("Piano Roll (TODO)", style: TextStyle(color: Colors.white)));
                   // case WorkspaceView.mixer:
@@ -359,18 +362,29 @@ class _ControlPanel extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade700),
       ),
       child: IntrinsicHeight(
-        child: Row(
-          children: [
-            _buildInfoText("BAR", "004"),
-            const SizedBox(width: 10),
-            _buildInfoText("BEAT", "02"),
-            const VerticalDivider(color: Colors.grey, width: 20),
-            _buildInfoText("TIME", "00:08:45"),
-            const VerticalDivider(color: Colors.grey, width: 20),
-            _buildInfoText("BPM", "67"),
-            const VerticalDivider(color: Colors.grey, width: 20),
-            _buildInfoText("SIG", "4/4"),
-          ],
+        child: StreamBuilder<PlaybackPosition>(
+          stream: createPositionStream(),
+          builder: (context, asyncSnapshot) {
+            final pos = asyncSnapshot.data;
+            final bar = pos?.bar ?? 0;
+            final beat = pos?.beat ?? 0;
+            final samples = pos?.samples ?? 0;
+            final bpm = pos?.tempo ?? 0.0;
+            final sampleRate = pos?.sampleRate ?? 44100;
+            return Row(
+              children: [
+                _buildInfoText("BAR", bar.toString()),
+                const SizedBox(width: 10),
+                _buildInfoText("BEAT", beat.toString()),
+                const VerticalDivider(color: Colors.grey, width: 20),
+                _buildInfoText("TIME", formatTimeFromSamples(samples, sampleRate)),
+                const VerticalDivider(color: Colors.grey, width: 20),
+                _buildInfoText("BPM", bpm.toStringAsFixed(1)),
+                const VerticalDivider(color: Colors.grey, width: 20),
+                _buildInfoText("SIG", "4/4"),
+              ],
+            );
+          }
         ),
       ),
     );

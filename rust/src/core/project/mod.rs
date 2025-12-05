@@ -22,10 +22,14 @@ pub struct ApplicationState {
     pub asset_library: Arc<AssetLibrary>,
     // All musical data lives here. The timeline just references these.
     pub pattern_pool: HashMap<u32, Arc<Pattern>>,
+    pub pattern_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
     pub tracks: HashMap<u32, Arc<KarbeatTrack>>,
     pub track_counter: u32,
+
+    // Counter for clips
+    pub clip_counter: u32,
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
@@ -179,8 +183,12 @@ pub struct Clip {
     /// Refer to where it sits on the global timeline
     pub start_time: u64,
     pub source: KarbeatSource,
-    pub offset_start: u64,
-    pub loop_length: u64,
+    pub offset_start: u64, // currently this does nothing since we set it always to 0
+    pub loop_length: u64, // Refer to length of the entire clip when not shrinked
+
+    // Trimming
+    pub trim_start: u64, // label in which sample the clip starts
+    pub trim_end: u64, // label in which sample the clip ends
 }
 
 impl PartialEq for Clip {
@@ -341,6 +349,9 @@ impl KarbeatTrack {
                 Err(index) => index,
             };
             clips_vec.insert(pos, clip);
+            for clip in clips_vec.iter() {
+                println!("Clip: {}, Name: {}, position: {}, length: {}", clip.id, clip.name, clip.start_time, clip.loop_length);
+            }
         } else {
             // In a real app, maybe return Result<Error>
             eprintln!("Warning: Mismatched Clip Source for Track Type");

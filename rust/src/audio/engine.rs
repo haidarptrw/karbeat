@@ -3,27 +3,30 @@
 use std::collections::HashMap;
 
 use log::info;
-use rtrb::Consumer;
+use rtrb::{Consumer, Producer};
 use triple_buffer::Output;
 
 use crate::{
-    audio::render_state::AudioRenderState,
+    audio::{event::PlaybackPosition, render_state::AudioRenderState},
     commands::AudioCommand,
     core::{
         project::{Clip, Pattern},
         track::audio_waveform::AudioWaveform,
     },
-    APP_STATE,
 };
 
 pub struct AudioEngine {
     // Comms
     state_consumer: Output<AudioRenderState>,
+    position_producer: Producer<PlaybackPosition>,
     current_state: AudioRenderState,
 
     // Timeline
     sample_rate: u64,
     playhead_samples: u64,
+    current_beat: usize,
+    current_bar: usize,
+    beat_samples_accumulator: usize,
 
     // Polyphony: Map <TrackID, List of Active Voices>
     active_voices: HashMap<Option<u32>, Vec<Voice>>,
@@ -33,6 +36,9 @@ pub struct AudioEngine {
 
     // For one shot
     preview_voices: Vec<PreviewVoice>,
+
+    // Update emit scheduler
+    last_emitted_samples: u64,
 }
 
 pub enum Voice {
@@ -51,10 +57,14 @@ pub struct MidiVoice {
 
 pub struct AudioVoice {
     pub waveform: AudioWaveform,
-    // Where in the output buffer do we start writing? (0 to buffer_len)
+    /// Where in the output buffer do we start writing? (0 to buffer_len)
     pub output_offset_samples: usize,
-    // Where in the source WAV file do we start reading?
+    /// Where in the source WAV file do we start reading?
     pub source_read_index: f64,
+    /// The specific start point in the source (from clip.trim_start)
+    pub start_boundary: f64,
+    /// The specific end point in the source (from clip.trim_start)
+    pub end_boundary: f64,
 }
 
 pub struct PreviewVoice {
@@ -79,16 +89,23 @@ impl AudioEngine {
     pub fn new(
         state_consumer: Output<AudioRenderState>,
         command_consumer: Consumer<AudioCommand>,
+        position_producer: Producer<PlaybackPosition>,
         sample_rate: u64,
+        initial_state: AudioRenderState,
     ) -> Self {
         Self {
             state_consumer,
             command_consumer,
-            current_state: AudioRenderState::default(),
+            position_producer,
+            current_state: initial_state,
             sample_rate,
             playhead_samples: 0,
             active_voices: HashMap::new(),
             preview_voices: Vec::new(),
+            beat_samples_accumulator: 0,
+            current_beat: 1,
+            current_bar: 1,
+            last_emitted_samples: 0,
         }
     }
 
@@ -106,7 +123,40 @@ impl AudioEngine {
                 AudioCommand::StopAllPreviews => {
                     self.preview_voices.clear();
                 }
-                _ => {}
+                AudioCommand::ResetPlayhead => {
+                    println!("[AudioEngine] Resetting Playhead to 0");
+                    self.playhead_samples = 0;
+                    self.current_beat = 1;
+                    self.current_bar = 1;
+                    self.beat_samples_accumulator = 0;
+
+                    // Immediately push the reset position back to UI so the slider snaps back
+                    if !self.position_producer.is_full() {
+                        let _ = self.position_producer.push(PlaybackPosition {
+                            samples: 0,
+                            beat: 1,
+                            bar: 1,
+                            tempo: self.current_state.tempo,
+                            sample_rate: self.current_state.sample_rate,
+                        });
+                    }
+                }
+                AudioCommand::SetPlayhead(samples) => {
+                    println!("[AudioEngine] Set Playhead to {}", samples);
+                    self.playhead_samples = samples as u64;
+                    self.recalculate_beat_bar();
+
+                    // Immediately push the reset position back to UI so the slider snaps back
+                    if !self.position_producer.is_full() {
+                        let _ = self.position_producer.push(PlaybackPosition {
+                            samples: self.playhead_samples,
+                            beat: self.current_beat,
+                            bar: self.current_bar,
+                            tempo: self.current_state.tempo,
+                            sample_rate: self.current_state.sample_rate,
+                        });
+                    }
+                }
             }
         }
 
@@ -124,6 +174,37 @@ impl AudioEngine {
             self.render_voices_to_buffer(output_buffer, channels);
 
             self.playhead_samples += frame_count as u64;
+
+            let samples_per_beat =
+                (60.0 / self.current_state.tempo * self.sample_rate as f32) as usize;
+            self.beat_samples_accumulator += frame_count as usize;
+
+            while self.beat_samples_accumulator >= samples_per_beat {
+                self.beat_samples_accumulator -= samples_per_beat;
+                // println!("Beat {}", self.current_beat);
+                self.current_beat += 1;
+                // TODO: adjust to time signature
+                if self.current_beat % 4 == 0 {
+                    self.current_bar += 1;
+                    // println!("Bar {}", self.current_bar);
+                }
+            }
+
+            let emission_interval = self.sample_rate / 60; 
+
+            if self.playhead_samples >= self.last_emitted_samples + emission_interval {
+                if !self.position_producer.is_full() {
+                    let _ = self.position_producer.push(PlaybackPosition {
+                        samples: self.playhead_samples,
+                        beat: self.current_beat,
+                        bar: self.current_bar,
+                        tempo: self.current_state.tempo,
+                        sample_rate: self.current_state.sample_rate,
+                    });
+                }
+                self.last_emitted_samples = self.playhead_samples;
+            }
+
             // Cleanup previous active voices
             for voices in self.active_voices.values_mut() {
                 voices.retain(|v| match v {
@@ -131,10 +212,41 @@ impl AudioEngine {
                     Voice::Audio(_) => false, // Always clear audio voices after render
                 });
             }
+        } else {
+            if !self.position_producer.is_full() {
+                let _ = self.position_producer.push(PlaybackPosition {
+                    samples: self.playhead_samples,
+                    beat: self.current_beat,
+                    bar: self.current_bar,
+                    tempo: self.current_state.tempo,
+                    sample_rate: self.current_state.sample_rate,
+                });
+            }
         }
 
         // Always RUN
         self.render_previews_to_buffer(output_buffer, channels);
+    }
+
+    /// Recalculates current Beat and Bar based on playhead_samples
+    /// Uses 1-based indexing for musical time.
+    fn recalculate_beat_bar(&mut self) {
+        let samples_per_beat = (60.0 / self.current_state.tempo * self.sample_rate as f32) as usize;
+
+        if samples_per_beat > 0 {
+            // Formula: Beat = (TotalBeats) + 1
+            self.current_beat = (self.playhead_samples as usize / samples_per_beat) + 1;
+
+            // Formula: Bar = (TotalBeats / 4) + 1
+            self.current_bar = (self.current_beat - 1) / 4 + 1;
+
+            self.beat_samples_accumulator = self.playhead_samples as usize % samples_per_beat;
+        } else {
+            // Fallback
+            self.current_beat = 1;
+            self.current_bar = 1;
+            self.beat_samples_accumulator = 0;
+        }
     }
 
     fn render_voices_to_buffer(&mut self, output: &mut [f32], channels: usize) {
@@ -201,8 +313,9 @@ impl AudioEngine {
                                 audio_voice.source_read_index + (frames_written as f64 * step);
 
                             // 2. Handle Looping / Trimming Limits
-                            let trim_end = audio_voice.waveform.trim_end as f64;
-                            let trim_start = audio_voice.waveform.trim_start as f64;
+                            let trim_end = audio_voice.start_boundary;
+                            let trim_start = audio_voice.end_boundary;
+
                             let max_len = (buffer_len / src_channels) as f64;
 
                             // Safety clamp for end of buffer
@@ -212,10 +325,11 @@ impl AudioEngine {
                                 max_len
                             };
 
-                            if audio_voice.waveform.is_looping && trim_end > 0.0 {
+                            if audio_voice.waveform.is_looping && (trim_end - trim_start) > 0.0 {
                                 if read_pos_f64 >= end_bound {
+                                    let loop_len = end_bound - trim_start;
                                     let remainder = read_pos_f64 - end_bound;
-                                    read_pos_f64 = trim_start + remainder;
+                                    read_pos_f64 = trim_start + (remainder % loop_len);
                                 }
                             } else {
                                 if read_pos_f64 >= end_bound - 1.0 {
@@ -337,37 +451,73 @@ impl AudioEngine {
         buffer_end: u64,
         sample_rate: u64,
     ) {
-        // 1. Calculate Intersection
-        // Where does this clip start within THIS buffer?
-        let start_offset_in_buffer = if clip.start_time > buffer_start {
-            (clip.start_time - buffer_start) as usize
-        } else {
-            0
-        };
+        // 1. Define Clip Boundaries on Global Timeline
+        let clip_global_start = clip.start_time;
+        let clip_global_end = clip.start_time + clip.loop_length;
 
-        // 2. Calculate Source Read Position
-        // Logic: (CurrentGlobalTime - ClipStartTime) + ClipOffset
-        // If buffer_start < clip.start_time, we start reading from index 0 of the clip.
-        // If buffer_start > clip.start_time, we are somewhere in the middle.
-        let time_elapsed_in_clip = if buffer_start > clip.start_time {
-            buffer_start - clip.start_time
-        } else {
-            0
-        };
+        // 2. Calculate Intersection with Current Buffer
+        // We only render the part of the clip that overlaps with [buffer_start, buffer_end]
+        let render_start = std::cmp::max(buffer_start, clip_global_start);
+        let render_end = std::cmp::min(buffer_end, clip_global_end);
 
+        // If there is no overlap, do nothing
+        if render_end <= render_start {
+            return;
+        }
+
+        // 3. Calculate Output Offset
+        // How many samples into the *buffer* do we start writing?
+        let start_offset_in_buffer = (render_start - buffer_start) as usize;
+
+        // 4. Calculate Source Read Position
+        // How much time has passed since the *clip* started?
+        let time_elapsed_in_clip = render_start - clip_global_start;
+
+        // Resampling ratio
         let ratio = waveform.sample_rate as f64 / sample_rate as f64;
-
         let source_elapsed_frames = time_elapsed_in_clip as f64 * ratio;
-        let source_read_idx = source_elapsed_frames + clip.offset_start as f64;
 
-        // 3. Create Transient Voice
-        // We push this to the voice list. The renderer will consume it immediately.
+        // 5. Define Trim Boundaries (Source Domain)
+        let trim_start = clip.trim_start as f64;
+        let trim_end = if clip.trim_end > 0 {
+            clip.trim_end as f64
+        } else {
+            (waveform.buffer.len() / waveform.channels as usize) as f64
+        };
+
+        // 6. Calculate Initial Read Index
+        let mut source_read_idx = trim_start + source_elapsed_frames;
+
+        // 7. Handle Initial Loop Wrapping
+        // If the clip is looping, the read index might theoretically be way past trim_end.
+        // We wrap it back into the [trim_start, trim_end] range.
+        let loop_len = trim_end - trim_start;
+
+        if waveform.is_looping && loop_len > 0.0 {
+            if source_read_idx >= trim_end {
+                // Calculate how far past trim_start we are, conceptually
+                let offset_from_start = source_read_idx - trim_start;
+                // Modulo to find position within the loop
+                let offset_in_loop = offset_from_start % loop_len;
+                source_read_idx = trim_start + offset_in_loop;
+            }
+        } else {
+            // If NOT looping, and we are past the end, we shouldn't be playing.
+            // (The intersection logic usually prevents this, but safety first)
+            if source_read_idx >= trim_end {
+                return;
+            }
+        }
+
+        // 8. Push Voice
         let voices = active_voices.entry(mixer_id).or_insert(Vec::new());
 
         voices.push(Voice::Audio(AudioVoice {
-            waveform: waveform.clone(), // Arc clone (cheap)
+            waveform: waveform.clone(),
             output_offset_samples: start_offset_in_buffer,
             source_read_index: source_read_idx,
+            start_boundary: trim_start,
+            end_boundary: trim_end,
         }));
     }
 

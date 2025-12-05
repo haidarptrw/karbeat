@@ -6,7 +6,9 @@
 import 'api/audio.dart';
 import 'api/project.dart';
 import 'api/simple.dart';
+import 'api/track.dart';
 import 'api/transport.dart';
+import 'audio/event.dart';
 import 'core/project.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -23,6 +25,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
   int dco_decode_CastedPrimitive_u_64(dynamic raw);
 
   @protected
@@ -34,6 +39,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
+
+  @protected
+  RustStreamSink<PlaybackPosition> dco_decode_StreamSink_playback_position_Sse(
+    dynamic raw,
+  );
 
   @protected
   String dco_decode_String(dynamic raw);
@@ -113,6 +123,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiProjectState? dco_decode_opt_box_autoadd_ui_project_state(dynamic raw);
 
   @protected
+  PlaybackPosition dco_decode_playback_position(dynamic raw);
+
+  @protected
   ProjectMetadata dco_decode_project_metadata(dynamic raw);
 
   @protected
@@ -153,6 +166,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiProjectState dco_decode_ui_project_state(dynamic raw);
 
   @protected
+  UiSourceType dco_decode_ui_source_type(dynamic raw);
+
+  @protected
   UiTrack dco_decode_ui_track(dynamic raw);
 
   @protected
@@ -160,6 +176,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
   int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
@@ -175,6 +194,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<PlaybackPosition> sse_decode_StreamSink_playback_position_Sse(
     SseDeserializer deserializer,
   );
 
@@ -274,6 +298,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackPosition sse_decode_playback_position(SseDeserializer deserializer);
+
+  @protected
   ProjectMetadata sse_decode_project_metadata(SseDeserializer deserializer);
 
   @protected
@@ -316,6 +343,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiProjectState sse_decode_ui_project_state(SseDeserializer deserializer);
 
   @protected
+  UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
+
+  @protected
   UiTrack sse_decode_ui_track(SseDeserializer deserializer);
 
   @protected
@@ -323,6 +353,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
@@ -339,6 +375,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_u_32_ui_track_None(
     Map<int, UiTrack> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_playback_position_Sse(
+    RustStreamSink<PlaybackPosition> self,
     SseSerializer serializer,
   );
 
@@ -451,6 +493,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_playback_position(
+    PlaybackPosition self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_metadata(
     ProjectMetadata self,
     SseSerializer serializer,
@@ -503,6 +551,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UiProjectState self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_track(UiTrack self, SseSerializer serializer);

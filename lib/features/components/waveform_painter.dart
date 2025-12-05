@@ -15,7 +15,7 @@ class StereoWaveformPainter extends CustomPainter {
 
     final paint = Paint()
       ..color = color
-      ..strokeWidth = 1.5
+      ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
@@ -25,40 +25,75 @@ class StereoWaveformPainter extends CustomPainter {
 
     // Draw center line
     canvas.drawLine(
-        Offset(0, size.height / 2), Offset(size.width, size.height / 2), centerDividerPaint);
+      Offset(0, size.height / 2),
+      Offset(size.width, size.height / 2),
+      centerDividerPaint,
+    );
 
     final path = Path();
 
+    final int totalDataBins = samples.length ~/ 4;
+
+    final double pixels = size.width;
+    if (pixels <= 0) return;
+
     // Data Layout: 4 floats per visual bin [L_min, L_max, R_min, R_max]
     // Total Bins = samples.length / 4
-    final stepX = size.width / (samples.length / 4);
+    final int drawSteps = pixels.ceil();
+    final double binsPerPixel = totalDataBins / pixels;
 
     // Height calculations
     final channelHeight = size.height / 2;
     final halfChannelHeight = channelHeight / 2;
-    
+
     // Y-Centers
-    final leftCenterY = halfChannelHeight; 
+    final leftCenterY = halfChannelHeight;
     final rightCenterY = channelHeight + halfChannelHeight;
 
-    for (int i = 0; i < samples.length; i += 4) {
-      if (i + 3 >= samples.length) break;
+    for (int i = 0; i < drawSteps; i++) {
+      // Determine which data bins correspond to this specific pixel column
+      final int startBin = (i * binsPerPixel).floor();
+      final int endBin = ((i + 1) * binsPerPixel).ceil();
 
-      // Extract raw values (-1.0 to 1.0)
-      final lMin = samples[i];
-      final lMax = samples[i + 1];
-      final rMin = samples[i + 2];
-      final rMax = samples[i + 3];
+      // Clamp to data bounds
+      final int actualStart = startBin.clamp(0, totalDataBins);
+      final int actualEnd = endBin.clamp(0, totalDataBins);
 
-      final x = (i / 4) * stepX;
+      if (actualStart >= actualEnd) continue;
+
+      // Find the absolute Min/Max in this range (Aggregation)
+      double lMin = 1.0;
+      double lMax = -1.0;
+      double rMin = 1.0;
+      double rMax = -1.0;
+
+      for (int i = actualStart; i < actualEnd; i++) {
+        final int sampleIdx = i * 4;
+        if (sampleIdx + 3 >= samples.length) break;
+
+        final v0 = samples[sampleIdx];
+        final v1 = samples[sampleIdx + 1];
+        final v2 = samples[sampleIdx + 2];
+        final v3 = samples[sampleIdx + 3];
+
+        if (v0 < lMin) lMin = v0;
+        if (v1 > lMax) lMax = v1;
+        if (v2 < rMin) rMin = v2;
+        if (v3 > rMax) rMax = v3;
+      }
+
+      // If loop didn't update values (e.g. range mismatch), skip
+      if (lMax < lMin) continue;
+
+      final double drawX = i.toDouble();
 
       // Draw Left Channel (Top) - Invert Y because screen Y goes down
-      path.moveTo(x, leftCenterY - (lMax * halfChannelHeight));
-      path.lineTo(x, leftCenterY - (lMin * halfChannelHeight));
+      path.moveTo(drawX, leftCenterY - (lMax * halfChannelHeight));
+      path.lineTo(drawX, leftCenterY - (lMin * halfChannelHeight));
 
       // Draw Right Channel (Bottom)
-      path.moveTo(x, rightCenterY - (rMax * halfChannelHeight));
-      path.lineTo(x, rightCenterY - (rMin * halfChannelHeight));
+      path.moveTo(drawX, rightCenterY - (rMax * halfChannelHeight));
+      path.lineTo(drawX, rightCenterY - (rMin * halfChannelHeight));
     }
 
     canvas.drawPath(path, paint);

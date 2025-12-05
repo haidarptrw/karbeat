@@ -39,7 +39,7 @@ class _AudioPropertiesScreenState extends State<AudioPropertiesScreen> {
       backgroundColor: Colors.grey.shade900,
       appBar: AppBar(
         title: Text(widget.sourceName),
-        backgroundColor: Colors.grey.shade800,
+        backgroundColor: const Color.fromARGB(255, 9, 7, 7),
         elevation: 0,
       ),
       body: FutureBuilder<AudioWaveformUiForAudioProperties?>(
