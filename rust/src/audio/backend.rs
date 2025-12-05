@@ -7,7 +7,7 @@ use cpal::{
 };
 use log::debug;
 use once_cell::sync::Lazy;
-use rtrb::Consumer;
+use rtrb::{Consumer, RingBuffer};
 use triple_buffer::Output;
 
 use crate::{
@@ -17,10 +17,73 @@ use crate::{
 
 static STREAM_GUARD: Lazy<Mutex<Option<cpal::Stream>>> = Lazy::new(|| Mutex::new(None));
 
+struct AudioContext {
+    engine: AudioEngine,
+    producer: rtrb::Producer<f32>,
+    staging_buffer: Vec<f32>,
+    channels: usize,
+}
+
+/// Macro to generate the stream building logic
+/// $device: cpal device
+/// $config: cpal config
+/// $ctx: The AudioContext (moved into the closure)
+/// $consumer: The RingBuffer consumer (moved into the closure)
+/// $sample_type: The primitive type (f32, i16, etc)
+/// $converter: A closure |f32_sample| -> $sample_type
+macro_rules! run_stream {
+    ($device:expr, $config:expr, $ctx:expr, $consumer:expr, $sample_type:ty, $converter:expr, $err_fn:expr) => {{
+        let mut ctx = $ctx;
+        let mut consumer = $consumer;
+        // Internal buffer for reading from ringbuffer before conversion
+        let mut read_buffer: Vec<f32> = Vec::new();
+
+        $device.build_output_stream(
+            &$config,
+            move |data: &mut [$sample_type], _: &OutputCallbackInfo| {
+                let samples_needed = data.len();
+
+                // Ensure Ring Buffer has enough data
+                // While readable samples < needed samples
+                while consumer.slots() < samples_needed {
+                    // Process fixed block
+                    ctx.engine.process(&mut ctx.staging_buffer);
+
+                    // Push to RingBuffer
+                    // Note: process() fills staging_buffer completely
+                    for sample in &ctx.staging_buffer {
+                        if let Err(_) = ctx.producer.push(*sample) {
+                            break;
+                        }
+                    }
+                }
+
+                if read_buffer.len() != samples_needed {
+                    read_buffer.resize(samples_needed, 0.0);
+                }
+
+                for i in 0..samples_needed {
+                    if let Ok(sample) = consumer.pop() {
+                        read_buffer[i] = sample;
+                    }
+                }
+
+                // Write to output with conversion
+                for (out, &in_sample) in data.iter_mut().zip(read_buffer.iter()) {
+                    *out = $converter(in_sample);
+                }
+            },
+            $err_fn,
+            None,
+        )
+    }};
+}
+
 /// Set host to use the optimized host. For now, it handles driver on Windows to use ASIO that is more optimized
 ///
 /// **TODO: Handle drive on other OS**
 fn set_host() -> cpal::Host {
+    #[allow(unused_assignments)]
     let mut host = cpal::default_host();
     #[cfg(target_os = "windows")]
     {
@@ -39,7 +102,7 @@ fn set_host() -> cpal::Host {
 }
 
 pub fn start_audio_stream(
-    state_consumer: Output<AudioRenderState>,
+    mut state_consumer: Output<AudioRenderState>,
     command_consumer: Consumer<AudioCommand>,
 ) -> Result<()> {
     let host = set_host();
@@ -67,77 +130,80 @@ pub fn start_audio_stream(
     let sample_format = supported_config.sample_format();
     let config: cpal::StreamConfig = supported_config.into();
     let sample_rate: u64 = config.sample_rate.0.into();
-    let channels = config.channels;
+    let channels = config.channels as usize;
 
     println!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);
     println!("Sample format: {}", sample_format);
 
-    let mut engine = AudioEngine::new(state_consumer, command_consumer, sample_rate);
+    state_consumer.update();
+
+    // Read buffer size before moving state_consumer
+    let mut buffer_size = state_consumer.read().buffer_size;
+
+    if buffer_size == 0 {
+        println!("Warning: buffer_size is 0 — using fallback of 512 frames");
+        buffer_size = 512; // or return Err
+    }
+
+    let engine = AudioEngine::new(state_consumer, command_consumer, sample_rate);
 
     let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
+    let ring_buffer_capacity = sample_rate as usize * channels as usize * 2;
+    let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
+
+    let staging_buffer = vec![0.0; buffer_size * channels];
+
+    let ctx = AudioContext {
+        engine,
+        producer,
+        staging_buffer,
+        channels,
+    };
+
     let stream = match sample_format {
-        cpal::SampleFormat::F32 => device.build_output_stream(
-            &config,
-            move |data: &mut [f32], _| {
-                engine.process(data);
-            },
-            err_fn,
-            None,
+        cpal::SampleFormat::F32 => run_stream!(
+            device,
+            config,
+            ctx,
+            consumer,
+            f32,
+            |s| s, // Identity
+            err_fn
         ),
 
-        cpal::SampleFormat::I16 => device.build_output_stream(
-            &config,
-            move |data: &mut [i16], _| {
-                let mut buffer_f32 = vec![0.0; data.len()];
-                engine.process(&mut buffer_f32);
-
-                for (out, &v) in data.iter_mut().zip(buffer_f32.iter()) {
-                    let v = (v * i16::MAX as f32).round();
-                    *out = v.clamp(i16::MIN as f32, i16::MAX as f32) as i16;
-                }
-            },
-            err_fn,
-            None,
+        cpal::SampleFormat::I16 => run_stream!(
+            device,
+            config,
+            ctx,
+            consumer,
+            i16,
+            |s: f32| (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32) as i16,
+            err_fn
         ),
 
-        cpal::SampleFormat::U16 => device.build_output_stream(
-            &config,
-            move |data: &mut [u16], _| {
-                let mut buffer_f32 = vec![0.0; data.len()];
-                engine.process(&mut buffer_f32);
-
-                for (out, &v) in data.iter_mut().zip(buffer_f32.iter()) {
-                    let v = ((v + 1.0) * 0.5 * u16::MAX as f32).round();
-                    *out = v.clamp(0.0, u16::MAX as f32) as u16;
-                }
-            },
-            err_fn,
-            None,
+        cpal::SampleFormat::U16 => run_stream!(
+            device,
+            config,
+            ctx,
+            consumer,
+            u16,
+            |s: f32| ((s + 1.0) * 0.5 * u16::MAX as f32).clamp(0.0, u16::MAX as f32) as u16,
+            err_fn
         ),
 
-        cpal::SampleFormat::U8 => {
-            device.build_output_stream(
-                &config,
-                move |data: &mut [u8], _| {
-                    let mut buffer_f32 = vec![0.0; data.len()];
-                    engine.process(&mut buffer_f32);
-
-                    for (out, &v) in data.iter_mut().zip(buffer_f32.iter()) {
-                        let v = ((v + 1.0) * 0.5 * 255.0).round();
-                        *out = v.clamp(0.0, 255.0) as u8;
-                    }
-                },
-                err_fn,
-                None,
-            )
-        }
+        cpal::SampleFormat::U8 => run_stream!(
+            device,
+            config,
+            ctx,
+            consumer,
+            u8,
+            |s: f32| ((s + 1.0) * 0.5 * 255.0).clamp(0.0, 255.0) as u8,
+            err_fn
+        ),
 
         other => {
-            return Err(anyhow!(
-                "Unsupported sample format from device: {:?}",
-                other
-            ));
+            return Err(anyhow!("Unsupported sample format: {:?}", other));
         }
     }?;
 

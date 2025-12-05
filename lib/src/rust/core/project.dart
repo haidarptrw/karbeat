@@ -80,6 +80,8 @@ class TransportState {
   final int loopEndSamples;
   final double bpm;
   final (int, int) timeSignature;
+  final int beatTracker;
+  final int barTracker;
 
   const TransportState({
     required this.isPlaying,
@@ -90,6 +92,8 @@ class TransportState {
     required this.loopEndSamples,
     required this.bpm,
     required this.timeSignature,
+    required this.beatTracker,
+    required this.barTracker,
   });
 
   @override
@@ -101,7 +105,9 @@ class TransportState {
       loopStartSamples.hashCode ^
       loopEndSamples.hashCode ^
       bpm.hashCode ^
-      timeSignature.hashCode;
+      timeSignature.hashCode ^
+      beatTracker.hashCode ^
+      barTracker.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -115,5 +121,7 @@ class TransportState {
           loopStartSamples == other.loopStartSamples &&
           loopEndSamples == other.loopEndSamples &&
           bpm == other.bpm &&
-          timeSignature == other.timeSignature;
+          timeSignature == other.timeSignature &&
+          beatTracker == other.beatTracker &&
+          barTracker == other.barTracker;
 }

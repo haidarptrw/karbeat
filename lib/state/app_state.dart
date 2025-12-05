@@ -23,6 +23,8 @@ class KarbeatState extends ChangeNotifier {
     loopEndSamples: 0,
     bpm: 67.0,
     timeSignature: (4, 4),
+    barTracker: 0,
+    beatTracker: 0,
   );
 
   ProjectMetadata _metadata = ProjectMetadata(

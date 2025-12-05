@@ -901,6 +901,8 @@ impl SseDecode for crate::core::project::TransportState {
         let mut var_loopEndSamples = <u64>::sse_decode(deserializer);
         let mut var_bpm = <f32>::sse_decode(deserializer);
         let mut var_timeSignature = <(u8, u8)>::sse_decode(deserializer);
+        let mut var_beatTracker = <usize>::sse_decode(deserializer);
+        let mut var_barTracker = <usize>::sse_decode(deserializer);
         return crate::core::project::TransportState {
             is_playing: var_isPlaying,
             is_recording: var_isRecording,
@@ -910,6 +912,8 @@ impl SseDecode for crate::core::project::TransportState {
             loop_end_samples: var_loopEndSamples,
             bpm: var_bpm,
             time_signature: var_timeSignature,
+            beat_tracker: var_beatTracker,
+            bar_tracker: var_barTracker,
         };
     }
 }
@@ -1013,6 +1017,13 @@ impl SseDecode for crate::api::project::UiTrack {
 impl SseDecode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
+}
+
+impl SseDecode for usize {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u64::<NativeEndian>().unwrap() as _
+    }
 }
 
 fn pde_ffi_dispatcher_primary_impl(
@@ -1215,6 +1226,8 @@ impl flutter_rust_bridge::IntoDart for crate::core::project::TransportState {
             self.loop_end_samples.into_into_dart().into_dart(),
             self.bpm.into_into_dart().into_dart(),
             self.time_signature.into_into_dart().into_dart(),
+            self.beat_tracker.into_into_dart().into_dart(),
+            self.bar_tracker.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1585,6 +1598,8 @@ impl SseEncode for crate::core::project::TransportState {
         <u64>::sse_encode(self.loop_end_samples, serializer);
         <f32>::sse_encode(self.bpm, serializer);
         <(u8, u8)>::sse_encode(self.time_signature, serializer);
+        <usize>::sse_encode(self.beat_tracker, serializer);
+        <usize>::sse_encode(self.bar_tracker, serializer);
     }
 }
 
@@ -1667,6 +1682,16 @@ impl SseEncode for crate::api::project::UiTrack {
 impl SseEncode for () {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
+}
+
+impl SseEncode for usize {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer
+            .cursor
+            .write_u64::<NativeEndian>(self as _)
+            .unwrap();
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]

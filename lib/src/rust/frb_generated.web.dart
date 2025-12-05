@@ -28,6 +28,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_CastedPrimitive_u_64(dynamic raw);
 
   @protected
+  int dco_decode_CastedPrimitive_usize(dynamic raw);
+
+  @protected
   Map<int, AudioWaveformUiForSourceList>
   dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
 
@@ -158,7 +161,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
   int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer);
 
   @protected
   Map<int, AudioWaveformUiForSourceList>
@@ -315,7 +324,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
@@ -496,6 +511,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
 }
 
 // Section: wire_class

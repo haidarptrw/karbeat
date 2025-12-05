@@ -577,6 +577,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_CastedPrimitive_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError(
+      'Not implemented in this codec, please use the other one',
+    );
+  }
+
+  @protected
   Map<int, AudioWaveformUiForSourceList>
   dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -842,8 +850,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TransportState dco_decode_transport_state(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return TransportState(
       isPlaying: dco_decode_bool(arr[0]),
       isRecording: dco_decode_bool(arr[1]),
@@ -853,6 +861,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       loopEndSamples: dco_decode_CastedPrimitive_u_64(arr[5]),
       bpm: dco_decode_f_32(arr[6]),
       timeSignature: dco_decode_record_u_8_u_8(arr[7]),
+      beatTracker: dco_decode_CastedPrimitive_usize(arr[8]),
+      barTracker: dco_decode_CastedPrimitive_usize(arr[9]),
     );
   }
 
@@ -944,9 +954,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
   int sse_decode_CastedPrimitive_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_u_64(deserializer);
+    return inner.toInt();
+  }
+
+  @protected
+  int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_usize(deserializer);
     return inner.toInt();
   }
 
@@ -1287,6 +1310,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_loopEndSamples = sse_decode_CastedPrimitive_u_64(deserializer);
     var var_bpm = sse_decode_f_32(deserializer);
     var var_timeSignature = sse_decode_record_u_8_u_8(deserializer);
+    var var_beatTracker = sse_decode_CastedPrimitive_usize(deserializer);
+    var var_barTracker = sse_decode_CastedPrimitive_usize(deserializer);
     return TransportState(
       isPlaying: var_isPlaying,
       isRecording: var_isRecording,
@@ -1296,6 +1321,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       loopEndSamples: var_loopEndSamples,
       bpm: var_bpm,
       timeSignature: var_timeSignature,
+      beatTracker: var_beatTracker,
+      barTracker: var_barTracker,
     );
   }
 
@@ -1389,9 +1416,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
   void sse_encode_CastedPrimitive_u_64(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(sseEncodeCastedPrimitiveU64(self), serializer);
+  }
+
+  @protected
+  void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(sseEncodeCastedPrimitiveU64(self), serializer);
   }
 
   @protected
@@ -1704,6 +1743,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_CastedPrimitive_u_64(self.loopEndSamples, serializer);
     sse_encode_f_32(self.bpm, serializer);
     sse_encode_record_u_8_u_8(self.timeSignature, serializer);
+    sse_encode_CastedPrimitive_usize(self.beatTracker, serializer);
+    sse_encode_CastedPrimitive_usize(self.barTracker, serializer);
   }
 
   @protected
@@ -1775,5 +1816,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 }

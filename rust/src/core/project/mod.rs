@@ -84,10 +84,10 @@ impl std::str::FromStr for TrackType {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum KarbeatSource {
-    /// Points to an Asset ID in AssetLibrary
+    /// Points to an AudioWaveform
     Audio(Arc<AudioWaveform>),
 
-    /// Points to a Pattern ID in PatternPool
+    /// Points to a Pattern
     Midi(Arc<Pattern>),
 
     /// Points to an Automation ID (Future implementation)
@@ -126,6 +126,10 @@ pub struct TransportState {
     // general state
     pub bpm: f32,
     pub time_signature: (u8, u8),
+
+    // Beat and bar tracker
+    pub beat_tracker: usize,
+    pub bar_tracker: usize,
 }
 
 impl Default for TransportState {
@@ -139,6 +143,8 @@ impl Default for TransportState {
             playhead_position_samples: Default::default(),
             loop_start_samples: Default::default(),
             loop_end_samples: Default::default(),
+            beat_tracker: 0,
+            bar_tracker: 0
         }
     }
 }
