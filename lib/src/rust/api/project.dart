@@ -36,6 +36,9 @@ Future<void> addNewTrack({required TrackType trackType}) =>
 Future<Map<int, UiTrack>> getTracks() =>
     RustLib.instance.api.crateApiProjectGetTracks();
 
+Future<int> getMaxSampleIndex() =>
+    RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
+
 class AudioWaveformUiForAudioProperties {
   final Float32List previewBuffer;
   final String filePath;

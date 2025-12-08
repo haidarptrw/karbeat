@@ -6,6 +6,7 @@ import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
+import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 
 enum ToolSelection { pointer, cut, draw }
@@ -15,6 +16,7 @@ enum WorkspaceView { trackList, pianoRoll, mixer, source }
 enum ToolbarMenuContextGroup { none, project, edit, view }
 
 class KarbeatState extends ChangeNotifier {
+  // ================== BACKEND STATES =========================
   TransportState _transportState = TransportState(
     isPlaying: false,
     isRecording: false,
@@ -52,6 +54,10 @@ class KarbeatState extends ChangeNotifier {
     KarbeatToolbarMenuGroupFactory.createViewMenuGroup(),
   ];
 
+  int maxSamplesIndex = 2000;
+
+  late final Stream<PlaybackPosition> _positionBroadcastStream;
+
   // =========== EDITOR STATE ====================
   ToolSelection _selectedTool = ToolSelection.pointer;
   WorkspaceView _currentView = WorkspaceView.trackList;
@@ -59,6 +65,13 @@ class KarbeatState extends ChangeNotifier {
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
+
+  // ================ CONSTRUCTOR ==================
+  KarbeatState() {
+    // 2. Initialize it ONCE. 
+    // This creates ONE Rust thread that feeds ALL Flutter widgets.
+    _positionBroadcastStream = createPositionStream().asBroadcastStream();
+  }
 
   // ============== GETTERS =================
   TransportState get transport => _transportState;
@@ -72,6 +85,7 @@ class KarbeatState extends ChangeNotifier {
   WorkspaceView get currentView => _currentView;
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
   AudioHardwareConfig get hardwareConfig => _hardwareConfig;
+  Stream<PlaybackPosition> get positionStream => _positionBroadcastStream;
 
   // =============== GLOBAL UI STATE ==========================
   double horizontalZoomLevel = 1000;
@@ -86,6 +100,7 @@ class KarbeatState extends ChangeNotifier {
   int _placementTrackId = -1;
 
   bool get isPlacing => _placingSourceId != null;
+  
 
 
   // ================ SYNCHRONIZATION ======================
@@ -135,6 +150,16 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       log("failed when syncing metadata: $e");
+    }
+  }
+
+  Future<void> syncMaxSampleIndex() async {
+    try {
+      final newState = await getMaxSampleIndex();
+      maxSamplesIndex = newState;
+      notifyListeners();
+    } catch (e) {
+      log("failed when syncing max sample index: $e");
     }
   }
 
@@ -239,6 +264,25 @@ class KarbeatState extends ChangeNotifier {
     if (gridSize != newSize) {
       gridSize = newSize;
       notifyListeners();
+    }
+  }
+
+  void setHorizontalZoom(double level) {
+  if (horizontalZoomLevel != level) {
+    horizontalZoomLevel = level;
+    notifyListeners();
+  }
+}
+
+  Future<void> seekTo(int samples) async {
+    try {
+      // Call the Rust API
+      await setPlayhead(val: samples);
+      
+      // Optimistic update (optional, since Rust pushes the update back immediately)
+      // notifyListeners(); 
+    } catch (e) {
+      print("Error seeking: $e");
     }
   }
 

@@ -304,7 +304,7 @@ class _ControlPanel extends StatelessWidget {
     builder.addDivider();
 
     // -- Info Display (Static for now) --
-    builder.addWidget(_buildInfoDisplay());
+    builder.addWidget(_buildInfoDisplay(context));
 
     builder.addDivider();
 
@@ -353,7 +353,7 @@ class _ControlPanel extends StatelessWidget {
     return builder.build();
   }
 
-  Widget _buildInfoDisplay() {
+  Widget _buildInfoDisplay(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -363,7 +363,7 @@ class _ControlPanel extends StatelessWidget {
       ),
       child: IntrinsicHeight(
         child: StreamBuilder<PlaybackPosition>(
-          stream: createPositionStream(),
+          stream: context.read<KarbeatState>().positionStream,
           builder: (context, asyncSnapshot) {
             final pos = asyncSnapshot.data;
             final bar = pos?.bar ?? 0;

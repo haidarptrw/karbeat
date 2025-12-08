@@ -5,6 +5,7 @@ use crate::{
     utils::math::is_power_of_two,
 };
 
+/// AudioRenderState, which is the state only used by audio thread
 #[derive(Default, Clone)]
 pub struct AudioRenderState {
     pub is_playing: bool,

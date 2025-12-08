@@ -1,8 +1,12 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:provider/provider.dart';
 
@@ -65,6 +69,12 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   // Local state for ghost clip
   Offset? _mousePos;
 
+  // LocalState for width
+  double _timelineWidth = 2000.0;
+
+  // base zoom level
+  double _baseZoomLevel = 1000.0;
+
   @override
   void initState() {
     super.initState();
@@ -75,15 +85,39 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     _horizontalControllers = LinkedScrollControllerGroup();
     _rulerController = _horizontalControllers.addAndGet();
     _trackContentController = _horizontalControllers.addAndGet();
+    _trackContentController.addListener(_handleScrollExpansion);
   }
 
   @override
   void dispose() {
+    _trackContentController.removeListener(_handleScrollExpansion);
     _headerController.dispose();
     _timelineController.dispose();
     _rulerController.dispose();
     _trackContentController.dispose();
     super.dispose();
+  }
+
+  void _handleScrollExpansion() {
+    // If the user scrolls within 500px of the edge...
+    final maxScroll = _trackContentController.position.maxScrollExtent;
+    final currentScroll = _trackContentController.offset;
+
+    if (currentScroll >= maxScroll - 500) {
+      // ... Add more space (e.g., another 2000px)
+      setState(() {
+        _timelineWidth += 2000.0;
+      });
+    }
+  }
+
+  void _updateZoom(double newZoom) {
+    // Define min/max zoom limits to prevent bugs
+    final clamped = newZoom.clamp(0.01, 5000.0);
+    
+    // Assuming you have a setter in KarbeatState. 
+    // If not, add: void setHorizontalZoom(double val) { horizontalZoomLevel = val; notifyListeners(); }
+    context.read<KarbeatState>().setHorizontalZoom(clamped);
   }
 
   @override
@@ -93,6 +127,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     final int itemCount = widget.tracks.length + 1;
     final state = context.read<KarbeatState>();
     final isPlacing = context.select<KarbeatState, bool>((s) => s.isPlacing);
+
+    // Calculate minimum width required by current song length
+    // e.g. (TotalSamples / ZoomLevel)
+    final currentTimelineWidth = _timelineWidth;
 
     return Stack(
       children: [
@@ -136,80 +174,125 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
 
             // --- RIGHT: TIMELINE ---
             Expanded(
-              child: Column(
-                children: [
-                  // Optional: Time Ruler Header (Horizontal Scrollable)
-                  // We would need another sync controller for the ruler + body horizontal scroll.
-                  Container(
-                    height: 30,
-                    color: Colors.grey.shade800,
-                    width: double.infinity,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      controller: _rulerController,
-                      physics: const ClampingScrollPhysics(),
-                      child: SizedBox(
-                        width: 50000, // Matches track list width
+              child: Listener(
+                onPointerSignal: (event) {
+                  if (event is PointerScrollEvent) {
+                    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+                    final isCtrl = keys.contains(LogicalKeyboardKey.controlLeft) || keys.contains(LogicalKeyboardKey.controlRight);
+                    if (!isCtrl) return;
+                    final currentZoom = context.read<KarbeatState>().horizontalZoomLevel;
+                    final double multiplier = event.scrollDelta.dy > 0 ? 0.9 : 1.1;
+                    _updateZoom(currentZoom * multiplier);
+                  }
+                },
+                child: GestureDetector(
+                  onScaleStart: (details) {
+                    _baseZoomLevel = context.read<KarbeatState>().horizontalZoomLevel;
+                  },
+                  onScaleUpdate: (details) {
+                    if (details.scale != 1.0) {
+                      final newZoom = _baseZoomLevel * details.scale;
+                      _updateZoom(newZoom);
+                    }
+                  },
+                  child: Column(
+                    children: [
+                      // Optional: Time Ruler Header (Horizontal Scrollable)
+                      // We would need another sync controller for the ruler + body horizontal scroll.
+                      Container(
                         height: 30,
-                        child: _TimelineRuler(
-                          scrollController: _rulerController,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: MouseRegion(
-                      cursor: isPlacing
-                          ? SystemMouseCursors.move
-                          : SystemMouseCursors.basic,
-                      onHover: null,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onPanUpdate: null,
-                        onTapDown: isPlacing
-                            ? (details) {
-                                setState(() {
-                                  _mousePos = details.localPosition;
-                                });
-                                _updatePlacementTarget(state);
-                              }
-                            : null,
+                        color: Colors.grey.shade800,
+                        width: double.infinity,
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          controller: _trackContentController,
-                          // Physics to match desktop feel
+                          controller: _rulerController,
                           physics: const ClampingScrollPhysics(),
                           child: SizedBox(
-                            width: 50000, // TODO: Bind to project duration
-                            child: ListView.builder(
-                              controller:
-                                  _timelineController, // Controller 2 (Synced Vertically)
-                              padding: EdgeInsets.zero,
-                              itemCount: itemCount,
-                              itemBuilder: (context, index) {
-                                if (index == widget.tracks.length) {
-                                  // Empty space matching Add Button height
-                                  return SizedBox(height: 60);
-                                }
-                                return KarbeatTrackSlot(
-                                  trackId: widget.tracks[index].id,
-                                  height: widget.itemHeight,
-                                  horizontalScrollController:
-                                      _trackContentController,
-                                );
-                              },
+                            width: currentTimelineWidth, // Matches track list width
+                            height: 30,
+                            child: _TimelineRuler(
+                              scrollController: _rulerController,
                             ),
                           ),
                         ),
                       ),
-                    ),
+                      Expanded(
+                        child: MouseRegion(
+                          cursor: isPlacing
+                              ? SystemMouseCursors.move
+                              : SystemMouseCursors.basic,
+                          onHover: null,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onPanUpdate: null,
+                            onTapDown: isPlacing
+                                ? (details) {
+                                    setState(() {
+                                      _mousePos = details.localPosition;
+                                    });
+                                    _updatePlacementTarget(state);
+                                  }
+                                : null,
+                            child: ScrollConfiguration(
+                              behavior: DragScrollBehavior(),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                controller: _trackContentController,
+                                // Physics to match desktop feel
+                                physics: const ClampingScrollPhysics(),
+                                child: SizedBox(
+                                  width: currentTimelineWidth,
+                                  child: ListView.builder(
+                                    controller:
+                                        _timelineController, // Controller 2 (Synced Vertically)
+                                    padding: EdgeInsets.zero,
+                                    itemCount: itemCount,
+                                    itemBuilder: (context, index) {
+                                      if (index == widget.tracks.length) {
+                                        // Empty space matching Add Button height
+                                        return SizedBox(height: 60);
+                                      }
+                                      return KarbeatTrackSlot(
+                                        trackId: widget.tracks[index].id,
+                                        height: widget.itemHeight,
+                                        horizontalScrollController:
+                                            _trackContentController,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ],
         ),
         if (isPlacing && _mousePos != null) _buildGhostClip(context),
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: false, 
+            child: TimelinePlayheadSeeker(
+              headerWidth: widget.headerWidth,
+              scrollController: _trackContentController,
+              onSeek: (int newSamples) {
+                // Clamp to 0
+                final safeSamples = newSamples < 0 ? 0 : newSamples;
+                
+                // Call your state to update position
+                // Assuming you have a method like this:
+                context.read<KarbeatState>().seekTo(safeSamples);
+                
+                print("Seeking to: $safeSamples samples");
+              },
+            ),
+          ),
+        ),
         if (isPlacing)
           Positioned(
             bottom: 30,

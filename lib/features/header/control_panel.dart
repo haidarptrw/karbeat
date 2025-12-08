@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:karbeat/utils/scroll_behavior.dart';
 
 class ControlPanel extends StatelessWidget {
   final List<Widget> items;
@@ -25,7 +26,7 @@ class ControlPanel extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: ScrollConfiguration(
-        behavior: _DragScrollBehavior(),
+        behavior: DragScrollBehavior(),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -134,14 +135,4 @@ class ControlPanelToolbarItem extends StatelessWidget {
       ),
     );
   }
-}
-
-// Custom Behavior to allow Mouse Dragging (Standard 'Inverse' Scrolling)
-class _DragScrollBehavior extends MaterialScrollBehavior {
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-    PointerDeviceKind.trackpad,
-  };
 }

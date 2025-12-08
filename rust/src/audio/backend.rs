@@ -146,6 +146,17 @@ pub fn start_audio_stream(
     println!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);
     println!("Sample format: {}", sample_format);
 
+    {
+        // We use crate::APP_STATE because it is public in lib.rs
+        if let Ok(mut state) = crate::APP_STATE.write() {
+            state.audio_config.sample_rate = sample_rate as u32;
+            state.audio_config.selected_output_device = device.name().unwrap_or("Unknown".to_string());
+            println!("✅ Global Audio Config updated: {} Hz", sample_rate);
+        } else {
+            eprintln!("❌ Failed to lock APP_STATE to update audio config");
+        }
+    }
+
     state_consumer.update();
 
     // Read buffer size before moving state_consumer

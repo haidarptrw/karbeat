@@ -63,6 +63,7 @@ pub fn create_position_stream(sink: StreamSink<PlaybackPosition>) -> Result<(), 
                     while let Ok(pos_data) = consumer.pop() {
                         // We map the Rust struct to something Dart understands
                         if sink.add(pos_data).is_err() {
+                            println!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
                             return; 
                         }
                     }

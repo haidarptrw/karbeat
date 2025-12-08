@@ -1,6 +1,6 @@
 // src/core/project/mod.rs
 
-use std::{cmp::Ordering, collections::HashMap, path::PathBuf, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, path::PathBuf, sync::{Arc, RwLock}};
 
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +31,9 @@ pub struct ApplicationState {
     // Counter for clips
     pub clip_counter: u32,
 
+    // Max samples index in the timeline
+    pub max_sample_index: u64,
+
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
     #[serde(skip)]
@@ -46,7 +49,7 @@ pub struct KarbeatTrack {
     pub name: String,
     pub color: String,
     pub track_type: TrackType,
-    pub clips: Arc<Vec<Clip>>,
+    pub clips: Arc<Vec<Arc<Clip>>>,
 
     // This tells the engine: "Any audio/midi generated on this track
     // gets sent to Mixer Channel X".
@@ -326,13 +329,13 @@ impl Default for AudioHardwareConfig {
 }
 
 impl KarbeatTrack {
-    pub fn clips(&self) -> &[Clip] {
-        return &self.clips;
+    pub fn clips(&self) -> &[Arc<Clip>] {
+        return self.clips.as_ref();
     }
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
-    pub fn add_clip(&mut self, clip: Clip) {
+    pub fn add_clip(&mut self, clip: Clip) -> Option<u64>{
         let is_valid = match (&self.track_type, &clip.source) {
             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
             (TrackType::Midi, KarbeatSource::Midi(_)) => true,
@@ -342,26 +345,56 @@ impl KarbeatTrack {
         };
 
         if is_valid {
+            // Calculate potential new max index BEFORE moving clip
+            let clip_end_sample = clip.start_time + (clip.trim_end - clip.trim_start);
+            
+            // 1. Wrap in Arc immediately
+            let clip_arc = Arc::new(clip);
+
+            // 2. COW: Get mutable access to the vector
             let clips_vec = Arc::make_mut(&mut self.clips);
             
-            let pos = match clips_vec.binary_search(&clip) {
+            // 3. Binary Search using the Arc reference (dereferencing to Clip for comparison)
+            let pos = match clips_vec.binary_search_by(|c| c.cmp(&clip_arc)) {
                 Ok(index) => index,
                 Err(index) => index,
             };
-            clips_vec.insert(pos, clip);
-            for clip in clips_vec.iter() {
-                println!("Clip: {}, Name: {}, position: {}, length: {}", clip.id, clip.name, clip.start_time, clip.loop_length);
-            }
+            
+            // 4. Insert pointer (Cheap!)
+            clips_vec.insert(pos, clip_arc);
+
+            // Return the end sample of this new clip
+            return Some(clip_end_sample);
         } else {
             // In a real app, maybe return Result<Error>
             eprintln!("Warning: Mismatched Clip Source for Track Type");
+            return None;
         }
     }
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
-    pub fn add_clips_bulk(&mut self, new_clips: Vec<Clip>) {
+    pub fn add_clips_bulk(&mut self, new_clips: Vec<Arc<Clip>>) {
         let clips_vec = Arc::make_mut(&mut self.clips);
         clips_vec.extend(new_clips);
         clips_vec.sort();
+    }
+}
+
+impl ApplicationState {
+    pub fn add_clip_to_track(&mut self, track_id: u32, clip: Clip) {
+        // 1. Get the track
+        if let Some(track_arc) = self.tracks.get_mut(&track_id) {
+            // 2. COW: Get mutable track
+            let track = Arc::make_mut(track_arc);
+            
+            // 3. Add Clip & Check bounds
+            // We pass the Clip by value. The track takes ownership and wraps it in Arc.
+            if let Some(new_clip_end) = track.add_clip(clip) {
+                // 4. Update Global Max (Cheap u64 comparison)
+                if new_clip_end > self.max_sample_index {
+                    self.max_sample_index = new_clip_end;
+                }
+            }
+        }
     }
 }

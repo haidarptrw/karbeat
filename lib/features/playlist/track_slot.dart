@@ -1,7 +1,5 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
+import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -169,10 +167,18 @@ class _ClipRenderer extends StatelessWidget {
       //   return const Center(
       //     child: Icon(Icons.show_chart, size: 16, color: Colors.white54),
       //   );
-      case UiClipSource_Audio():
+      case UiClipSource_Audio(:final field0):
         // TODO In future: Use CustomPainter to draw the waveform summary here
-        return const Center(
-          child: Icon(Icons.graphic_eq, size: 16, color: Colors.white54),
+        // return const Center(
+        //   child: Icon(Icons.graphic_eq, size: 16, color: Colors.white54),
+        // );
+        return CustomPaint(
+          size: Size.infinite, // Fill the clip container
+          painter: MonoWaveformPainter(
+            samples: field0.previewBuffer, // <--- PASS DATA HERE
+            color: Colors.white.withAlpha(200), // High contrast waveform
+            strokeWidth: 1.0,
+          ),
         );
       case UiClipSource_None():
         return const Center(

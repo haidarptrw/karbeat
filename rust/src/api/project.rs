@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, ops::Deref};
 
 use serde::Serialize;
 
@@ -34,7 +34,7 @@ impl From<&KarbeatTrack> for UiTrack {
             id: value.id,
             name: value.name.clone(),
             track_type: value.track_type.clone(),
-            clips: value.clips.iter().map(|c| UiClip::from(c)).collect()
+            clips: value.clips.iter().map(|c| UiClip::from(c.deref().deref())).collect()
         }
     }
 }
@@ -114,7 +114,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
 impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
     fn from(value: &AudioWaveform) -> Self {
         Self {
-            preview_buffer: downsample(value.buffer.as_ref(), 1000),
+            preview_buffer: downsample(value.buffer.as_ref(), 10000),
             file_path: value.file_path.clone(),
             name: value.name.clone(),
             sample_rate: value.sample_rate,
@@ -156,7 +156,7 @@ pub fn get_ui_state() -> Option<UiProjectState> {
             .tracks
             .values()
             .map(|t| UiTrack {
-                clips: t.clips.iter().map(|e| UiClip::from(e)).collect(),
+                clips: t.clips.iter().map(|e| UiClip::from(e.deref())).collect(),
                 id: t.id,
                 name: t.name.clone(),
                 track_type: t.track_type().clone(),
@@ -261,4 +261,12 @@ pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
         .collect();
 
     Ok(return_data)
+}
+
+pub fn get_max_sample_index() -> Result<u64, String> {
+    let app = APP_STATE
+        .read()
+        .map_err(|e| format!("Error acquiring read lock of APP_STATE: {}", e))?;
+
+    Ok(app.max_sample_index)
 }

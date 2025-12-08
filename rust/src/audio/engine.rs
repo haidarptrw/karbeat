@@ -129,6 +129,7 @@ impl AudioEngine {
                     self.current_beat = 1;
                     self.current_bar = 1;
                     self.beat_samples_accumulator = 0;
+                    self.last_emitted_samples = 0;
 
                     // Immediately push the reset position back to UI so the slider snaps back
                     if !self.position_producer.is_full() {
@@ -145,6 +146,7 @@ impl AudioEngine {
                     println!("[AudioEngine] Set Playhead to {}", samples);
                     self.playhead_samples = samples as u64;
                     self.recalculate_beat_bar();
+                    self.last_emitted_samples = self.playhead_samples;
 
                     // Immediately push the reset position back to UI so the slider snaps back
                     if !self.position_producer.is_full() {
@@ -175,22 +177,9 @@ impl AudioEngine {
 
             self.playhead_samples += frame_count as u64;
 
-            let samples_per_beat =
-                (60.0 / self.current_state.tempo * self.sample_rate as f32) as usize;
-            self.beat_samples_accumulator += frame_count as usize;
+            self.recalculate_beat_bar();
 
-            while self.beat_samples_accumulator >= samples_per_beat {
-                self.beat_samples_accumulator -= samples_per_beat;
-                // println!("Beat {}", self.current_beat);
-                self.current_beat += 1;
-                // TODO: adjust to time signature
-                if self.current_beat % 4 == 0 {
-                    self.current_bar += 1;
-                    // println!("Bar {}", self.current_bar);
-                }
-            }
-
-            let emission_interval = self.sample_rate / 60; 
+            let emission_interval = self.sample_rate / 60;
 
             if self.playhead_samples >= self.last_emitted_samples + emission_interval {
                 if !self.position_producer.is_full() {
