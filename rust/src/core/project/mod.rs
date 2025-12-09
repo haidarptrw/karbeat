@@ -1,10 +1,15 @@
 // src/core/project/mod.rs
 
-use std::{cmp::Ordering, collections::HashMap, path::PathBuf, sync::{Arc, RwLock}};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::track::audio_waveform::AudioWaveform;
+use crate::{api::track, core::track::audio_waveform::AudioWaveform};
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ApplicationState {
@@ -49,7 +54,8 @@ pub struct KarbeatTrack {
     pub name: String,
     pub color: String,
     pub track_type: TrackType,
-    pub clips: Arc<Vec<Arc<Clip>>>,
+    pub clips: Arc<BTreeSet<Arc<Clip>>>,
+    pub max_sample_index: u64,
 
     // This tells the engine: "Any audio/midi generated on this track
     // gets sent to Mixer Channel X".
@@ -63,8 +69,9 @@ impl Default for KarbeatTrack {
             name: Default::default(),
             color: Default::default(),
             track_type: TrackType::Audio,
-            clips: Default::default(),
+            clips: Arc::new(BTreeSet::new()),
             target_mixer_channel_id: None,
+            max_sample_index: 0,
         }
     }
 }
@@ -81,8 +88,8 @@ impl std::str::FromStr for TrackType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "audio"      => Ok(TrackType::Audio),
-            "midi"       => Ok(TrackType::Midi),
+            "audio" => Ok(TrackType::Audio),
+            "midi" => Ok(TrackType::Midi),
             "automation" => Ok(TrackType::Automation),
             _ => Err("Invalid track type".into()),
         }
@@ -116,7 +123,6 @@ impl Default for ProjectMetadata {
             author: Default::default(),
             version: Default::default(),
             created_at: Default::default(),
-
         }
     }
 }
@@ -151,12 +157,10 @@ impl Default for TransportState {
             loop_start_samples: Default::default(),
             loop_end_samples: Default::default(),
             beat_tracker: 0,
-            bar_tracker: 0
+            bar_tracker: 0,
         }
     }
 }
-
-
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Pattern {
@@ -187,11 +191,7 @@ pub struct Clip {
     pub start_time: u64,
     pub source: KarbeatSource,
     pub offset_start: u64, // currently this does nothing since we set it always to 0
-    pub loop_length: u64, // Refer to length of the entire clip when not shrinked
-
-    // Trimming
-    pub trim_start: u64, // label in which sample the clip starts
-    pub trim_end: u64, // label in which sample the clip ends
+    pub loop_length: u64,  // Refer to length of the entire clip when not shrinked
 }
 
 impl PartialEq for Clip {
@@ -329,13 +329,18 @@ impl Default for AudioHardwareConfig {
 }
 
 impl KarbeatTrack {
-    pub fn clips(&self) -> &[Arc<Clip>] {
+    pub fn clips(&self) ->&BTreeSet<Arc<Clip>> {
         return self.clips.as_ref();
     }
+
+    pub fn clips_to_vec(&self) -> Vec<Arc<Clip>> {
+        self.clips.iter().cloned().collect()
+    }
+
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
-    pub fn add_clip(&mut self, clip: Clip) -> Option<u64>{
+    pub fn add_clip(&mut self, clip: Clip) -> Option<u64> {
         let is_valid = match (&self.track_type, &clip.source) {
             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
             (TrackType::Midi, KarbeatSource::Midi(_)) => true,
@@ -346,22 +351,21 @@ impl KarbeatTrack {
 
         if is_valid {
             // Calculate potential new max index BEFORE moving clip
-            let clip_end_sample = clip.start_time + (clip.trim_end - clip.trim_start);
-            
+            let clip_end_sample = clip.start_time + clip.loop_length;
+
             // 1. Wrap in Arc immediately
             let clip_arc = Arc::new(clip);
 
             // 2. COW: Get mutable access to the vector
-            let clips_vec = Arc::make_mut(&mut self.clips);
-            
-            // 3. Binary Search using the Arc reference (dereferencing to Clip for comparison)
-            let pos = match clips_vec.binary_search_by(|c| c.cmp(&clip_arc)) {
-                Ok(index) => index,
-                Err(index) => index,
-            };
-            
+            let clips_set = Arc::make_mut(&mut self.clips);
+
             // 4. Insert pointer (Cheap!)
-            clips_vec.insert(pos, clip_arc);
+            clips_set.insert(clip_arc);
+
+            // update the max sample index
+            if clip_end_sample > self.max_sample_index {
+                self.max_sample_index = clip_end_sample;
+            }
 
             // Return the end sample of this new clip
             return Some(clip_end_sample);
@@ -372,11 +376,42 @@ impl KarbeatTrack {
         }
     }
 
+    /// Remove the clip, change max_index_sample if the deleted clip are the latest end sample index
+    pub fn remove_clip(&mut self, clip_id: u32) -> bool {
+        let clips_set = Arc::make_mut(&mut self.clips);
+
+        let initial_len = clips_set.len();
+        
+        clips_set.retain(|c| c.id != clip_id);
+
+        if clips_set.len() < initial_len {
+            // Recalculate max sample index if something was removed
+            self.max_sample_index = clips_set
+                .iter()
+                .map(|c| c.start_time + c.loop_length)
+                .max()
+                .unwrap_or(0);
+
+            true
+        } else {
+            false
+        }
+    }
+
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
     pub fn add_clips_bulk(&mut self, new_clips: Vec<Arc<Clip>>) {
         let clips_vec = Arc::make_mut(&mut self.clips);
         clips_vec.extend(new_clips);
-        clips_vec.sort();
+
+        self.max_sample_index = clips_vec
+            .iter()
+            .map(|c| c.start_time + c.loop_length)
+            .max()
+            .unwrap_or(0);
+    }
+
+    pub fn update_max_sample_index(&mut self) {
+        self.clips.iter().map(|c| c.start_time + c.loop_length).max().unwrap_or(0);
     }
 }
 
@@ -386,15 +421,32 @@ impl ApplicationState {
         if let Some(track_arc) = self.tracks.get_mut(&track_id) {
             // 2. COW: Get mutable track
             let track = Arc::make_mut(track_arc);
-            
+
             // 3. Add Clip & Check bounds
             // We pass the Clip by value. The track takes ownership and wraps it in Arc.
-            if let Some(new_clip_end) = track.add_clip(clip) {
+            if let Some(_) = track.add_clip(clip) {
                 // 4. Update Global Max (Cheap u64 comparison)
-                if new_clip_end > self.max_sample_index {
-                    self.max_sample_index = new_clip_end;
-                }
+                self.update_max_sample_index();
             }
         }
+    }
+
+    pub fn delete_clip_from_track(&mut self, track_id: u32, clip_id: u32) {
+        if let Some(track_arc) = self.tracks.get_mut(&track_id) {
+            let track = Arc::make_mut(track_arc);
+            if track.remove_clip(clip_id) {
+                // Only recompute global max if that track actually changed
+                self.update_max_sample_index();
+            }
+        }
+    }
+
+    pub fn update_max_sample_index(&mut self) {
+         self.max_sample_index = self
+            .tracks
+            .values()
+            .map(|t| t.max_sample_index)
+            .max()
+            .unwrap_or(0);
     }
 }

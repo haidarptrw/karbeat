@@ -223,8 +223,11 @@ class _ControlPanel extends StatelessWidget {
         name: "Tracks",
         icon: Icons.view_list,
         color: Colors.cyanAccent,
-        onTap: () => context.read<KarbeatState>().navigateTo(WorkspaceView.trackList),
-        isActive: context.select<KarbeatState, bool>((s) => s.currentView == WorkspaceView.trackList),
+        onTap: () =>
+            context.read<KarbeatState>().navigateTo(WorkspaceView.trackList),
+        isActive: context.select<KarbeatState, bool>(
+          (s) => s.currentView == WorkspaceView.trackList,
+        ),
       ),
     );
 
@@ -251,8 +254,11 @@ class _ControlPanel extends StatelessWidget {
         name: "Source",
         icon: Icons.group_work,
         color: Colors.cyanAccent,
-        onTap: () => context.read<KarbeatState>().navigateTo(WorkspaceView.source),
-        isActive: context.select<KarbeatState, bool>((s) => s.currentView == WorkspaceView.source),
+        onTap: () =>
+            context.read<KarbeatState>().navigateTo(WorkspaceView.source),
+        isActive: context.select<KarbeatState, bool>(
+          (s) => s.currentView == WorkspaceView.source,
+        ),
       ),
     );
 
@@ -344,6 +350,13 @@ class _ControlPanel extends StatelessWidget {
                 onTap: () =>
                     context.read<KarbeatState>().selectTool(ToolSelection.draw),
               ),
+              ControlPanelToolbarItem(
+                name: "Delete",
+                icon: Icons.delete,
+                color: Colors.red,
+                isActive: selectedTool == ToolSelection.delete,
+                onTap: () => context.read<KarbeatState>().selectTool(ToolSelection.delete),
+              ),
             ],
           );
         },
@@ -377,14 +390,17 @@ class _ControlPanel extends StatelessWidget {
                 const SizedBox(width: 10),
                 _buildInfoText("BEAT", beat.toString()),
                 const VerticalDivider(color: Colors.grey, width: 20),
-                _buildInfoText("TIME", formatTimeFromSamples(samples, sampleRate)),
+                _buildInfoText(
+                  "TIME",
+                  formatTimeFromSamples(samples, sampleRate),
+                ),
                 const VerticalDivider(color: Colors.grey, width: 20),
                 _buildInfoText("BPM", bpm.toStringAsFixed(1)),
                 const VerticalDivider(color: Colors.grey, width: 20),
                 _buildInfoText("SIG", "4/4"),
               ],
             );
-          }
+          },
         ),
       ),
     );

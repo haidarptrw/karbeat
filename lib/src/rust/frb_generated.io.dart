@@ -139,6 +139,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, int) dco_decode_record_u_8_u_8(dynamic raw);
 
   @protected
+  ResizeEdge dco_decode_resize_edge(dynamic raw);
+
+  @protected
   TrackType dco_decode_track_type(dynamic raw);
 
   @protected
@@ -314,6 +317,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
+
+  @protected
+  ResizeEdge sse_decode_resize_edge(SseDeserializer deserializer);
 
   @protected
   TrackType sse_decode_track_type(SseDeserializer deserializer);
@@ -518,6 +524,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_record_u_8_u_8((int, int) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_resize_edge(ResizeEdge self, SseSerializer serializer);
 
   @protected
   void sse_encode_track_type(TrackType self, SseSerializer serializer);

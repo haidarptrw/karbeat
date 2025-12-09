@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -75,6 +77,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   // base zoom level
   double _baseZoomLevel = 1000.0;
 
+  int _activeSampleRate = 44100;
+  StreamSubscription? _posSub;
+
   @override
   void initState() {
     super.initState();
@@ -86,6 +91,22 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     _rulerController = _horizontalControllers.addAndGet();
     _trackContentController = _horizontalControllers.addAndGet();
     _trackContentController.addListener(_handleScrollExpansion);
+
+    final state = context.read<KarbeatState>();
+    _activeSampleRate = state.hardwareConfig.sampleRate > 0
+        ? state.hardwareConfig.sampleRate
+        : 44100;
+
+    // FIX: Listen to the stream to detect the REAL negotiated sample rate (e.g. 48000)
+    // The engine sends this in every position update.
+    _posSub = state.positionStream.listen((pos) {
+      if (pos.sampleRate > 0 && pos.sampleRate != _activeSampleRate) {
+        // Only setState if it changed to avoid spamming rebuilds
+        setState(() {
+          _activeSampleRate = pos.sampleRate;
+        });
+      }
+    });
   }
 
   @override
@@ -114,10 +135,45 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   void _updateZoom(double newZoom) {
     // Define min/max zoom limits to prevent bugs
     final clamped = newZoom.clamp(0.01, 5000.0);
-    
-    // Assuming you have a setter in KarbeatState. 
+
+    // Assuming you have a setter in KarbeatState.
     // If not, add: void setHorizontalZoom(double val) { horizontalZoomLevel = val; notifyListeners(); }
     context.read<KarbeatState>().setHorizontalZoom(clamped);
+  }
+
+  void _handleTimelineGesture(
+    BuildContext context,
+    Offset localPosition, {
+    bool isDrag = false,
+  }) {
+    final state = context.read<KarbeatState>();
+    double scrollX = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    final double absoluteX = localPosition.dx + scrollX;
+    if (absoluteX < 0) return;
+
+    final zoomLevel = state.horizontalZoomLevel;
+
+    switch (state.selectedTool) {
+      case ToolSelection.scrub:
+        final double samples = absoluteX * zoomLevel;
+        state.seekTo(samples.toInt());
+        break;
+      case ToolSelection.zoom:
+        break;
+      case ToolSelection.draw:
+        setState(() {
+          _mousePos = localPosition;
+        });
+        _updatePlacementTarget(state);
+        break;
+      case ToolSelection.pointer:
+      case ToolSelection.cut:
+      default:
+        break;
+    }
   }
 
   @override
@@ -127,9 +183,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     final int itemCount = widget.tracks.length + 1;
     final state = context.read<KarbeatState>();
     final isPlacing = context.select<KarbeatState, bool>((s) => s.isPlacing);
-
-    // Calculate minimum width required by current song length
-    // e.g. (TotalSamples / ZoomLevel)
+    final selectedTool = context.select<KarbeatState, ToolSelection>(
+      (s) => s.selectedTool,
+    );
     final currentTimelineWidth = _timelineWidth;
 
     return Stack(
@@ -178,40 +234,83 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) {
                     final keys = HardwareKeyboard.instance.logicalKeysPressed;
-                    final isCtrl = keys.contains(LogicalKeyboardKey.controlLeft) || keys.contains(LogicalKeyboardKey.controlRight);
+                    final isCtrl =
+                        keys.contains(LogicalKeyboardKey.controlLeft) ||
+                        keys.contains(LogicalKeyboardKey.controlRight);
                     if (!isCtrl) return;
-                    final currentZoom = context.read<KarbeatState>().horizontalZoomLevel;
-                    final double multiplier = event.scrollDelta.dy > 0 ? 0.9 : 1.1;
+                    final currentZoom = context
+                        .read<KarbeatState>()
+                        .horizontalZoomLevel;
+                    final double multiplier = event.scrollDelta.dy > 0
+                        ? 0.9
+                        : 1.1;
                     _updateZoom(currentZoom * multiplier);
                   }
                 },
                 child: GestureDetector(
-                  onScaleStart: (details) {
-                    _baseZoomLevel = context.read<KarbeatState>().horizontalZoomLevel;
-                  },
-                  onScaleUpdate: (details) {
-                    if (details.scale != 1.0) {
-                      final newZoom = _baseZoomLevel * details.scale;
-                      _updateZoom(newZoom);
+                  behavior: HitTestBehavior.translucent,
+                  onTapDown: (details) => _handleTimelineGesture(
+                    context,
+                    details.localPosition,
+                    isDrag: false,
+                  ),
+                  onPanUpdate: (details) {
+                    if (selectedTool == ToolSelection.zoom) {
+                      final currentZoom = state.horizontalZoomLevel;
+                      double multiplier = 1.0 - (details.delta.dy * 0.01);
+                      _updateZoom(currentZoom * multiplier);
+                      return;
+                    }
+                    if (selectedTool == ToolSelection.scrub) {
+                      _handleTimelineGesture(
+                        context,
+                        details.localPosition,
+                        isDrag: true,
+                      );
+                      return;
+                    }
+                    if (selectedTool == ToolSelection.draw) {
+                      setState(() => _mousePos = details.localPosition);
+                      _updatePlacementTarget(state);
                     }
                   },
                   child: Column(
                     children: [
                       // Optional: Time Ruler Header (Horizontal Scrollable)
                       // We would need another sync controller for the ruler + body horizontal scroll.
-                      Container(
-                        height: 30,
-                        color: Colors.grey.shade800,
-                        width: double.infinity,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          controller: _rulerController,
-                          physics: const ClampingScrollPhysics(),
-                          child: SizedBox(
-                            width: currentTimelineWidth, // Matches track list width
-                            height: 30,
-                            child: _TimelineRuler(
-                              scrollController: _rulerController,
+                      GestureDetector(
+                        onTapDown: (details) {
+                          double scrollX = _rulerController.hasClients
+                              ? _rulerController.offset
+                              : 0;
+                          double absoluteX = details.localPosition.dx + scrollX;
+                          final samples = absoluteX * state.horizontalZoomLevel;
+                          state.seekTo(samples.toInt());
+                        },
+                        onPanUpdate: (details) {
+                          double scrollX = _rulerController.hasClients
+                              ? _rulerController.offset
+                              : 0;
+                          double absoluteX = details.localPosition.dx + scrollX;
+                          final samples = absoluteX * state.horizontalZoomLevel;
+                          state.seekTo(samples.toInt());
+                        },
+                        child: Container(
+                          height: 30,
+                          color: Colors.grey.shade800,
+                          width: double.infinity,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            controller: _rulerController,
+                            physics: const ClampingScrollPhysics(),
+                            child: SizedBox(
+                              width:
+                                  currentTimelineWidth, // Matches track list width
+                              height: 30,
+                              child: _TimelineRuler(
+                                scrollController: _rulerController,
+                                sampleRate: _activeSampleRate,
+                              ),
                             ),
                           ),
                         ),
@@ -257,6 +356,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                         height: widget.itemHeight,
                                         horizontalScrollController:
                                             _trackContentController,
+                                        sampleRate: _activeSampleRate,
                                       );
                                     },
                                   ),
@@ -276,18 +376,18 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
         if (isPlacing && _mousePos != null) _buildGhostClip(context),
         Positioned.fill(
           child: IgnorePointer(
-            ignoring: false, 
+            ignoring: false,
             child: TimelinePlayheadSeeker(
               headerWidth: widget.headerWidth,
               scrollController: _trackContentController,
               onSeek: (int newSamples) {
                 // Clamp to 0
                 final safeSamples = newSamples < 0 ? 0 : newSamples;
-                
+
                 // Call your state to update position
                 // Assuming you have a method like this:
                 context.read<KarbeatState>().seekTo(safeSamples);
-                
+
                 print("Seeking to: $safeSamples samples");
               },
             ),
@@ -545,8 +645,12 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
 
 class _TimelineRuler extends StatelessWidget {
   final ScrollController scrollController;
+  final int sampleRate;
 
-  const _TimelineRuler({required this.scrollController});
+  const _TimelineRuler({
+    required this.scrollController,
+    required this.sampleRate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -555,10 +659,7 @@ class _TimelineRuler extends StatelessWidget {
       (s) => s.horizontalZoomLevel,
     );
     final tempo = context.select<KarbeatState, double>((s) => s.tempo);
-    final sampleRate = context.select<KarbeatState, int>(
-      (s) => s.hardwareConfig.sampleRate,
-    );
-    final safeSampleRate = sampleRate <= 0 ? 44100 : sampleRate;
+    final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
 
     return RepaintBoundary(
       child: CustomPaint(

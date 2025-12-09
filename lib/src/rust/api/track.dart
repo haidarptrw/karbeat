@@ -18,4 +18,23 @@ Future<void> createClip({
   startTime: startTime,
 );
 
+Future<void> deleteClip({required int trackId, required int clipId}) => RustLib
+    .instance
+    .api
+    .crateApiTrackDeleteClip(trackId: trackId, clipId: clipId);
+
+Future<void> resizeClip({
+  required int trackId,
+  required int clipId,
+  required ResizeEdge edge,
+  required int newTimeVal,
+}) => RustLib.instance.api.crateApiTrackResizeClip(
+  trackId: trackId,
+  clipId: clipId,
+  edge: edge,
+  newTimeVal: newTimeVal,
+);
+
+enum ResizeEdge { left, right }
+
 enum UiSourceType { audio, midi }

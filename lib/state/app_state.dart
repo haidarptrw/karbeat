@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
@@ -5,15 +6,26 @@ import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
+import 'package:karbeat/src/rust/api/track.dart' as track;
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 
-enum ToolSelection { pointer, cut, draw }
+enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
 enum ToolbarMenuContextGroup { none, project, edit, view }
+
+/// Events that trigger a state refresh
+enum ProjectEvent {
+  tracksChanged,
+  transportChanged,
+  metadataChanged,
+  sourceListChanged,
+  configChanged,
+}
+
 
 class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
@@ -40,7 +52,7 @@ class KarbeatState extends ChangeNotifier {
   AudioHardwareConfig _hardwareConfig = AudioHardwareConfig(
     selectedInputDevice: '',
     selectedOutputDevice: '',
-    sampleRate: 44100,
+    sampleRate: 48000,
     bufferSize: 256,
     cpuLoad: 0,
   );
@@ -58,6 +70,10 @@ class KarbeatState extends ChangeNotifier {
 
   late final Stream<PlaybackPosition> _positionBroadcastStream;
 
+  // STRATEGY: Internal Event Bus for State Synchronization
+  final StreamController<ProjectEvent> _stateEventController = StreamController.broadcast();
+  StreamSubscription<ProjectEvent>? _stateSubscription;
+
   // =========== EDITOR STATE ====================
   ToolSelection _selectedTool = ToolSelection.pointer;
   WorkspaceView _currentView = WorkspaceView.trackList;
@@ -71,6 +87,36 @@ class KarbeatState extends ChangeNotifier {
     // 2. Initialize it ONCE. 
     // This creates ONE Rust thread that feeds ALL Flutter widgets.
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
+    _initStateListener();
+    syncTrackState();
+    syncMaxSampleIndex();
+    syncTransportState();
+    syncMetadataState();
+    syncSourceList();
+    syncAudioHardwareConfigState();
+  }
+
+  void _initStateListener() {
+    _stateSubscription = _stateEventController.stream.listen((event) async {
+      switch (event) {
+        case ProjectEvent.tracksChanged:
+          await syncTrackState();
+          await syncMaxSampleIndex(); // Tracks changing usually affects song length
+          break;
+        case ProjectEvent.transportChanged:
+          await syncTransportState();
+          break;
+        case ProjectEvent.metadataChanged:
+          await syncMetadataState();
+          break;
+        case ProjectEvent.sourceListChanged:
+          await syncSourceList();
+          break;
+        case ProjectEvent.configChanged:
+          await syncAudioHardwareConfigState();
+          break;
+      }
+    });
   }
 
   // ============== GETTERS =================
@@ -183,19 +229,26 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Triggers a state refresh. Call this after any Rust API action.
+  void notifyBackendChange(ProjectEvent event) {
+    if (!_stateEventController.isClosed) {
+      _stateEventController.add(event);
+    }
+  }
+
 
   // =============== ACTIONS ===============
 
   /// Loads an audio file and refreshes the source list
   Future<void> addAudioFile(String path) async {
     await addAudioSource(filePath: path);
-    await syncSourceList();
+    notifyBackendChange(ProjectEvent.sourceListChanged);
   }
 
   Future<void> addTrack(TrackType type) async {
     try {
       await addNewTrack(trackType: type);
-      await syncTrackState();
+      notifyBackendChange(ProjectEvent.tracksChanged);
     } catch (e) {
       log("Failed to add track: $e");
     }
@@ -205,7 +258,7 @@ class KarbeatState extends ChangeNotifier {
     try {
       final newPlaying = !_transportState.isPlaying;
       await setPlaying(val: newPlaying);
-      await syncTransportState();
+      notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
       log("Failed to toggle play: $e");
     }
@@ -282,7 +335,27 @@ class KarbeatState extends ChangeNotifier {
       // Optimistic update (optional, since Rust pushes the update back immediately)
       // notifyListeners(); 
     } catch (e) {
-      print("Error seeking: $e");
+      log("Error seeking: $e");
+    }
+  }
+
+  Future<void> deleteClip(int trackId, int clipId) async {
+    try {
+      // Call Rust API
+      await track.deleteClip(trackId: trackId, clipId: clipId);
+      // State updates automatically via Broadcast -> Stream -> UI Rebuild
+      await syncTrackState();
+    } catch (e) {
+      log("Error deleting clip: $e");
+    }
+  }
+
+  Future<void> resizeClip(int trackId, int clipId, ResizeEdge edge, int newTime) async {
+    try {
+      await track.resizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTime);
+      await syncTrackState();
+    } catch (e) {
+      log("Error resizing clip: $e");
     }
   }
 

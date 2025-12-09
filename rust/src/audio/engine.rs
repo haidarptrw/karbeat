@@ -302,8 +302,8 @@ impl AudioEngine {
                                 audio_voice.source_read_index + (frames_written as f64 * step);
 
                             // 2. Handle Looping / Trimming Limits
-                            let trim_end = audio_voice.start_boundary;
-                            let trim_start = audio_voice.end_boundary;
+                            let trim_end = audio_voice.end_boundary;
+                            let trim_start = audio_voice.start_boundary;
 
                             let max_len = (buffer_len / src_channels) as f64;
 
@@ -440,73 +440,60 @@ impl AudioEngine {
         buffer_end: u64,
         sample_rate: u64,
     ) {
-        // 1. Define Clip Boundaries on Global Timeline
-        let clip_global_start = clip.start_time;
-        let clip_global_end = clip.start_time + clip.loop_length;
+        // 1. TIMELINE DOMAIN
+        let clip_timeline_start = clip.start_time;
+        // Clip length is now authoritative for timeline boundaries
+        let clip_timeline_end = clip.start_time + clip.loop_length; 
 
-        // 2. Calculate Intersection with Current Buffer
-        // We only render the part of the clip that overlaps with [buffer_start, buffer_end]
-        let render_start = std::cmp::max(buffer_start, clip_global_start);
-        let render_end = std::cmp::min(buffer_end, clip_global_end);
+        let render_start = std::cmp::max(buffer_start, clip_timeline_start);
+        let render_end = std::cmp::min(buffer_end, clip_timeline_end);
 
-        // If there is no overlap, do nothing
         if render_end <= render_start {
             return;
         }
 
-        // 3. Calculate Output Offset
-        // How many samples into the *buffer* do we start writing?
-        let start_offset_in_buffer = (render_start - buffer_start) as usize;
+        let output_offset = (render_start - buffer_start) as usize;
 
-        // 4. Calculate Source Read Position
-        // How much time has passed since the *clip* started?
-        let time_elapsed_in_clip = render_start - clip_global_start;
+        // 2. SOURCE DOMAIN
+        let samples_elapsed_timeline = render_start - clip_timeline_start;
+        let effective_play_pos_timeline = samples_elapsed_timeline + clip.offset_start;
 
-        // Resampling ratio
         let ratio = waveform.sample_rate as f64 / sample_rate as f64;
-        let source_elapsed_frames = time_elapsed_in_clip as f64 * ratio;
+        let source_elapsed_frames = effective_play_pos_timeline as f64 * ratio;
 
-        // 5. Define Trim Boundaries (Source Domain)
-        let trim_start = clip.trim_start as f64;
-        let trim_end = if clip.trim_end > 0 {
-            clip.trim_end as f64
+        // 3. BOUNDARY & LOOPING LOGIC
+        // CHANGED: Retrieve trim properties from the WAVEFORM (Source)
+        let trim_start_source = waveform.trim_start as f64;
+        
+        let trim_end_source = if waveform.trim_end > 0 {
+            waveform.trim_end as f64
         } else {
+            // Fallback to full buffer length if 0
             (waveform.buffer.len() / waveform.channels as usize) as f64
         };
 
-        // 6. Calculate Initial Read Index
-        let mut source_read_idx = trim_start + source_elapsed_frames;
+        let source_read_idx; 
+        let loop_region_len = trim_end_source - trim_start_source;
 
-        // 7. Handle Initial Loop Wrapping
-        // If the clip is looping, the read index might theoretically be way past trim_end.
-        // We wrap it back into the [trim_start, trim_end] range.
-        let loop_len = trim_end - trim_start;
-
-        if waveform.is_looping && loop_len > 0.0 {
-            if source_read_idx >= trim_end {
-                // Calculate how far past trim_start we are, conceptually
-                let offset_from_start = source_read_idx - trim_start;
-                // Modulo to find position within the loop
-                let offset_in_loop = offset_from_start % loop_len;
-                source_read_idx = trim_start + offset_in_loop;
-            }
+        if waveform.is_looping && loop_region_len > 0.0 {
+            let offset_in_loop = source_elapsed_frames % loop_region_len;
+            source_read_idx = trim_start_source + offset_in_loop;
         } else {
-            // If NOT looping, and we are past the end, we shouldn't be playing.
-            // (The intersection logic usually prevents this, but safety first)
-            if source_read_idx >= trim_end {
+            source_read_idx = trim_start_source + source_elapsed_frames;
+            if source_read_idx >= trim_end_source {
                 return;
             }
         }
 
-        // 8. Push Voice
+        // 4. PUSH VOICE
         let voices = active_voices.entry(mixer_id).or_insert(Vec::new());
 
         voices.push(Voice::Audio(AudioVoice {
             waveform: waveform.clone(),
-            output_offset_samples: start_offset_in_buffer,
+            output_offset_samples: output_offset,
             source_read_index: source_read_idx,
-            start_boundary: trim_start,
-            end_boundary: trim_end,
+            start_boundary: trim_start_source,
+            end_boundary: trim_end_source,
         }));
     }
 

@@ -34,7 +34,7 @@ impl From<&KarbeatTrack> for UiTrack {
             id: value.id,
             name: value.name.clone(),
             track_type: value.track_type.clone(),
-            clips: value.clips.iter().map(|c| UiClip::from(c.deref().deref())).collect()
+            clips: value.clips_to_vec().iter().map(|c| UiClip::from(c.deref())).collect()
         }
     }
 }
@@ -100,6 +100,7 @@ pub struct AudioWaveformUiForAudioProperties {
 pub struct AudioWaveformUiForClip {
     pub name: String,
     pub preview_buffer: Vec<f32>,
+    pub sample_rate: u32,
 }
 
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
@@ -134,8 +135,9 @@ impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
 impl From<&AudioWaveform> for AudioWaveformUiForClip {
     fn from(value: &AudioWaveform) -> Self {
         Self {
-            preview_buffer: downsample(value.buffer.as_ref(), 500),
-            name: value.name.clone()
+            preview_buffer: value.buffer.as_ref().clone(),
+            name: value.name.clone(),
+            sample_rate: value.sample_rate
         }
     }
 }

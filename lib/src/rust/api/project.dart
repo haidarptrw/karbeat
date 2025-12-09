@@ -109,14 +109,17 @@ class AudioWaveformUiForAudioProperties {
 class AudioWaveformUiForClip {
   final String name;
   final Float32List previewBuffer;
+  final int sampleRate;
 
   const AudioWaveformUiForClip({
     required this.name,
     required this.previewBuffer,
+    required this.sampleRate,
   });
 
   @override
-  int get hashCode => name.hashCode ^ previewBuffer.hashCode;
+  int get hashCode =>
+      name.hashCode ^ previewBuffer.hashCode ^ sampleRate.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -124,7 +127,8 @@ class AudioWaveformUiForClip {
       other is AudioWaveformUiForClip &&
           runtimeType == other.runtimeType &&
           name == other.name &&
-          previewBuffer == other.previewBuffer;
+          previewBuffer == other.previewBuffer &&
+          sampleRate == other.sampleRate;
 }
 
 class AudioWaveformUiForSourceList {
