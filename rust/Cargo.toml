@@ -4,10 +4,34 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
+path = "src/lib.rs"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
+anyhow = "1.0.100"
+cpal = { version = "0.16.0", features = ["asio"] }
+crossbeam-channel = "0.5.15"
 flutter_rust_bridge = "=2.11.1"
+log = "0.4.28"
+minimp3 = "0.6.1"
+once_cell = "1.21.3"
+rodio = "0.21.1"
+rtrb = "0.3.2"
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+symphonia = { version = "0.5.5", default-features = false, features = [
+    "aac",
+    "mp3",
+    "flac",
+    "wav",
+    "ogg",
+] }
+triple_buffer = "8.1.1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[profile.release]
+# Optimize for ARM with f64
+codegen-units = 1
+lto = true
+opt-level = 3
