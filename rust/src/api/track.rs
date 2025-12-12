@@ -55,6 +55,7 @@ pub fn create_clip(
                     source: crate::core::project::KarbeatSource::Audio(audio_source.clone()),
                     offset_start: 0,
                     loop_length: timeline_length,
+                    source_id: source_id,
                 };
                 app.add_clip_to_track(track_id, clip);
             }

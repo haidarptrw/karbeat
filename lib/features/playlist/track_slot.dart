@@ -124,6 +124,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
   // Local state for smooth UI updates during drag
   late int _visualStartTime;
   late int _visualLoopLength;
+  late int _visualOffset;
 
   @override
   void initState() {
@@ -143,6 +144,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
   void _syncModel() {
     _visualStartTime = widget.clip.startTime.toInt();
     _visualLoopLength = widget.clip.loopLength.toInt();
+    _visualOffset = widget.clip.offsetStart.toInt();
   }
 
   @override
@@ -232,8 +234,11 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                     .clamp(0, oldEnd - 100)
                     .toInt();
 
+                final moveAmount = newStart - _visualStartTime;
                 _visualStartTime = newStart;
                 _visualLoopLength = oldEnd - newStart;
+                _visualOffset += moveAmount; 
+                if (_visualOffset < 0) _visualOffset = 0;
               }
             });
           },
@@ -272,6 +277,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
             color: Colors.cyanAccent.withAlpha(47),
             zoomLevel: widget.zoomLevel,
             projectSampleRate: context.read<KarbeatState>().hardwareConfig.sampleRate,
+            overrideOffset: _visualOffset.toDouble(),
           ),
         ),
       ),
@@ -289,6 +295,7 @@ class _ClipRenderer extends StatelessWidget {
   final Color color;
   final double zoomLevel;
   final int projectSampleRate;
+  final double? overrideOffset;
 
   const _ClipRenderer({
     required this.clip,
@@ -296,6 +303,7 @@ class _ClipRenderer extends StatelessWidget {
     required this.color,
     required this.zoomLevel,
     required this.projectSampleRate,
+    this.overrideOffset,
   });
 
   @override
@@ -311,7 +319,7 @@ class _ClipRenderer extends StatelessWidget {
         child: Stack(
           children: [
             // A. Content (Waveform or MIDI Notes)
-            Positioned.fill(child: _buildContent()),
+            Positioned.fill(child: _buildContent(context)),
 
             // B. Label Header
             Positioned(
@@ -339,7 +347,9 @@ class _ClipRenderer extends StatelessWidget {
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(BuildContext context) {
+    final audioSources = context.select<KarbeatState, Map<int, AudioWaveformUiForAudioProperties>>((state) => state.audioSources);
+
     switch (clip.source) {
       // In future: Use CustomPainter to draw the waveform summary here
 
@@ -353,18 +363,26 @@ class _ClipRenderer extends StatelessWidget {
       //   return const Center(
       //     child: Icon(Icons.show_chart, size: 16, color: Colors.white54),
       //   );
-      case UiClipSource_Audio(:final field0):
+      
+      case UiClipSource_Audio(:final sourceId):
         double ratio = 1.0;
-        if (projectSampleRate > 0 && field0.sampleRate > 0) {
-          ratio = field0.sampleRate / projectSampleRate;
+        final audioData = audioSources[sourceId];
+        if (audioData == null) {
+           return const Center(child: Text("Loading...", style: TextStyle(fontSize: 8)));
         }
+        if (projectSampleRate > 0 && audioData.sampleRate > 0) {
+          ratio = audioData.sampleRate / projectSampleRate;
+        }
+
+        final double effectiveOffset = overrideOffset ?? clip.offsetStart.toDouble();
+
         return CustomPaint(
           size: Size.infinite, // Fill the clip container
           painter: StereoWaveformClipPainter(
-            samples: field0.previewBuffer,
+            samples: audioData.previewBuffer,
             color: Colors.white.withAlpha(200),
             zoomLevel: zoomLevel,
-            offsetSamples: clip.offsetStart.toDouble(),
+            offsetSamples: effectiveOffset,
             strokeWidth: 1.0,
             ratio: ratio
           ),

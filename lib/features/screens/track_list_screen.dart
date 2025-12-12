@@ -74,9 +74,6 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   // LocalState for width
   double _timelineWidth = 2000.0;
 
-  // base zoom level
-  double _baseZoomLevel = 1000.0;
-
   int _activeSampleRate = 44100;
   StreamSubscription? _posSub;
 
@@ -100,6 +97,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     // FIX: Listen to the stream to detect the REAL negotiated sample rate (e.g. 48000)
     // The engine sends this in every position update.
     _posSub = state.positionStream.listen((pos) {
+      if (!mounted) return;
       if (pos.sampleRate > 0 && pos.sampleRate != _activeSampleRate) {
         // Only setState if it changed to avoid spamming rebuilds
         setState(() {

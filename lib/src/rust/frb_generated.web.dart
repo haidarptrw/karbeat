@@ -36,8 +36,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_CastedPrimitive_usize(dynamic raw);
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>
-  dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
+  Map<int, AudioWaveformUiForAudioProperties>
+  dco_decode_Map_u_32_audio_waveform_ui_for_audio_properties_None(dynamic raw);
 
   @protected
   Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
@@ -58,24 +58,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw);
 
   @protected
-  AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw);
-
-  @protected
-  AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
-    dynamic raw,
-  );
-
-  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
   AudioWaveformUiForAudioProperties
   dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw);
-
-  @protected
-  AudioWaveformUiForClip dco_decode_box_autoadd_audio_waveform_ui_for_clip(
-    dynamic raw,
-  );
 
   @protected
   UiProjectState dco_decode_box_autoadd_ui_project_state(dynamic raw);
@@ -99,8 +86,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  List<(int, AudioWaveformUiForSourceList)>
-  dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+  List<(int, AudioWaveformUiForAudioProperties)>
+  dco_decode_list_record_u_32_audio_waveform_ui_for_audio_properties(
+    dynamic raw,
+  );
 
   @protected
   List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
@@ -112,8 +101,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiTrack> dco_decode_list_ui_track(dynamic raw);
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>?
-  dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
+  Map<int, AudioWaveformUiForAudioProperties>?
+  dco_decode_opt_Map_u_32_audio_waveform_ui_for_audio_properties_None(
+    dynamic raw,
+  );
 
   @protected
   AudioWaveformUiForAudioProperties?
@@ -131,8 +122,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectMetadata dco_decode_project_metadata(dynamic raw);
 
   @protected
-  (int, AudioWaveformUiForSourceList)
-  dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw);
+  (int, AudioWaveformUiForAudioProperties)
+  dco_decode_record_u_32_audio_waveform_ui_for_audio_properties(dynamic raw);
 
   @protected
   (int, UiTrack) dco_decode_record_u_32_ui_track(dynamic raw);
@@ -192,8 +183,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_CastedPrimitive_usize(SseDeserializer deserializer);
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>
-  sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+  Map<int, AudioWaveformUiForAudioProperties>
+  sse_decode_Map_u_32_audio_waveform_ui_for_audio_properties_None(
     SseDeserializer deserializer,
   );
 
@@ -222,26 +213,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
   AudioWaveformUiForAudioProperties
   sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  AudioWaveformUiForClip sse_decode_box_autoadd_audio_waveform_ui_for_clip(
     SseDeserializer deserializer,
   );
 
@@ -269,8 +245,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
-  List<(int, AudioWaveformUiForSourceList)>
-  sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+  List<(int, AudioWaveformUiForAudioProperties)>
+  sse_decode_list_record_u_32_audio_waveform_ui_for_audio_properties(
     SseDeserializer deserializer,
   );
 
@@ -286,8 +262,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>?
-  sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
+  Map<int, AudioWaveformUiForAudioProperties>?
+  sse_decode_opt_Map_u_32_audio_waveform_ui_for_audio_properties_None(
     SseDeserializer deserializer,
   );
 
@@ -309,8 +285,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectMetadata sse_decode_project_metadata(SseDeserializer deserializer);
 
   @protected
-  (int, AudioWaveformUiForSourceList)
-  sse_decode_record_u_32_audio_waveform_ui_for_source_list(
+  (int, AudioWaveformUiForAudioProperties)
+  sse_decode_record_u_32_audio_waveform_ui_for_audio_properties(
     SseDeserializer deserializer,
   );
 
@@ -375,8 +351,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_CastedPrimitive_usize(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
-    Map<int, AudioWaveformUiForSourceList> self,
+  void sse_encode_Map_u_32_audio_waveform_ui_for_audio_properties_None(
+    Map<int, AudioWaveformUiForAudioProperties> self,
     SseSerializer serializer,
   );
 
@@ -408,29 +384,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_audio_waveform_ui_for_clip(
-    AudioWaveformUiForClip self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_audio_waveform_ui_for_source_list(
-    AudioWaveformUiForSourceList self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
     AudioWaveformUiForAudioProperties self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_box_autoadd_audio_waveform_ui_for_clip(
-    AudioWaveformUiForClip self,
     SseSerializer serializer,
   );
 
@@ -465,8 +423,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
-    List<(int, AudioWaveformUiForSourceList)> self,
+  void sse_encode_list_record_u_32_audio_waveform_ui_for_audio_properties(
+    List<(int, AudioWaveformUiForAudioProperties)> self,
     SseSerializer serializer,
   );
 
@@ -483,8 +441,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
-    Map<int, AudioWaveformUiForSourceList>? self,
+  void sse_encode_opt_Map_u_32_audio_waveform_ui_for_audio_properties_None(
+    Map<int, AudioWaveformUiForAudioProperties>? self,
     SseSerializer serializer,
   );
 
@@ -513,8 +471,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
-    (int, AudioWaveformUiForSourceList) self,
+  void sse_encode_record_u_32_audio_waveform_ui_for_audio_properties(
+    (int, AudioWaveformUiForAudioProperties) self,
     SseSerializer serializer,
   );
 

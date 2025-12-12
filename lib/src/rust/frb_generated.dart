@@ -111,7 +111,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<ProjectMetadata> crateApiProjectGetProjectMetadata();
 
-  Future<Map<int, AudioWaveformUiForSourceList>?>
+  Future<Map<int, AudioWaveformUiForAudioProperties>?>
   crateApiProjectGetSourceList();
 
   Future<Map<int, UiTrack>> crateApiProjectGetTracks();
@@ -429,7 +429,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_project_metadata", argNames: []);
 
   @override
-  Future<Map<int, AudioWaveformUiForSourceList>?>
+  Future<Map<int, AudioWaveformUiForAudioProperties>?>
   crateApiProjectGetSourceList() {
     return handler.executeNormal(
       NormalTask(
@@ -444,7 +444,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData:
-              sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None,
+              sse_decode_opt_Map_u_32_audio_waveform_ui_for_audio_properties_None,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiProjectGetSourceListConstMeta,
@@ -788,11 +788,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>
-  dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw) {
+  Map<int, AudioWaveformUiForAudioProperties>
+  dco_decode_Map_u_32_audio_waveform_ui_for_audio_properties_None(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return Map.fromEntries(
-      dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+      dco_decode_list_record_u_32_audio_waveform_ui_for_audio_properties(
         raw,
       ).map((e) => MapEntry(e.$1, e.$2)),
     );
@@ -862,33 +862,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return AudioWaveformUiForClip(
-      name: dco_decode_String(arr[0]),
-      previewBuffer: dco_decode_list_prim_f_32_strict(arr[1]),
-      sampleRate: dco_decode_u_32(arr[2]),
-    );
-  }
-
-  @protected
-  AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return AudioWaveformUiForSourceList(
-      name: dco_decode_String(arr[0]),
-      muted: dco_decode_bool(arr[1]),
-    );
-  }
-
-  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
@@ -899,14 +872,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_audio_waveform_ui_for_audio_properties(raw);
-  }
-
-  @protected
-  AudioWaveformUiForClip dco_decode_box_autoadd_audio_waveform_ui_for_clip(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_audio_waveform_ui_for_clip(raw);
   }
 
   @protected
@@ -952,11 +917,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(int, AudioWaveformUiForSourceList)>
-  dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw) {
+  List<(int, AudioWaveformUiForAudioProperties)>
+  dco_decode_list_record_u_32_audio_waveform_ui_for_audio_properties(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
-        .map(dco_decode_record_u_32_audio_waveform_ui_for_source_list)
+        .map(dco_decode_record_u_32_audio_waveform_ui_for_audio_properties)
         .toList();
   }
 
@@ -979,12 +946,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>?
-  dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw) {
+  Map<int, AudioWaveformUiForAudioProperties>?
+  dco_decode_opt_Map_u_32_audio_waveform_ui_for_audio_properties_None(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null
         ? null
-        : dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(raw);
+        : dco_decode_Map_u_32_audio_waveform_ui_for_audio_properties_None(raw);
   }
 
   @protected
@@ -1008,14 +977,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlaybackPosition dco_decode_playback_position(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return PlaybackPosition(
       samples: dco_decode_CastedPrimitive_u_64(arr[0]),
       beat: dco_decode_CastedPrimitive_usize(arr[1]),
       bar: dco_decode_CastedPrimitive_usize(arr[2]),
       tempo: dco_decode_f_32(arr[3]),
       sampleRate: dco_decode_u_32(arr[4]),
+      isPlaying: dco_decode_bool(arr[5]),
     );
   }
 
@@ -1034,8 +1004,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (int, AudioWaveformUiForSourceList)
-  dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw) {
+  (int, AudioWaveformUiForAudioProperties)
+  dco_decode_record_u_32_audio_waveform_ui_for_audio_properties(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2) {
@@ -1043,7 +1013,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     }
     return (
       dco_decode_u_32(arr[0]),
-      dco_decode_audio_waveform_ui_for_source_list(arr[1]),
+      dco_decode_audio_waveform_ui_for_audio_properties(arr[1]),
     );
   }
 
@@ -1144,9 +1114,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     switch (raw[0]) {
       case 0:
-        return UiClipSource_Audio(
-          dco_decode_box_autoadd_audio_waveform_ui_for_clip(raw[1]),
-        );
+        return UiClipSource_Audio(sourceId: dco_decode_u_32(raw[1]));
       case 1:
         return UiClipSource_None();
       default:
@@ -1220,14 +1188,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>
-  sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+  Map<int, AudioWaveformUiForAudioProperties>
+  sse_decode_Map_u_32_audio_waveform_ui_for_audio_properties_None(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
-      deserializer,
-    );
+    var inner =
+        sse_decode_list_record_u_32_audio_waveform_ui_for_audio_properties(
+          deserializer,
+        );
     return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
   }
 
@@ -1311,31 +1280,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_String(deserializer);
-    var var_previewBuffer = sse_decode_list_prim_f_32_strict(deserializer);
-    var var_sampleRate = sse_decode_u_32(deserializer);
-    return AudioWaveformUiForClip(
-      name: var_name,
-      previewBuffer: var_previewBuffer,
-      sampleRate: var_sampleRate,
-    );
-  }
-
-  @protected
-  AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_String(deserializer);
-    var var_muted = sse_decode_bool(deserializer);
-    return AudioWaveformUiForSourceList(name: var_name, muted: var_muted);
-  }
-
-  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
@@ -1348,14 +1292,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_audio_waveform_ui_for_audio_properties(deserializer));
-  }
-
-  @protected
-  AudioWaveformUiForClip sse_decode_box_autoadd_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_audio_waveform_ui_for_clip(deserializer));
   }
 
   @protected
@@ -1405,17 +1341,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(int, AudioWaveformUiForSourceList)>
-  sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
+  List<(int, AudioWaveformUiForAudioProperties)>
+  sse_decode_list_record_u_32_audio_waveform_ui_for_audio_properties(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <(int, AudioWaveformUiForSourceList)>[];
+    var ans_ = <(int, AudioWaveformUiForAudioProperties)>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(
-        sse_decode_record_u_32_audio_waveform_ui_for_source_list(deserializer),
+        sse_decode_record_u_32_audio_waveform_ui_for_audio_properties(
+          deserializer,
+        ),
       );
     }
     return ans_;
@@ -1460,14 +1398,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<int, AudioWaveformUiForSourceList>?
-  sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
+  Map<int, AudioWaveformUiForAudioProperties>?
+  sse_decode_opt_Map_u_32_audio_waveform_ui_for_audio_properties_None(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
-      return (sse_decode_Map_u_32_audio_waveform_ui_for_source_list_None(
+      return (sse_decode_Map_u_32_audio_waveform_ui_for_audio_properties_None(
         deserializer,
       ));
     } else {
@@ -1512,12 +1450,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_bar = sse_decode_CastedPrimitive_usize(deserializer);
     var var_tempo = sse_decode_f_32(deserializer);
     var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_isPlaying = sse_decode_bool(deserializer);
     return PlaybackPosition(
       samples: var_samples,
       beat: var_beat,
       bar: var_bar,
       tempo: var_tempo,
       sampleRate: var_sampleRate,
+      isPlaying: var_isPlaying,
     );
   }
 
@@ -1537,13 +1477,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (int, AudioWaveformUiForSourceList)
-  sse_decode_record_u_32_audio_waveform_ui_for_source_list(
+  (int, AudioWaveformUiForAudioProperties)
+  sse_decode_record_u_32_audio_waveform_ui_for_audio_properties(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_field0 = sse_decode_u_32(deserializer);
-    var var_field1 = sse_decode_audio_waveform_ui_for_source_list(deserializer);
+    var var_field1 = sse_decode_audio_waveform_ui_for_audio_properties(
+      deserializer,
+    );
     return (var_field0, var_field1);
   }
 
@@ -1656,10 +1598,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var tag_ = sse_decode_i_32(deserializer);
     switch (tag_) {
       case 0:
-        var var_field0 = sse_decode_box_autoadd_audio_waveform_ui_for_clip(
-          deserializer,
-        );
-        return UiClipSource_Audio(var_field0);
+        var var_sourceId = sse_decode_u_32(deserializer);
+        return UiClipSource_Audio(sourceId: var_sourceId);
       case 1:
         return UiClipSource_None();
       default:
@@ -1730,12 +1670,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
-    Map<int, AudioWaveformUiForSourceList> self,
+  void sse_encode_Map_u_32_audio_waveform_ui_for_audio_properties_None(
+    Map<int, AudioWaveformUiForAudioProperties> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
+    sse_encode_list_record_u_32_audio_waveform_ui_for_audio_properties(
       self.entries.map((e) => (e.key, e.value)).toList(),
       serializer,
     );
@@ -1811,27 +1751,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_audio_waveform_ui_for_clip(
-    AudioWaveformUiForClip self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.name, serializer);
-    sse_encode_list_prim_f_32_strict(self.previewBuffer, serializer);
-    sse_encode_u_32(self.sampleRate, serializer);
-  }
-
-  @protected
-  void sse_encode_audio_waveform_ui_for_source_list(
-    AudioWaveformUiForSourceList self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.name, serializer);
-    sse_encode_bool(self.muted, serializer);
-  }
-
-  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
@@ -1844,15 +1763,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_audio_waveform_ui_for_audio_properties(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_audio_waveform_ui_for_clip(
-    AudioWaveformUiForClip self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_audio_waveform_ui_for_clip(self, serializer);
   }
 
   @protected
@@ -1909,14 +1819,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
-    List<(int, AudioWaveformUiForSourceList)> self,
+  void sse_encode_list_record_u_32_audio_waveform_ui_for_audio_properties(
+    List<(int, AudioWaveformUiForAudioProperties)> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_record_u_32_audio_waveform_ui_for_source_list(
+      sse_encode_record_u_32_audio_waveform_ui_for_audio_properties(
         item,
         serializer,
       );
@@ -1954,15 +1864,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
-    Map<int, AudioWaveformUiForSourceList>? self,
+  void sse_encode_opt_Map_u_32_audio_waveform_ui_for_audio_properties_None(
+    Map<int, AudioWaveformUiForAudioProperties>? self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
-      sse_encode_Map_u_32_audio_waveform_ui_for_source_list_None(
+      sse_encode_Map_u_32_audio_waveform_ui_for_audio_properties_None(
         self,
         serializer,
       );
@@ -2009,6 +1919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_CastedPrimitive_usize(self.bar, serializer);
     sse_encode_f_32(self.tempo, serializer);
     sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_bool(self.isPlaying, serializer);
   }
 
   @protected
@@ -2024,13 +1935,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
-    (int, AudioWaveformUiForSourceList) self,
+  void sse_encode_record_u_32_audio_waveform_ui_for_audio_properties(
+    (int, AudioWaveformUiForAudioProperties) self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.$1, serializer);
-    sse_encode_audio_waveform_ui_for_source_list(self.$2, serializer);
+    sse_encode_audio_waveform_ui_for_audio_properties(self.$2, serializer);
   }
 
   @protected
@@ -2119,9 +2030,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     switch (self) {
-      case UiClipSource_Audio(field0: final field0):
+      case UiClipSource_Audio(sourceId: final sourceId):
         sse_encode_i_32(0, serializer);
-        sse_encode_box_autoadd_audio_waveform_ui_for_clip(field0, serializer);
+        sse_encode_u_32(sourceId, serializer);
       case UiClipSource_None():
         sse_encode_i_32(1, serializer);
     }

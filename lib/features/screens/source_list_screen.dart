@@ -26,7 +26,7 @@ class SourceListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Access the source map from state
     final sources = context
-        .select<KarbeatState, Map<int, AudioWaveformUiForSourceList>>(
+        .select<KarbeatState, Map<int, AudioWaveformUiForAudioProperties>>(
           (state) => state.audioSources,
         );
 

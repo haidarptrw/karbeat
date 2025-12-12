@@ -767,13 +767,14 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
 }
 
 impl SseDecode
-    for std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>
+    for std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForAudioProperties>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)>>::sse_decode(
-            deserializer,
-        );
+        let mut inner =
+            <Vec<(u32, crate::api::project::AudioWaveformUiForAudioProperties)>>::sse_decode(
+                deserializer,
+            );
         return inner.into_iter().collect();
     }
 }
@@ -859,32 +860,6 @@ impl SseDecode for crate::api::project::AudioWaveformUiForAudioProperties {
     }
 }
 
-impl SseDecode for crate::api::project::AudioWaveformUiForClip {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_name = <String>::sse_decode(deserializer);
-        let mut var_previewBuffer = <Vec<f32>>::sse_decode(deserializer);
-        let mut var_sampleRate = <u32>::sse_decode(deserializer);
-        return crate::api::project::AudioWaveformUiForClip {
-            name: var_name,
-            preview_buffer: var_previewBuffer,
-            sample_rate: var_sampleRate,
-        };
-    }
-}
-
-impl SseDecode for crate::api::project::AudioWaveformUiForSourceList {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_name = <String>::sse_decode(deserializer);
-        let mut var_muted = <bool>::sse_decode(deserializer);
-        return crate::api::project::AudioWaveformUiForSourceList {
-            name: var_name,
-            muted: var_muted,
-        };
-    }
-}
-
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -944,17 +919,16 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)> {
+impl SseDecode for Vec<(u32, crate::api::project::AudioWaveformUiForAudioProperties)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
-            ans_.push(
-                <(u32, crate::api::project::AudioWaveformUiForSourceList)>::sse_decode(
-                    deserializer,
-                ),
-            );
+            ans_.push(<(
+                u32,
+                crate::api::project::AudioWaveformUiForAudioProperties,
+            )>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -999,14 +973,16 @@ impl SseDecode for Vec<crate::api::project::UiTrack> {
 }
 
 impl SseDecode
-    for Option<std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>>
+    for Option<
+        std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForAudioProperties>,
+    >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<std::collections::HashMap<
                 u32,
-                crate::api::project::AudioWaveformUiForSourceList,
+                crate::api::project::AudioWaveformUiForAudioProperties,
             >>::sse_decode(deserializer));
         } else {
             return None;
@@ -1048,12 +1024,14 @@ impl SseDecode for crate::audio::event::PlaybackPosition {
         let mut var_bar = <usize>::sse_decode(deserializer);
         let mut var_tempo = <f32>::sse_decode(deserializer);
         let mut var_sampleRate = <u32>::sse_decode(deserializer);
+        let mut var_isPlaying = <bool>::sse_decode(deserializer);
         return crate::audio::event::PlaybackPosition {
             samples: var_samples,
             beat: var_beat,
             bar: var_bar,
             tempo: var_tempo,
             sample_rate: var_sampleRate,
+            is_playing: var_isPlaying,
         };
     }
 }
@@ -1074,12 +1052,12 @@ impl SseDecode for crate::core::project::ProjectMetadata {
     }
 }
 
-impl SseDecode for (u32, crate::api::project::AudioWaveformUiForSourceList) {
+impl SseDecode for (u32, crate::api::project::AudioWaveformUiForAudioProperties) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_field0 = <u32>::sse_decode(deserializer);
         let mut var_field1 =
-            <crate::api::project::AudioWaveformUiForSourceList>::sse_decode(deserializer);
+            <crate::api::project::AudioWaveformUiForAudioProperties>::sse_decode(deserializer);
         return (var_field0, var_field1);
     }
 }
@@ -1209,9 +1187,10 @@ impl SseDecode for crate::api::project::UiClipSource {
         let mut tag_ = <i32>::sse_decode(deserializer);
         match tag_ {
             0 => {
-                let mut var_field0 =
-                    <crate::api::project::AudioWaveformUiForClip>::sse_decode(deserializer);
-                return crate::api::project::UiClipSource::Audio(var_field0);
+                let mut var_sourceId = <u32>::sse_decode(deserializer);
+                return crate::api::project::UiClipSource::Audio {
+                    source_id: var_sourceId,
+                };
             }
             1 => {
                 return crate::api::project::UiClipSource::None;
@@ -1388,49 +1367,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::AudioWaveformUiForAu
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::project::AudioWaveformUiForClip {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.name.into_into_dart().into_dart(),
-            self.preview_buffer.into_into_dart().into_dart(),
-            self.sample_rate.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::project::AudioWaveformUiForClip
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::project::AudioWaveformUiForClip>
-    for crate::api::project::AudioWaveformUiForClip
-{
-    fn into_into_dart(self) -> crate::api::project::AudioWaveformUiForClip {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::project::AudioWaveformUiForSourceList {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.name.into_into_dart().into_dart(),
-            self.muted.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::project::AudioWaveformUiForSourceList
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::project::AudioWaveformUiForSourceList>
-    for crate::api::project::AudioWaveformUiForSourceList
-{
-    fn into_into_dart(self) -> crate::api::project::AudioWaveformUiForSourceList {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::audio::event::PlaybackPosition {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -1439,6 +1375,7 @@ impl flutter_rust_bridge::IntoDart for crate::audio::event::PlaybackPosition {
             self.bar.into_into_dart().into_dart(),
             self.tempo.into_into_dart().into_dart(),
             self.sample_rate.into_into_dart().into_dart(),
+            self.is_playing.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1572,8 +1509,8 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::UiClip>
 impl flutter_rust_bridge::IntoDart for crate::api::project::UiClipSource {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
-            crate::api::project::UiClipSource::Audio(field0) => {
-                [0.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            crate::api::project::UiClipSource::Audio { source_id } => {
+                [0.into_dart(), source_id.into_into_dart().into_dart()].into_dart()
             }
             crate::api::project::UiClipSource::None => [1.into_dart()].into_dart(),
             _ => {
@@ -1664,11 +1601,11 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
 }
 
 impl SseEncode
-    for std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>
+    for std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForAudioProperties>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)>>::sse_encode(
+        <Vec<(u32, crate::api::project::AudioWaveformUiForAudioProperties)>>::sse_encode(
             self.into_iter().collect(),
             serializer,
         );
@@ -1734,23 +1671,6 @@ impl SseEncode for crate::api::project::AudioWaveformUiForAudioProperties {
     }
 }
 
-impl SseEncode for crate::api::project::AudioWaveformUiForClip {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.name, serializer);
-        <Vec<f32>>::sse_encode(self.preview_buffer, serializer);
-        <u32>::sse_encode(self.sample_rate, serializer);
-    }
-}
-
-impl SseEncode for crate::api::project::AudioWaveformUiForSourceList {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.name, serializer);
-        <bool>::sse_encode(self.muted, serializer);
-    }
-}
-
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1806,12 +1726,12 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for Vec<(u32, crate::api::project::AudioWaveformUiForSourceList)> {
+impl SseEncode for Vec<(u32, crate::api::project::AudioWaveformUiForAudioProperties)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <(u32, crate::api::project::AudioWaveformUiForSourceList)>::sse_encode(
+            <(u32, crate::api::project::AudioWaveformUiForAudioProperties)>::sse_encode(
                 item, serializer,
             );
         }
@@ -1849,13 +1769,15 @@ impl SseEncode for Vec<crate::api::project::UiTrack> {
 }
 
 impl SseEncode
-    for Option<std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>>
+    for Option<
+        std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForAudioProperties>,
+    >
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForSourceList>>::sse_encode(value, serializer);
+            <std::collections::HashMap<u32, crate::api::project::AudioWaveformUiForAudioProperties>>::sse_encode(value, serializer);
         }
     }
 }
@@ -1888,6 +1810,7 @@ impl SseEncode for crate::audio::event::PlaybackPosition {
         <usize>::sse_encode(self.bar, serializer);
         <f32>::sse_encode(self.tempo, serializer);
         <u32>::sse_encode(self.sample_rate, serializer);
+        <bool>::sse_encode(self.is_playing, serializer);
     }
 }
 
@@ -1901,11 +1824,11 @@ impl SseEncode for crate::core::project::ProjectMetadata {
     }
 }
 
-impl SseEncode for (u32, crate::api::project::AudioWaveformUiForSourceList) {
+impl SseEncode for (u32, crate::api::project::AudioWaveformUiForAudioProperties) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.0, serializer);
-        <crate::api::project::AudioWaveformUiForSourceList>::sse_encode(self.1, serializer);
+        <crate::api::project::AudioWaveformUiForAudioProperties>::sse_encode(self.1, serializer);
     }
 }
 
@@ -2018,9 +1941,9 @@ impl SseEncode for crate::api::project::UiClipSource {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         match self {
-            crate::api::project::UiClipSource::Audio(field0) => {
+            crate::api::project::UiClipSource::Audio { source_id } => {
                 <i32>::sse_encode(0, serializer);
-                <crate::api::project::AudioWaveformUiForClip>::sse_encode(field0, serializer);
+                <u32>::sse_encode(source_id, serializer);
             }
             crate::api::project::UiClipSource::None => {
                 <i32>::sse_encode(1, serializer);

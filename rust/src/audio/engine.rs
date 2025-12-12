@@ -124,23 +124,7 @@ impl AudioEngine {
                     self.preview_voices.clear();
                 }
                 AudioCommand::ResetPlayhead => {
-                    println!("[AudioEngine] Resetting Playhead to 0");
-                    self.playhead_samples = 0;
-                    self.current_beat = 1;
-                    self.current_bar = 1;
-                    self.beat_samples_accumulator = 0;
-                    self.last_emitted_samples = 0;
-
-                    // Immediately push the reset position back to UI so the slider snaps back
-                    if !self.position_producer.is_full() {
-                        let _ = self.position_producer.push(PlaybackPosition {
-                            samples: 0,
-                            beat: 1,
-                            bar: 1,
-                            tempo: self.current_state.tempo,
-                            sample_rate: self.current_state.sample_rate,
-                        });
-                    }
+                    self.reset_playhead();
                 }
                 AudioCommand::SetPlayhead(samples) => {
                     println!("[AudioEngine] Set Playhead to {}", samples);
@@ -156,6 +140,7 @@ impl AudioEngine {
                             bar: self.current_bar,
                             tempo: self.current_state.tempo,
                             sample_rate: self.current_state.sample_rate,
+                            is_playing: self.current_state.is_playing,
                         });
                     }
                 }
@@ -167,7 +152,11 @@ impl AudioEngine {
 
         let channels = 2;
 
-        if self.current_state.is_playing {
+        if self.playhead_samples > self.current_state.max_sample_index {
+            self.current_state.is_playing = false;
+            self.reset_playhead();
+        } else if self.current_state.is_playing {
+            // check if the playhead has already exceed the max sample index
             let frame_count = output_buffer.len() / channels;
 
             // sequencer
@@ -189,6 +178,7 @@ impl AudioEngine {
                         bar: self.current_bar,
                         tempo: self.current_state.tempo,
                         sample_rate: self.current_state.sample_rate,
+                        is_playing: self.current_state.is_playing,
                     });
                 }
                 self.last_emitted_samples = self.playhead_samples;
@@ -209,6 +199,7 @@ impl AudioEngine {
                     bar: self.current_bar,
                     tempo: self.current_state.tempo,
                     sample_rate: self.current_state.sample_rate,
+                    is_playing: self.current_state.is_playing,
                 });
             }
         }
@@ -235,6 +226,28 @@ impl AudioEngine {
             self.current_beat = 1;
             self.current_bar = 1;
             self.beat_samples_accumulator = 0;
+        }
+    }
+
+    fn reset_playhead(&mut self) {
+        println!("[AudioEngine] Resetting Playhead to 0");
+        self.playhead_samples = 0;
+        self.current_beat = 1;
+        self.current_bar = 1;
+        self.beat_samples_accumulator = 0;
+        self.last_emitted_samples = 0;
+        self.current_state.is_playing = false;
+
+        // Immediately push the reset position back to UI so the slider snaps back
+        if !self.position_producer.is_full() {
+            let _ = self.position_producer.push(PlaybackPosition {
+                samples: 0,
+                beat: 1,
+                bar: 1,
+                tempo: self.current_state.tempo,
+                sample_rate: self.current_state.sample_rate,
+                is_playing: false,
+            });
         }
     }
 
@@ -443,7 +456,7 @@ impl AudioEngine {
         // 1. TIMELINE DOMAIN
         let clip_timeline_start = clip.start_time;
         // Clip length is now authoritative for timeline boundaries
-        let clip_timeline_end = clip.start_time + clip.loop_length; 
+        let clip_timeline_end = clip.start_time + clip.loop_length;
 
         let render_start = std::cmp::max(buffer_start, clip_timeline_start);
         let render_end = std::cmp::min(buffer_end, clip_timeline_end);
@@ -464,7 +477,7 @@ impl AudioEngine {
         // 3. BOUNDARY & LOOPING LOGIC
         // CHANGED: Retrieve trim properties from the WAVEFORM (Source)
         let trim_start_source = waveform.trim_start as f64;
-        
+
         let trim_end_source = if waveform.trim_end > 0 {
             waveform.trim_end as f64
         } else {
@@ -472,7 +485,7 @@ impl AudioEngine {
             (waveform.buffer.len() / waveform.channels as usize) as f64
         };
 
-        let source_read_idx; 
+        let source_read_idx;
         let loop_region_len = trim_end_source - trim_start_source;
 
         if waveform.is_looping && loop_region_len > 0.0 {

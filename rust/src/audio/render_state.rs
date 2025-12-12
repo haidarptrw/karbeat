@@ -13,6 +13,7 @@ pub struct AudioRenderState {
     pub tempo: f32, // BPM
     pub sample_rate: u32,
     pub buffer_size: usize,
+    pub max_sample_index: u64,
 
     // Flattened data for quick access
     pub tracks: Vec<Arc<KarbeatTrack>>,
@@ -35,6 +36,7 @@ impl From<&ApplicationState> for AudioRenderState {
             patterns: app.pattern_pool.clone(),
             mixer_state: app.mixer.clone(),
             asset_library: app.asset_library.clone(),
+            max_sample_index: app.max_sample_index,
             buffer_size: if is_power_of_two(app.audio_config.buffer_size.into()) {
                 app.audio_config.buffer_size as usize
             } else {

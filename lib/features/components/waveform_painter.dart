@@ -3,12 +3,15 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class StereoWaveformPainter extends CustomPainter {
+  /// Expecting raw interleaved stereo samples: [L, R, L, R, ...]
   final List<double> samples;
   final Color color;
+  final double strokeWidth;
 
   const StereoWaveformPainter({
     required this.samples,
-    this.color = Colors.blueAccent,
+    required this.color,
+    this.strokeWidth = 1.0,
   });
 
   @override
@@ -17,111 +20,124 @@ class StereoWaveformPainter extends CustomPainter {
 
     final paint = Paint()
       ..color = color
-      ..strokeWidth = 1.0
+      ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    final centerDividerPaint = Paint()
-      ..color = Colors.white.withAlpha(25)
+    // Draw Divider Line (Center)
+    final dividerPaint = Paint()
+      ..color = Colors.white.withAlpha((0.2*255).round())
       ..strokeWidth = 1.0;
-
-    // Draw center line
+    
     canvas.drawLine(
       Offset(0, size.height / 2),
       Offset(size.width, size.height / 2),
-      centerDividerPaint,
+      dividerPaint,
     );
 
-    final int totalDataBins = samples.length ~/ 4;
-    final double pixels = size.width;
+    // 1. Calculate Metrics
+    // Interleaved [L, R] means Total Frames = Array Length / 2
+    final int totalFrames = samples.length ~/ 2;
+    final double width = size.width;
     
-    // Total columns to draw
-    final int drawSteps = pixels.ceil();
-    final double binsPerPixel = totalDataBins / pixels;
+    // We draw 4 lines per pixel column (L_top, L_btm, R_top, R_btm)
+    // 4 lines * 2 points * 2 coords = 16 floats per pixel? 
+    // Optimization: We draw 1 line for L (from max to min) and 1 for R.
+    // L Line: (x, yMax) -> (x, yMin)
+    // R Line: (x, yMax) -> (x, yMin)
+    // Total: 2 lines * 2 points * 2 coords = 8 floats per pixel.
+    final int pointsCount = width.ceil() * 8;
+    final Float32List rawPoints = Float32List(pointsCount);
+    int ptr = 0;
 
-    // Height calculations
-    final channelHeight = size.height / 2;
-    final halfChannelHeight = channelHeight / 2;
-    final leftCenterY = halfChannelHeight;
-    final rightCenterY = channelHeight + halfChannelHeight;
+    // Calculate how many audio frames fit into one screen pixel
+    final double framesPerPixel = totalFrames / width;
+    
+    // Height Layout
+    final double halfHeight = size.height / 2;
+    final double quarterHeight = halfHeight / 2;
+    final double leftCenterY = quarterHeight; 
+    final double rightCenterY = halfHeight + quarterHeight; 
 
-    // OPTIMIZATION 1: Use Float32List for batch drawing (GPU friendly)
-    // We need 2 lines per pixel column (Left channel line, Right channel line)
-    // Each line has 2 points (Start, End)
-    // Each point has 2 coordinates (x, y)
-    // Total: drawSteps * 2 lines * 2 points * 2 coords = drawSteps * 8
-    final rawPoints = Float32List(drawSteps * 8);
-    int ptr = 0; // Pointer for insertion
-
-    for (int i = 0; i < drawSteps; i++) {
-      final int startBin = (i * binsPerPixel).floor();
-      final int endBin = ((i + 1) * binsPerPixel).ceil();
-
-      // Clamp
-      final int actualStart = startBin.clamp(0, totalDataBins);
-      final int actualEnd = endBin.clamp(0, totalDataBins);
-
-      if (actualStart >= actualEnd) continue;
-
-      // OPTIMIZATION 2: Adaptive Sampling (Striding)
-      // If a single pixel covers 10,000 samples, we don't need to check all 10,000.
-      // Checking 50-100 spread out samples is visually identical on a 1px wide line.
-      int step = 1;
-      final int range = actualEnd - actualStart;
-      if (range > 100) {
-        step = (range / 100).ceil();
-      }
-
-      double lMin = 1.0;
-      double lMax = -1.0;
-      double rMin = 1.0;
-      double rMax = -1.0;
-
-      // Inner Loop with Step
-      for (int j = actualStart; j < actualEnd; j += step) {
-        final int sampleIdx = j * 4;
-        if (sampleIdx + 3 >= samples.length) break;
-
-        final v0 = samples[sampleIdx];     // L_min
-        final v1 = samples[sampleIdx + 1]; // L_max
-        final v2 = samples[sampleIdx + 2]; // R_min
-        final v3 = samples[sampleIdx + 3]; // R_max
-
-        if (v0 < lMin) lMin = v0;
-        if (v1 > lMax) lMax = v1;
-        if (v2 < rMin) rMin = v2;
-        if (v3 > rMax) rMax = v3;
-      }
-
-      if (lMax < lMin) continue;
-
-      final double x = i.toDouble();
-
-      // --- Left Channel Line ---
-      // P1 (Top)
-      rawPoints[ptr++] = x; 
-      rawPoints[ptr++] = leftCenterY - (lMax * halfChannelHeight);
-      // P2 (Bottom)
-      rawPoints[ptr++] = x;
-      rawPoints[ptr++] = leftCenterY - (lMin * halfChannelHeight);
-
-      // --- Right Channel Line ---
-      // P1 (Top)
-      rawPoints[ptr++] = x;
-      rawPoints[ptr++] = rightCenterY - (rMax * halfChannelHeight);
-      // P2 (Bottom)
-      rawPoints[ptr++] = x;
-      rawPoints[ptr++] = rightCenterY - (rMin * halfChannelHeight);
+    // 2. OPTIMIZATION: Adaptive Step
+    // If we are squeezing 10,000 samples into 1 pixel, we don't need to read all 10,000.
+    // Reading every ~50th sample is enough to find the visual shape.
+    int step = 1;
+    if (framesPerPixel > 50) {
+      step = (framesPerPixel / 50).ceil();
     }
 
-    // OPTIMIZATION 3: Draw all points in one GPU call
-    // This is significantly faster than path.moveTo / path.lineTo loops
+    // 3. DRAWING LOOP
+    for (int x = 0; x < width; x++) {
+      // Determine the start/end index in the buffer for this specific pixel column
+      final int startFrame = (x * framesPerPixel).floor();
+      final int endFrame = ((x + 1) * framesPerPixel).ceil();
+
+      final int actualStart = startFrame.clamp(0, totalFrames);
+      final int actualEnd = endFrame.clamp(0, totalFrames);
+
+      if (actualStart >= actualEnd) {
+        ptr += 8; // Advance pointer to keep alignment
+        continue;
+      }
+
+      // Track Peaks for this slice
+      double lMin = 1.0, lMax = -1.0;
+      double rMin = 1.0, rMax = -1.0;
+      bool hasData = false;
+
+      // Inner Loop: Iterate FRAMES
+      for (int i = actualStart; i < actualEnd; i += step) {
+        final int sampleIdx = i * 2; // Jump by 2 because it's interleaved
+        
+        if (sampleIdx + 1 >= samples.length) break;
+
+        final double l = samples[sampleIdx];
+        final double r = samples[sampleIdx + 1];
+
+        if (!hasData) {
+          lMin = l; lMax = l;
+          rMin = r; rMax = r;
+          hasData = true;
+        } else {
+          if (l < lMin) lMin = l;
+          if (l > lMax) lMax = l;
+          if (r < rMin) rMin = r;
+          if (r > rMax) rMax = r;
+        }
+      }
+
+      if (!hasData) {
+        ptr += 8;
+        continue;
+      }
+
+      // Visual tweak: ensure we always draw at least a dot if the wave is flat/silent
+      if (lMax == lMin) { lMax += 0.01; lMin -= 0.01; }
+      if (rMax == rMin) { rMax += 0.01; rMin -= 0.01; }
+
+      final double xPos = x.toDouble();
+
+      // --- LEFT CHANNEL (Top) ---
+      // Invert Y: Positive samples go UP (subtract from center)
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = leftCenterY - (lMax * quarterHeight); // Top point
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = leftCenterY - (lMin * quarterHeight); // Bottom point
+
+      // --- RIGHT CHANNEL (Bottom) ---
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = rightCenterY - (rMax * quarterHeight); // Top point
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = rightCenterY - (rMin * quarterHeight); // Bottom point
+    }
+
+    // 4. Batch Render
     canvas.drawRawPoints(PointMode.lines, rawPoints, paint);
   }
 
   @override
   bool shouldRepaint(covariant StereoWaveformPainter oldDelegate) {
-    // Only repaint if the data actually changed
     return oldDelegate.samples != samples || oldDelegate.color != color;
   }
 }
@@ -279,7 +295,7 @@ class StereoWaveformClipPainter extends CustomPainter {
 
     // Draw Divider Line (Center)
     final dividerPaint = Paint()
-      ..color = Colors.white.withOpacity(0.2)
+      ..color = Colors.white.withAlpha((0.2*255).round())
       ..strokeWidth = 1.0;
     canvas.drawLine(
       Offset(0, size.height / 2),
@@ -345,8 +361,8 @@ class StereoWaveformClipPainter extends CustomPainter {
 
     // Optimization: stride
     int step = 1;
-    if (framesPerPixel > 200) {
-      step = (framesPerPixel / 200).ceil();
+    if (framesPerPixel > 50) {
+      step = (framesPerPixel / 50).ceil();
     }
 
     for (int x = 0; x < width; x++) {
@@ -536,8 +552,8 @@ class MonoWaveformClipPainter extends CustomPainter {
 
     //    If zoomed out (1 pixel = 10k frames), skip checking every single frame to save CPU.
     int step = 1;
-    if (framesPerPixel > 200) {
-      step = (framesPerPixel / 200).ceil();
+    if (framesPerPixel > 50) {
+      step = (framesPerPixel / 50).ceil();
     }
 
     // 4. DRAWING LOOP

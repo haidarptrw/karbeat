@@ -49,7 +49,7 @@ pub struct UiClip {
 }
 
 pub enum UiClipSource {
-    Audio(AudioWaveformUiForClip),
+    Audio{ source_id: u32 },
     None, // represent clip with empty source, this is placeholder, as this will be removed when I already implement MIDI Pattern and automation
 }
 
@@ -57,7 +57,9 @@ impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
         let source = match &value.source {
-            KarbeatSource::Audio(audio_waveform) => UiClipSource::Audio(audio_waveform.as_ref().into()),
+            KarbeatSource::Audio(_) => UiClipSource::Audio{ 
+                source_id: value.source_id
+            },
             _ => UiClipSource::None,
         };
         Self {
@@ -78,6 +80,7 @@ impl From<&Clip> for UiClip {
 pub struct AudioWaveformUiForSourceList {
     pub name: String,
     pub muted: bool,
+    pub sample_rate: u32,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -108,6 +111,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
         Self {
             name: value.name.clone(),
             muted: value.muted,
+            sample_rate: value.sample_rate
         }
     }
 }
@@ -115,7 +119,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
 impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
     fn from(value: &AudioWaveform) -> Self {
         Self {
-            preview_buffer: downsample(value.buffer.as_ref(), 10000),
+            preview_buffer: value.buffer.to_vec(),
             file_path: value.file_path.clone(),
             name: value.name.clone(),
             sample_rate: value.sample_rate,
@@ -137,7 +141,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForClip {
         Self {
             preview_buffer: value.buffer.as_ref().clone(),
             name: value.name.clone(),
-            sample_rate: value.sample_rate
+            sample_rate: value.sample_rate,
         }
     }
 }
@@ -187,7 +191,7 @@ pub fn get_transport_state() -> Result<TransportState, String> {
     Ok(ts)
 }
 
-pub fn get_source_list() -> Option<HashMap<u32, AudioWaveformUiForSourceList>> {
+pub fn get_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioProperties>> {
     // Read from app state
     let Ok(app) = APP_STATE.read() else {
         return None; // Send empty
@@ -197,7 +201,7 @@ pub fn get_source_list() -> Option<HashMap<u32, AudioWaveformUiForSourceList>> {
         .source_map
         .iter()
         .map(|(&id, arc_waveform)| {
-            let ui = AudioWaveformUiForSourceList::from(arc_waveform.as_ref());
+            let ui = AudioWaveformUiForAudioProperties::from(arc_waveform.as_ref());
             (id, ui)
         })
         .collect();

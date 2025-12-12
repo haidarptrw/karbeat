@@ -6,7 +6,7 @@ import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/src/rust/api/track.dart' as track;
+import 'package:karbeat/src/rust/api/track.dart' as track_api;
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
@@ -58,7 +58,7 @@ class KarbeatState extends ChangeNotifier {
   );
 
   Map<int, UiTrack> _tracks = {};
-  Map<int, AudioWaveformUiForSourceList> _audioSources = {};
+  Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
     KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -126,7 +126,7 @@ class KarbeatState extends ChangeNotifier {
   bool get isLooping => _transportState.isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
-  Map<int, AudioWaveformUiForSourceList> get audioSources => _audioSources;
+  Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
   ToolSelection get selectedTool => _selectedTool;
   WorkspaceView get currentView => _currentView;
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
@@ -268,7 +268,7 @@ class KarbeatState extends ChangeNotifier {
     try {
       await setPlaying(val: false);
       await setPlayhead(val: 0);
-      await syncTransportState();
+      notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
       log("Failed to stop play: $e");
     }
@@ -333,30 +333,104 @@ class KarbeatState extends ChangeNotifier {
       await setPlayhead(val: samples);
       
       // Optimistic update (optional, since Rust pushes the update back immediately)
-      // notifyListeners(); 
+      notifyListeners(); 
     } catch (e) {
       log("Error seeking: $e");
     }
   }
 
   Future<void> deleteClip(int trackId, int clipId) async {
+    if (_tracks.containsKey(trackId)) {
+      final track = _tracks[trackId]!;
+      final updatedClips = track.clips.where((c) => c.id != clipId).toList();
+      
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+      notifyListeners(); // Immediate UI update
+    }
+
     try {
       // Call Rust API
-      await track.deleteClip(trackId: trackId, clipId: clipId);
+      await track_api.deleteClip(trackId: trackId, clipId: clipId);
       // State updates automatically via Broadcast -> Stream -> UI Rebuild
-      await syncTrackState();
+      notifyBackendChange(ProjectEvent.tracksChanged);
     } catch (e) {
       log("Error deleting clip: $e");
+      await syncTrackState();
     }
   }
 
   Future<void> resizeClip(int trackId, int clipId, ResizeEdge edge, int newTime) async {
+    _applyOptimisticResize(trackId, clipId, edge, newTime);
     try {
-      await track.resizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTime);
-      await syncTrackState();
+      await track_api.resizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTime);
+      notifyBackendChange(ProjectEvent.tracksChanged);
     } catch (e) {
       log("Error resizing clip: $e");
+      await syncTrackState();
     }
+  }
+
+  // Helper
+  void _applyOptimisticResize(int trackId, int clipId, ResizeEdge edge, int newTime) {
+    final track = _tracks[trackId];
+    if (track == null) return;
+
+    final clipIndex = track.clips.indexWhere((c) => c.id == clipId);
+    if (clipIndex == -1) return;
+
+    final clip = track.clips[clipIndex];
+    
+    int newStart = clip.startTime.toInt();
+    int newLength = clip.loopLength.toInt();
+    int newOffset = clip.offsetStart.toInt();
+
+    // MIRROR RUST LOGIC
+    if (edge == ResizeEdge.right) {
+       // Dragging Right Edge: newTime is the END time
+       if (newTime > clip.startTime) {
+         newLength = newTime - clip.startTime;
+       }
+    } else {
+       // Dragging Left Edge: newTime is the START time (Slip Edit)
+       final oldEnd = clip.startTime + clip.loopLength;
+       
+       if (newTime < oldEnd) {
+         final delta = newTime - clip.startTime;
+         final potentialOffset = clip.offsetStart + delta;
+         
+         // Constraint: Offset cannot be negative
+         if (potentialOffset >= 0) {
+           newStart = newTime;
+           newLength = oldEnd - newTime;
+           newOffset = potentialOffset.toInt();
+         }
+       }
+    }
+
+    // Create Updated Objects
+    // NOTE: Assuming generated classes don't have copyWith, we use constructors.
+    final updatedClip = UiClip(
+       id: clip.id,
+       name: clip.name,
+       startTime: newStart,
+       loopLength: newLength,
+       offsetStart: newOffset,
+       source: clip.source,
+    );
+
+    final updatedClips = List<UiClip>.from(track.clips);
+    updatedClips[clipIndex] = updatedClip;
+    
+    // Sort logic (optional for optimistic, but good practice)
+    // updatedClips.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    final updatedTrack = _copyWithTrack(track, clips: updatedClips);
+    
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = updatedTrack;
+    
+    notifyListeners(); // This prevents the "Flashback" when Stop is pressed
   }
 
     // ============= PLACEMENT MODE LOGIC =================
@@ -386,12 +460,14 @@ class KarbeatState extends ChangeNotifier {
         );
         
         // Refresh tracks to see the new clip
-        await syncTrackState();
         
         // Reset mode
         _placingSourceId = null;
         _placementTrackId = -1;
-        notifyListeners();
+
+        notifyBackendChange(ProjectEvent.tracksChanged);
+        // await syncTrackState();
+        // notifyListeners();
         
       } catch (e) {
         log("Error creating clip: $e");
@@ -404,5 +480,14 @@ class KarbeatState extends ChangeNotifier {
     _placingSourceId = null;
     _placementTrackId = -1;
     notifyListeners();
+  }
+
+  UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
+    return UiTrack(
+      id: original.id,
+      name: original.name,
+      trackType: original.trackType,
+      clips: clips ?? original.clips,
+    );
   }
 }

@@ -119,10 +119,10 @@ return none(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( AudioWaveformUiForClip field0)?  audio,TResult Function()?  none,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int sourceId)?  audio,TResult Function()?  none,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case UiClipSource_Audio() when audio != null:
-return audio(_that.field0);case UiClipSource_None() when none != null:
+return audio(_that.sourceId);case UiClipSource_None() when none != null:
 return none();case _:
   return orElse();
 
@@ -141,10 +141,10 @@ return none();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( AudioWaveformUiForClip field0)  audio,required TResult Function()  none,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int sourceId)  audio,required TResult Function()  none,}) {final _that = this;
 switch (_that) {
 case UiClipSource_Audio():
-return audio(_that.field0);case UiClipSource_None():
+return audio(_that.sourceId);case UiClipSource_None():
 return none();}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -159,10 +159,10 @@ return none();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( AudioWaveformUiForClip field0)?  audio,TResult? Function()?  none,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int sourceId)?  audio,TResult? Function()?  none,}) {final _that = this;
 switch (_that) {
 case UiClipSource_Audio() when audio != null:
-return audio(_that.field0);case UiClipSource_None() when none != null:
+return audio(_that.sourceId);case UiClipSource_None() when none != null:
 return none();case _:
   return null;
 
@@ -175,10 +175,10 @@ return none();case _:
 
 
 class UiClipSource_Audio extends UiClipSource {
-  const UiClipSource_Audio(this.field0): super._();
+  const UiClipSource_Audio({required this.sourceId}): super._();
   
 
- final  AudioWaveformUiForClip field0;
+ final  int sourceId;
 
 /// Create a copy of UiClipSource
 /// with the given fields replaced by the non-null parameter values.
@@ -190,16 +190,16 @@ $UiClipSource_AudioCopyWith<UiClipSource_Audio> get copyWith => _$UiClipSource_A
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiClipSource_Audio&&(identical(other.field0, field0) || other.field0 == field0));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiClipSource_Audio&&(identical(other.sourceId, sourceId) || other.sourceId == sourceId));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,field0);
+int get hashCode => Object.hash(runtimeType,sourceId);
 
 @override
 String toString() {
-  return 'UiClipSource.audio(field0: $field0)';
+  return 'UiClipSource.audio(sourceId: $sourceId)';
 }
 
 
@@ -210,7 +210,7 @@ abstract mixin class $UiClipSource_AudioCopyWith<$Res> implements $UiClipSourceC
   factory $UiClipSource_AudioCopyWith(UiClipSource_Audio value, $Res Function(UiClipSource_Audio) _then) = _$UiClipSource_AudioCopyWithImpl;
 @useResult
 $Res call({
- AudioWaveformUiForClip field0
+ int sourceId
 });
 
 
@@ -227,10 +227,10 @@ class _$UiClipSource_AudioCopyWithImpl<$Res>
 
 /// Create a copy of UiClipSource
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+@pragma('vm:prefer-inline') $Res call({Object? sourceId = null,}) {
   return _then(UiClipSource_Audio(
-null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
-as AudioWaveformUiForClip,
+sourceId: null == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

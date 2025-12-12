@@ -12,6 +12,7 @@ class PlaybackPosition {
   final int bar;
   final double tempo;
   final int sampleRate;
+  final bool isPlaying;
 
   const PlaybackPosition({
     required this.samples,
@@ -19,6 +20,7 @@ class PlaybackPosition {
     required this.bar,
     required this.tempo,
     required this.sampleRate,
+    required this.isPlaying,
   });
 
   @override
@@ -27,7 +29,8 @@ class PlaybackPosition {
       beat.hashCode ^
       bar.hashCode ^
       tempo.hashCode ^
-      sampleRate.hashCode;
+      sampleRate.hashCode ^
+      isPlaying.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -38,5 +41,6 @@ class PlaybackPosition {
           beat == other.beat &&
           bar == other.bar &&
           tempo == other.tempo &&
-          sampleRate == other.sampleRate;
+          sampleRate == other.sampleRate &&
+          isPlaying == other.isPlaying;
 }

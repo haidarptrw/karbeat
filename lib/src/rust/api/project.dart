@@ -9,6 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'project.freezed.dart';
 
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`
 
 Future<UiProjectState?> getUiState() =>
@@ -20,7 +21,7 @@ Future<ProjectMetadata> getProjectMetadata() =>
 Future<TransportState> getTransportState() =>
     RustLib.instance.api.crateApiProjectGetTransportState();
 
-Future<Map<int, AudioWaveformUiForSourceList>?> getSourceList() =>
+Future<Map<int, AudioWaveformUiForAudioProperties>?> getSourceList() =>
     RustLib.instance.api.crateApiProjectGetSourceList();
 
 Future<void> addAudioSource({required String filePath}) =>
@@ -106,49 +107,6 @@ class AudioWaveformUiForAudioProperties {
           muted == other.muted;
 }
 
-class AudioWaveformUiForClip {
-  final String name;
-  final Float32List previewBuffer;
-  final int sampleRate;
-
-  const AudioWaveformUiForClip({
-    required this.name,
-    required this.previewBuffer,
-    required this.sampleRate,
-  });
-
-  @override
-  int get hashCode =>
-      name.hashCode ^ previewBuffer.hashCode ^ sampleRate.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AudioWaveformUiForClip &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          previewBuffer == other.previewBuffer &&
-          sampleRate == other.sampleRate;
-}
-
-class AudioWaveformUiForSourceList {
-  final String name;
-  final bool muted;
-
-  const AudioWaveformUiForSourceList({required this.name, required this.muted});
-
-  @override
-  int get hashCode => name.hashCode ^ muted.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AudioWaveformUiForSourceList &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          muted == other.muted;
-}
-
 class UiClip {
   final String name;
   final int id;
@@ -192,7 +150,7 @@ class UiClip {
 sealed class UiClipSource with _$UiClipSource {
   const UiClipSource._();
 
-  const factory UiClipSource.audio(AudioWaveformUiForClip field0) =
+  const factory UiClipSource.audio({required int sourceId}) =
       UiClipSource_Audio;
   const factory UiClipSource.none() = UiClipSource_None;
 }
