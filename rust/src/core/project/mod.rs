@@ -412,7 +412,7 @@ impl KarbeatTrack {
     }
 
     pub fn update_max_sample_index(&mut self) {
-        self.clips.iter().map(|c| c.start_time + c.loop_length).max().unwrap_or(0);
+        self.max_sample_index = self.clips.iter().map(|c| c.start_time + c.loop_length).max().unwrap_or(0);
     }
 }
 

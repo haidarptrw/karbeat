@@ -88,6 +88,15 @@ class KarbeatState extends ChangeNotifier {
     // This creates ONE Rust thread that feeds ALL Flutter widgets.
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
+    _positionBroadcastStream.listen((pos) {
+      if (pos.isPlaying != _transportState.isPlaying) {
+        // Update local TransportState
+        _transportState = _transportState.copyWith(isPlaying: pos.isPlaying);
+        
+        // Notify UI (Control Panel Play Button will toggle off)
+        notifyListeners(); 
+      }
+    });
     syncTrackState();
     syncMaxSampleIndex();
     syncTransportState();
@@ -488,6 +497,34 @@ class KarbeatState extends ChangeNotifier {
       name: original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,
+    );
+  }
+}
+
+extension TransportStateCopyWith on TransportState {
+  TransportState copyWith({
+    bool? isPlaying,
+    bool? isRecording,
+    bool? isLooping,
+    int? playheadPositionSamples,
+    int? loopStartSamples,
+    int? loopEndSamples,
+    double? bpm,
+    (int, int)? timeSignature,
+    int? barTracker,
+    int? beatTracker,
+  }) {
+    return TransportState(
+      isPlaying: isPlaying ?? this.isPlaying,
+      isRecording: isRecording ?? this.isRecording,
+      isLooping: isLooping ?? this.isLooping,
+      playheadPositionSamples: playheadPositionSamples ?? this.playheadPositionSamples,
+      loopStartSamples: loopStartSamples ?? this.loopStartSamples,
+      loopEndSamples: loopEndSamples ?? this.loopEndSamples,
+      bpm: bpm ?? this.bpm,
+      timeSignature: timeSignature ?? this.timeSignature,
+      barTracker: barTracker ?? this.barTracker,
+      beatTracker: beatTracker ?? this.beatTracker,
     );
   }
 }

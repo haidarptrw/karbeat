@@ -77,6 +77,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   int _activeSampleRate = 44100;
   StreamSubscription? _posSub;
 
+  bool _isCtrlPressed = false;
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +90,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     _rulerController = _horizontalControllers.addAndGet();
     _trackContentController = _horizontalControllers.addAndGet();
     _trackContentController.addListener(_handleScrollExpansion);
+    HardwareKeyboard.instance.addHandler(_handleKeyEvents);
 
     final state = context.read<KarbeatState>();
     _activeSampleRate = state.hardwareConfig.sampleRate > 0
@@ -115,6 +118,23 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     _rulerController.dispose();
     _trackContentController.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyEvents(KeyEvent event) {
+    final isCtrl = HardwareKeyboard.instance.logicalKeysPressed
+            .contains(LogicalKeyboardKey.controlLeft) ||
+        HardwareKeyboard.instance.logicalKeysPressed
+            .contains(LogicalKeyboardKey.controlRight);
+
+    if (isCtrl != _isCtrlPressed) {
+      // Check mounted before setState in case of fast dispose
+      if (mounted) {
+        setState(() {
+          _isCtrlPressed = isCtrl;
+        });
+      }
+    }
+    return false;
   }
 
   void _handleScrollExpansion() {
@@ -231,18 +251,11 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               child: Listener(
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) {
-                    final keys = HardwareKeyboard.instance.logicalKeysPressed;
-                    final isCtrl =
-                        keys.contains(LogicalKeyboardKey.controlLeft) ||
-                        keys.contains(LogicalKeyboardKey.controlRight);
-                    if (!isCtrl) return;
-                    final currentZoom = context
-                        .read<KarbeatState>()
-                        .horizontalZoomLevel;
-                    final double multiplier = event.scrollDelta.dy > 0
-                        ? 0.9
-                        : 1.1;
-                    _updateZoom(currentZoom * multiplier);
+                    if (_isCtrlPressed) {
+                      final currentZoom = context.read<KarbeatState>().horizontalZoomLevel;
+                      final double multiplier = event.scrollDelta.dy > 0 ? 0.9 : 1.1;
+                      _updateZoom(currentZoom * multiplier);
+                    }
                   }
                 },
                 child: GestureDetector(
@@ -300,7 +313,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             controller: _rulerController,
-                            physics: const ClampingScrollPhysics(),
+                            physics: _isCtrlPressed 
+                                ? const NeverScrollableScrollPhysics() 
+                                : const ClampingScrollPhysics(),
                             child: SizedBox(
                               width:
                                   currentTimelineWidth, // Matches track list width
@@ -336,7 +351,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                 scrollDirection: Axis.horizontal,
                                 controller: _trackContentController,
                                 // Physics to match desktop feel
-                                physics: const ClampingScrollPhysics(),
+                                physics: _isCtrlPressed 
+                                    ? const NeverScrollableScrollPhysics() 
+                                    : const ClampingScrollPhysics(),
                                 child: SizedBox(
                                   width: currentTimelineWidth,
                                   child: ListView.builder(

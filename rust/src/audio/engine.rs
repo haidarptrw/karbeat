@@ -199,7 +199,7 @@ impl AudioEngine {
                     bar: self.current_bar,
                     tempo: self.current_state.tempo,
                     sample_rate: self.current_state.sample_rate,
-                    is_playing: self.current_state.is_playing,
+                    is_playing: false,
                 });
             }
         }
