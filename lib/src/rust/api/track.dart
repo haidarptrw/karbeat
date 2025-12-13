@@ -23,6 +23,8 @@ Future<void> deleteClip({required int trackId, required int clipId}) => RustLib
     .api
     .crateApiTrackDeleteClip(trackId: trackId, clipId: clipId);
 
+/// Resize the clip. for default mode, it will only adjust
+/// the start time and loop length of the clip
 Future<void> resizeClip({
   required int trackId,
   required int clipId,
@@ -33,6 +35,18 @@ Future<void> resizeClip({
   clipId: clipId,
   edge: edge,
   newTimeVal: newTimeVal,
+);
+
+Future<void> moveClip({
+  required int sourceTrackId,
+  required int clipId,
+  required int newStartTime,
+  int? newTrackId,
+}) => RustLib.instance.api.crateApiTrackMoveClip(
+  sourceTrackId: sourceTrackId,
+  clipId: clipId,
+  newStartTime: newStartTime,
+  newTrackId: newTrackId,
 );
 
 enum ResizeEdge { left, right }

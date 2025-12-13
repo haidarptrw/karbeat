@@ -76,7 +76,7 @@ impl Default for KarbeatTrack {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TrackType {
     Audio,
     Midi,
@@ -96,7 +96,7 @@ impl std::str::FromStr for TrackType {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum KarbeatSource {
     /// Points to an AudioWaveform
     Audio(Arc<AudioWaveform>),
@@ -162,7 +162,7 @@ impl Default for TransportState {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Pattern {
     pub id: u32,
     pub name: String,
@@ -171,7 +171,7 @@ pub struct Pattern {
     pub notes: HashMap<u32, Vec<Note>>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Note {
     pub start_tick: u64,
     pub duration: u64,

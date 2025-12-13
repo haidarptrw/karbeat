@@ -116,10 +116,12 @@ class _InteractiveClip extends StatefulWidget {
   State<_InteractiveClip> createState() => _InteractiveClipState();
 }
 
-enum _DragAction { none, resizeLeft, resizeRight }
+enum _DragAction { none, resizeLeft, resizeRight, move }
 
 class _InteractiveClipState extends State<_InteractiveClip> {
   _DragAction _currentAction = _DragAction.none;
+  // Track vertical drag to determine target track
+  double _verticalDragDy = 0.0;
 
   // Local state for smooth UI updates during drag
   late int _visualStartTime;
@@ -145,6 +147,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     _visualStartTime = widget.clip.startTime.toInt();
     _visualLoopLength = widget.clip.loopLength.toInt();
     _visualOffset = widget.clip.offsetStart.toInt();
+    _verticalDragDy = 0.0;
   }
 
   @override
@@ -153,18 +156,21 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     final double left = _visualStartTime / widget.zoomLevel;
     final double width = _visualLoopLength / widget.zoomLevel;
     final double safeWidth = width < 1 ? 1 : width;
+    const resizeEdgeSize = 15.0;
+
+    final double top = 2 + _verticalDragDy;
 
     // Determine Cursor
     MouseCursor cursor = SystemMouseCursors.basic;
     if (widget.selectedTool == ToolSelection.delete) {
-      cursor = SystemMouseCursors.click; // Or use SystemMouseCursors.forbidden
+      cursor = SystemMouseCursors.click;
+    } else if (widget.selectedTool == ToolSelection.move) {
+      cursor = SystemMouseCursors.move;
     }
-    // For normal pointers, we determine resize cursor in MouseRegion logic below
-    // but we can set a default here.
 
     return Positioned(
       left: left,
-      top: 2,
+      top: top,
       height: widget.height - 4,
       width: safeWidth,
       child: MouseRegion(
@@ -174,8 +180,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
           if (widget.selectedTool == ToolSelection.delete) return;
 
           final x = event.localPosition.dx;
-          const edgeSize = 10.0;
-          if (x < edgeSize || x > safeWidth - edgeSize) {
+          if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
             // TODO: Ideally use a ValueNotifier to switch cursor to resizeLeftRight
             // For now, standard cursor is fine or implementation specific
           }
@@ -194,63 +199,84 @@ class _InteractiveClipState extends State<_InteractiveClip> {
             }
           },
 
-          // --- 2. DRAG START (RESIZE) ---
-          onHorizontalDragStart: (details) {
-            // Disable interactions if Delete tool is active
+          onPanStart: (details) {
             if (widget.selectedTool == ToolSelection.delete) return;
-
+            
             final x = details.localPosition.dx;
-            const edgeSize = 15.0; // Hitbox for resizing
 
-            if (x < edgeSize) {
-              setState(() => _currentAction = _DragAction.resizeLeft);
-            } else if (x > safeWidth - edgeSize) {
-              setState(() => _currentAction = _DragAction.resizeRight);
-            } else {
-              // Middle click - Skip Move as requested
-              _currentAction = _DragAction.none;
+            if (widget.selectedTool == ToolSelection.move) {
+              if (x < resizeEdgeSize) {
+                 setState(() => _currentAction = _DragAction.resizeLeft);
+               } else if (x > safeWidth - resizeEdgeSize) {
+                 setState(() => _currentAction = _DragAction.resizeRight);
+               } else {
+                 setState(() => _currentAction = _DragAction.move);
+               }
             }
           },
 
-          // --- 3. DRAG UPDATE (VISUAL) ---
-          onHorizontalDragUpdate: (details) {
+          onPanUpdate: (details) {
             if (_currentAction == _DragAction.none) return;
-
-            // Convert pixel delta to sample delta
             final deltaSamples = (details.delta.dx * widget.zoomLevel).round();
 
             setState(() {
-              if (_currentAction == _DragAction.resizeRight) {
-                // Changing Length
+              if (_currentAction == _DragAction.move) {
+                _visualStartTime = (_visualStartTime + deltaSamples).clamp(0, double.infinity).toInt();
+                _verticalDragDy += details.delta.dy;
+              }
+              else if (_currentAction == _DragAction.resizeRight) {
                 _visualLoopLength = (_visualLoopLength + deltaSamples)
                     .clamp(100, double.infinity)
                     .toInt();
-              } else if (_currentAction == _DragAction.resizeLeft) {
-                // Changing Start + Length (Visual Slip)
+              }
+              else if (_currentAction == _DragAction.resizeLeft) {
                 final oldEnd = _visualStartTime + _visualLoopLength;
-
-                // New start cannot exceed old end
                 final newStart = (_visualStartTime + deltaSamples)
                     .clamp(0, oldEnd - 100)
                     .toInt();
-
                 final moveAmount = newStart - _visualStartTime;
                 _visualStartTime = newStart;
                 _visualLoopLength = oldEnd - newStart;
-                _visualOffset += moveAmount; 
+                _visualOffset += moveAmount;
                 if (_visualOffset < 0) _visualOffset = 0;
               }
             });
           },
 
-          // --- 4. DRAG END (COMMIT) ---
-          onHorizontalDragEnd: (_) {
+          onPanEnd: (_) {
             if (_currentAction == _DragAction.none) return;
 
             final state = context.read<KarbeatState>();
 
-            if (_currentAction == _DragAction.resizeRight) {
-              // API expects absolute NEW TIME value for edge
+            if (_currentAction == _DragAction.move) {
+              int? newTrackId;
+              
+              // Estimate row index offset based on drag distance and row height
+              final rowOffset = (_verticalDragDy / widget.height).round();
+              
+              if (rowOffset != 0) {
+                // Find target track ID from state list
+                // We need the ordered list of tracks to know who is above/below
+                final sortedTracks = state.tracks.values.toList()
+                  ..sort((a, b) => a.id.compareTo(b.id));
+                
+                final currentIndex = sortedTracks.indexWhere((t) => t.id == widget.trackId);
+                if (currentIndex != -1) {
+                  final targetIndex = currentIndex + rowOffset;
+                  if (targetIndex >= 0 && targetIndex < sortedTracks.length) {
+                    newTrackId = sortedTracks[targetIndex].id;
+                  }
+                }
+              }
+
+              state.moveClip(
+                widget.trackId,
+                widget.clip.id,
+                _visualStartTime,
+                newTrackId: newTrackId, // Pass the new track (or null if same)
+              );
+            } 
+            else if (_currentAction == _DragAction.resizeRight) {
               final newEndTime = _visualStartTime + _visualLoopLength;
               state.resizeClip(
                 widget.trackId,
@@ -258,7 +284,8 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                 ResizeEdge.right,
                 newEndTime,
               );
-            } else if (_currentAction == _DragAction.resizeLeft) {
+            } 
+            else if (_currentAction == _DragAction.resizeLeft) {
               state.resizeClip(
                 widget.trackId,
                 widget.clip.id,
@@ -267,10 +294,13 @@ class _InteractiveClipState extends State<_InteractiveClip> {
               );
             }
 
-            setState(() => _currentAction = _DragAction.none);
+            // Reset
+            setState(() {
+              _currentAction = _DragAction.none;
+              _verticalDragDy = 0.0; // Snap back visually until state sync updates
+            });
           },
 
-          // --- 5. VISUAL RENDERER ---
           child: _ClipRenderer(
             clip: widget.clip,
             trackType: widget.trackType,

@@ -63,6 +63,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
   UiProjectState dco_decode_box_autoadd_ui_project_state(dynamic raw);
 
   @protected
@@ -109,6 +112,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     dynamic raw,
   );
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
   UiProjectState? dco_decode_opt_box_autoadd_ui_project_state(dynamic raw);
@@ -220,6 +226,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   UiProjectState sse_decode_box_autoadd_ui_project_state(
     SseDeserializer deserializer,
   );
@@ -270,6 +279,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     SseDeserializer deserializer,
   );
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   UiProjectState? sse_decode_opt_box_autoadd_ui_project_state(
@@ -391,6 +403,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_ui_project_state(
     UiProjectState self,
     SseSerializer serializer,
@@ -449,6 +464,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     AudioWaveformUiForAudioProperties? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_ui_project_state(

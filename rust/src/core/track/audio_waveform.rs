@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub type AudioFrame = [f32; 2];
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AudioWaveform {
     #[serde(skip)]
     pub buffer: Arc<Vec<f32>>,

@@ -380,6 +380,16 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> moveClip(int trackId, int clipId, int newStartTime, {int? newTrackId}) async {
+    try {
+      await track_api.moveClip(sourceTrackId: trackId, clipId: clipId, newStartTime: newStartTime, newTrackId: newTrackId);
+      notifyBackendChange(ProjectEvent.tracksChanged);
+    } catch (e) {
+      log("Error moving clip: $e");
+      await syncTrackState();
+    }
+  }
+
   // Helper
   void _applyOptimisticResize(int trackId, int clipId, ResizeEdge edge, int newTime) {
     final track = _tracks[trackId];
