@@ -119,14 +119,19 @@ class _InteractiveClip extends StatefulWidget {
 enum _DragAction { none, resizeLeft, resizeRight, move }
 
 class _InteractiveClipState extends State<_InteractiveClip> {
-  _DragAction _currentAction = _DragAction.none;
-  // Track vertical drag to determine target track
-  double _verticalDragDy = 0.0;
-
   // Local state for smooth UI updates during drag
   late int _visualStartTime;
   late int _visualLoopLength;
   late int _visualOffset;
+
+  _DragAction _currentAction = _DragAction.none;
+
+  // Track vertical drag to determine target track
+  double _verticalDragDy = 0.0;
+
+  // Overlay for global draggin
+  OverlayEntry? _overlayEntry;
+  final ValueNotifier<Offset> _overlayPosition = ValueNotifier(Offset.zero);
 
   @override
   void initState() {
@@ -150,6 +155,56 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     _verticalDragDy = 0.0;
   }
 
+  void _createOverlay(BuildContext context) {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final size = renderBox.size;
+    final initialGlobalPos = renderBox.localToGlobal(Offset.zero);
+    _overlayPosition.value = initialGlobalPos;
+
+    // Create entry
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return ValueListenableBuilder<Offset>(
+          valueListenable: _overlayPosition,
+          builder: (context, offset, child) {
+            return Positioned(
+              left: offset.dx,
+              top: offset.dy,
+              width: size.width,
+              height: size.height,
+              child: Material(
+                color: Colors.transparent,
+                child: _ClipRenderer(
+                  clip: widget.clip,
+                  trackType: widget.trackType,
+                  color: Colors.cyanAccent.withAlpha((0.5 * 255).round()),
+                  zoomLevel: widget.zoomLevel,
+                  projectSampleRate: context
+                      .read<KarbeatState>()
+                      .hardwareConfig
+                      .sampleRate,
+                  overrideOffset: _visualOffset.toDouble(),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _updateOverlay(Offset delta) {
+    _overlayPosition.value += delta;
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Coordinate Mapping (Pixels)
@@ -157,6 +212,8 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     final double width = _visualLoopLength / widget.zoomLevel;
     final double safeWidth = width < 1 ? 1 : width;
     const resizeEdgeSize = 15.0;
+
+    final isMoving = _currentAction == _DragAction.move;
 
     final double top = 2 + _verticalDragDy;
 
@@ -170,144 +227,163 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
     return Positioned(
       left: left,
-      top: top,
+      top: 2,
       height: widget.height - 4,
       width: safeWidth,
-      child: MouseRegion(
-        cursor: cursor,
-        // Detect Hover for Resize Cursors (only if not in Delete mode)
-        onHover: (event) {
-          if (widget.selectedTool == ToolSelection.delete) return;
-
-          final x = event.localPosition.dx;
-          if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
-            // TODO: Ideally use a ValueNotifier to switch cursor to resizeLeftRight
-            // For now, standard cursor is fine or implementation specific
-          }
-        },
-        child: GestureDetector(
-          // Opaque ensures we catch taps even on transparent parts of waveform
-          behavior: HitTestBehavior.opaque,
-
-          // --- 1. DELETE ACTION ---
-          onTap: () {
-            if (widget.selectedTool == ToolSelection.delete) {
-              context.read<KarbeatState>().deleteClip(
-                widget.trackId,
-                widget.clip.id,
-              );
-            }
-          },
-
-          onPanStart: (details) {
+      child: Opacity(
+        opacity: isMoving ? 0.0 : 1.0,
+        child: MouseRegion(
+          cursor: cursor,
+          // Detect Hover for Resize Cursors (only if not in Delete mode)
+          onHover: (event) {
             if (widget.selectedTool == ToolSelection.delete) return;
-            
-            final x = details.localPosition.dx;
 
-            if (widget.selectedTool == ToolSelection.move) {
-              if (x < resizeEdgeSize) {
-                 setState(() => _currentAction = _DragAction.resizeLeft);
-               } else if (x > safeWidth - resizeEdgeSize) {
-                 setState(() => _currentAction = _DragAction.resizeRight);
-               } else {
-                 setState(() => _currentAction = _DragAction.move);
-               }
+            final x = event.localPosition.dx;
+            if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
+              // TODO: Ideally use a ValueNotifier to switch cursor to resizeLeftRight
+              // For now, standard cursor is fine or implementation specific
             }
           },
+          child: GestureDetector(
+            // Opaque ensures we catch taps even on transparent parts of waveform
+            behavior: HitTestBehavior.opaque,
 
-          onPanUpdate: (details) {
-            if (_currentAction == _DragAction.none) return;
-            final deltaSamples = (details.delta.dx * widget.zoomLevel).round();
-
-            setState(() {
-              if (_currentAction == _DragAction.move) {
-                _visualStartTime = (_visualStartTime + deltaSamples).clamp(0, double.infinity).toInt();
-                _verticalDragDy += details.delta.dy;
+            // --- 1. DELETE ACTION ---
+            onTap: () {
+              if (widget.selectedTool == ToolSelection.delete) {
+                context.read<KarbeatState>().deleteClip(
+                  widget.trackId,
+                  widget.clip.id,
+                );
               }
-              else if (_currentAction == _DragAction.resizeRight) {
-                _visualLoopLength = (_visualLoopLength + deltaSamples)
-                    .clamp(100, double.infinity)
-                    .toInt();
-              }
-              else if (_currentAction == _DragAction.resizeLeft) {
-                final oldEnd = _visualStartTime + _visualLoopLength;
-                final newStart = (_visualStartTime + deltaSamples)
-                    .clamp(0, oldEnd - 100)
-                    .toInt();
-                final moveAmount = newStart - _visualStartTime;
-                _visualStartTime = newStart;
-                _visualLoopLength = oldEnd - newStart;
-                _visualOffset += moveAmount;
-                if (_visualOffset < 0) _visualOffset = 0;
-              }
-            });
-          },
+            },
 
-          onPanEnd: (_) {
-            if (_currentAction == _DragAction.none) return;
+            onPanStart: (details) {
+              if (widget.selectedTool == ToolSelection.delete) return;
 
-            final state = context.read<KarbeatState>();
+              final x = details.localPosition.dx;
 
-            if (_currentAction == _DragAction.move) {
-              int? newTrackId;
-              
-              // Estimate row index offset based on drag distance and row height
-              final rowOffset = (_verticalDragDy / widget.height).round();
-              
-              if (rowOffset != 0) {
-                // Find target track ID from state list
-                // We need the ordered list of tracks to know who is above/below
-                final sortedTracks = state.tracks.values.toList()
-                  ..sort((a, b) => a.id.compareTo(b.id));
-                
-                final currentIndex = sortedTracks.indexWhere((t) => t.id == widget.trackId);
-                if (currentIndex != -1) {
-                  final targetIndex = currentIndex + rowOffset;
-                  if (targetIndex >= 0 && targetIndex < sortedTracks.length) {
-                    newTrackId = sortedTracks[targetIndex].id;
-                  }
+              if (widget.selectedTool == ToolSelection.move) {
+                if (x < resizeEdgeSize) {
+                  setState(() => _currentAction = _DragAction.resizeLeft);
+                } else if (x > safeWidth - resizeEdgeSize) {
+                  setState(() => _currentAction = _DragAction.resizeRight);
+                } else {
+                  setState(() => _currentAction = _DragAction.move);
+                  _createOverlay(context);
                 }
               }
+            },
 
-              state.moveClip(
-                widget.trackId,
-                widget.clip.id,
-                _visualStartTime,
-                newTrackId: newTrackId, // Pass the new track (or null if same)
-              );
-            } 
-            else if (_currentAction == _DragAction.resizeRight) {
-              final newEndTime = _visualStartTime + _visualLoopLength;
-              state.resizeClip(
-                widget.trackId,
-                widget.clip.id,
-                ResizeEdge.right,
-                newEndTime,
-              );
-            } 
-            else if (_currentAction == _DragAction.resizeLeft) {
-              state.resizeClip(
-                widget.trackId,
-                widget.clip.id,
-                ResizeEdge.left,
-                _visualStartTime,
-              );
-            }
+            onPanUpdate: (details) {
+              if (_currentAction == _DragAction.none) return;
+              final deltaSamples = (details.delta.dx * widget.zoomLevel)
+                  .round();
 
-            // Reset
-            setState(() {
-              _currentAction = _DragAction.none;
-              _verticalDragDy = 0.0; // Snap back visually until state sync updates
-            });
-          },
+              if (_currentAction == _DragAction.move) {
+                _updateOverlay(details.delta);
 
-          child: _ClipRenderer(
-            clip: widget.clip,
-            trackType: widget.trackType,
-            color: Colors.cyanAccent.withAlpha(47),
-            zoomLevel: widget.zoomLevel,
-            projectSampleRate: context.read<KarbeatState>().hardwareConfig.sampleRate,
-            overrideOffset: _visualOffset.toDouble(),
+                setState(() {
+                  _visualStartTime = (_visualStartTime + deltaSamples)
+                      .clamp(0, double.infinity)
+                      .toInt();
+                  _verticalDragDy += details.delta.dy;
+                });
+              }
+              else {
+                setState(() {
+                  if (_currentAction == _DragAction.resizeRight) {
+                    _visualLoopLength = (_visualLoopLength + deltaSamples)
+                        .clamp(100, double.infinity)
+                        .toInt();
+                  } else if (_currentAction == _DragAction.resizeLeft) {
+                    final oldEnd = _visualStartTime + _visualLoopLength;
+                    final newStart = (_visualStartTime + deltaSamples)
+                        .clamp(0, oldEnd - 100)
+                        .toInt();
+
+                    final moveAmount = newStart - _visualStartTime;
+                    _visualStartTime = newStart;
+                    _visualLoopLength = oldEnd - newStart;
+                    _visualOffset += moveAmount;
+                    if (_visualOffset < 0) _visualOffset = 0;
+                  }
+                });
+              }
+            },
+
+            onPanEnd: (_) {
+              if (_currentAction == _DragAction.none) return;
+
+              final state = context.read<KarbeatState>();
+
+              if (_currentAction == _DragAction.move) {
+                _removeOverlay();
+                int? newTrackId;
+
+                // Estimate row index offset based on drag distance and row height
+                final rowOffset = (_verticalDragDy / widget.height).round();
+
+                if (rowOffset != 0) {
+                  // Find target track ID from state list
+                  // We need the ordered list of tracks to know who is above/below
+                  final sortedTracks = state.tracks.values.toList()
+                    ..sort((a, b) => a.id.compareTo(b.id));
+
+                  final currentIndex = sortedTracks.indexWhere(
+                    (t) => t.id == widget.trackId,
+                  );
+                  if (currentIndex != -1) {
+                    final targetIndex = currentIndex + rowOffset;
+                    if (targetIndex >= 0 && targetIndex < sortedTracks.length) {
+                      newTrackId = sortedTracks[targetIndex].id;
+                    }
+                  }
+                }
+
+                state.moveClip(
+                  widget.trackId,
+                  widget.clip.id,
+                  _visualStartTime,
+                  newTrackId:
+                      newTrackId, // Pass the new track (or null if same)
+                );
+              } else if (_currentAction == _DragAction.resizeRight) {
+                final newEndTime = _visualStartTime + _visualLoopLength;
+                state.resizeClip(
+                  widget.trackId,
+                  widget.clip.id,
+                  ResizeEdge.right,
+                  newEndTime,
+                );
+              } else if (_currentAction == _DragAction.resizeLeft) {
+                state.resizeClip(
+                  widget.trackId,
+                  widget.clip.id,
+                  ResizeEdge.left,
+                  _visualStartTime,
+                );
+              }
+
+              // Reset
+              setState(() {
+                _currentAction = _DragAction.none;
+                _verticalDragDy =
+                    0.0; // Snap back visually until state sync updates
+              });
+            },
+
+            child: _ClipRenderer(
+              clip: widget.clip,
+              trackType: widget.trackType,
+              color: Colors.cyanAccent.withAlpha(47),
+              zoomLevel: widget.zoomLevel,
+              projectSampleRate: context
+                  .read<KarbeatState>()
+                  .hardwareConfig
+                  .sampleRate,
+              overrideOffset: _visualOffset.toDouble(),
+            ),
           ),
         ),
       ),
@@ -378,7 +454,10 @@ class _ClipRenderer extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context) {
-    final audioSources = context.select<KarbeatState, Map<int, AudioWaveformUiForAudioProperties>>((state) => state.audioSources);
+    final audioSources = context
+        .select<KarbeatState, Map<int, AudioWaveformUiForAudioProperties>>(
+          (state) => state.audioSources,
+        );
 
     switch (clip.source) {
       // In future: Use CustomPainter to draw the waveform summary here
@@ -393,18 +472,21 @@ class _ClipRenderer extends StatelessWidget {
       //   return const Center(
       //     child: Icon(Icons.show_chart, size: 16, color: Colors.white54),
       //   );
-      
+
       case UiClipSource_Audio(:final sourceId):
         double ratio = 1.0;
         final audioData = audioSources[sourceId];
         if (audioData == null) {
-           return const Center(child: Text("Loading...", style: TextStyle(fontSize: 8)));
+          return const Center(
+            child: Text("Loading...", style: TextStyle(fontSize: 8)),
+          );
         }
         if (projectSampleRate > 0 && audioData.sampleRate > 0) {
           ratio = audioData.sampleRate / projectSampleRate;
         }
 
-        final double effectiveOffset = overrideOffset ?? clip.offsetStart.toDouble();
+        final double effectiveOffset =
+            overrideOffset ?? clip.offsetStart.toDouble();
 
         return CustomPaint(
           size: Size.infinite, // Fill the clip container
@@ -414,7 +496,7 @@ class _ClipRenderer extends StatelessWidget {
             zoomLevel: zoomLevel,
             offsetSamples: effectiveOffset,
             strokeWidth: 1.0,
-            ratio: ratio
+            ratio: ratio,
           ),
         );
       case UiClipSource_None():
@@ -444,7 +526,6 @@ class _GridPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (tempo <= 0 || sampleRate <= 0 || zoomLevel <= 0 || gridSize <= 0) {
       return;
-
     }
 
     final double samplesPerBeat = (60.0 / tempo) * sampleRate;

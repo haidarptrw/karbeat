@@ -152,7 +152,7 @@ impl AudioEngine {
 
         let channels = 2;
 
-        // check if the playhead has already exceed the max sample index
+        // check if the playhead has already exceeded the max sample index
         if self.playhead_samples > self.current_state.max_sample_index {
             self.current_state.is_playing = false;
             self.reset_playhead();
