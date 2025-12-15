@@ -194,7 +194,7 @@ pub fn move_clip(
 
             let is_compatible = match (&target_type, &clip.source) {
                 (TrackType::Audio, KarbeatSource::Audio(_)) => true,
-                (TrackType::Midi, KarbeatSource::Midi(_)) => true,
+                (TrackType::Midi, KarbeatSource::Generator{..}) => true,
                 _ => false,
             };
 

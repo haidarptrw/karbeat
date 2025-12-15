@@ -26,7 +26,7 @@ pub fn play_source_preview(id: u32) {
                 if let Some(sender) = guard.as_mut() {
                     // This matches the logic you requested
                     let _ = sender.push(AudioCommand::PlayOneShot(waveform_to_play));
-                    println!("Preview command sent for ID: {}", id);
+                    log::info!("Preview command sent for ID: {}", id);
                 }
             }
         }

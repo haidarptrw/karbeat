@@ -216,14 +216,14 @@ pub fn add_audio_source(file_path: &str) {
             match app.load_audio(file_path.to_string(), None) {
                 Ok(id) => {
                     let Some(audio) = app.asset_library.source_map.get(&id) else {
-                        println!("[error] can't get the audiowave");
+                        log::error!("[error] can't get the audiowave");
                         return;
                     };
 
-                    println!("Sucessfully add {}", audio.name);
+                    log::info!("Sucessfully add {}", audio.name);
                 }
                 Err(e) => {
-                    println!("[error] failed to load the audio: {}", e);
+                    log::error!("[error] failed to load the audio: {}", e);
                 }
             }
         };
@@ -245,7 +245,7 @@ pub fn add_new_track(track_type: TrackType) -> Result<(), String> {
             }
         };
         app.add_new_track(track_type);
-        println!("[add_new_track] successfully add new track")
+        log::info!("[add_new_track] successfully add new track")
     }
     broadcast_state_change();
     Ok(())

@@ -4,12 +4,13 @@ use std::{
     cmp::Ordering,
     collections::{BTreeSet, HashMap},
     path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
-use crate::{api::track, core::track::audio_waveform::AudioWaveform};
+use crate::{api::track, core::{plugin::KarbeatPlugin, track::audio_waveform::AudioWaveform}};
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ApplicationState {
@@ -25,9 +26,14 @@ pub struct ApplicationState {
     pub mixer: MixerState,
     pub transport: TransportState,
     pub asset_library: Arc<AssetLibrary>,
+
     // All musical data lives here. The timeline just references these.
     pub pattern_pool: HashMap<u32, Arc<Pattern>>,
     pub pattern_counter: u32,
+
+    // Generator sources
+    pub generator_pool: HashMap<u32, Arc<RwLock<GeneratorInstance>>>,
+    pub generator_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
     pub tracks: HashMap<u32, Arc<KarbeatTrack>>,
@@ -101,8 +107,12 @@ pub enum KarbeatSource {
     /// Points to an AudioWaveform
     Audio(Arc<AudioWaveform>),
 
-    /// Points to a Pattern
-    Midi(Arc<Pattern>),
+    /// Points to Generators paired with Patterns
+    /// Each entry in the vector is a (GeneratorInstance, Pattern) pair.
+    /// This allows a single clip to trigger multiple generators (layering) or just one.
+    Generator {
+        generator_pattern_pairs: Vec<(GeneratorInstance, Arc<Pattern>)>,
+    },
 
     /// Points to an Automation ID (Future implementation)
     Automation(u32),
@@ -251,8 +261,15 @@ impl Default for MixerChannel {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub enum GeneratorInstance {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GeneratorInstance {
+    pub id: u32,
+    pub effects: Arc<Vec<PluginInstance>>,
+    pub instance_type: GeneratorInstanceType,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum GeneratorInstanceType {
     // A Synth (Internal or VST)
     Plugin(PluginInstance),
 
@@ -263,13 +280,15 @@ pub enum GeneratorInstance {
     AudioInput { device_channel_index: u32 },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PluginInstance {
-    pub id: u32,
     pub name: String,
     pub internal_type: String, // e.g., "EQ_3BAND", "COMPRESSOR"
     pub bypass: bool,
     pub parameters: HashMap<u32, f32>, // Param ID -> Value
+
+    #[serde(skip)]
+    pub instance: Option<Arc<Mutex<KarbeatPlugin>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -341,10 +360,10 @@ impl KarbeatTrack {
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
-    pub fn add_clip(&mut self, clip: Clip) -> Option<u64> {
+    pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u64> {
         let is_valid = match (&self.track_type, &clip.source) {
             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
-            (TrackType::Midi, KarbeatSource::Midi(_)) => true,
+            (TrackType::Midi, KarbeatSource::Generator{..}) => true,
             (TrackType::Automation, KarbeatSource::Automation(_)) => true,
             // Allow Automation on Audio/Midi tracks? usually yes, but strictly speaking:
             _ => false,
@@ -369,11 +388,9 @@ impl KarbeatTrack {
             }
 
             // Return the end sample of this new clip
-            return Some(clip_end_sample);
+            return Ok(clip_end_sample);
         } else {
-            // In a real app, maybe return Result<Error>
-            eprintln!("Warning: Mismatched Clip Source for Track Type");
-            return None;
+            return Err(anyhow::anyhow!("Warning: Mismatched Clip Source for Track Type"));
         }
     }
 
@@ -399,6 +416,30 @@ impl KarbeatTrack {
         }
     }
 
+    pub fn remove_clip_by_source_id(&mut self, source_id: u32, is_generator: bool) {
+        let clips_set = Arc::make_mut(&mut self.clips);
+
+        clips_set.retain(|clip_arc| {
+            match &clip_arc.source {
+                KarbeatSource::Audio(_) => {
+                    if !is_generator {
+                        clip_arc.source_id != source_id
+                    } else {
+                        true
+                    }
+                },
+                KarbeatSource::Generator { generator_pattern_pairs: generator_pattern_pair } => {
+                    if is_generator {
+                        !generator_pattern_pair.iter().any(|(gen, _)| gen.id == source_id)
+                    } else {
+                        true
+                    }
+                },
+                KarbeatSource::Automation(_) => true,
+            }
+        });
+    }
+
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
     pub fn add_clips_bulk(&mut self, new_clips: Vec<Arc<Clip>>) {
         let clips_vec = Arc::make_mut(&mut self.clips);
@@ -418,14 +459,14 @@ impl KarbeatTrack {
 
 impl ApplicationState {
     pub fn add_clip_to_track(&mut self, track_id: u32, clip: Clip) {
-        // 1. Get the track
+        // Get the track
         if let Some(track_arc) = self.tracks.get_mut(&track_id) {
-            // 2. COW: Get mutable track
+            // COW: Get mutable track
             let track = Arc::make_mut(track_arc);
 
-            // 3. Add Clip & Check bounds
+            // Add Clip & Check bounds
             // We pass the Clip by value. The track takes ownership and wraps it in Arc.
-            if let Some(_) = track.add_clip(clip) {
+            if let Ok(_) = track.add_clip(clip) {
                 // 4. Update Global Max (Cheap u64 comparison)
                 self.update_max_sample_index();
             }
@@ -445,9 +486,66 @@ impl ApplicationState {
     pub fn update_max_sample_index(&mut self) {
          self.max_sample_index = self
             .tracks
-            .values()
-            .map(|t| t.max_sample_index)
+            .values_mut()
+            .map(|t| {
+                let track_mut = Arc::make_mut(t);
+                track_mut.update_max_sample_index();
+                track_mut.max_sample_index
+            })
             .max()
             .unwrap_or(0);
+    }
+
+    pub fn add_generator(&mut self, instance_type: GeneratorInstanceType) -> u32 {
+        self.generator_counter += 1;
+        let id = self.generator_counter;
+        
+        // Ensure the inner instance knows its ID
+        let instance = GeneratorInstance {
+            id,
+            instance_type,
+            effects: Arc::new(Default::default())
+        };
+
+        self.generator_pool.insert(id, Arc::new(RwLock::new(instance)));
+        id
+    }
+
+    /// Deletes a generator source and removes all clips referencing it.
+    pub fn remove_generator(&mut self, generator_id: u32) -> Option<u32> {
+        if self.generator_pool.remove(&generator_id).is_none() {
+            return None;
+        }
+
+        for track_arc in self.tracks.values_mut() {
+            let track = Arc::make_mut(track_arc);
+            track.remove_clip_by_source_id(generator_id, true);
+        }
+
+        self.update_max_sample_index();
+        Some(generator_id)
+    }
+
+    /// Deletes an audio source and removes all clips referencing it.
+    pub fn remove_audio_source(&mut self, source_id: u32) -> anyhow::Result<u32> {
+        // we check whether the source exists
+        // ASSUME: the id inside source_map and sample_paths are same based on the existing insertion logic
+        let library = Arc::make_mut(&mut self.asset_library);
+        
+        if library.source_map.remove(&source_id).is_none() {
+            return Err(anyhow!("Source does not exist"));
+        }
+
+        library.sample_paths.remove(&source_id);
+
+        // cascade delete
+        for track_arc in self.tracks.values_mut() {
+            let track = Arc::make_mut(track_arc);
+            track.remove_clip_by_source_id(source_id, false);
+        }
+
+        self.update_max_sample_index();
+
+        Ok(source_id)
     }
 }

@@ -70,12 +70,13 @@ impl AudioLoader for ApplicationState {
         let waveform = match load_audio_file(path.clone(), name) {
             Ok(waveform) => waveform,
             Err(e) => {
-                println!("Cannot decode audio file: {}", e);
-                return Err(anyhow!(format!("Cannot decode audio file: {}", e)));
+                let error_msg = format!("Cannot decode audio file: {}", e);
+                log::error!("{}", error_msg);
+                return Err(anyhow!("{}", error_msg));
             }
         };
         let id = self.asset_library.next_id;
-        let mut asset_library = Arc::make_mut(&mut self.asset_library);
+        let asset_library = Arc::make_mut(&mut self.asset_library);
         asset_library.next_id += 1;
 
         asset_library.sample_paths.insert(
@@ -87,7 +88,7 @@ impl AudioLoader for ApplicationState {
             Arc::new(waveform)
         );
 
-        println!("Successfully loaded audio: {} (ID: {})", path, id);
+        log::info!("Successfully loaded audio: {} (ID: {})", path, id);
 
         Ok(id)
     }

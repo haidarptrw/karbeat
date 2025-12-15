@@ -1,7 +1,8 @@
+pub mod plugin;
 pub mod utils;
 // src/lib.rs
 
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, Once, RwLock};
 
 use once_cell::sync::Lazy;
 use rtrb::{Producer, RingBuffer};
@@ -19,6 +20,10 @@ pub mod commands;
 pub mod core;
 mod frb_generated;
 
+// ==================================================================
+// ================== Global States variables =======================
+// ==================================================================
+
 pub static COMMAND_SENDER: Lazy<Mutex<Option<Producer<AudioCommand>>>> =
     Lazy::new(|| Mutex::new(None));
 
@@ -31,7 +36,12 @@ pub static APP_STATE: Lazy<Arc<RwLock<ApplicationState>>> =
 pub static RENDER_STATE_PRODUCER: Lazy<Mutex<Option<Input<AudioRenderState>>>> =
     Lazy::new(|| Mutex::new(None));
 
-static mut SEQUENCE_ID: u32 = 0;
+pub static INIT_LOGGER: Once = Once::new();
+
+
+// ==================================================================
+// ================== Functions =====================================
+// ==================================================================
 
 /// Broadcast changes in ApplicationState to AudioRenderState (things that
 /// is used by the Audio Thread)
@@ -54,12 +64,12 @@ pub fn broadcast_state_change() {
             // producer.publish();
         }
     } else {
-        println!("Error when publishing");
+        log::error!("Error when publishing");
     }
 }
 
 fn generate_startup_beep() -> AudioWaveform {
-    let sample_rate = 44100;
+    let sample_rate = 48000;
     let duration_secs = 0.5;
     let total_frames = (sample_rate as f32 * duration_secs) as usize;
     let frequency = 440.0; // A4 Note
@@ -94,8 +104,8 @@ pub fn init_engine() {
         AudioRenderState::from(&*app)
     };
 
-    println!(
-        "✨ Init Engine with Buffer Size: {}",
+    log::info!(
+        "Init Engine with Buffer Size: {}",
         initial_state.buffer_size
     );
     let (state_in, state_out) =
@@ -117,16 +127,34 @@ pub fn init_engine() {
 
     match start_audio_stream(state_out, cmd_cons, initial_state) {
         Ok(_) => {
-            println!("Audio Engine Successfully initialized");
+            log::info!("Audio Engine Successfully initialized");
 
             // SEND STARTUP BEEP
             if let Some(producer) = guard.as_mut() {
                 let beep_waveform = generate_startup_beep();
                 // Push the command directly to the ring buffer
                 let _ = producer.push(AudioCommand::PlayOneShot(beep_waveform));
-                println!("Startup beep command sent");
+                log::info!("Startup beep command sent");
             }
         }
-        Err(e) => eprintln!("Failed to start audio engine: {}", e),
+        Err(e) => {
+            log::error!("Failed to start audio engine: {}", e);
+            panic!()
+        },
     }
+}
+
+pub fn init_logger() {
+    INIT_LOGGER.call_once(|| {
+        #[cfg(debug_assertions)]
+        {
+            use env_logger::Env;
+
+            let _ = env_logger::Builder::from_env(
+                Env::default().default_filter_or("debug"),
+            )
+            .format_timestamp_millis()
+            .try_init();
+        }
+    });
 }
