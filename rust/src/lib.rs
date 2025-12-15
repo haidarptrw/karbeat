@@ -1,3 +1,4 @@
+pub mod test;
 pub mod plugin;
 pub mod utils;
 // src/lib.rs

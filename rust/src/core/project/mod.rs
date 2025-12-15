@@ -66,6 +66,8 @@ pub struct KarbeatTrack {
     // This tells the engine: "Any audio/midi generated on this track
     // gets sent to Mixer Channel X".
     pub target_mixer_channel_id: Option<u32>,
+
+    pub generator: Option<GeneratorInstance>,
 }
 
 impl Default for KarbeatTrack {
@@ -78,6 +80,7 @@ impl Default for KarbeatTrack {
             clips: Arc::new(BTreeSet::new()),
             target_mixer_channel_id: None,
             max_sample_index: 0,
+            generator: None
         }
     }
 }
@@ -110,9 +113,7 @@ pub enum KarbeatSource {
     /// Points to Generators paired with Patterns
     /// Each entry in the vector is a (GeneratorInstance, Pattern) pair.
     /// This allows a single clip to trigger multiple generators (layering) or just one.
-    Generator {
-        generator_pattern_pairs: Vec<(GeneratorInstance, Arc<Pattern>)>,
-    },
+    Midi(Arc<Pattern>),
 
     /// Points to an Automation ID (Future implementation)
     Automation(u32),
@@ -363,7 +364,7 @@ impl KarbeatTrack {
     pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u64> {
         let is_valid = match (&self.track_type, &clip.source) {
             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
-            (TrackType::Midi, KarbeatSource::Generator{..}) => true,
+            (TrackType::Midi, KarbeatSource::Midi{..}) => true,
             (TrackType::Automation, KarbeatSource::Automation(_)) => true,
             // Allow Automation on Audio/Midi tracks? usually yes, but strictly speaking:
             _ => false,
@@ -428,13 +429,7 @@ impl KarbeatTrack {
                         true
                     }
                 },
-                KarbeatSource::Generator { generator_pattern_pairs: generator_pattern_pair } => {
-                    if is_generator {
-                        !generator_pattern_pair.iter().any(|(gen, _)| gen.id == source_id)
-                    } else {
-                        true
-                    }
-                },
+                KarbeatSource::Midi {..} => true,
                 KarbeatSource::Automation(_) => true,
             }
         });

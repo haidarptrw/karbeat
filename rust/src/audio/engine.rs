@@ -2,10 +2,9 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
-use log::info;
 use rtrb::{Consumer, Producer};
 use triple_buffer::Output;
 
@@ -13,8 +12,8 @@ use crate::{
     audio::{event::PlaybackPosition, render_state::AudioRenderState},
     commands::AudioCommand,
     core::{
-        plugin::{KarbeatGenerator, KarbeatPlugin, MidiEvent, MidiMessage},
-        project::{Clip, GeneratorInstance, Pattern},
+        plugin::{KarbeatPlugin, MidiEvent, MidiMessage},
+        project::{Clip, KarbeatSource, Pattern},
         track::audio_waveform::AudioWaveform,
     },
 };
@@ -404,6 +403,46 @@ impl AudioEngine {
         // } = self;
 
         for track in tracks {
+            let mut track_generator_voice_index: Option<usize> = None;
+
+            if let Some(gen_instance) = &track.generator {
+                let gen_id = gen_instance.id;
+                
+                // Get the list of voices for this track's mixer channel
+                let voices = self.active_voices
+                    .entry(track.target_mixer_channel_id)
+                    .or_insert(Vec::new());
+
+                // Try to find existing voice for this generator
+                for (i, v) in voices.iter().enumerate() {
+                    if let Voice::Generator(g) = v {
+                        if g.id == gen_id {
+                            track_generator_voice_index = Some(i);
+                            break;
+                        }
+                    }
+                }
+
+                // If not found, verify we have a valid plugin instance and create it
+                if track_generator_voice_index.is_none() {
+                    // Extract the plugin runtime (Arc<Mutex<KarbeatPlugin>>)
+                    let plugin_runtime = match &gen_instance.instance_type {
+                        crate::core::project::GeneratorInstanceType::Plugin(p) => &p.instance,
+                        _ => &None, // Handle other types later
+                    };
+
+                    if let Some(plugin_arc) = plugin_runtime {
+                        voices.push(Voice::Generator(GeneratorVoice {
+                            id: gen_id,
+                            generator: plugin_arc.clone(),
+                            events: Vec::new(),
+                            active: true,
+                        }));
+                        track_generator_voice_index = Some(voices.len() - 1);
+                    }
+                }
+            }
+
             for clip in track.clips() {
                 if clip.start_time > end_time {
                     break;
@@ -414,7 +453,7 @@ impl AudioEngine {
                     continue;
                 }
                 match &clip.source {
-                    crate::core::project::KarbeatSource::Audio(waveform) => {
+                    KarbeatSource::Audio(waveform) => {
                         Self::process_audio_clip(
                             &mut self.active_voices,
                             track.target_mixer_channel_id,
@@ -425,55 +464,12 @@ impl AudioEngine {
                             sample_rate.to_owned(),
                         );
                     }
-                    crate::core::project::KarbeatSource::Generator {
-                        generator_pattern_pairs,
-                    } => {
-                        for (gen_instance, pattern) in generator_pattern_pairs {
-                            let gen_id = gen_instance.id;
-
-                            let plugin_arc_opt = match &gen_instance.instance_type {
-                                crate::core::project::GeneratorInstanceType::Plugin(p) => {
-                                    &p.instance
-                                }
-                                // TODO: Handle Sampler / AudioInput here
-                                _ => continue,
-                            };
-
-                            let plugin_arc = if let Some(arc) = plugin_arc_opt {
-                                arc
-                            } else {
-                                continue; // No runtime instance loaded
-                            };
-
-                            // Find or Create the Generator Voice
-                            let voices = self
-                                .active_voices
-                                .entry(track.target_mixer_channel_id)
-                                .or_insert(Vec::new());
-
-                            let mut gen_voice_idx = None;
-
-                            for (i, v) in voices.iter().enumerate() {
-                                if let Voice::Generator(g) = v {
-                                    if g.id == gen_instance.id {
-                                        gen_voice_idx = Some(i);
-                                        break;
-                                    }
-                                };
-                            }
-
-                            // If not found, create it (This requires retrieving the Arc<Mutex> from state/instance)
-                            if gen_voice_idx.is_none() {
-                                voices.push(Voice::Generator(GeneratorVoice {
-                                    id: gen_id,
-                                    generator: plugin_arc.clone(),
-                                    events: Vec::new(),
-                                    active: true,
-                                }));
-                                gen_voice_idx = Some(voices.len() - 1);
-                            }
-
-                            if let Some(idx) = gen_voice_idx {
+                    KarbeatSource::Midi(pattern) => {
+                        // Pass notes to the TRACK'S generator voice
+                        if let Some(idx) = track_generator_voice_index {
+                            // We need to re-borrow voices here. 
+                            // Note: HashMap borrow rules can be tricky. We use the index we found.
+                            if let Some(voices) = self.active_voices.get_mut(&track.target_mixer_channel_id) {
                                 if let Voice::Generator(ref mut gen_voice) = voices[idx] {
                                     Self::process_pattern_events(
                                         &mut gen_voice.events,
@@ -488,7 +484,7 @@ impl AudioEngine {
                             }
                         }
                     }
-                    crate::core::project::KarbeatSource::Automation(_) => {
+                    KarbeatSource::Automation(_) => {
                         // TODO: Implementing Automation
                     }
                 }
