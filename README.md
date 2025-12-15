@@ -5,7 +5,7 @@ A simple cross-platform Digital Audio Workstation (DAW). we prioritize our appli
 ## Words
 
 Thanks to our contributors:
-- Haidar Wibowo: Creator + Lead Developer + Audio Engineer
+- [haidarptrw](https://github.com/haidarptrw): Creator + Lead Developer + Audio Engineer
 
 ## REFERENCES
 
