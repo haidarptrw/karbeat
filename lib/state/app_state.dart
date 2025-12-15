@@ -101,7 +101,7 @@ class KarbeatState extends ChangeNotifier {
     syncMaxSampleIndex();
     syncTransportState();
     syncMetadataState();
-    syncSourceList();
+    syncAudioSourceList();
     syncAudioHardwareConfigState();
   }
 
@@ -119,7 +119,7 @@ class KarbeatState extends ChangeNotifier {
           await syncMetadataState();
           break;
         case ProjectEvent.sourceListChanged:
-          await syncSourceList();
+          await syncAudioSourceList();
           break;
         case ProjectEvent.configChanged:
           await syncAudioHardwareConfigState();
@@ -220,8 +220,8 @@ class KarbeatState extends ChangeNotifier {
 
   /// Syncs the list of loaded audio files
   /// Call this when: Adding a file, Removing a file
-  Future<void> syncSourceList() async {
-    final sources = await getSourceList();
+  Future<void> syncAudioSourceList() async {
+    final sources = await getAudioSourceList();
     if (sources != null) {
       _audioSources = Map.from(sources);
       notifyListeners();

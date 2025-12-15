@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'project.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<UiProjectState?> getUiState() =>
     RustLib.instance.api.crateApiProjectGetUiState();
@@ -21,8 +21,12 @@ Future<ProjectMetadata> getProjectMetadata() =>
 Future<TransportState> getTransportState() =>
     RustLib.instance.api.crateApiProjectGetTransportState();
 
-Future<Map<int, AudioWaveformUiForAudioProperties>?> getSourceList() =>
-    RustLib.instance.api.crateApiProjectGetSourceList();
+Future<Map<int, AudioWaveformUiForAudioProperties>?> getAudioSourceList() =>
+    RustLib.instance.api.crateApiProjectGetAudioSourceList();
+
+/// Get generator list used in the project
+Future<List<UiGeneratorInstance>> getGeneratorList() =>
+    RustLib.instance.api.crateApiProjectGetGeneratorList();
 
 Future<void> addAudioSource({required String filePath}) =>
     RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
@@ -152,7 +156,36 @@ sealed class UiClipSource with _$UiClipSource {
 
   const factory UiClipSource.audio({required int sourceId}) =
       UiClipSource_Audio;
+  const factory UiClipSource.midi({required int patternId}) = UiClipSource_Midi;
   const factory UiClipSource.none() = UiClipSource_None;
+}
+
+class UiGeneratorInstance {
+  final int id;
+  final String name;
+  final String internalType;
+  final Map<int, double> parameters;
+
+  const UiGeneratorInstance({
+    required this.id,
+    required this.name,
+    required this.internalType,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ internalType.hashCode ^ parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiGeneratorInstance &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          internalType == other.internalType &&
+          parameters == other.parameters;
 }
 
 class UiProjectState {

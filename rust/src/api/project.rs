@@ -6,10 +6,12 @@ use crate::{
     broadcast_state_change,
     core::{
         file_manager::loader::AudioLoader,
-        project::{Clip, KarbeatSource, KarbeatTrack, ProjectMetadata, TrackType, TransportState},
+        project::{
+            Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, KarbeatTrack,
+            ProjectMetadata, TrackType, TransportState,
+        },
         track::audio_waveform::AudioWaveform,
     },
-    utils::audio_utils::downsample,
     APP_STATE,
 };
 
@@ -34,7 +36,11 @@ impl From<&KarbeatTrack> for UiTrack {
             id: value.id,
             name: value.name.clone(),
             track_type: value.track_type.clone(),
-            clips: value.clips_to_vec().iter().map(|c| UiClip::from(c.deref())).collect()
+            clips: value
+                .clips_to_vec()
+                .iter()
+                .map(|c| UiClip::from(c.deref()))
+                .collect(),
         }
     }
 }
@@ -49,7 +55,8 @@ pub struct UiClip {
 }
 
 pub enum UiClipSource {
-    Audio{ source_id: u32 },
+    Audio { source_id: u32 },
+    Midi { pattern_id: u32 },
     None, // represent clip with empty source, this is placeholder, as this will be removed when I already implement MIDI Pattern and automation
 }
 
@@ -57,8 +64,11 @@ impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
         let source = match &value.source {
-            KarbeatSource::Audio(_) => UiClipSource::Audio{ 
-                source_id: value.source_id
+            KarbeatSource::Audio(_) => UiClipSource::Audio {
+                source_id: value.source_id,
+            },
+            KarbeatSource::Midi(_) => UiClipSource::Midi {
+                pattern_id: value.source_id,
             },
             _ => UiClipSource::None,
         };
@@ -68,7 +78,7 @@ impl From<&Clip> for UiClip {
             start_time: value.start_time,
             source: source,
             offset_start: value.offset_start,
-            loop_length: value.loop_length
+            loop_length: value.loop_length,
         }
     }
 }
@@ -111,7 +121,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
         Self {
             name: value.name.clone(),
             muted: value.muted,
-            sample_rate: value.sample_rate
+            sample_rate: value.sample_rate,
         }
     }
 }
@@ -142,6 +152,40 @@ impl From<&AudioWaveform> for AudioWaveformUiForClip {
             preview_buffer: value.buffer.as_ref().clone(),
             name: value.name.clone(),
             sample_rate: value.sample_rate,
+        }
+    }
+}
+
+pub struct UiGeneratorInstance {
+    pub id: u32,
+    pub name: String,
+    pub internal_type: String,
+    pub parameters: HashMap<u32, f32>,
+}
+
+impl From<&GeneratorInstance> for UiGeneratorInstance {
+    fn from(generator_instance: &GeneratorInstance) -> Self {
+        match &generator_instance.instance_type {
+            GeneratorInstanceType::Plugin(plugin_instance) => Self {
+                id: generator_instance.id,
+                name: plugin_instance.name.clone(),
+                internal_type: plugin_instance.internal_type.clone(),
+                parameters: plugin_instance.parameters.clone(),
+            },
+            GeneratorInstanceType::Sampler { .. } => {
+                Self {
+                    id: generator_instance.id,
+                    name: "Sampler".to_string(),
+                    internal_type: "Sampler".to_string(),
+                    parameters: HashMap::new(), // Add sampler params later if needed
+                }
+            }
+            GeneratorInstanceType::AudioInput { .. } => Self {
+                id: generator_instance.id,
+                name: "Audio Input".to_string(),
+                internal_type: "AudioInput".to_string(),
+                parameters: HashMap::new(),
+            },
         }
     }
 }
@@ -191,7 +235,7 @@ pub fn get_transport_state() -> Result<TransportState, String> {
     Ok(ts)
 }
 
-pub fn get_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioProperties>> {
+pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioProperties>> {
     // Read from app state
     let Ok(app) = APP_STATE.read() else {
         return None; // Send empty
@@ -207,6 +251,26 @@ pub fn get_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioPropertie
         .collect();
 
     Some(map)
+}
+
+/// Get generator list used in the project
+pub fn get_generator_list() -> Result<Vec<UiGeneratorInstance>, String> {
+    let app = APP_STATE
+        .read()
+        .map_err(|e| format!("Poisoned error: {}", e))?;
+
+    let generators = app
+        .generator_pool
+        .values()
+        .map(|generator_guard| {
+            let generator = generator_guard
+                .read()
+                .expect("Failed to read generator lock");
+            UiGeneratorInstance::from(&*generator)
+        })
+        .collect();
+
+    Ok(generators)
 }
 
 pub fn add_audio_source(file_path: &str) {
@@ -252,7 +316,7 @@ pub fn add_new_track(track_type: TrackType) -> Result<(), String> {
 }
 
 /// Get all tracks on the session/project.
-/// 
+///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
     let app = APP_STATE

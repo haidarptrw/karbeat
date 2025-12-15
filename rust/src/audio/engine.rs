@@ -465,7 +465,6 @@ impl AudioEngine {
                         );
                     }
                     KarbeatSource::Midi(pattern) => {
-                        // Pass notes to the TRACK'S generator voice
                         if let Some(idx) = track_generator_voice_index {
                             // We need to re-borrow voices here. 
                             // Note: HashMap borrow rules can be tricky. We use the index we found.
