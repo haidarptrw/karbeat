@@ -1,3 +1,4 @@
+pub mod plugin;
 pub mod pattern;
 pub mod simple;
 pub mod project;

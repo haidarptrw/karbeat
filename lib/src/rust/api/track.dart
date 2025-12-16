@@ -49,6 +49,11 @@ Future<void> moveClip({
   newTrackId: newTrackId,
 );
 
+Future<void> addMidiTrackWithGenerator({required String generatorName}) =>
+    RustLib.instance.api.crateApiTrackAddMidiTrackWithGenerator(
+      generatorName: generatorName,
+    );
+
 enum ResizeEdge { left, right }
 
 enum UiSourceType { audio, midi }

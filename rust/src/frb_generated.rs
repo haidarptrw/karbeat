@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1698971500;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1365674526;
 
 // Section: executor
 
@@ -74,6 +74,40 @@ fn wire__crate__api__project__add_audio_source_impl(
                     let output_ok = Result::<_, ()>::Ok({
                         crate::api::project::add_audio_source(&api_file_path);
                     })?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__track__add_midi_track_with_generator_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "add_midi_track_with_generator",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_generator_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok =
+                        crate::api::track::add_midi_track_with_generator(api_generator_name)?;
                     Ok(output_ok)
                 })())
             }
@@ -317,6 +351,38 @@ fn wire__crate__api__project__get_audio_source_list_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::project::get_audio_source_list())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__plugin__get_available_generators_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_available_generators",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::plugin::get_available_generators()?;
                     Ok(output_ok)
                 })())
             }
@@ -1098,6 +1164,18 @@ impl SseDecode for i8 {
     }
 }
 
+impl SseDecode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1627,40 +1705,52 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__project__add_audio_source_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__project__add_new_track_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__track__create_clip_impl(port, ptr, rust_vec_len, data_len),
-        4 => {
+        2 => wire__crate__api__track__add_midi_track_with_generator_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        3 => wire__crate__api__project__add_new_track_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__track__create_clip_impl(port, ptr, rust_vec_len, data_len),
+        5 => {
             wire__crate__api__audio__create_position_stream_impl(port, ptr, rust_vec_len, data_len)
         }
-        5 => wire__crate__api__track__delete_clip_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__audio__get_audio_config_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__audio__get_audio_properties_impl(port, ptr, rust_vec_len, data_len),
-        8 => {
+        6 => wire__crate__api__track__delete_clip_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__audio__get_audio_config_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__audio__get_audio_properties_impl(port, ptr, rust_vec_len, data_len),
+        9 => {
             wire__crate__api__project__get_audio_source_list_impl(port, ptr, rust_vec_len, data_len)
         }
-        9 => wire__crate__api__project__get_generator_list_impl(port, ptr, rust_vec_len, data_len),
-        10 => {
+        10 => wire__crate__api__plugin__get_available_generators_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        11 => wire__crate__api__project__get_generator_list_impl(port, ptr, rust_vec_len, data_len),
+        12 => {
             wire__crate__api__project__get_max_sample_index_impl(port, ptr, rust_vec_len, data_len)
         }
-        11 => wire__crate__api__pattern__get_pattern_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__pattern__get_patterns_impl(port, ptr, rust_vec_len, data_len),
-        13 => {
+        13 => wire__crate__api__pattern__get_pattern_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__pattern__get_patterns_impl(port, ptr, rust_vec_len, data_len),
+        15 => {
             wire__crate__api__project__get_project_metadata_impl(port, ptr, rust_vec_len, data_len)
         }
-        14 => wire__crate__api__project__get_session_state_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__project__get_tracks_impl(port, ptr, rust_vec_len, data_len),
-        16 => {
+        16 => wire__crate__api__project__get_session_state_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__project__get_tracks_impl(port, ptr, rust_vec_len, data_len),
+        18 => {
             wire__crate__api__project__get_transport_state_impl(port, ptr, rust_vec_len, data_len)
         }
-        17 => wire__crate__api__project__get_ui_state_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__track__move_clip_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__audio__play_source_preview_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__track__resize_clip_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__project__get_ui_state_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__track__move_clip_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__audio__play_source_preview_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__track__resize_clip_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__transport__set_looping_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__transport__set_playhead_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__transport__set_playing_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__audio__stop_all_previews_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1673,7 +1763,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        18 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2200,6 +2290,16 @@ impl SseEncode for i8 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_i8(self).unwrap();
+    }
+}
+
+impl SseEncode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <String>::sse_encode(item, serializer);
+        }
     }
 }
 

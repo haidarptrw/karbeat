@@ -250,3 +250,12 @@ pub fn move_clip(
     broadcast_state_change();
     Ok(())
 }
+
+pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), String> {
+    {
+        let mut app = APP_STATE.write().map_err(|e| format!("Lock failed: {}", e))?;
+        app.add_new_midi_track_with_generator(&generator_name).map_err(|e| format!("{}", e))?;
+    }
+    broadcast_state_change();
+    Ok(())
+}

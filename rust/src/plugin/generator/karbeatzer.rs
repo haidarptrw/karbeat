@@ -1,7 +1,7 @@
 // src/plugin/generator/karbeatzer.rs
 
 use crate::core::plugin::{KarbeatGenerator, MidiEvent, MidiMessage};
-use std::f32::consts::PI;
+use std::{collections::HashMap, f32::consts::PI};
 
 /// **Karbeatzer**, an enhanced subtractive synthesizer
 pub struct Karbeatzer {
@@ -486,5 +486,46 @@ impl KarbeatGenerator for Karbeatzer {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+    
+    fn default_parameters(&self) -> HashMap<u32, f32> {
+        let mut map = HashMap::new();
+        
+        // Global
+        map.insert(0, 0.5); // Gain
+
+        // Filter
+        map.insert(1, 2000.0); // Cutoff
+        map.insert(2, 0.2);    // Resonance
+        map.insert(3, 0.0);    // Mode (LowPass)
+
+        // Envelope
+        map.insert(4, 0.01); // Attack
+        map.insert(5, 0.2);  // Decay
+        map.insert(6, 0.7);  // Sustain
+        map.insert(7, 0.5);  // Release
+
+        // FX
+        map.insert(8, 0.0);  // Drive
+
+        // Osc 1
+        map.insert(10, 1.0); // Saw
+        map.insert(11, 0.0); // Detune
+        map.insert(12, 1.0); // Mix
+        map.insert(13, 0.5); // PW
+
+        // Osc 2
+        map.insert(20, 2.0); // Square
+        map.insert(21, 0.1); // Detune
+        map.insert(22, 0.5); // Mix
+        map.insert(23, 0.5); // PW
+
+        // Osc 3
+        map.insert(30, 0.0); // Sine
+        map.insert(31, -12.0); // Detune
+        map.insert(32, 0.3); // Mix
+        map.insert(33, 0.5); // PW
+
+        map
     }
 }

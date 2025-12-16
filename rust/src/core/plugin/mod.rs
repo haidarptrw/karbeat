@@ -1,6 +1,6 @@
 // src/core/plugin/mod.rs
 
-use std::{any::Any, fmt::Debug};
+use std::{any::Any, collections::HashMap, fmt::Debug};
 
 /// Trait that indicates an Effect plugin
 /// Requires Send + Sync so it can be moved between UI and Audio threads
@@ -27,6 +27,9 @@ pub trait KarbeatEffect: Send + Sync {
     /// Get a parameter value
     fn get_parameter(&self, id: u32) -> f32;
 
+    /// Get the default values for all parameters supported by this plugin
+    fn default_parameters(&self) -> HashMap<u32, f32>;
+
     // Helper for downcasting if you need concrete access later
     fn as_any(&self) -> &dyn Any;
 }
@@ -47,6 +50,9 @@ pub trait KarbeatGenerator: Send + Sync {
 
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
+
+    /// Get the default values for all parameters supported by this plugin
+    fn default_parameters(&self) -> HashMap<u32, f32>;
     
     fn as_any(&self) -> &dyn Any;
 }
@@ -84,6 +90,13 @@ impl KarbeatPlugin {
                 // (Or add to it if you implement mixing logic inside)
                 g.process(buffer, events);
             }
+        }
+    }
+
+    pub fn default_parameters(&self) -> std::collections::HashMap<u32, f32> {
+        match self {
+            KarbeatPlugin::Effect(e) => e.default_parameters(),
+            KarbeatPlugin::Generator(g) => g.default_parameters(),
         }
     }
 }

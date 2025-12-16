@@ -633,25 +633,57 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   void _showAddTrackDialog(BuildContext context) {
+// Access the list from state
+    final availablePlugins = context.read<KarbeatState>().availableGenerators;
+
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text("Select Track Type"),
+        title: const Text("Add New Track"),
         children: [
           SimpleDialogOption(
             onPressed: () {
+              Navigator.pop(ctx);
               context.read<KarbeatState>().addTrack(TrackType.audio);
-              Navigator.pop(ctx);
             },
-            child: const Text("Audio Track"),
+            child: const Row(
+              children: [
+                Icon(Icons.graphic_eq, color: Colors.cyanAccent),
+                SizedBox(width: 10),
+                Text("Audio Track"),
+              ],
+            ),
           ),
-          SimpleDialogOption(
-            onPressed: () {
-              context.read<KarbeatState>().addTrack(TrackType.midi);
-              Navigator.pop(ctx);
-            },
-            child: const Text("MIDI / Instrument Track"),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: Text("Instruments", style: TextStyle(color: Colors.grey, fontSize: 12)),
           ),
+          
+          // DYNAMICALLY GENERATE OPTIONS
+          if (availablePlugins.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Text("No plugins found", style: TextStyle(color: Colors.grey)),
+            )
+          else
+            ...availablePlugins.map((name) => _buildGeneratorOption(ctx, name, Icons.piano)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeneratorOption(BuildContext ctx, String name, IconData icon) {
+    return SimpleDialogOption(
+      onPressed: () {
+        Navigator.pop(ctx);
+        context.read<KarbeatState>().addMidiTrackWithGenerator(name);
+      },
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.orangeAccent),
+          const SizedBox(width: 10),
+          Text(name),
         ],
       ),
     );

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
+import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/track.dart' as track_api;
@@ -67,6 +68,8 @@ class KarbeatState extends ChangeNotifier {
   Map<int, UiGeneratorInstance> _generators = {};
   Map<int, UiPattern> _patterns = {};
   UiSessionState? _sessionState;
+  List<String> _availableGenerators = [];
+  List<String> get availableGenerators => _availableGenerators;
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
     KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -113,6 +116,19 @@ class KarbeatState extends ChangeNotifier {
     syncPatternList();
     syncGeneratorList();
     syncAudioHardwareConfigState();
+
+    // fetch available generators
+    fetchAvailableGenerators();
+  }
+
+  Future<void> fetchAvailableGenerators() async {
+    try {
+      final list = await getAvailableGenerators();
+      _availableGenerators = list;
+      notifyListeners();
+    } catch (e) {
+      log("Error fetching plugins: $e");
+    }
   }
 
   void _initStateListener() {
@@ -296,6 +312,16 @@ class KarbeatState extends ChangeNotifier {
       notifyBackendChange(ProjectEvent.tracksChanged);
     } catch (e) {
       log("Failed to add track: $e");
+    }
+  }
+
+  Future<void> addMidiTrackWithGenerator(String generatorName) async {
+    try {
+      await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
+      notifyBackendChange(ProjectEvent.tracksChanged);
+      notifyBackendChange(ProjectEvent.generatorListChanged);
+    } catch (e) {
+      log("Failed to add midi track: $e");
     }
   }
 
