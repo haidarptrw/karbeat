@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'project.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
 
 Future<UiProjectState?> getUiState() =>
     RustLib.instance.api.crateApiProjectGetUiState();
@@ -25,7 +25,7 @@ Future<Map<int, AudioWaveformUiForAudioProperties>?> getAudioSourceList() =>
     RustLib.instance.api.crateApiProjectGetAudioSourceList();
 
 /// Get generator list used in the project
-Future<List<UiGeneratorInstance>> getGeneratorList() =>
+Future<Map<int, UiGeneratorInstance>> getGeneratorList() =>
     RustLib.instance.api.crateApiProjectGetGeneratorList();
 
 Future<void> addAudioSource({required String filePath}) =>
@@ -43,6 +43,9 @@ Future<Map<int, UiTrack>> getTracks() =>
 
 Future<int> getMaxSampleIndex() =>
     RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
+
+Future<UiSessionState> getSessionState() =>
+    RustLib.instance.api.crateApiProjectGetSessionState();
 
 class AudioWaveformUiForAudioProperties {
   final Float32List previewBuffer;
@@ -204,6 +207,24 @@ class UiProjectState {
           runtimeType == other.runtimeType &&
           metadata == other.metadata &&
           tracks == other.tracks;
+}
+
+class UiSessionState {
+  final int? selectedTrackId;
+  final int? selectedClipId;
+
+  const UiSessionState({this.selectedTrackId, this.selectedClipId});
+
+  @override
+  int get hashCode => selectedTrackId.hashCode ^ selectedClipId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiSessionState &&
+          runtimeType == other.runtimeType &&
+          selectedTrackId == other.selectedTrackId &&
+          selectedClipId == other.selectedClipId;
 }
 
 class UiTrack {

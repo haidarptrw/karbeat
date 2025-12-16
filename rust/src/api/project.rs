@@ -8,7 +8,7 @@ use crate::{
         file_manager::loader::AudioLoader,
         project::{
             Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, KarbeatTrack,
-            ProjectMetadata, TrackType, TransportState,
+            ProjectMetadata, SessionState, TrackType, TransportState,
         },
         track::audio_waveform::AudioWaveform,
     },
@@ -155,7 +155,9 @@ impl From<&AudioWaveform> for AudioWaveformUiForClip {
         }
     }
 }
-
+// ============================================================
+// =================== GENERATOR INSTANCE =====================
+// ============================================================
 pub struct UiGeneratorInstance {
     pub id: u32,
     pub name: String,
@@ -190,6 +192,40 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
     }
 }
 
+// ============================================================
+// =====================SESSION STATE==========================
+// ============================================================
+
+pub struct UiSessionState {
+    // What is the user clicking on right now?
+    pub selected_track_id: Option<u32>,
+    pub selected_clip_id: Option<u32>,
+    // Undo/Redo Stack
+    // We don't save this usually, or we save it separately
+    // pub undo_stack: Vec<AudioCommandUi>,
+    // pub redo_stack: Vec<AudioCommandUi>,
+
+    // Clipboard for Copy/Paste
+    // pub clipboard: Option<Clip>, Option<Clipboard>
+}
+
+impl From<&SessionState> for UiSessionState {
+    fn from(session: &SessionState) -> Self {
+        Self {
+            selected_clip_id: session.selected_clip_id,
+            selected_track_id: session.selected_track_id,
+        }
+    }
+}
+
+impl Into<UiSessionState> for SessionState {
+    fn into(self) -> UiSessionState {
+        UiSessionState {
+            selected_track_id: self.selected_track_id,
+            selected_clip_id: self.selected_clip_id,
+        }
+    }
+}
 // ============================ APIs ==================================
 
 pub fn get_ui_state() -> Option<UiProjectState> {
@@ -254,19 +290,20 @@ pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioPro
 }
 
 /// Get generator list used in the project
-pub fn get_generator_list() -> Result<Vec<UiGeneratorInstance>, String> {
+pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String> {
     let app = APP_STATE
         .read()
         .map_err(|e| format!("Poisoned error: {}", e))?;
 
     let generators = app
         .generator_pool
-        .values()
-        .map(|generator_guard| {
+        .iter()
+        .map(|(&id, generator_guard)| {
             let generator = generator_guard
                 .read()
                 .expect("Failed to read generator lock");
-            UiGeneratorInstance::from(&*generator)
+            let ui_gen = UiGeneratorInstance::from(&*generator);
+            (id, ui_gen)
         })
         .collect();
 
@@ -339,4 +376,13 @@ pub fn get_max_sample_index() -> Result<u64, String> {
         .map_err(|e| format!("Error acquiring read lock of APP_STATE: {}", e))?;
 
     Ok(app.max_sample_index)
+}
+
+pub fn get_session_state() -> Result<UiSessionState, String> {
+    let app = APP_STATE
+        .read()
+        .map_err(|e| format!("APP_STATE got poisoned: {}", e))?;
+
+    let session = UiSessionState::from(&app.session);
+    Ok(session)
 }

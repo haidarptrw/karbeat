@@ -4,6 +4,7 @@ import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/track.dart' as track_api;
@@ -23,7 +24,10 @@ enum ProjectEvent {
   transportChanged,
   metadataChanged,
   sourceListChanged,
+  generatorListChanged,
+  sessionChanged,
   configChanged,
+  patternChanged,
 }
 
 
@@ -57,8 +61,12 @@ class KarbeatState extends ChangeNotifier {
     cpuLoad: 0,
   );
 
+  // =================== STORES ==========================
   Map<int, UiTrack> _tracks = {};
   Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
+  Map<int, UiGeneratorInstance> _generators = {};
+  Map<int, UiPattern> _patterns = {};
+  UiSessionState? _sessionState;
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
     KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -84,7 +92,7 @@ class KarbeatState extends ChangeNotifier {
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
-    // 2. Initialize it ONCE. 
+    // Initialize it ONCE. 
     // This creates ONE Rust thread that feeds ALL Flutter widgets.
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
@@ -102,6 +110,8 @@ class KarbeatState extends ChangeNotifier {
     syncTransportState();
     syncMetadataState();
     syncAudioSourceList();
+    syncPatternList();
+    syncGeneratorList();
     syncAudioHardwareConfigState();
   }
 
@@ -121,8 +131,16 @@ class KarbeatState extends ChangeNotifier {
         case ProjectEvent.sourceListChanged:
           await syncAudioSourceList();
           break;
+        case ProjectEvent.generatorListChanged:
+          await syncGeneratorList();
+          break;
         case ProjectEvent.configChanged:
           await syncAudioHardwareConfigState();
+          break;
+        case ProjectEvent.sessionChanged:
+          break;
+        case ProjectEvent.patternChanged:
+          await syncPatternList();
           break;
       }
     });
@@ -136,11 +154,14 @@ class KarbeatState extends ChangeNotifier {
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
   Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
+  Map<int, UiGeneratorInstance> get generators => _generators;
   ToolSelection get selectedTool => _selectedTool;
   WorkspaceView get currentView => _currentView;
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
   AudioHardwareConfig get hardwareConfig => _hardwareConfig;
   Stream<PlaybackPosition> get positionStream => _positionBroadcastStream;
+  UiSessionState? get sessionState => _sessionState;
+  Map<int, UiPattern> get patterns => _patterns;
 
   // =============== GLOBAL UI STATE ==========================
   double horizontalZoomLevel = 1000;
@@ -155,23 +176,8 @@ class KarbeatState extends ChangeNotifier {
   int _placementTrackId = -1;
 
   bool get isPlacing => _placingSourceId != null;
-  
-
 
   // ================ SYNCHRONIZATION ======================
-  // / Syncs the core project structure (Tracks, Metadata)
-  // / Call this when: Loading project, Adding tracks, changing BPM
-  // Future<void> syncProjectState() async {
-  //   // Call Rust API (get_ui_state returns Option<UiProjectState>)
-
-  //   final newState = await getUiState();
-
-  //   if (newState != null) {
-  //     _metadata = newState.metadata;
-  //     _tracks = newState.tracks;
-  //     notifyListeners();
-  //   }
-  // }
 
   /// Syncs only the track state
   Future<void> syncTrackState() async {
@@ -228,6 +234,26 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> syncGeneratorList() async {
+    try {
+      final generators = await getGeneratorList();
+      _generators = generators;
+      notifyListeners();
+    } catch (e) {
+      log("Failed to sync generators: $e");
+    }
+  }
+
+  Future<void> syncSessionState() async {
+    try {
+      final newState = await getSessionState();
+      _sessionState = newState;
+      notifyListeners();
+    } catch (e) {
+      log("Failed to sync session state: $e");
+    }
+  }
+
   Future<void> syncAudioHardwareConfigState() async {
     try {
       final newState = await getAudioConfig();
@@ -235,6 +261,16 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       log("Failed to sync audio hardware state: $e");
+    }
+  }
+
+  Future<void> syncPatternList() async {
+    try {
+      final result = await getPatterns();
+      _patterns = result;
+      notifyListeners();
+    } catch (e) {
+      log("Failed to sync pattern list: $e");
     }
   }
 
@@ -471,9 +507,13 @@ class KarbeatState extends ChangeNotifier {
   Future<void> confirmPlacement() async {
     if (_placingSourceId != null && _placementTrackId != -1) {
       try {
+        UiSourceType type = UiSourceType.audio;
+        if (_generators.containsKey(_placingSourceId)) {
+          type = UiSourceType.midi;
+        }
         await createClip(
           sourceId: _placingSourceId!,
-          sourceType: UiSourceType.audio, // Assuming Audio for now
+          sourceType: type,
           trackId: _placementTrackId,
           startTime: _placementTimeSamples.toInt(),
         );

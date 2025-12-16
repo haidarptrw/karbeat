@@ -562,54 +562,56 @@ impl AudioEngine {
         buffer_end: u64,
     ) {
         let samples_per_beat = (60.0 / tempo * sample_rate as f32) as u64;
-        let pattern_len_samples = pattern.length_bars as u64 * 4 * samples_per_beat;
+        let pattern_len_samples = (pattern.length_ticks as f64 / 960.0 * samples_per_beat as f64) as u64;
 
-        for (_midi_ch, notes) in &pattern.notes {
-            for note in notes {
-                let note_start_samples =
-                    (note.start_tick as f64 / 960.0 * samples_per_beat as f64) as u64;
-                let note_duration_samples =
-                    (note.duration as f64 / 960.0 * samples_per_beat as f64) as u64;
+        if pattern_len_samples == 0 { return; }
 
-                let relative_buffer_start = if buffer_start > clip.start_time {
-                    buffer_start - clip.start_time
-                } else {
-                    0
-                };
-                let relative_buffer_end = buffer_end - clip.start_time;
+        for note in &pattern.notes {
+            let note_start_samples =
+                (note.start_tick as f64 / 960.0 * samples_per_beat as f64) as u64;
+            let note_duration_samples =
+                (note.duration as f64 / 960.0 * samples_per_beat as f64) as u64;
 
-                let loop_read_start = relative_buffer_start + clip.offset_start;
-                let loop_read_end = relative_buffer_end + clip.offset_start;
+            let relative_buffer_start = if buffer_start > clip.start_time {
+                buffer_start - clip.start_time
+            } else {
+                0
+            };
+            let relative_buffer_end = buffer_end - clip.start_time;
 
-                let start_iter = loop_read_start / pattern_len_samples;
-                let end_iter = loop_read_end / pattern_len_samples;
+            let loop_read_start = relative_buffer_start + clip.offset_start;
+            let loop_read_end = relative_buffer_end + clip.offset_start;
 
-                for i in start_iter..=end_iter {
-                    let pattern_offset = i * pattern_len_samples;
-                    let abs_note_start =
-                        clip.start_time + pattern_offset + note_start_samples - clip.offset_start;
-                    let abs_note_end = abs_note_start + note_duration_samples;
+            let start_iter = loop_read_start / pattern_len_samples;
+            let end_iter = loop_read_end / pattern_len_samples;
 
-                    if abs_note_start >= buffer_start && abs_note_start < buffer_end {
-                        events.push(MidiEvent {
-                            sample_offset: (abs_note_start - buffer_start) as usize,
-                            data: MidiMessage::NoteOn {
-                                key: note.key,
-                                velocity: note.velocity,
-                            },
-                        });
-                    }
+            for i in start_iter..=end_iter {
+                let pattern_offset = i * pattern_len_samples;
+                let abs_note_start =
+                    clip.start_time + pattern_offset + note_start_samples - clip.offset_start;
+                let abs_note_end = abs_note_start + note_duration_samples;
 
-                    if abs_note_end >= buffer_start && abs_note_end < buffer_end {
-                        events.push(MidiEvent {
-                            sample_offset: (abs_note_end - buffer_start) as usize,
-                            data: MidiMessage::NoteOff { key: note.key },
-                        });
-                    }
+                // 1. Note ON
+                if abs_note_start >= buffer_start && abs_note_start < buffer_end {
+                    events.push(MidiEvent {
+                        sample_offset: (abs_note_start - buffer_start) as usize,
+                        data: MidiMessage::NoteOn {
+                            key: note.key,
+                            velocity: note.velocity,
+                        },
+                    });
+                }
+
+                // 2. Note OFF
+                if abs_note_end >= buffer_start && abs_note_end < buffer_end {
+                    events.push(MidiEvent {
+                        sample_offset: (abs_note_end - buffer_start) as usize,
+                        data: MidiMessage::NoteOff { key: note.key },
+                    });
                 }
             }
         }
-
+        
         events.sort_by_key(|e| e.sample_offset);
     }
 

@@ -177,9 +177,9 @@ impl Default for TransportState {
 pub struct Pattern {
     pub id: u32,
     pub name: String,
-    pub length_bars: u32,
+    pub length_ticks: u64,
 
-    pub notes: HashMap<u32, Vec<Note>>,
+    pub notes: Vec<Note>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

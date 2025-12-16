@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/audio.dart';
+import 'api/pattern.dart';
 import 'api/project.dart';
 import 'api/simple.dart';
 import 'api/track.dart';
@@ -39,6 +40,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw);
+
+  @protected
+  Map<int, UiGeneratorInstance> dco_decode_Map_u_32_ui_generator_instance_None(
+    dynamic raw,
+  );
+
+  @protected
+  Map<int, UiPattern> dco_decode_Map_u_32_ui_pattern_None(dynamic raw);
 
   @protected
   Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
@@ -84,6 +93,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  int dco_decode_i_8(dynamic raw);
+
+  @protected
   Float32List dco_decode_list_prim_f_32_strict(dynamic raw);
 
   @protected
@@ -99,13 +111,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw);
 
   @protected
+  List<(int, UiGeneratorInstance)>
+  dco_decode_list_record_u_32_ui_generator_instance(dynamic raw);
+
+  @protected
+  List<(int, UiPattern)> dco_decode_list_record_u_32_ui_pattern(dynamic raw);
+
+  @protected
   List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
 
   @protected
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
 
   @protected
-  List<UiGeneratorInstance> dco_decode_list_ui_generator_instance(dynamic raw);
+  List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
   List<UiTrack> dco_decode_list_ui_track(dynamic raw);
@@ -140,6 +159,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, double) dco_decode_record_u_32_f_32(dynamic raw);
+
+  @protected
+  (int, UiGeneratorInstance) dco_decode_record_u_32_ui_generator_instance(
+    dynamic raw,
+  );
+
+  @protected
+  (int, UiPattern) dco_decode_record_u_32_ui_pattern(dynamic raw);
 
   @protected
   (int, UiTrack) dco_decode_record_u_32_ui_track(dynamic raw);
@@ -178,7 +205,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
+  UiNote dco_decode_ui_note(dynamic raw);
+
+  @protected
+  UiPattern dco_decode_ui_pattern(dynamic raw);
+
+  @protected
   UiProjectState dco_decode_ui_project_state(dynamic raw);
+
+  @protected
+  UiSessionState dco_decode_ui_session_state(dynamic raw);
 
   @protected
   UiSourceType dco_decode_ui_source_type(dynamic raw);
@@ -209,6 +245,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer);
+
+  @protected
+  Map<int, UiGeneratorInstance> sse_decode_Map_u_32_ui_generator_instance_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Map<int, UiPattern> sse_decode_Map_u_32_ui_pattern_None(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Map<int, UiTrack> sse_decode_Map_u_32_ui_track_None(
@@ -264,6 +310,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_i_8(SseDeserializer deserializer);
+
+  @protected
   Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer);
 
   @protected
@@ -281,6 +330,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, UiGeneratorInstance)>
+  sse_decode_list_record_u_32_ui_generator_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<(int, UiPattern)> sse_decode_list_record_u_32_ui_pattern(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(int, UiTrack)> sse_decode_list_record_u_32_ui_track(
     SseDeserializer deserializer,
   );
@@ -289,9 +349,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
 
   @protected
-  List<UiGeneratorInstance> sse_decode_list_ui_generator_instance(
-    SseDeserializer deserializer,
-  );
+  List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
   List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
@@ -332,6 +390,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
 
   @protected
+  (int, UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, UiPattern) sse_decode_record_u_32_ui_pattern(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, UiTrack) sse_decode_record_u_32_ui_track(SseDeserializer deserializer);
 
   @protected
@@ -370,7 +438,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiNote sse_decode_ui_note(SseDeserializer deserializer);
+
+  @protected
+  UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
+
+  @protected
   UiProjectState sse_decode_ui_project_state(SseDeserializer deserializer);
+
+  @protected
+  UiSessionState sse_decode_ui_session_state(SseDeserializer deserializer);
 
   @protected
   UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
@@ -405,6 +482,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_u_32_f_32_None(
     Map<int, double> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_u_32_ui_generator_instance_None(
+    Map<int, UiGeneratorInstance> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_u_32_ui_pattern_None(
+    Map<int, UiPattern> self,
     SseSerializer serializer,
   );
 
@@ -466,6 +555,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_i_8(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_f_32_strict(
     Float32List self,
     SseSerializer serializer,
@@ -490,6 +582,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_ui_generator_instance(
+    List<(int, UiGeneratorInstance)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_u_32_ui_pattern(
+    List<(int, UiPattern)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_ui_track(
     List<(int, UiTrack)> self,
     SseSerializer serializer,
@@ -499,10 +603,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_ui_generator_instance(
-    List<UiGeneratorInstance> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
@@ -553,6 +654,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_u_32_ui_generator_instance(
+    (int, UiGeneratorInstance) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_ui_pattern(
+    (int, UiPattern) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_u_32_ui_track(
     (int, UiTrack) self,
     SseSerializer serializer,
@@ -598,8 +711,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_note(UiNote self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_project_state(
     UiProjectState self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_session_state(
+    UiSessionState self,
     SseSerializer serializer,
   );
 

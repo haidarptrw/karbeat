@@ -68,11 +68,13 @@ pub fn create_clip(
                 let bpm = if app.transport.bpm == 0.0 {120.0} else {app.transport.bpm};
                 let samples_per_beat = (sample_rate as f32 / (bpm/60.0)) as u64;
                 let timeline_length = 4 * samples_per_beat;
+
+                let default_ticks = 4 * 960;
                 let pattern = Arc::new(Pattern {
                     id: new_pattern_id,
                     name: format!("Pattern {}", new_pattern_id),
-                    length_bars: 1,
-                    notes: HashMap::new()
+                    length_ticks: default_ticks,
+                    notes: Vec::new()
                 });
 
                 app.pattern_pool.insert(new_pattern_id, pattern.clone());

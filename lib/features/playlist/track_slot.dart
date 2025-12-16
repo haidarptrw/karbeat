@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/features/components/midi_drawer.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
@@ -289,8 +290,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                       .toInt();
                   _verticalDragDy += details.delta.dy;
                 });
-              }
-              else {
+              } else {
                 setState(() {
                   if (_currentAction == _DragAction.resizeRight) {
                     _visualLoopLength = (_visualLoopLength + deltaSamples)
@@ -454,28 +454,14 @@ class _ClipRenderer extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context) {
-    final audioSources = context
-        .select<KarbeatState, Map<int, AudioWaveformUiForAudioProperties>>(
-          (state) => state.audioSources,
-        );
+    final state = context.read<KarbeatState>();
 
     switch (clip.source) {
       // In future: Use CustomPainter to draw the waveform summary here
 
-      // case KarbeatSource_Midi():
-      //   return const Center(
-      //     child: Icon(Icons.piano, size: 16, color: Colors.white54),
-      //   );
-      // // In future: Draw mini rectangles for notes
-
-      // case KarbeatSource_Automation():
-      //   return const Center(
-      //     child: Icon(Icons.show_chart, size: 16, color: Colors.white54),
-      //   );
-
       case UiClipSource_Audio(:final sourceId):
         double ratio = 1.0;
-        final audioData = audioSources[sourceId];
+        final audioData = state.audioSources[sourceId];
         if (audioData == null) {
           return const Center(
             child: Text("Loading...", style: TextStyle(fontSize: 8)),
@@ -499,10 +485,31 @@ class _ClipRenderer extends StatelessWidget {
             ratio: ratio,
           ),
         );
-      case UiClipSource_None():
-        return const Center(
-          child: Icon(Icons.show_chart, size: 16, color: Colors.white54),
+      case UiClipSource_Midi(:final patternId):
+        final pattern = state.patterns[patternId];
+
+        if (pattern == null) {
+          state.syncPatternList();
+          return const Center(
+            child: Text(
+              "?",
+              style: TextStyle(color: Colors.white54, fontSize: 10),
+            ),
+          );
+        }
+
+        return CustomPaint(
+          size: Size.infinite,
+          painter: MidiClipPainter(
+            pattern: pattern,
+            color: color,
+            zoomLevel: zoomLevel,
+            sampleRate: projectSampleRate,
+            bpm: state.transport.bpm,
+          ),
         );
+      default:
+        return const SizedBox();
     }
   }
 }
