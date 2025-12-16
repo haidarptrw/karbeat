@@ -25,9 +25,14 @@ class SourceListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Access the source map from state
-    final sources = context
+    final audioSources = context
         .select<KarbeatState, Map<int, AudioWaveformUiForAudioProperties>>(
           (state) => state.audioSources,
+        );
+
+    final generators = context
+        .select<KarbeatState, Map<int, UiGeneratorInstance>>(
+          (value) => value.generators,
         );
 
     return Scaffold(
@@ -37,94 +42,155 @@ class SourceListScreen extends StatelessWidget {
         backgroundColor: Colors.cyanAccent,
         child: const Icon(Icons.add),
       ),
-      body: sources.isEmpty
-          ? const Center(
-              child: Text(
-                "No Audio Sources Loaded.\nClick + to add a WAV/MP3 file.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+      body: CustomScrollView(
+        slivers: [
+          // 1. GENERATORS SECTION
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text("Instruments / Generators", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          
+          if (generators.isEmpty)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text("No Instruments.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
               ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: sources.length,
-              separatorBuilder: (_, _) => const Divider(color: Colors.grey),
-              itemBuilder: (context, index) {
-                final id = sources.keys.elementAt(index);
-                final sourceUi = sources.values.elementAt(index);
+            ),
 
-                return ListTile(
-                  leading: const Icon(
-                    Icons.audio_file,
-                    color: Colors.cyanAccent,
-                  ),
-                  title: Text(
-                    sourceUi.name,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  subtitle: Text(
-                    "ID: $id",
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          sourceUi.muted ? Icons.volume_off : Icons.volume_up,
-                          color: sourceUi.muted ? Colors.red : Colors.green,
-                        ),
-                        onPressed: () {
-                          // TODO: Source Action (Drag and Drop to track timeline)
-                        },
-                      ),
-                      const SizedBox(width: 8),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, color: Colors.white),
-                        onSelected: (value) {
-                          if (value == 'place') {
-                            // Trigger Placement Mode
-                            context.read<KarbeatState>().startPlacement(id);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'place',
-                            child: Row(
-                              children: [
-                                Icon(Icons.input, color: Colors.black54),
-                                SizedBox(width: 8),
-                                Text("Put clip in timeline"),
-                              ],
-                            ),
-                          ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text("Delete Source"),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final id = generators.keys.elementAt(index);
+                final gen = generators.values.elementAt(index);
+                return _SourceTile(
+                  title: gen.name,
+                  subtitle: "ID: $id | ${gen.internalType}",
+                  icon: Icons.piano,
+                  color: Colors.orangeAccent,
+                  onTap: () {
+                    // Navigate to Plugin Editor
+                    // Navigator.of(context).push(
+                    //   MaterialPageRoute(
+                    //     builder: (_) => PluginEditorScreen(generatorId: id),
+                    //   ),
+                    // );
+                  },
+                  onPlace: () => context.read<KarbeatState>().startPlacement(id),
+                  // onDelete: () => context.read<KarbeatState>().removeGenerator(id), // TODO implement
+                );
+              },
+              childCount: generators.length,
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+
+          // 2. AUDIO CLIPS SECTION
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text("Audio Clips", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+          ),
+
+          if (audioSources.isEmpty)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text("No Audio Files.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+              ),
+            ),
+
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final id = audioSources.keys.elementAt(index);
+                final source = audioSources.values.elementAt(index);
+                return _SourceTile(
+                  title: source.name,
+                  subtitle: "ID: $id | ${source.sampleRate} Hz",
+                  icon: Icons.audio_file,
+                  color: Colors.cyanAccent,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => AudioPropertiesScreen(
-                          sourceId: id, // Pass the ID from the map
-                          sourceName: sourceUi.name,
+                        builder: (_) => AudioPropertiesScreen(
+                          sourceId: id,
+                          sourceName: source.name,
                         ),
                       ),
                     );
                   },
+                  onPlace: () => context.read<KarbeatState>().startPlacement(id),
                 );
               },
+              childCount: audioSources.length,
             ),
+          ),
+          
+          // Extra padding at bottom for FAB
+          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+        ],
+      ),    
+    );
+  }
+}
+
+class _SourceTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final VoidCallback onPlace;
+
+  const _SourceTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+    required this.onPlace,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: color),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      subtitle: Text(subtitle, style: const TextStyle(color: Colors.grey)),
+      trailing: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert, color: Colors.white),
+        onSelected: (value) {
+          if (value == 'place') onPlace();
+        },
+        itemBuilder: (context) => [
+          const PopupMenuItem(
+            value: 'place',
+            child: Row(
+              children: [
+                Icon(Icons.input, color: Colors.black54),
+                SizedBox(width: 8),
+                Text("Put in timeline"),
+              ],
+            ),
+          ),
+          const PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete, color: Colors.red),
+                SizedBox(width: 8),
+                Text("Delete"),
+              ],
+            ),
+          ),
+        ],
+      ),
+      onTap: onTap,
     );
   }
 }

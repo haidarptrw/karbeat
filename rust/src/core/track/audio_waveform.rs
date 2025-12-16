@@ -2,9 +2,11 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::project::PluginInstance;
+
 pub type AudioFrame = [f32; 2];
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AudioWaveform {
     #[serde(skip)]
     pub buffer: Arc<Vec<f32>>,
@@ -20,6 +22,8 @@ pub struct AudioWaveform {
     pub is_looping: bool,
     pub normalized: bool,
     pub muted: bool,
+
+    pub effects: Arc<Vec<PluginInstance>>,
 }
 
 
@@ -39,6 +43,7 @@ impl Default for AudioWaveform {
             is_looping: false, 
             normalized: false,
             muted: false,
+            effects: Default::default()
         }
     }
 }

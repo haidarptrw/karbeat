@@ -55,11 +55,12 @@ extension UiClipSourcePatterns on UiClipSource {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiClipSource_Audio value)?  audio,TResult Function( UiClipSource_None value)?  none,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiClipSource_Audio value)?  audio,TResult Function( UiClipSource_Midi value)?  midi,TResult Function( UiClipSource_None value)?  none,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case UiClipSource_Audio() when audio != null:
-return audio(_that);case UiClipSource_None() when none != null:
+return audio(_that);case UiClipSource_Midi() when midi != null:
+return midi(_that);case UiClipSource_None() when none != null:
 return none(_that);case _:
   return orElse();
 
@@ -78,11 +79,12 @@ return none(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiClipSource_Audio value)  audio,required TResult Function( UiClipSource_None value)  none,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiClipSource_Audio value)  audio,required TResult Function( UiClipSource_Midi value)  midi,required TResult Function( UiClipSource_None value)  none,}){
 final _that = this;
 switch (_that) {
 case UiClipSource_Audio():
-return audio(_that);case UiClipSource_None():
+return audio(_that);case UiClipSource_Midi():
+return midi(_that);case UiClipSource_None():
 return none(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
@@ -97,11 +99,12 @@ return none(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiClipSource_Audio value)?  audio,TResult? Function( UiClipSource_None value)?  none,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiClipSource_Audio value)?  audio,TResult? Function( UiClipSource_Midi value)?  midi,TResult? Function( UiClipSource_None value)?  none,}){
 final _that = this;
 switch (_that) {
 case UiClipSource_Audio() when audio != null:
-return audio(_that);case UiClipSource_None() when none != null:
+return audio(_that);case UiClipSource_Midi() when midi != null:
+return midi(_that);case UiClipSource_None() when none != null:
 return none(_that);case _:
   return null;
 
@@ -119,10 +122,11 @@ return none(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int sourceId)?  audio,TResult Function()?  none,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int sourceId)?  audio,TResult Function( int patternId)?  midi,TResult Function()?  none,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case UiClipSource_Audio() when audio != null:
-return audio(_that.sourceId);case UiClipSource_None() when none != null:
+return audio(_that.sourceId);case UiClipSource_Midi() when midi != null:
+return midi(_that.patternId);case UiClipSource_None() when none != null:
 return none();case _:
   return orElse();
 
@@ -141,10 +145,11 @@ return none();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int sourceId)  audio,required TResult Function()  none,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int sourceId)  audio,required TResult Function( int patternId)  midi,required TResult Function()  none,}) {final _that = this;
 switch (_that) {
 case UiClipSource_Audio():
-return audio(_that.sourceId);case UiClipSource_None():
+return audio(_that.sourceId);case UiClipSource_Midi():
+return midi(_that.patternId);case UiClipSource_None():
 return none();}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -159,10 +164,11 @@ return none();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int sourceId)?  audio,TResult? Function()?  none,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int sourceId)?  audio,TResult? Function( int patternId)?  midi,TResult? Function()?  none,}) {final _that = this;
 switch (_that) {
 case UiClipSource_Audio() when audio != null:
-return audio(_that.sourceId);case UiClipSource_None() when none != null:
+return audio(_that.sourceId);case UiClipSource_Midi() when midi != null:
+return midi(_that.patternId);case UiClipSource_None() when none != null:
 return none();case _:
   return null;
 
@@ -230,6 +236,72 @@ class _$UiClipSource_AudioCopyWithImpl<$Res>
 @pragma('vm:prefer-inline') $Res call({Object? sourceId = null,}) {
   return _then(UiClipSource_Audio(
 sourceId: null == sourceId ? _self.sourceId : sourceId // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiClipSource_Midi extends UiClipSource {
+  const UiClipSource_Midi({required this.patternId}): super._();
+  
+
+ final  int patternId;
+
+/// Create a copy of UiClipSource
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiClipSource_MidiCopyWith<UiClipSource_Midi> get copyWith => _$UiClipSource_MidiCopyWithImpl<UiClipSource_Midi>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiClipSource_Midi&&(identical(other.patternId, patternId) || other.patternId == patternId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,patternId);
+
+@override
+String toString() {
+  return 'UiClipSource.midi(patternId: $patternId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiClipSource_MidiCopyWith<$Res> implements $UiClipSourceCopyWith<$Res> {
+  factory $UiClipSource_MidiCopyWith(UiClipSource_Midi value, $Res Function(UiClipSource_Midi) _then) = _$UiClipSource_MidiCopyWithImpl;
+@useResult
+$Res call({
+ int patternId
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiClipSource_MidiCopyWithImpl<$Res>
+    implements $UiClipSource_MidiCopyWith<$Res> {
+  _$UiClipSource_MidiCopyWithImpl(this._self, this._then);
+
+  final UiClipSource_Midi _self;
+  final $Res Function(UiClipSource_Midi) _then;
+
+/// Create a copy of UiClipSource
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? patternId = null,}) {
+  return _then(UiClipSource_Midi(
+patternId: null == patternId ? _self.patternId : patternId // ignore: cast_nullable_to_non_nullable
 as int,
   ));
 }

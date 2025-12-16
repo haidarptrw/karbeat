@@ -98,7 +98,7 @@ fn set_host() -> cpal::Host {
             return host;
         };
         host = wasapi_host;
-        println!("Connected to WASAPI Host");
+        log::info!("Connected to WASAPI Host");
     }
     host
 }
@@ -112,7 +112,7 @@ pub fn start_audio_stream(
     {
         let mut guard = STREAM_GUARD.lock().unwrap();
         if guard.is_some() {
-            println!("🛑 Stopping previous audio stream...");
+            log::info!("🛑 Stopping previous audio stream...");
             *guard = None; // This drops the stream, stopping the audio thread
         }
     }
@@ -123,7 +123,7 @@ pub fn start_audio_stream(
         .context("no audio output device available")?;
 
     // debug!("Output dev");
-    println!(
+    log::info!(
         "Output device: {}",
         device.name().unwrap_or("Unknown".into())
     );
@@ -143,17 +143,18 @@ pub fn start_audio_stream(
     let sample_rate: u64 = config.sample_rate.0.into();
     let channels = config.channels as usize;
 
-    println!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);
-    println!("Sample format: {}", sample_format);
+    log::info!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);
+    log::info!("Sample format: {}", sample_format);
 
     {
         // We use crate::APP_STATE because it is public in lib.rs
         if let Ok(mut state) = crate::APP_STATE.write() {
             state.audio_config.sample_rate = sample_rate as u32;
             state.audio_config.selected_output_device = device.name().unwrap_or("Unknown".to_string());
-            println!("✅ Global Audio Config updated: {} Hz", sample_rate);
+            log::info!("✅ Global Audio Config updated: {} Hz", sample_rate);
         } else {
-            eprintln!("❌ Failed to lock APP_STATE to update audio config");
+            log::error!("❌ Failed to lock APP_STATE to update audio config");
+            panic!();
         }
     }
 
@@ -163,7 +164,7 @@ pub fn start_audio_stream(
     let mut buffer_size = state_consumer.read().buffer_size;
 
     if buffer_size == 0 {
-        println!("Warning: buffer_size is 0 — using fallback of 512 frames");
+        log::warn!("Warning: buffer_size is 0 — using fallback of 512 frames");
         buffer_size = 512; // or return Err
     }
 

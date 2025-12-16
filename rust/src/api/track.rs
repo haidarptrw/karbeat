@@ -1,8 +1,10 @@
 // rust\src\api\track.rs
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::{broadcast_state_change, core::project::Clip, APP_STATE};
+use crate::{
+    APP_STATE, broadcast_state_change, core::project::{Clip, KarbeatSource, Pattern, TrackType}
+};
 
 pub enum UiSourceType {
     Audio,
@@ -59,12 +61,40 @@ pub fn create_clip(
                 };
                 app.add_clip_to_track(track_id, clip);
             }
-            UiSourceType::Midi => {}
+            UiSourceType::Midi => {
+                app.pattern_counter += 1;
+                let new_pattern_id = app.pattern_counter;
+                let sample_rate = app.audio_config.sample_rate;
+                let bpm = if app.transport.bpm == 0.0 {120.0} else {app.transport.bpm};
+                let samples_per_beat = (sample_rate as f32 / (bpm/60.0)) as u64;
+                let timeline_length = 4 * samples_per_beat;
+
+                let default_ticks = 4 * 960;
+                let pattern = Arc::new(Pattern {
+                    id: new_pattern_id,
+                    name: format!("Pattern {}", new_pattern_id),
+                    length_ticks: default_ticks,
+                    notes: Vec::new()
+                });
+
+                app.pattern_pool.insert(new_pattern_id, pattern.clone());
+                app.clip_counter += 1;
+                let new_clip_id = app.clip_counter;
+                let clip = Clip {
+                    name: pattern.name.clone(),
+                    id: new_clip_id,
+                    start_time: start_time as u64,
+                    source: KarbeatSource::Midi(pattern),
+                    offset_start: 0,
+                    loop_length: timeline_length,
+                    source_id: new_pattern_id
+                };
+
+                app.add_clip_to_track(track_id, clip);
+            }
         }
     }
-
     broadcast_state_change();
-
     Ok(())
 }
 
@@ -76,12 +106,12 @@ pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
 
         app.delete_clip_from_track(track_id, clip_id);
     }
-
     broadcast_state_change();
-
     Ok(())
 }
 
+/// Resize the clip. for default mode, it will only adjust
+/// the start time and loop length of the clip
 pub fn resize_clip(
     track_id: u32,
     clip_id: u32,
@@ -136,7 +166,6 @@ pub fn resize_clip(
 
             clips.insert(Arc::new(modified_clip));
             track.update_max_sample_index();
-
         } else {
             return Err("Clip not found".to_string());
         }
@@ -145,6 +174,88 @@ pub fn resize_clip(
         app.update_max_sample_index();
     }
 
+    broadcast_state_change();
+    Ok(())
+}
+
+pub fn move_clip(
+    source_track_id: u32,
+    clip_id: u32,
+    new_start_time: u64,
+    new_track_id: Option<u32>,
+) -> Result<(), String> {
+    {
+        let mut app = APP_STATE.write().map_err(|_| "failed to lock state")?;
+        let target_track_id = new_track_id.unwrap_or(source_track_id);
+        let target_type = if let Some(target) = app.tracks.get(&target_track_id) {
+            target.track_type.clone()
+        } else {
+            return Err("Target track not found".to_string());
+        };
+
+        let track_arc = app
+            .tracks
+            .get_mut(&source_track_id)
+            .ok_or("Track not found")?;
+
+        if source_track_id == target_track_id {
+            let track = Arc::make_mut(track_arc);
+            let clips = Arc::make_mut(&mut track.clips);
+            if let Some(clip) = clips.iter().find(|c| c.id == clip_id).cloned() {
+                // remove old clip
+                clips.remove(&clip);
+                let mut modified_clip = (*clip).clone();
+                modified_clip.start_time = new_start_time;
+                clips.insert(Arc::new(modified_clip));
+                track.update_max_sample_index();
+            } else {
+                return Err("[move_clip] Clip not found".to_string());
+            }
+        } else {
+            let track = Arc::make_mut(track_arc);
+            let clips = Arc::make_mut(&mut track.clips);
+
+            let clip = clips
+                .iter()
+                .find(|c| c.id == clip_id)
+                .ok_or("[move_clip] clip not found".to_string())?
+                .clone();
+
+            let is_compatible = match (&target_type, &clip.source) {
+                (TrackType::Audio, KarbeatSource::Audio(_)) => true,
+                (TrackType::Midi, KarbeatSource::Midi(_)) => true,
+                _ => false,
+            };
+
+            if !is_compatible {
+                return Err(format!(
+                    "Incompatible track type. Cannot move {:?} clip to {:?} track.",
+                    clip.source, target_type
+                ));
+            }
+
+            clips.remove(&clip);
+            track.update_max_sample_index();
+
+            let mut new_clip = (*clip).clone();
+            new_clip.start_time = new_start_time;
+            
+            // get target track. this is already checked at the beginning, so it will never throws error
+            let target_track = Arc::make_mut(app.tracks.get_mut(&target_track_id).unwrap()); 
+            let _ = target_track.add_clip(new_clip).map_err(|e| format!("{}", e));
+        }
+        app.update_max_sample_index();
+    }
+
+    broadcast_state_change();
+    Ok(())
+}
+
+pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), String> {
+    {
+        let mut app = APP_STATE.write().map_err(|e| format!("Lock failed: {}", e))?;
+        app.add_new_midi_track_with_generator(&generator_name).map_err(|e| format!("{}", e))?;
+    }
     broadcast_state_change();
     Ok(())
 }

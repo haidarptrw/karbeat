@@ -1,14 +1,8 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
-import 'package:karbeat/features/header/control_panel.dart';
-import 'package:karbeat/features/screens/source_list_screen.dart';
-import 'package:karbeat/features/screens/track_list_screen.dart';
+import 'package:karbeat/features/layout/main_content.dart';
 import 'package:karbeat/features/side_panel/side_panel.dart';
-import 'package:karbeat/src/rust/api/audio.dart';
-import 'package:karbeat/src/rust/audio/event.dart';
+import 'package:karbeat/features/side_panel/sidebar.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:karbeat/utils/formatter.dart';
 import 'package:provider/provider.dart';
 
 class MainScreen extends StatelessWidget {
@@ -16,22 +10,19 @@ class MainScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // REMOVED: Top-level Consumer.
-    // The Scaffold is static; only specific children need to rebuild.
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          Row(
+          const Row(
             children: [
-              const _SidebarToolbar(), // Extracted to a const widget
+              Sidebar(),
               Expanded(
-                child: _MainContent(),
-              ), // Extracted to keep MainScreen clean
+                child: MainContent(),
+              ),
             ],
           ),
           // Optimized Context Panel Overlay
-          // Only rebuilds if the specific panel ID changes
           Selector<KarbeatState, ToolbarMenuContextGroup>(
             selector: (_, state) => state.currentToolbarContext,
             builder: (context, currentContext, child) {
@@ -55,7 +46,6 @@ class MainScreen extends StatelessWidget {
     BuildContext context,
     ToolbarMenuContextGroup currentContext,
   ) {
-    // Note: We don't need a Consumer here because we passed the currentContext in
     final group = KarbeatState.menuGroups.firstWhere(
       (g) => g.id == currentContext,
     );
@@ -63,7 +53,6 @@ class MainScreen extends StatelessWidget {
     return ContextPanel(
       group: group,
       onAction: (action) {
-        // Read context.read to avoid listening
         final state = context.read<KarbeatState>();
         state.closeContextPanel();
         action.callback?.call(context, state);
@@ -72,362 +61,6 @@ class MainScreen extends StatelessWidget {
         ).showSnackBar(SnackBar(content: Text('Executed: ${action.title}')));
       },
       onClose: () => context.read<KarbeatState>().closeContextPanel(),
-    );
-  }
-}
-
-// =============================================================================
-// 1. OPTIMIZED SIDEBAR (TOOLBAR)
-// =============================================================================
-class _SidebarToolbar extends StatelessWidget {
-  const _SidebarToolbar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 60,
-      color: Colors.grey.shade900,
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              color: Colors.grey.shade900,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  // Selector ensures this list only rebuilds when a menu opens/closes
-                  children: [
-                    Selector<KarbeatState, ToolbarMenuContextGroup>(
-                      selector: (_, state) => state.currentToolbarContext,
-                      builder: (context, currentContext, _) {
-                        return Column(
-                          children: KarbeatState.menuGroups.map((group) {
-                            return _SidebarItem(
-                              icon: group.icon,
-                              title: group.title,
-                              isActive: currentContext == group.id,
-                              onTap: () => context
-                                  .read<KarbeatState>()
-                                  .toggleToolbarContext(group.id),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _SidebarItem({
-    required this.icon,
-    required this.title,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(
-        color: isActive ? Colors.purple.shade700 : Colors.transparent,
-        border: isActive
-            ? Border(left: BorderSide(color: Colors.purple.shade300, width: 3))
-            : null,
-      ),
-      child: Tooltip(
-        message: title,
-        child: IconButton(
-          icon: Icon(
-            icon,
-            color: isActive ? Colors.white : Colors.grey.shade400,
-            size: 22,
-          ),
-          onPressed: onTap,
-        ),
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// 2. OPTIMIZED MAIN CONTENT & HEADER
-// =============================================================================
-class _MainContent extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey.shade800,
-      child: Column(
-        children: [
-          SafeArea(
-            top: true,
-            bottom: false,
-            child: Container(
-              color: Colors.grey.shade50,
-              child: const _ControlPanel(),
-            ),
-          ),
-          Expanded(
-            child: Selector<KarbeatState, WorkspaceView>(
-              selector: (_, state) => state.currentView,
-              builder: (context, currentView, _) {
-                switch (currentView) {
-                  case WorkspaceView.trackList:
-                    return TrackListScreen();
-                  case WorkspaceView.source:
-                    return SourceListScreen();
-                  // case WorkspaceView.pianoRoll:
-                  //   return const Center(child: Text("Piano Roll (TODO)", style: TextStyle(color: Colors.white)));
-                  // case WorkspaceView.mixer:
-                  //   return const Center(child: Text("Mixer (TODO)", style: TextStyle(color: Colors.white)));
-                  default:
-                    return TrackListScreen(); // for now fallback to TrackListScreen
-                }
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// 3. OPTIMIZED CONTROL PANEL (GRANULAR REBUILDS)
-// =============================================================================
-class _ControlPanel extends StatelessWidget {
-  const _ControlPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    final builder = ControlPanelBuilder();
-
-    // -- Navigation (Stateless) --
-    builder.addItem(
-      ControlPanelToolbarItem(
-        name: "Tracks",
-        icon: Icons.view_list,
-        color: Colors.cyanAccent,
-        onTap: () =>
-            context.read<KarbeatState>().navigateTo(WorkspaceView.trackList),
-        isActive: context.select<KarbeatState, bool>(
-          (s) => s.currentView == WorkspaceView.trackList,
-        ),
-      ),
-    );
-
-    builder.addItem(
-      ControlPanelToolbarItem(
-        name: "Piano Roll",
-        icon: Icons.piano,
-        color: Colors.cyanAccent,
-        onTap: () => log("Nav to Piano Roll"),
-      ),
-    );
-
-    builder.addItem(
-      ControlPanelToolbarItem(
-        name: "Mixer",
-        icon: Icons.tune,
-        color: Colors.cyanAccent,
-        onTap: () => log("Nav to mixer"),
-      ),
-    );
-
-    builder.addItem(
-      ControlPanelToolbarItem(
-        name: "Source",
-        icon: Icons.group_work,
-        color: Colors.cyanAccent,
-        onTap: () =>
-            context.read<KarbeatState>().navigateTo(WorkspaceView.source),
-        isActive: context.select<KarbeatState, bool>(
-          (s) => s.currentView == WorkspaceView.source,
-        ),
-      ),
-    );
-
-    builder.addDivider();
-
-    // -- Transport (Listens to isPlaying) --
-    builder.addWidget(
-      Selector<KarbeatState, bool>(
-        selector: (_, state) => state.isPlaying,
-        builder: (context, isPlaying, _) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ControlPanelToolbarItem(
-                name: isPlaying ? "Pause" : "Play",
-                icon: isPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.greenAccent,
-                isActive: isPlaying,
-                onTap: () => context.read<KarbeatState>().togglePlay(),
-              ),
-              ControlPanelToolbarItem(
-                name: "Stop",
-                icon: Icons.stop,
-                color: Colors.redAccent,
-                onTap: () => context.read<KarbeatState>().stop(),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    // -- Loop (Listens to isLooping) --
-    builder.addWidget(
-      Selector<KarbeatState, bool>(
-        selector: (_, state) => state.isLooping,
-        builder: (context, isLooping, _) {
-          return ControlPanelToolbarItem(
-            name: "Loop",
-            icon: Icons.loop,
-            color: Colors.orangeAccent,
-            isActive: isLooping,
-            onTap: () => context.read<KarbeatState>().toggleLoop(),
-          );
-        },
-      ),
-    );
-
-    builder.addDivider();
-
-    // -- Info Display (Static for now) --
-    builder.addWidget(_buildInfoDisplay(context));
-
-    builder.addDivider();
-
-    // -- Tools (Listens to selectedTool) --
-    // We wrap the *Group* of tools in one Selector.
-    // Alternatively, wrap each item if you want extreme optimization,
-    // but wrapping the group is usually sufficient.
-    builder.addWidget(
-      Selector<KarbeatState, ToolSelection>(
-        selector: (_, state) => state.selectedTool,
-        builder: (context, selectedTool, _) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ControlPanelToolbarItem(
-                name: "Select",
-                icon: Icons.near_me,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.pointer,
-                onTap: () => context.read<KarbeatState>().selectTool(
-                  ToolSelection.pointer,
-                ),
-              ),
-              ControlPanelToolbarItem(
-                name: "Cut",
-                icon: Icons.content_cut,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.cut,
-                onTap: () =>
-                    context.read<KarbeatState>().selectTool(ToolSelection.cut),
-              ),
-              ControlPanelToolbarItem(
-                name: "Draw",
-                icon: Icons.edit,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.draw,
-                onTap: () =>
-                    context.read<KarbeatState>().selectTool(ToolSelection.draw),
-              ),
-              ControlPanelToolbarItem(
-                name: "Delete",
-                icon: Icons.delete,
-                color: Colors.red,
-                isActive: selectedTool == ToolSelection.delete,
-                onTap: () => context.read<KarbeatState>().selectTool(ToolSelection.delete),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    return builder.build();
-  }
-
-  Widget _buildInfoDisplay(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade700),
-      ),
-      child: IntrinsicHeight(
-        child: StreamBuilder<PlaybackPosition>(
-          stream: context.read<KarbeatState>().positionStream,
-          builder: (context, asyncSnapshot) {
-            final pos = asyncSnapshot.data;
-            final bar = pos?.bar ?? 0;
-            final beat = pos?.beat ?? 0;
-            final samples = pos?.samples ?? 0;
-            final bpm = pos?.tempo ?? 0.0;
-            final sampleRate = pos?.sampleRate ?? 44100;
-            return Row(
-              children: [
-                _buildInfoText("BAR", bar.toString()),
-                const SizedBox(width: 10),
-                _buildInfoText("BEAT", beat.toString()),
-                const VerticalDivider(color: Colors.grey, width: 20),
-                _buildInfoText(
-                  "TIME",
-                  formatTimeFromSamples(samples, sampleRate),
-                ),
-                const VerticalDivider(color: Colors.grey, width: 20),
-                _buildInfoText("BPM", bpm.toStringAsFixed(1)),
-                const VerticalDivider(color: Colors.grey, width: 20),
-                _buildInfoText("SIG", "4/4"),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoText(String label, String value) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 8,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.lightGreenAccent,
-            fontSize: 14,
-            fontFamily: 'monospace',
-          ),
-        ),
-      ],
     );
   }
 }
