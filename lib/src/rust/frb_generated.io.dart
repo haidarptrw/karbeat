@@ -7,6 +7,7 @@ import 'api/audio.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
 import 'api/project.dart';
+import 'api/session.dart';
 import 'api/simple.dart';
 import 'api/track.dart';
 import 'api/transport.dart';

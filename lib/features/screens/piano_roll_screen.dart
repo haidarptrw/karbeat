@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:provider/provider.dart';
 
 class PianoRollScreen extends StatefulWidget {
@@ -17,24 +18,32 @@ class PianoRollScreen extends StatefulWidget {
 class PianoRollScreenState extends State<PianoRollScreen> {
   final double _keyHeight = 20.0;
   final double _keyWidth = 60.0;
-  double _zoomX = 1.0;
+  double _zoomX = 0.5;
 
-  late ScrollController _verticalController;
-  late ScrollController _horizontalController;
+  late LinkedScrollControllerGroup _verticalControllers;
+  late ScrollController _keysController;
+  late ScrollController _gridVerticalController;
+  late ScrollController _gridHorizontalController;
 
   @override
   void initState() {
     super.initState();
-    _verticalController = ScrollController(
-      initialScrollOffset: _keyHeight * 40,
-    ); // start middle C
-    _horizontalController = ScrollController();
+    _verticalControllers = LinkedScrollControllerGroup();
+    _keysController = _verticalControllers.addAndGet();
+    _gridVerticalController = _verticalControllers.addAndGet();
+    _gridHorizontalController = ScrollController();
+
+    // Jump to Middle C (MIDI 60)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _verticalControllers.jumpTo((127 - 60) * _keyHeight - 100);
+    });
   }
 
   @override
   void dispose() {
-    _verticalController.dispose();
-    _horizontalController.dispose();
+    _keysController.dispose();
+    _gridVerticalController.dispose();
+    _gridHorizontalController.dispose();
     super.dispose();
   }
 
@@ -96,12 +105,14 @@ class PianoRollScreenState extends State<PianoRollScreen> {
               SizedBox(
                 width: _keyWidth,
                 child: ListView.builder(
-                  controller: _verticalController,
+                  controller: _keysController,
                   itemCount: 128,
+                  itemExtent: _keyHeight,
                   itemBuilder: (context, index) {
                     // MIDI 127 is top, 0 is bottom. List index 0 is top.
                     final midiKey = 127 - index;
                     final isBlack = _isBlackKey(midiKey);
+                    final label = _getNoteName(midiKey);
                     return Container(
                       height: _keyHeight,
                       decoration: BoxDecoration(
@@ -115,15 +126,9 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                       ),
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.only(right: 4),
-                      child: isBlack
-                          ? null
-                          : Text(
-                              "C${(midiKey / 12).floor() - 1}",
-                              style: const TextStyle(
-                                fontSize: 8,
-                                color: Colors.black,
-                              ),
-                            ),
+                      child: (midiKey % 12 == 0 || !isBlack) 
+                          ? Text(label, style: TextStyle(fontSize: 9, color: isBlack ? Colors.white54 : Colors.black54))
+                          : null,
                     );
                   },
                 ),
@@ -132,10 +137,10 @@ class PianoRollScreenState extends State<PianoRollScreen> {
               // GRID & NOTES
               Expanded(
                 child: SingleChildScrollView(
-                  controller: _horizontalController,
+                  controller: _gridHorizontalController,
                   scrollDirection: Axis.horizontal,
                   child: SingleChildScrollView(
-                    controller: _verticalController,
+                    controller: _gridVerticalController,
                     scrollDirection: Axis.vertical,
                     child: SizedBox(
                       height: 128 * _keyHeight,
@@ -153,7 +158,9 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                             ),
                           ),
                           // Notes
-                          ...pattern.notes.map((note) => _buildNoteWidget(note)),
+                          ...pattern.notes.map(
+                            (note) => _buildNoteWidget(note),
+                          ),
                         ],
                       ),
                     ),
@@ -170,6 +177,14 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   bool _isBlackKey(int key) {
     const blackKey = [1, 3, 6, 8, 10];
     return blackKey.contains(key % 12);
+  }
+
+  // Helper for correct Note Names
+  String _getNoteName(int midiKey) {
+    const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    final octave = (midiKey / 12).floor() - 1;
+    final name = names[midiKey % 12];
+    return "$name$octave";
   }
 
   Widget _buildNoteWidget(UiNote note) {
@@ -217,12 +232,14 @@ class _PianoGridPainter extends CustomPainter {
 
     // Vertical Lines (Beats)
     // 960 ticks = 1 beat
-    final pixelsPerBeat = 960 * zoomX;
-    int beats = (size.width / pixelsPerBeat).ceil();
+    final ticksPerBeat = 960 * zoomX;
+    final double pixelsPerBeat = ticksPerBeat * zoomX;
 
-    for (int i = 0; i < beats; i++) {
-      final x = i * pixelsPerBeat;
-      paint.color = (i % 4 == 0)
+    if (pixelsPerBeat < 2) return;
+
+    for (double x = 0; x < size.width; x += pixelsPerBeat) {
+      int beatIndex = (x / pixelsPerBeat).round();
+      paint.color = (beatIndex % 4 == 0)
           ? Colors.white24
           : Colors.white10; // Bar vs Beat
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);

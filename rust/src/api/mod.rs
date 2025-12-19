@@ -1,3 +1,4 @@
+pub mod session;
 pub mod plugin;
 pub mod pattern;
 pub mod simple;

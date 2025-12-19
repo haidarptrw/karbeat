@@ -168,7 +168,8 @@ class DefaultControlPanel extends StatelessWidget {
         name: "Piano Roll",
         icon: Icons.piano,
         color: Colors.cyanAccent,
-        onTap: () => log("Nav to Piano Roll"),
+        onTap: () => context.read<KarbeatState>().navigateTo(WorkspaceView.pianoRoll),
+        isActive: context.select<KarbeatState, bool>((s)=> s.currentView == WorkspaceView.pianoRoll)
       ),
     );
 

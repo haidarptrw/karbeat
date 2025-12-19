@@ -17,7 +17,7 @@ pub enum ResizeEdge {
 }
 
 pub fn create_clip(
-    source_id: u32,
+    source_id: Option<u32>,
     source_type: UiSourceType,
     track_id: u32,
     start_time: u32,
@@ -29,6 +29,7 @@ pub fn create_clip(
 
         match source_type {
             UiSourceType::Audio => {
+                let source_id = source_id.ok_or(format!("Audio clip needs source id"))?;
                 // check the source
                 let audio_source = app
                     .asset_library

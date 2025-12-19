@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 Future<void> createClip({
-  required int sourceId,
+  int? sourceId,
   required UiSourceType sourceType,
   required int trackId,
   required int startTime,

@@ -5,6 +5,7 @@ import 'package:karbeat/features/screens/source_list_screen.dart';
 import 'package:karbeat/features/screens/track_list_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/utils/logger.dart';
 import 'package:provider/provider.dart';
 
 class MainContent extends StatelessWidget {
@@ -74,6 +75,7 @@ class MainContent extends StatelessWidget {
                         return null; // Clip not found
                       },
                       builder: (context, patternId, _) {
+                        KarbeatLogger.info("Opening piano roll for pattern id $patternId");
                         return PianoRollScreen(patternId: patternId);
                       },
                     );
