@@ -7,7 +7,6 @@ pub fn update_selected_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
         app.session.selected_track_id = Some(track_id);
         app.session.selected_clip_id = Some(clip_id);
     }
-    broadcast_state_change();
     Ok(())
 }
 
@@ -17,6 +16,5 @@ pub fn deselect_clip() -> Result<(), String> {
         app.session.selected_track_id = None;
         app.session.selected_clip_id = None;
     }
-    broadcast_state_change();
     Ok(())
 }

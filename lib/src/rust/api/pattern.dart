@@ -14,6 +14,50 @@ Future<UiPattern> getPattern({required int patternId}) =>
 Future<Map<int, UiPattern>> getPatterns() =>
     RustLib.instance.api.crateApiPatternGetPatterns();
 
+Future<UiNote> addNote({
+  required int patternId,
+  required int key,
+  required int startTick,
+  int? duration,
+}) => RustLib.instance.api.crateApiPatternAddNote(
+  patternId: patternId,
+  key: key,
+  startTick: startTick,
+  duration: duration,
+);
+
+Future<UiNote> deleteNote({required int patternId, required int index}) =>
+    RustLib.instance.api.crateApiPatternDeleteNote(
+      patternId: patternId,
+      index: index,
+    );
+
+Future<UiNote> resizeNote({
+  required int patternId,
+  required int noteIndex,
+  required int newDuration,
+}) => RustLib.instance.api.crateApiPatternResizeNote(
+  patternId: patternId,
+  noteIndex: noteIndex,
+  newDuration: newDuration,
+);
+
+Future<UiNote> changeNoteParams({
+  required int patternId,
+  required int noteIndex,
+  int? velocity,
+  double? probability,
+  int? microOffset,
+  bool? mute,
+}) => RustLib.instance.api.crateApiPatternChangeNoteParams(
+  patternId: patternId,
+  noteIndex: noteIndex,
+  velocity: velocity,
+  probability: probability,
+  microOffset: microOffset,
+  mute: mute,
+);
+
 class UiNote {
   final int startTick;
   final int duration;

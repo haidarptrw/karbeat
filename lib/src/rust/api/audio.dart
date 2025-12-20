@@ -9,10 +9,12 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
+/// GETTER: Fetch details + Downsampled Buffer for UI
 Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
   required int id,
 }) => RustLib.instance.api.crateApiAudioGetAudioProperties(id: id);
 
+/// ACTION: Play the sound via the Engine
 Future<void> playSourcePreview({required int id}) =>
     RustLib.instance.api.crateApiAudioPlaySourcePreview(id: id);
 

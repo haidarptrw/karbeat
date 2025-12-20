@@ -1,8 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    core::project::{Note, Pattern},
-    APP_STATE,
+    APP_STATE, core::project::{Note, Pattern}, sync_audio_graph
 };
 
 pub struct UiPattern {
@@ -71,9 +70,126 @@ pub fn get_pattern(pattern_id: u32) -> Result<UiPattern, String> {
 
 pub fn get_patterns() -> Result<HashMap<u32, UiPattern>, String> {
     let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
-    let patterns = app.pattern_pool.iter().map(|(&id, pattern_arc)| {
-        let pattern_ui = UiPattern::from(pattern_arc.as_ref());
-        (id, pattern_ui)
-    }).collect();
+    let patterns = app
+        .pattern_pool
+        .iter()
+        .map(|(&id, pattern_arc)| {
+            let pattern_ui = UiPattern::from(pattern_arc.as_ref());
+            (id, pattern_ui)
+        })
+        .collect();
     Ok(patterns)
 }
+
+pub fn add_note(
+    pattern_id: u32,
+    key: u32,
+    start_tick: u64,
+    duration: Option<u64>,
+) -> Result<UiNote, String> {
+    // check key input if it is in the range between 0 - 127
+    if key > 127 {
+        return Err("Invalid key input: it must not exceed 127".to_string());
+    }
+
+    let note: Option<Note> = {
+        let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+        let pattern_arc = app
+            .pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or("Cannot find the pattern".to_string())?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        Some(
+            pattern
+                .add_note(key as u8, start_tick, duration)
+                .map_err(|e| format!("{}", e))?,
+        )
+    };
+
+    let note_ui = UiNote::from(
+        &note.ok_or(
+            "Add note failed previously. 
+    This error shouldn't happen as all error cases handle gracefully"
+                .to_owned(),
+        )?,
+    );
+    sync_audio_graph();
+    Ok(note_ui)
+}
+
+pub fn delete_note(pattern_id: u32, index: usize) -> Result<UiNote, String> {
+    let note: Note = {
+        let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+        let pattern_arc = app
+            .pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or("Cannot find the pattern".to_string())?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        pattern.delete_note(index).map_err(|e| format!("{}", e))?
+    };
+
+    let note_ui = UiNote::from(&note);
+    sync_audio_graph();
+    Ok(note_ui)
+}
+
+pub fn resize_note(
+    pattern_id: u32,
+    note_index: usize,
+    new_duration: u64,
+) -> Result<UiNote, String> {
+    let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+    let pattern_arc = app
+        .pattern_pool
+        .get_mut(&pattern_id)
+        .ok_or("Cannot find the pattern".to_string())?;
+    let pattern = Arc::make_mut(pattern_arc);
+
+    let note = pattern
+        .resize_note(note_index, new_duration)
+        .map_err(|e| format!("{}", e))?;
+
+    let note_ui = UiNote::from(note);
+
+    // drop lock here so that broadcast state change can access the APP_STATE
+    drop(app);
+
+    sync_audio_graph();
+    Ok(note_ui)
+}
+
+pub fn change_note_params(
+    pattern_id: u32,
+    note_index: usize,
+    velocity: Option<i64>,
+    probability: Option<f32>,
+    micro_offset: Option<i64>,
+    mute: Option<bool>,
+) -> Result<UiNote, String> {
+    // validate inputs
+    let velocity = velocity.and_then(|v| u8::try_from(v).ok());
+    let micro_offset = micro_offset.and_then(|m| i8::try_from(m).ok());
+
+    let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+    let pattern_arc = app
+        .pattern_pool
+        .get_mut(&pattern_id)
+        .ok_or("Cannot find the pattern".to_string())?;
+    let pattern = Arc::make_mut(pattern_arc);
+
+    let note = pattern
+        .set_note_params(note_index, velocity, probability, micro_offset, mute)
+        .map_err(|e| format!("{}", e))?;
+
+    let note_ui = UiNote::from(note);
+
+    // drop lock here so that broadcast state change can access the APP_STATE
+    drop(app);
+
+    sync_audio_graph();
+    Ok(note_ui)
+}
+
+// TODO: add more APIs for piano roll feature

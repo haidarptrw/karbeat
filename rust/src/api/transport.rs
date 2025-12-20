@@ -1,7 +1,7 @@
 // src/api/transport.rs
 // collections of transport API
 
-use crate::{broadcast_state_change, commands::AudioCommand, APP_STATE, COMMAND_SENDER};
+use crate::{APP_STATE, COMMAND_SENDER, broadcast_state_change, commands::AudioCommand, sync_transport};
 
 pub fn set_playing(val: bool) -> Result<(), String> {
     {
@@ -35,5 +35,6 @@ pub fn set_looping(val: bool) -> Result<(), String> {
         app.transport.is_looping = val;
     }
     broadcast_state_change();
+    // sync_transport();
     Ok(())
 }

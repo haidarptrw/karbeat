@@ -10,7 +10,10 @@ use std::{
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
-use crate::{api::track, core::{plugin::KarbeatPlugin, track::audio_waveform::AudioWaveform}};
+use crate::{
+    api::track,
+    core::{plugin::KarbeatPlugin, track::audio_waveform::AudioWaveform},
+};
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ApplicationState {
@@ -80,7 +83,7 @@ impl Default for KarbeatTrack {
             clips: Arc::new(BTreeSet::new()),
             target_mixer_channel_id: None,
             max_sample_index: 0,
-            generator: None
+            generator: None,
         }
     }
 }
@@ -173,6 +176,21 @@ impl Default for TransportState {
     }
 }
 
+impl PartialEq for TransportState {
+    fn eq(&self, other: &Self) -> bool {
+        self.is_playing == other.is_playing
+            && self.is_recording == other.is_recording
+            && self.is_looping == other.is_looping
+            && self.playhead_position_samples == other.playhead_position_samples
+            && self.loop_start_samples == other.loop_start_samples
+            && self.loop_end_samples == other.loop_end_samples
+            && self.bpm == other.bpm
+            && self.time_signature == other.time_signature
+            && self.beat_tracker == other.beat_tracker
+            && self.bar_tracker == other.bar_tracker
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Pattern {
     pub id: u32,
@@ -192,6 +210,38 @@ pub struct Note {
     pub probability: f32,
     pub micro_offset: i8,
     pub mute: bool,
+}
+
+impl PartialEq for Note {
+    fn eq(&self, other: &Self) -> bool {
+        self.start_tick == other.start_tick
+    }
+}
+
+impl Eq for Note {}
+
+impl PartialOrd for Note {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Note {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.start_tick.cmp(&other.start_tick) {
+            Ordering::Equal => {
+                // Secondary: if start times are equal, sort by key (pitch)
+                match self.key.cmp(&other.key) {
+                    Ordering::Equal => {
+                        // Tertiary: if keys are equal, sort by velocity
+                        self.velocity.cmp(&other.velocity)
+                    }
+                    other => other,
+                }
+            }
+            other => other,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -350,7 +400,7 @@ impl Default for AudioHardwareConfig {
 }
 
 impl KarbeatTrack {
-    pub fn clips(&self) ->&BTreeSet<Arc<Clip>> {
+    pub fn clips(&self) -> &BTreeSet<Arc<Clip>> {
         return self.clips.as_ref();
     }
 
@@ -364,7 +414,7 @@ impl KarbeatTrack {
     pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u64> {
         let is_valid = match (&self.track_type, &clip.source) {
             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
-            (TrackType::Midi, KarbeatSource::Midi{..}) => true,
+            (TrackType::Midi, KarbeatSource::Midi { .. }) => true,
             (TrackType::Automation, KarbeatSource::Automation(_)) => true,
             // Allow Automation on Audio/Midi tracks? usually yes, but strictly speaking:
             _ => false,
@@ -391,7 +441,9 @@ impl KarbeatTrack {
             // Return the end sample of this new clip
             return Ok(clip_end_sample);
         } else {
-            return Err(anyhow::anyhow!("Warning: Mismatched Clip Source for Track Type"));
+            return Err(anyhow::anyhow!(
+                "Warning: Mismatched Clip Source for Track Type"
+            ));
         }
     }
 
@@ -400,7 +452,7 @@ impl KarbeatTrack {
         let clips_set = Arc::make_mut(&mut self.clips);
 
         let initial_len = clips_set.len();
-        
+
         clips_set.retain(|c| c.id != clip_id);
 
         if clips_set.len() < initial_len {
@@ -420,18 +472,16 @@ impl KarbeatTrack {
     pub fn remove_clip_by_source_id(&mut self, source_id: u32, is_generator: bool) {
         let clips_set = Arc::make_mut(&mut self.clips);
 
-        clips_set.retain(|clip_arc| {
-            match &clip_arc.source {
-                KarbeatSource::Audio(_) => {
-                    if !is_generator {
-                        clip_arc.source_id != source_id
-                    } else {
-                        true
-                    }
-                },
-                KarbeatSource::Midi {..} => true,
-                KarbeatSource::Automation(_) => true,
+        clips_set.retain(|clip_arc| match &clip_arc.source {
+            KarbeatSource::Audio(_) => {
+                if !is_generator {
+                    clip_arc.source_id != source_id
+                } else {
+                    true
+                }
             }
+            KarbeatSource::Midi { .. } => true,
+            KarbeatSource::Automation(_) => true,
         });
     }
 
@@ -448,7 +498,12 @@ impl KarbeatTrack {
     }
 
     pub fn update_max_sample_index(&mut self) {
-        self.max_sample_index = self.clips.iter().map(|c| c.start_time + c.loop_length).max().unwrap_or(0);
+        self.max_sample_index = self
+            .clips
+            .iter()
+            .map(|c| c.start_time + c.loop_length)
+            .max()
+            .unwrap_or(0);
     }
 }
 
@@ -479,7 +534,7 @@ impl ApplicationState {
     }
 
     pub fn update_max_sample_index(&mut self) {
-         self.max_sample_index = self
+        self.max_sample_index = self
             .tracks
             .values_mut()
             .map(|t| {
@@ -494,15 +549,16 @@ impl ApplicationState {
     pub fn add_generator(&mut self, instance_type: GeneratorInstanceType) -> u32 {
         self.generator_counter += 1;
         let id = self.generator_counter;
-        
+
         // Ensure the inner instance knows its ID
         let instance = GeneratorInstance {
             id,
             instance_type,
-            effects: Arc::new(Default::default())
+            effects: Arc::new(Default::default()),
         };
 
-        self.generator_pool.insert(id, Arc::new(RwLock::new(instance)));
+        self.generator_pool
+            .insert(id, Arc::new(RwLock::new(instance)));
         id
     }
 
@@ -526,7 +582,7 @@ impl ApplicationState {
         // we check whether the source exists
         // ASSUME: the id inside source_map and sample_paths are same based on the existing insertion logic
         let library = Arc::make_mut(&mut self.asset_library);
-        
+
         if library.source_map.remove(&source_id).is_none() {
             return Err(anyhow!("Source does not exist"));
         }

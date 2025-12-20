@@ -1,3 +1,4 @@
+pub mod midi;
 // src/core/track/mod.rs
 
 use std::{collections::HashMap, sync::{Arc, Mutex, RwLock}};
