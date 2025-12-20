@@ -13,6 +13,7 @@ import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as sessionApi;
+import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
 enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom }
@@ -489,6 +490,93 @@ class KarbeatState extends ChangeNotifier {
     } catch (e) {
       KarbeatLogger.error("Error when creating new empty pattern clip: $e");
       await syncTrackState(); // rollback
+    }
+  }
+
+  // ===================== NOTE CHANGE API'S ==========================
+  Future<void> previewNote({
+    required int trackId,
+    required int noteKey,
+    required bool isOn,
+    int velocity = 100,
+  }) async {
+    try {
+      await playPreviewNote(
+        trackId: trackId,
+        noteKey: noteKey,
+        velocity: velocity,
+        isOn: isOn,
+      );
+      KarbeatLogger.info("Play ${numToMidiKey(noteKey)} with generator from $trackId");
+    } catch (e) {
+      KarbeatLogger.error("Error previewing note: $e");
+    }
+  }
+
+  Future<void> addPatternNote({
+    required int patternId,
+    required int key,
+    required int startTick,
+    required int duration,
+  }) async {
+    try {
+      await addNote(
+        patternId: patternId,
+        key: key,
+        startTick: startTick,
+        duration: duration,
+      );
+      notifyBackendChange(ProjectEvent.patternChanged);
+    } catch (e) {
+      KarbeatLogger.error("Error adding note: $e");
+    }
+  }
+
+  Future<void> deletePatternNote({
+    required int patternId,
+    required int index,
+  }) async {
+    try {
+      await deleteNote(patternId: patternId, index: index);
+      notifyBackendChange(ProjectEvent.patternChanged);
+    } catch (e) {
+      KarbeatLogger.error("Error deleting note: $e");
+    }
+  }
+
+  Future<void> movePatternNote({
+    required int patternId,
+    required int index,
+    required int newStartTick,
+    required int newKey,
+  }) async {
+    try {
+      await moveNote(
+        patternId: patternId,
+        index: index,
+        newStartTick: newStartTick,
+        newKey: newKey,
+      );
+      notifyBackendChange(ProjectEvent.patternChanged);
+    } catch (e) {
+      log("Error moving note: $e");
+    }
+  }
+
+  Future<void> resizePatternNote({
+    required int patternId,
+    required int index,
+    required int newDuration,
+  }) async {
+    try {
+      await resizeNote(
+        patternId: patternId,
+        noteIndex: index,
+        newDuration: newDuration,
+      );
+      notifyBackendChange(ProjectEvent.patternChanged);
+    } catch (e) {
+      log("Error resizing note: $e");
     }
   }
 

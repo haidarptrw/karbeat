@@ -43,7 +43,7 @@ impl Pattern {
 
         let duration_proper = duration.unwrap_or(960); // standard default of 960 ticks per beat
 
-        // TODO: Handle pattern expansion (Moyou Tenkai 🤞 (模様展開) 
+        // TODO: Handle pattern expansion (Moyou Tenkai 🤞 (模様展開)
         // upon insertion of a note outside length ticks boundary)
         if start_tick >= self.length_ticks {
             return Err(anyhow::anyhow!(
@@ -123,7 +123,12 @@ impl Pattern {
         Ok(&self.notes[index])
     }
 
-    pub fn move_note(&mut self, index: usize, new_start_tick: u64) -> anyhow::Result<&Note> {
+    pub fn move_note(
+        &mut self,
+        index: usize,
+        new_start_tick: u64,
+        new_key: u8,
+    ) -> anyhow::Result<&Note> {
         if index >= self.notes.len() {
             return Err(anyhow::anyhow!(
                 "Note index {} out of bounds (pattern has {} notes)",
@@ -132,6 +137,7 @@ impl Pattern {
             ));
         }
 
+        // Validate Timing
         if new_start_tick >= self.length_ticks {
             return Err(anyhow::anyhow!(
                 "start_tick ({}) must be less than pattern length ({})",
@@ -140,14 +146,27 @@ impl Pattern {
             ));
         }
 
-        self.notes[index].start_tick = new_start_tick;
+        // Validate Key
+        if new_key > 127 {
+            return Err(anyhow::anyhow!(
+                "MIDI key must be between 0 and 127, got {}",
+                new_key
+            ));
+        }
 
+        // Update the note
+        self.notes[index].start_tick = new_start_tick;
+        self.notes[index].key = new_key;
+
+        // Re-sort to maintain chronological order in the vector
         self.sort_notes_unstable();
 
+        // Retrieve reference to the updated note
+        // We search by both tick and key to ensure we find the correct note (or an identical one)
         let note = self
             .notes
             .iter()
-            .find(|n| n.start_tick == new_start_tick)
+            .find(|n| n.start_tick == new_start_tick && n.key == new_key)
             .ok_or_else(|| anyhow::anyhow!("Note not found after moving"))?;
 
         Ok(note)

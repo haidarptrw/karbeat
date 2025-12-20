@@ -3,7 +3,7 @@ use std::{collections::HashMap, ops::Deref};
 use serde::Serialize;
 
 use crate::{
-    APP_STATE, core::{
+    APP_STATE, broadcast_state_change, core::{
         file_manager::loader::AudioLoader,
         project::{
             Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, KarbeatTrack,
@@ -328,7 +328,7 @@ pub fn add_audio_source(file_path: &str) {
         };
     }
 
-    sync_audio_graph();
+    broadcast_state_change();
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
@@ -346,7 +346,7 @@ pub fn add_new_track(track_type: TrackType) -> Result<(), String> {
         app.add_new_track(track_type);
         log::info!("[add_new_track] successfully add new track")
     }
-    sync_audio_graph();
+    broadcast_state_change();
     Ok(())
 }
 

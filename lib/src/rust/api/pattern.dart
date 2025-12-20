@@ -42,6 +42,18 @@ Future<UiNote> resizeNote({
   newDuration: newDuration,
 );
 
+Future<UiNote> moveNote({
+  required int patternId,
+  required int index,
+  required int newStartTick,
+  required int newKey,
+}) => RustLib.instance.api.crateApiPatternMoveNote(
+  patternId: patternId,
+  index: index,
+  newStartTick: newStartTick,
+  newKey: newKey,
+);
+
 Future<UiNote> changeNoteParams({
   required int patternId,
   required int noteIndex,

@@ -182,7 +182,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   // Helper for correct Note Names
   String _getNoteName(int midiKey) {
     const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    final octave = (midiKey / 12).floor() - 1;
+    final octave = (midiKey / 12).floor();
     final name = names[midiKey % 12];
     return "$name$octave";
   }

@@ -79,3 +79,46 @@ pub fn create_position_stream(sink: StreamSink<PlaybackPosition>) -> Result<(), 
     });
     Ok(())
 }
+
+/// play preview sound when drawing note or pressing the piano tile on the UI
+pub fn play_preview_note(
+    track_id: u32,
+    note_key: i32,
+    velocity: i32,
+    is_on: bool,
+) -> Result<(), String> {
+    // validate input
+    if note_key < 0 || note_key > 127 {
+        return Err("Note key must be between 0 and 127".to_string());
+    }
+
+    if velocity < 0 || note_key > 100 {
+        return Err("Note velocity must be between 0 and 100".to_string());
+    }
+
+    let note_key: u8 = note_key as u8;
+
+    let velocity: u8 = velocity as u8;
+
+    let generator_id = {
+        let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+        let track = app
+            .tracks
+            .get(&track_id)
+            .ok_or("Can't find requested track")?;
+        track.generator.as_ref().ok_or("Track has no generator")?.id
+    };
+
+    if let Ok(mut command_guard) = COMMAND_SENDER.lock() {
+        if let Some(sender) = command_guard.as_mut() {
+            let _ = sender.push(AudioCommand::PlayPreviewNote {
+                note_key: note_key,
+                generator_id,
+                velocity,
+                is_note_on: is_on,
+            });
+        }
+    }
+
+    Ok(())
+}

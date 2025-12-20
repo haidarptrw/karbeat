@@ -133,22 +133,27 @@ impl AudioEngine {
             if self.playhead_samples > self.current_state.graph.max_sample_index {
                 self.stop_playback();
             } else {
-                // A. Schedule Events (MIDI / Audio Clips)
+                // Schedule Events (MIDI / Audio Clips)
                 self.resolve_sequencer_events(frame_count);
 
-                // B. Render Active Voices
+                // Render Active Voices
                 self.render_voices_to_buffer(output_buffer, channels);
 
-                // C. Advance Playhead
+                // Advance Playhead
                 self.playhead_samples += frame_count as u64;
                 self.recalculate_beat_bar();
                 self.emit_playback_position();
 
-                // D. Cleanup
+                // Cleanup
                 self.cleanup_finished_voices();
             }
         } else {
-            // Not playing? Emit static position for UI sync
+            self.render_voices_to_buffer(output_buffer, channels);
+            
+            // Clean up audio voices (oneshots), keep generator voices active if they have pending audio tail
+            // For now, we reuse standard cleanup
+            self.cleanup_finished_voices();
+            
             self.emit_static_position();
         }
 
@@ -178,6 +183,18 @@ impl AudioEngine {
                 self.recalculate_beat_bar();
                 self.last_emitted_samples = self.playhead_samples;
                 self.emit_static_position(); // Snap UI immediately
+            }
+            AudioCommand::PlayPreviewNote {
+                note_key,
+                generator_id,
+                velocity,
+                is_note_on,
+            } => {
+                // this should push preview voice in the shape of note pressed connected to generator.
+                // e.g Note placing on piano roll, hold press from a keyboard,
+                // or a press at the piano tile on the left of piano roll screen
+                // it also requires the logic to handle input based on the ADSR of the voice generator
+                self.trigger_live_note(generator_id, note_key, velocity, is_note_on);
             }
         }
     }
@@ -252,6 +269,47 @@ impl AudioEngine {
                 if let Voice::Generator(g) = v {
                     g.events.clear();
                 }
+            }
+        }
+    }
+
+    fn trigger_live_note(&mut self, generator_id: u32, key: u8, velocity: u8, is_on: bool) {
+        let target_info = self.current_state.graph.tracks.iter().find_map(|t| {
+            if let Some(gen) = &t.generator {
+                if gen.id == generator_id {
+                    return Some((t.target_mixer_channel_id, gen.clone()));
+                }
+            }
+            None
+        });
+
+        if let Some((mixer_id, gen_instance)) = target_info {
+            // Ensure the voice is active (even if Transport is stopped)
+            // This creates the voice if it doesn't exist.
+            if let Some(voice_idx) = self.ensure_generator_voice(mixer_id, &gen_instance) {
+                // Inject MIDI event
+                if let Some(voices) = self.active_voices.get_mut(&mixer_id) {
+                    if let Voice::Generator(gen_voice) = &mut voices[voice_idx] {
+                        let message = if is_on {
+                            MidiMessage::NoteOn { key, velocity }
+                        } else {
+                            MidiMessage::NoteOff { key }
+                        };
+
+                        gen_voice.events.push(MidiEvent {
+                            sample_offset: 0,
+                            data: message,
+                        });
+
+                        // Keep voice alive for processing even if track is empty
+                        gen_voice.active = true;
+                    }
+                }
+            } else {
+                log::warn!(
+                    "PlayPreviewNote: Generator ID {} not found in active graph",
+                    generator_id
+                );
             }
         }
     }

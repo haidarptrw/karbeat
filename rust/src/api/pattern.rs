@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    APP_STATE, core::project::{Note, Pattern}, sync_audio_graph
+    APP_STATE, broadcast_state_change, core::project::{Note, Pattern}, sync_audio_graph
 };
 
 pub struct UiPattern {
@@ -114,7 +114,7 @@ pub fn add_note(
                 .to_owned(),
         )?,
     );
-    sync_audio_graph();
+    broadcast_state_change();
     Ok(note_ui)
 }
 
@@ -131,7 +131,7 @@ pub fn delete_note(pattern_id: u32, index: usize) -> Result<UiNote, String> {
     };
 
     let note_ui = UiNote::from(&note);
-    sync_audio_graph();
+    broadcast_state_change();
     Ok(note_ui)
 }
 
@@ -156,8 +156,27 @@ pub fn resize_note(
     // drop lock here so that broadcast state change can access the APP_STATE
     drop(app);
 
-    sync_audio_graph();
+    broadcast_state_change();
     Ok(note_ui)
+}
+
+pub fn move_note(
+    pattern_id: u32,
+    index: usize,
+    new_start_tick: u64,
+    new_key: u32
+) -> Result<UiNote, String>{
+    if new_key > 127 { return Err("Invalid key".to_string()); }
+
+    let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+    let pattern_arc = app.pattern_pool.get_mut(&pattern_id).ok_or("Pattern not found")?;
+    let pattern = Arc::make_mut(pattern_arc);
+
+    let note = pattern.move_note(index, new_start_tick, new_key as u8).map_err(|e| format!("{}", e))?;
+    let ui_note = UiNote::from(note);
+    drop(app);
+    broadcast_state_change();
+    Ok(ui_note)
 }
 
 pub fn change_note_params(
@@ -188,7 +207,7 @@ pub fn change_note_params(
     // drop lock here so that broadcast state change can access the APP_STATE
     drop(app);
 
-    sync_audio_graph();
+    broadcast_state_change();
     Ok(note_ui)
 }
 
