@@ -1,5 +1,3 @@
-use std::any;
-
 use crate::core::project::{Note, Pattern};
 
 impl Pattern {
@@ -57,7 +55,11 @@ impl Pattern {
             return Err(anyhow::anyhow!("Note duration must be greater than 0"));
         }
 
+        let new_note_id = self.next_note_id;
+        self.next_note_id += 1;
+
         let note = Note {
+            id: new_note_id,
             start_tick,
             duration: duration_proper,
             key,

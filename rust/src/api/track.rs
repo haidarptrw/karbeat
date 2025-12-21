@@ -75,7 +75,8 @@ pub fn create_clip(
                     id: new_pattern_id,
                     name: format!("Pattern {}", new_pattern_id),
                     length_ticks: default_ticks,
-                    notes: Vec::new()
+                    notes: Vec::new(),
+                    next_note_id: 0,
                 });
 
                 app.pattern_pool.insert(new_pattern_id, pattern.clone());
@@ -85,7 +86,7 @@ pub fn create_clip(
                     name: pattern.name.clone(),
                     id: new_clip_id,
                     start_time: start_time as u64,
-                    source: KarbeatSource::Midi(pattern),
+                    source: KarbeatSource::Midi(new_pattern_id),
                     offset_start: 0,
                     loop_length: timeline_length,
                     source_id: new_pattern_id

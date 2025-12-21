@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/utils/logger.dart';
 import 'package:provider/provider.dart';
 
 class TimelinePlayheadSeeker extends StatefulWidget {
@@ -30,10 +31,6 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
 
   @override
   void dispose() {
-    print("[Flutter] TimelinePlayheadSeeker Disposed");
-    // If you are manually listening to a stream (StreamSubscription), you MUST cancel it here.
-    // Since you are using StreamBuilder, it handles unsubscription,
-    // causing the Rust 'sink.add' to fail, which is exactly what you are seeing.
     super.dispose();
   }
 

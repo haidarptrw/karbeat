@@ -1,7 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    APP_STATE, broadcast_state_change, core::project::{Note, Pattern}, sync_audio_graph
+    broadcast_state_change,
+    core::project::{Note, Pattern},
+    sync_audio_graph, APP_STATE,
 };
 
 pub struct UiPattern {
@@ -12,6 +14,7 @@ pub struct UiPattern {
     pub notes: Vec<UiNote>,
 }
 pub struct UiNote {
+    pub id: u32,
     pub start_tick: u64,
     pub duration: u64,
     pub key: u8, // 0 - 127 MIDI key
@@ -25,6 +28,7 @@ pub struct UiNote {
 impl From<&Note> for UiNote {
     fn from(n: &Note) -> Self {
         Self {
+            id: n.id,
             start_tick: n.start_tick,
             duration: n.duration,
             key: n.key,
@@ -118,7 +122,7 @@ pub fn add_note(
     Ok(note_ui)
 }
 
-pub fn delete_note(pattern_id: u32, index: usize) -> Result<UiNote, String> {
+pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
     let note: Note = {
         let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
         let pattern_arc = app
@@ -127,6 +131,11 @@ pub fn delete_note(pattern_id: u32, index: usize) -> Result<UiNote, String> {
             .ok_or("Cannot find the pattern".to_string())?;
         let pattern = Arc::make_mut(pattern_arc);
 
+        let index = pattern
+            .notes
+            .iter()
+            .position(|n| n.id == note_id)
+            .ok_or(format!("Note with ID {} not found", note_id))?;
         pattern.delete_note(index).map_err(|e| format!("{}", e))?
     };
 
@@ -135,11 +144,7 @@ pub fn delete_note(pattern_id: u32, index: usize) -> Result<UiNote, String> {
     Ok(note_ui)
 }
 
-pub fn resize_note(
-    pattern_id: u32,
-    note_index: usize,
-    new_duration: u64,
-) -> Result<UiNote, String> {
+pub fn resize_note(pattern_id: u32, note_id: u32, new_duration: u64) -> Result<UiNote, String> {
     let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
     let pattern_arc = app
         .pattern_pool
@@ -147,8 +152,14 @@ pub fn resize_note(
         .ok_or("Cannot find the pattern".to_string())?;
     let pattern = Arc::make_mut(pattern_arc);
 
+    let index = pattern
+        .notes
+        .iter()
+        .position(|n| n.id == note_id)
+        .ok_or(format!("Note with ID {} not found", note_id))?;
+
     let note = pattern
-        .resize_note(note_index, new_duration)
+        .resize_note(index, new_duration)
         .map_err(|e| format!("{}", e))?;
 
     let note_ui = UiNote::from(note);
@@ -162,17 +173,30 @@ pub fn resize_note(
 
 pub fn move_note(
     pattern_id: u32,
-    index: usize,
+    note_id: u32,
     new_start_tick: u64,
-    new_key: u32
-) -> Result<UiNote, String>{
-    if new_key > 127 { return Err("Invalid key".to_string()); }
+    new_key: u32,
+) -> Result<UiNote, String> {
+    if new_key > 127 {
+        return Err("Invalid key".to_string());
+    }
 
     let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
-    let pattern_arc = app.pattern_pool.get_mut(&pattern_id).ok_or("Pattern not found")?;
+    let pattern_arc = app
+        .pattern_pool
+        .get_mut(&pattern_id)
+        .ok_or("Pattern not found")?;
     let pattern = Arc::make_mut(pattern_arc);
 
-    let note = pattern.move_note(index, new_start_tick, new_key as u8).map_err(|e| format!("{}", e))?;
+    let index = pattern
+        .notes
+        .iter()
+        .position(|n| n.id == note_id)
+        .ok_or(format!("Note with ID {} not found", note_id))?;
+
+    let note = pattern
+        .move_note(index, new_start_tick, new_key as u8)
+        .map_err(|e| format!("{}", e))?;
     let ui_note = UiNote::from(note);
     drop(app);
     broadcast_state_change();
@@ -181,7 +205,7 @@ pub fn move_note(
 
 pub fn change_note_params(
     pattern_id: u32,
-    note_index: usize,
+    note_id: u32,
     velocity: Option<i64>,
     probability: Option<f32>,
     micro_offset: Option<i64>,
@@ -198,8 +222,14 @@ pub fn change_note_params(
         .ok_or("Cannot find the pattern".to_string())?;
     let pattern = Arc::make_mut(pattern_arc);
 
+    let index = pattern
+        .notes
+        .iter()
+        .position(|n| n.id == note_id)
+        .ok_or(format!("Note with ID {} not found", note_id))?;
+
     let note = pattern
-        .set_note_params(note_index, velocity, probability, micro_offset, mute)
+        .set_note_params(index, velocity, probability, micro_offset, mute)
         .map_err(|e| format!("{}", e))?;
 
     let note_ui = UiNote::from(note);

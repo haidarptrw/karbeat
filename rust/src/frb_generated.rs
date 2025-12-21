@@ -211,7 +211,7 @@ fn wire__crate__api__pattern__change_note_params_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
-            let api_note_index = <usize>::sse_decode(&mut deserializer);
+            let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_velocity = <Option<i64>>::sse_decode(&mut deserializer);
             let api_probability = <Option<f32>>::sse_decode(&mut deserializer);
             let api_micro_offset = <Option<i64>>::sse_decode(&mut deserializer);
@@ -221,7 +221,7 @@ fn wire__crate__api__pattern__change_note_params_impl(
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::pattern::change_note_params(
                         api_pattern_id,
-                        api_note_index,
+                        api_note_id,
                         api_velocity,
                         api_probability,
                         api_micro_offset,
@@ -367,11 +367,11 @@ fn wire__crate__api__pattern__delete_note_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
-            let api_index = <usize>::sse_decode(&mut deserializer);
+            let api_note_id = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::pattern::delete_note(api_pattern_id, api_index)?;
+                    let output_ok = crate::api::pattern::delete_note(api_pattern_id, api_note_id)?;
                     Ok(output_ok)
                 })())
             }
@@ -958,7 +958,7 @@ fn wire__crate__api__pattern__move_note_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
-            let api_index = <usize>::sse_decode(&mut deserializer);
+            let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_new_start_tick = <u64>::sse_decode(&mut deserializer);
             let api_new_key = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -966,7 +966,7 @@ fn wire__crate__api__pattern__move_note_impl(
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::pattern::move_note(
                         api_pattern_id,
-                        api_index,
+                        api_note_id,
                         api_new_start_tick,
                         api_new_key,
                     )?;
@@ -1116,14 +1116,14 @@ fn wire__crate__api__pattern__resize_note_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_pattern_id = <u32>::sse_decode(&mut deserializer);
-            let api_note_index = <usize>::sse_decode(&mut deserializer);
+            let api_note_id = <u32>::sse_decode(&mut deserializer);
             let api_new_duration = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::pattern::resize_note(
                         api_pattern_id,
-                        api_note_index,
+                        api_note_id,
                         api_new_duration,
                     )?;
                     Ok(output_ok)
@@ -1955,6 +1955,7 @@ impl SseDecode for crate::api::project::UiGeneratorInstance {
 impl SseDecode for crate::api::pattern::UiNote {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <u32>::sse_decode(deserializer);
         let mut var_startTick = <u64>::sse_decode(deserializer);
         let mut var_duration = <u64>::sse_decode(deserializer);
         let mut var_key = <u8>::sse_decode(deserializer);
@@ -1963,6 +1964,7 @@ impl SseDecode for crate::api::pattern::UiNote {
         let mut var_microOffset = <i8>::sse_decode(deserializer);
         let mut var_mute = <bool>::sse_decode(deserializer);
         return crate::api::pattern::UiNote {
+            id: var_id,
             start_tick: var_startTick,
             duration: var_duration,
             key: var_key,
@@ -2389,6 +2391,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::UiGeneratorInstance>
 impl flutter_rust_bridge::IntoDart for crate::api::pattern::UiNote {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.id.into_into_dart().into_dart(),
             self.start_tick.into_into_dart().into_dart(),
             self.duration.into_into_dart().into_dart(),
             self.key.into_into_dart().into_dart(),
@@ -3059,6 +3062,7 @@ impl SseEncode for crate::api::project::UiGeneratorInstance {
 impl SseEncode for crate::api::pattern::UiNote {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.id, serializer);
         <u64>::sse_encode(self.start_tick, serializer);
         <u64>::sse_encode(self.duration, serializer);
         <u8>::sse_encode(self.key, serializer);

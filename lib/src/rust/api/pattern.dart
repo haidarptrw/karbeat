@@ -26,44 +26,44 @@ Future<UiNote> addNote({
   duration: duration,
 );
 
-Future<UiNote> deleteNote({required int patternId, required int index}) =>
+Future<UiNote> deleteNote({required int patternId, required int noteId}) =>
     RustLib.instance.api.crateApiPatternDeleteNote(
       patternId: patternId,
-      index: index,
+      noteId: noteId,
     );
 
 Future<UiNote> resizeNote({
   required int patternId,
-  required int noteIndex,
+  required int noteId,
   required int newDuration,
 }) => RustLib.instance.api.crateApiPatternResizeNote(
   patternId: patternId,
-  noteIndex: noteIndex,
+  noteId: noteId,
   newDuration: newDuration,
 );
 
 Future<UiNote> moveNote({
   required int patternId,
-  required int index,
+  required int noteId,
   required int newStartTick,
   required int newKey,
 }) => RustLib.instance.api.crateApiPatternMoveNote(
   patternId: patternId,
-  index: index,
+  noteId: noteId,
   newStartTick: newStartTick,
   newKey: newKey,
 );
 
 Future<UiNote> changeNoteParams({
   required int patternId,
-  required int noteIndex,
+  required int noteId,
   int? velocity,
   double? probability,
   int? microOffset,
   bool? mute,
 }) => RustLib.instance.api.crateApiPatternChangeNoteParams(
   patternId: patternId,
-  noteIndex: noteIndex,
+  noteId: noteId,
   velocity: velocity,
   probability: probability,
   microOffset: microOffset,
@@ -71,6 +71,7 @@ Future<UiNote> changeNoteParams({
 );
 
 class UiNote {
+  final int id;
   final int startTick;
   final int duration;
   final int key;
@@ -80,6 +81,7 @@ class UiNote {
   final bool mute;
 
   const UiNote({
+    required this.id,
     required this.startTick,
     required this.duration,
     required this.key,
@@ -91,6 +93,7 @@ class UiNote {
 
   @override
   int get hashCode =>
+      id.hashCode ^
       startTick.hashCode ^
       duration.hashCode ^
       key.hashCode ^
@@ -104,6 +107,7 @@ class UiNote {
       identical(this, other) ||
       other is UiNote &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           startTick == other.startTick &&
           duration == other.duration &&
           key == other.key &&

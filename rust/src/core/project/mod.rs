@@ -116,7 +116,7 @@ pub enum KarbeatSource {
     /// Points to Generators paired with Patterns
     /// Each entry in the vector is a (GeneratorInstance, Pattern) pair.
     /// This allows a single clip to trigger multiple generators (layering) or just one.
-    Midi(Arc<Pattern>),
+    Midi(u32),
 
     /// Points to an Automation ID (Future implementation)
     Automation(u32),
@@ -198,10 +198,13 @@ pub struct Pattern {
     pub length_ticks: u64,
 
     pub notes: Vec<Note>,
+
+    pub next_note_id: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Note {
+    pub id: u32,
     pub start_tick: u64,
     pub duration: u64,
     pub key: u8, // 0 - 127 MIDI key

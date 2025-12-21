@@ -114,7 +114,14 @@ impl AudioEngine {
     pub fn process(&mut self, output_buffer: &mut [f32]) {
         // 1. Sync State
         if self.state_consumer.update() {
-            self.current_state = self.state_consumer.read().clone();
+            let new_state =  self.state_consumer.read().clone();
+
+            // Check if we switched from Playing -> Stopped via heavy update
+            if self.current_state.transport.is_playing && !new_state.transport.is_playing {
+                self.stop_all_active_generators();
+            }
+
+            self.current_state = new_state.clone();
         }
 
         // 2. Process Commands (Play, Stop, Seek)
@@ -149,11 +156,10 @@ impl AudioEngine {
             }
         } else {
             self.render_voices_to_buffer(output_buffer, channels);
-            
+
             // Clean up audio voices (oneshots), keep generator voices active if they have pending audio tail
-            // For now, we reuse standard cleanup
             self.cleanup_finished_voices();
-            
+
             self.emit_static_position();
         }
 
@@ -162,11 +168,25 @@ impl AudioEngine {
     }
 
     fn stop_playback(&mut self) {
-        // We can't modify `current_state` directly if it's supposed to be read-only from `state_consumer`.
-        // Ideally, we send a "Stop" event back to the main thread via a producer.
-        // For now, we locally stop processing.
-        // self.current_state.transport.is_playing = false; // This is a local override only
         self.reset_playhead();
+    }
+
+    fn stop_all_active_generators(&mut self) {
+        for voices in self.active_voices.values_mut() {
+            for voice in voices.iter_mut() {
+                if let Voice::Generator(gen_voice) = voice {
+                    if let Ok(mut guard) = gen_voice.generator.lock() {
+                        if let KarbeatPlugin::Generator(gen) = &mut *guard {
+                            // Reset the plugin to kill all internal voices/envelopes
+                            gen.reset();
+                        }
+                    }
+                    // Clear any pending MIDI events that might have been queued
+                    gen_voice.events.clear();
+                }
+            }
+        }
+        self.preview_voices.clear();
     }
 
     fn process_command(&mut self, cmd: AudioCommand) {
@@ -439,6 +459,7 @@ impl AudioEngine {
         let start_time = self.playhead_samples;
         let end_time = start_time + buffer_size as u64;
 
+        // Use the tracks from the current audio graph state
         let tracks = self.current_state.graph.tracks.clone();
 
         for track in tracks {
@@ -481,21 +502,26 @@ impl AudioEngine {
                         self.sample_rate,
                     );
                 }
-                KarbeatSource::Midi(pattern) => {
-                    if let Some(idx) = gen_voice_idx {
-                        if let Some(voices) =
-                            self.active_voices.get_mut(&track.target_mixer_channel_id)
-                        {
-                            if let Voice::Generator(ref mut gen_voice) = voices[idx] {
-                                Self::schedule_midi_events(
-                                    &mut gen_voice.events,
-                                    self.sample_rate,
-                                    self.current_state.transport.bpm,
-                                    clip,
-                                    pattern,
-                                    start_time,
-                                    end_time,
-                                );
+                KarbeatSource::Midi(id) => {
+                    // Look up the FRESH pattern from the pool using the ID.
+                    let fresh_pattern = self.current_state.graph.patterns.get(&id);
+
+                    if let Some(pattern) = fresh_pattern {
+                        if let Some(idx) = gen_voice_idx {
+                            if let Some(voices) =
+                                self.active_voices.get_mut(&track.target_mixer_channel_id)
+                            {
+                                if let Voice::Generator(ref mut gen_voice) = voices[idx] {
+                                    Self::schedule_midi_events(
+                                        &mut gen_voice.events,
+                                        self.sample_rate,
+                                        self.current_state.transport.bpm,
+                                        clip,
+                                        pattern, // Use the fresh pattern here
+                                        start_time,
+                                        end_time,
+                                    );
+                                }
                             }
                         }
                     }
@@ -524,6 +550,19 @@ impl AudioEngine {
         if let crate::core::project::GeneratorInstanceType::Plugin(p) = &gen_instance.instance_type
         {
             if let Some(plugin_arc) = &p.instance {
+                if let Ok(mut guard) = plugin_arc.lock() {
+                    if let KarbeatPlugin::Generator(gen) = &mut *guard {
+                        // Use buffer size from current state, fallback to 512 if not set
+                        let buf_size = if self.current_state.graph.buffer_size > 0 {
+                            self.current_state.graph.buffer_size
+                        } else {
+                            512
+                        };
+
+                        gen.prepare(self.sample_rate as f32, buf_size);
+                    }
+                }
+
                 voices.push(Voice::Generator(GeneratorVoice {
                     id: gen_instance.id,
                     generator: plugin_arc.clone(),

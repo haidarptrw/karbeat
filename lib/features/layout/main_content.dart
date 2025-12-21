@@ -35,48 +35,45 @@ class MainContent extends StatelessWidget {
                   case WorkspaceView.source:
                     return const SourceListScreen();
                   case WorkspaceView.pianoRoll:
-                    return Selector<KarbeatState, int?>(
+                    return Selector<KarbeatState, (int?, int?)?>(
                       selector: (_, state) {
-                        // Get Selected Clip ID
+                        // 1. Get Selected IDs
                         final clipId = state.sessionState?.selectedClipId;
                         final trackId = state.sessionState?.selectedTrackId;
+
                         if (clipId == null || trackId == null) return null;
 
-                        // Find the Clip object (Iterate tracks)
+                        // 2. Find the Track
                         final track = state.tracks[trackId];
-                        if (track == null) {
-                          for (final track in state.tracks.values) {
-                            for (final clip in track.clips) {
-                              if (clip.id == clipId) {
-                                if (clip.source case UiClipSource_Midi(
-                                  :final patternId,
-                                )) {
-                                  return patternId;
-                                }
-                                // Selected clip exists but isn't MIDI (e.g. Audio)
-                                return null;
-                              }
+                        if (track == null) return null;
+
+                        // 3. Find the Clip inside the Track
+                        for (final clip in track.clips) {
+                          if (clip.id == clipId) {
+                            // 4. Check if it's MIDI and get Pattern ID
+                            if (clip.source case UiClipSource_Midi(
+                              :final patternId,
+                            )) {
+                              // Return Tuple: (PatternID, TrackID)
+                              return (patternId, trackId);
                             }
-                          }
-                        } else {
-                          for (final clip in track.clips) {
-                            if (clip.id == clipId) {
-                              if (clip.source case UiClipSource_Midi(
-                                :final patternId,
-                              )) {
-                                return patternId;
-                              }
-                              // Selected clip exists but isn't MIDI (e.g. Audio)
-                              return null;
-                            }
+                            return null; // Selected clip is not MIDI (e.g. Audio)
                           }
                         }
-
-                        return null; // Clip not found
+                        return null; // Clip not found in track
                       },
-                      builder: (context, patternId, _) {
-                        KarbeatLogger.info("Opening piano roll for pattern id $patternId");
-                        return PianoRollScreen(patternId: patternId);
+                      builder: (context, selectionData, _) {
+                        final patternId = selectionData?.$1;
+                        final trackId = selectionData?.$2;
+
+                        KarbeatLogger.info(
+                          "Opening piano roll for pattern: $patternId on track: $trackId",
+                        );
+
+                        return PianoRollScreen(
+                          patternId: patternId,
+                          parentTrackId: trackId,
+                        );
                       },
                     );
                   default:

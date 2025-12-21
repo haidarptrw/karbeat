@@ -103,7 +103,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<UiNote> crateApiPatternChangeNoteParams({
     required int patternId,
-    required int noteIndex,
+    required int noteId,
     int? velocity,
     double? probability,
     int? microOffset,
@@ -126,7 +126,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<UiNote> crateApiPatternDeleteNote({
     required int patternId,
-    required int index,
+    required int noteId,
   });
 
   Future<void> crateApiSessionDeselectClip();
@@ -173,7 +173,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<UiNote> crateApiPatternMoveNote({
     required int patternId,
-    required int index,
+    required int noteId,
     required int newStartTick,
     required int newKey,
   });
@@ -196,7 +196,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<UiNote> crateApiPatternResizeNote({
     required int patternId,
-    required int noteIndex,
+    required int noteId,
     required int newDuration,
   });
 
@@ -355,7 +355,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<UiNote> crateApiPatternChangeNoteParams({
     required int patternId,
-    required int noteIndex,
+    required int noteId,
     int? velocity,
     double? probability,
     int? microOffset,
@@ -366,7 +366,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(patternId, serializer);
-          sse_encode_CastedPrimitive_usize(noteIndex, serializer);
+          sse_encode_u_32(noteId, serializer);
           sse_encode_opt_CastedPrimitive_i_64(velocity, serializer);
           sse_encode_opt_box_autoadd_f_32(probability, serializer);
           sse_encode_opt_CastedPrimitive_i_64(microOffset, serializer);
@@ -385,7 +385,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         constMeta: kCrateApiPatternChangeNoteParamsConstMeta,
         argValues: [
           patternId,
-          noteIndex,
+          noteId,
           velocity,
           probability,
           microOffset,
@@ -401,7 +401,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "change_note_params",
         argNames: [
           "patternId",
-          "noteIndex",
+          "noteId",
           "velocity",
           "probability",
           "microOffset",
@@ -519,14 +519,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<UiNote> crateApiPatternDeleteNote({
     required int patternId,
-    required int index,
+    required int noteId,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(patternId, serializer);
-          sse_encode_CastedPrimitive_usize(index, serializer);
+          sse_encode_u_32(noteId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -539,7 +539,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPatternDeleteNoteConstMeta,
-        argValues: [patternId, index],
+        argValues: [patternId, noteId],
         apiImpl: this,
       ),
     );
@@ -547,7 +547,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiPatternDeleteNoteConstMeta => const TaskConstMeta(
     debugName: "delete_note",
-    argNames: ["patternId", "index"],
+    argNames: ["patternId", "noteId"],
   );
 
   @override
@@ -1026,7 +1026,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<UiNote> crateApiPatternMoveNote({
     required int patternId,
-    required int index,
+    required int noteId,
     required int newStartTick,
     required int newKey,
   }) {
@@ -1035,7 +1035,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(patternId, serializer);
-          sse_encode_CastedPrimitive_usize(index, serializer);
+          sse_encode_u_32(noteId, serializer);
           sse_encode_CastedPrimitive_u_64(newStartTick, serializer);
           sse_encode_u_32(newKey, serializer);
           pdeCallFfi(
@@ -1050,7 +1050,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPatternMoveNoteConstMeta,
-        argValues: [patternId, index, newStartTick, newKey],
+        argValues: [patternId, noteId, newStartTick, newKey],
         apiImpl: this,
       ),
     );
@@ -1058,7 +1058,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiPatternMoveNoteConstMeta => const TaskConstMeta(
     debugName: "move_note",
-    argNames: ["patternId", "index", "newStartTick", "newKey"],
+    argNames: ["patternId", "noteId", "newStartTick", "newKey"],
   );
 
   @override
@@ -1169,7 +1169,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<UiNote> crateApiPatternResizeNote({
     required int patternId,
-    required int noteIndex,
+    required int noteId,
     required int newDuration,
   }) {
     return handler.executeNormal(
@@ -1177,7 +1177,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(patternId, serializer);
-          sse_encode_CastedPrimitive_usize(noteIndex, serializer);
+          sse_encode_u_32(noteId, serializer);
           sse_encode_CastedPrimitive_u_64(newDuration, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -1191,7 +1191,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPatternResizeNoteConstMeta,
-        argValues: [patternId, noteIndex, newDuration],
+        argValues: [patternId, noteId, newDuration],
         apiImpl: this,
       ),
     );
@@ -1199,7 +1199,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiPatternResizeNoteConstMeta => const TaskConstMeta(
     debugName: "resize_note",
-    argNames: ["patternId", "noteIndex", "newDuration"],
+    argNames: ["patternId", "noteId", "newDuration"],
   );
 
   @override
@@ -1890,16 +1890,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiNote dco_decode_ui_note(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return UiNote(
-      startTick: dco_decode_CastedPrimitive_u_64(arr[0]),
-      duration: dco_decode_CastedPrimitive_u_64(arr[1]),
-      key: dco_decode_u_8(arr[2]),
-      velocity: dco_decode_u_8(arr[3]),
-      probability: dco_decode_f_32(arr[4]),
-      microOffset: dco_decode_i_8(arr[5]),
-      mute: dco_decode_bool(arr[6]),
+      id: dco_decode_u_32(arr[0]),
+      startTick: dco_decode_CastedPrimitive_u_64(arr[1]),
+      duration: dco_decode_CastedPrimitive_u_64(arr[2]),
+      key: dco_decode_u_8(arr[3]),
+      velocity: dco_decode_u_8(arr[4]),
+      probability: dco_decode_f_32(arr[5]),
+      microOffset: dco_decode_i_8(arr[6]),
+      mute: dco_decode_bool(arr[7]),
     );
   }
 
@@ -2649,6 +2650,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   UiNote sse_decode_ui_note(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
     var var_startTick = sse_decode_CastedPrimitive_u_64(deserializer);
     var var_duration = sse_decode_CastedPrimitive_u_64(deserializer);
     var var_key = sse_decode_u_8(deserializer);
@@ -2657,6 +2659,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_microOffset = sse_decode_i_8(deserializer);
     var var_mute = sse_decode_bool(deserializer);
     return UiNote(
+      id: var_id,
       startTick: var_startTick,
       duration: var_duration,
       key: var_key,
@@ -3354,6 +3357,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_ui_note(UiNote self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
     sse_encode_CastedPrimitive_u_64(self.startTick, serializer);
     sse_encode_CastedPrimitive_u_64(self.duration, serializer);
     sse_encode_u_8(self.key, serializer);

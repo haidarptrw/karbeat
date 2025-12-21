@@ -534,10 +534,10 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> deletePatternNote({
     required int patternId,
-    required int index,
+    required int noteId,
   }) async {
     try {
-      await deleteNote(patternId: patternId, index: index);
+      await deleteNote(patternId: patternId, noteId: noteId);
       notifyBackendChange(ProjectEvent.patternChanged);
     } catch (e) {
       KarbeatLogger.error("Error deleting note: $e");
@@ -546,14 +546,14 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> movePatternNote({
     required int patternId,
-    required int index,
+    required int noteId,
     required int newStartTick,
     required int newKey,
   }) async {
     try {
       await moveNote(
         patternId: patternId,
-        index: index,
+        noteId: noteId,
         newStartTick: newStartTick,
         newKey: newKey,
       );
@@ -565,13 +565,13 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> resizePatternNote({
     required int patternId,
-    required int index,
+    required int noteId,
     required int newDuration,
   }) async {
     try {
       await resizeNote(
         patternId: patternId,
-        noteIndex: index,
+        noteId: noteId,
         newDuration: newDuration,
       );
       notifyBackendChange(ProjectEvent.patternChanged);
