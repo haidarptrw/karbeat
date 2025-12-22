@@ -38,3 +38,13 @@ pub fn set_looping(val: bool) -> Result<(), String> {
     // sync_transport();
     Ok(())
 }
+
+pub fn set_bpm(val: f32) -> Result<(), String> {
+    {
+        let mut app = APP_STATE.write().map_err(|e| format!("POISON ERROR: {}", e))?;
+        app.transport.bpm = val;
+    }
+
+    broadcast_state_change();
+    Ok(())
+}

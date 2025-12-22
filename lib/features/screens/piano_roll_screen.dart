@@ -1,6 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:karbeat/features/components/virtual_keyboard.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
@@ -26,10 +28,54 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   final double _keyWidth = 60.0;
   double _zoomX = 0.5;
 
+  int _gridDenom = 4;
+
   late LinkedScrollControllerGroup _verticalControllers;
   late ScrollController _keysController;
   late ScrollController _gridVerticalController;
   late ScrollController _gridHorizontalController;
+
+  // Track active notes for Keyboard visualization
+  final Set<int> _activeKeyboardNotes = {};
+
+  // Standard DAW Keyboard Mapping (Z=C3)
+  static final Map<PhysicalKeyboardKey, int> _keyMap = {
+    PhysicalKeyboardKey.keyZ: 48, // C4
+    PhysicalKeyboardKey.keyS: 49,
+    PhysicalKeyboardKey.keyX: 50,
+    PhysicalKeyboardKey.keyD: 51,
+    PhysicalKeyboardKey.keyC: 52,
+    PhysicalKeyboardKey.keyV: 53,
+    PhysicalKeyboardKey.keyG: 54,
+    PhysicalKeyboardKey.keyB: 55,
+    PhysicalKeyboardKey.keyH: 56,
+    PhysicalKeyboardKey.keyN: 57,
+    PhysicalKeyboardKey.keyJ: 58,
+    PhysicalKeyboardKey.keyM: 59,
+    PhysicalKeyboardKey.comma: 60, // C5
+    // Upper row (Q=C4)
+    PhysicalKeyboardKey.keyQ: 60,
+    PhysicalKeyboardKey.digit2: 61,
+    PhysicalKeyboardKey.keyW: 62,
+    PhysicalKeyboardKey.digit3: 63,
+    PhysicalKeyboardKey.keyE: 64,
+    PhysicalKeyboardKey.keyR: 65,
+    PhysicalKeyboardKey.digit5: 66,
+    PhysicalKeyboardKey.keyT: 67,
+    PhysicalKeyboardKey.digit6: 68,
+    PhysicalKeyboardKey.keyY: 69,
+    PhysicalKeyboardKey.digit7: 70,
+    PhysicalKeyboardKey.keyU: 71,
+    // C6
+    PhysicalKeyboardKey.keyI: 72,
+    PhysicalKeyboardKey.digit9: 73,
+    PhysicalKeyboardKey.keyO: 74,
+    PhysicalKeyboardKey.digit0: 75,
+    PhysicalKeyboardKey.keyP: 76,
+    PhysicalKeyboardKey.bracketLeft: 77,
+    PhysicalKeyboardKey.equal: 78,
+    PhysicalKeyboardKey.bracketRight: 79
+  };
 
   @override
   void initState() {
@@ -53,10 +99,34 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     super.dispose();
   }
 
+  void _handleNoteOn(int note) {
+    if (widget.parentTrackId != null) {
+      context.read<KarbeatState>().previewNote(
+        trackId: widget.parentTrackId!,
+        noteKey: note,
+        isOn: true,
+      );
+    }
+  }
+
+  void _handleNoteOff(int note) {
+    if (widget.parentTrackId != null) {
+      context.read<KarbeatState>().previewNote(
+        trackId: widget.parentTrackId!,
+        noteKey: note,
+        isOn: false,
+      );
+    }
+  }
+
   void _handleAddNote(TapDownDetails details, int patternId) {
+    final state = context.read<KarbeatState>();
+    if (state.selectedTool == ToolSelection.delete) return;
+
     double offsetX = details.localPosition.dx;
     int tick = (offsetX / _zoomX).round();
-    int snap = 240; // snap to grid (240 ticks)
+
+    int snap = _getSnapTicks();
     tick = (tick / snap).round() * snap;
 
     // Calculate key
@@ -68,8 +138,18 @@ class PianoRollScreenState extends State<PianoRollScreen> {
       patternId: patternId,
       key: midiKey,
       startTick: tick,
-      duration: 480,
+      duration: snap,
     );
+  }
+
+  void _handleZoom(double scale) {
+    setState(() {
+      _zoomX = (_zoomX * scale).clamp(0.1, 5.0);
+    });
+  }
+
+  int _getSnapTicks() {
+    return (960.0 / 4.0 / _gridDenom).round();
   }
 
   @override
@@ -87,141 +167,174 @@ class PianoRollScreenState extends State<PianoRollScreen> {
       (s) => s.patterns[widget.patternId],
     );
 
+    // Also listen to selected tool for cursor updates on the grid
+    final selectedTool = context.select<KarbeatState, ToolSelection>(
+      (s) => s.selectedTool,
+    );
+
     if (pattern == null) {
       return const Center(
         child: Text("Pattern not found", style: TextStyle(color: Colors.white)),
       );
     }
 
-    return Column(
-      children: [
-        // ==== TOOLBAR ===
-        _PianoRollToolbar(
-          name: "Toolbar",
-          onZoomIn: () => setState(() => _zoomX *= 1.2),
-          onZoomOut: () => setState(() => _zoomX /= 1.2),
-        ),
+    return Focus(
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          final note = _keyMap[event.physicalKey];
+          if (note != null && !_activeKeyboardNotes.contains(note)) {
+            setState(() => _activeKeyboardNotes.add(note));
+            _handleNoteOn(note);
+            return KeyEventResult.handled;
+          }
+        } else if (event is KeyUpEvent) {
+          final note = _keyMap[event.physicalKey];
+          if (note != null) {
+            setState(() => _activeKeyboardNotes.remove(note));
+            _handleNoteOff(note);
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Column(
+        children: [
+          // ==== TOOLBAR ===
+          _PianoRollToolbar(
+            name: pattern.name,
+            onZoomIn: () => _handleZoom(1.2),
+            onZoomOut: () => _handleZoom(1 / 1.2),
+            gridDenom: _gridDenom,
+            onGridDenomChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _gridDenom = val;
+                });
+              }
+            },
+          ),
 
-        // === EDITOR AREA ===
-        Expanded(
-          child: Row(
-            children: [
-              // PIANO KEYS (Left)
-              SizedBox(
-                width: _keyWidth,
-                child: ListView.builder(
-                  controller: _keysController,
-                  itemCount: 128,
-                  itemExtent: _keyHeight,
-                  itemBuilder: (context, index) {
-                    // MIDI 127 is top, 0 is bottom. List index 0 is top.
-                    final midiKey = 127 - index;
-                    return _PianoKey(
-                      midiKey: midiKey,
-                      height: _keyHeight,
-                      onPlayNote: (isOn) {
-                        if (widget.parentTrackId != null) {
-                          context.read<KarbeatState>().previewNote(
-                            trackId: widget.parentTrackId!,
-                            noteKey: midiKey,
-                            isOn: isOn,
-                          );
-                        }
-                      },
-                    );
-                  },
-                ),
-              ),
-
-              // GRID & NOTES
-              Expanded(
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context).copyWith(
-                    scrollbars: true,
-                    dragDevices: {
-                      PointerDeviceKind.touch,
-                      PointerDeviceKind.mouse,
+          // === EDITOR AREA ===
+          Expanded(
+            child: Row(
+              children: [
+                // PIANO KEYS (Left)
+                SizedBox(
+                  width: _keyWidth,
+                  child: ListView.builder(
+                    controller: _keysController,
+                    itemCount: 128,
+                    itemExtent: _keyHeight,
+                    itemBuilder: (context, index) {
+                      // MIDI 127 is top, 0 is bottom. List index 0 is top.
+                      final midiKey = 127 - index;
+                      return _PianoKey(
+                        midiKey: midiKey,
+                        height: _keyHeight,
+                        onPlayNote: (isOn) {
+                          if (widget.parentTrackId != null) {
+                            context.read<KarbeatState>().previewNote(
+                              trackId: widget.parentTrackId!,
+                              noteKey: midiKey,
+                              isOn: isOn,
+                            );
+                          }
+                        },
+                      );
                     },
                   ),
-                  child: SingleChildScrollView(
-                    controller: _gridHorizontalController,
-                    scrollDirection: Axis.horizontal,
+                ),
+
+                // GRID & NOTES
+                Expanded(
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      scrollbars: true,
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                      },
+                    ),
                     child: SingleChildScrollView(
-                      controller: _gridVerticalController,
-                      scrollDirection: Axis.vertical,
-                      child: GestureDetector(
-                        onDoubleTapDown: (details) =>
-                            _handleAddNote(details, pattern.id),
-                        child: SizedBox(
-                          height: 128 * _keyHeight,
-                          width:
-                              pattern.lengthTicks * _zoomX +
-                              1000, // Approx width
-                          child: Stack(
-                            children: [
-                              // Grid background
-                              Positioned.fill(
-                                child: RepaintBoundary(
-                                  child: CustomPaint(
-                                    painter: _PianoGridPainter(
-                                      zoomX: _zoomX,
-                                      keyHeight: _keyHeight,
+                      controller: _gridHorizontalController,
+                      scrollDirection: Axis.horizontal,
+                      child: SingleChildScrollView(
+                        controller: _gridVerticalController,
+                        scrollDirection: Axis.vertical,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onDoubleTapDown: (details) =>
+                              _handleAddNote(details, pattern.id),
+                          child: MouseRegion(
+                            cursor: selectedTool == ToolSelection.draw
+                                ? SystemMouseCursors.copy
+                                : SystemMouseCursors.basic,
+                            child: SizedBox(
+                              height: 128 * _keyHeight,
+                              width:
+                                  pattern.lengthTicks * _zoomX +
+                                  1000, // Approx width
+                              child: Stack(
+                                children: [
+                                  // Grid background
+                                  Positioned.fill(
+                                    child: RepaintBoundary(
+                                      child: CustomPaint(
+                                        painter: _PianoGridPainter(
+                                          zoomX: _zoomX,
+                                          keyHeight: _keyHeight,
+                                          gridDenom: _gridDenom,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+
+                                  // LAYER B: Interactive Notes
+                                  ...pattern.notes.map((note) {
+                                    return _InteractiveNote(
+                                      // Use note ID as the Flutter Key for efficient diffing
+                                      key: ValueKey(note.id),
+                                      note: note,
+                                      noteId:
+                                          note.id, // Pass ID instead of Index
+                                      patternId: pattern.id,
+                                      trackId: widget.parentTrackId,
+                                      zoomX: _zoomX,
+                                      keyHeight: _keyHeight,
+                                      selectedTool: selectedTool,
+                                      snapTicks: _getSnapTicks(),
+                                    );
+                                  }),
+                                ],
                               ),
-                              // Notes
-                              // LAYER B: Interactive Notes
-                              // We use .asMap() to get the index, which is required
-                              // for the Rust API (resize_note/delete_note takes index)
-                              ...pattern.notes.map((note) {
-                                return _InteractiveNote(
-                                  // Use note ID as the Flutter Key for efficient diffing
-                                  key: ValueKey(note.id),
-                                  note: note,
-                                  noteId: note.id, // Pass ID instead of Index
-                                  patternId: pattern.id,
-                                  trackId: widget.parentTrackId,
-                                  zoomX: _zoomX,
-                                  keyHeight: _keyHeight,
-                                );
-                              }),
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
+              ],
+            ),
+          ),
+
+          // ========= VIRTUAL KEYBOARD ===========
+          SizedBox(
+            height: 120,
+            child: Container(
+              color: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: VirtualKeyboard(
+                startOctave: 4,
+                octaveCount: 2,
+                onNoteOn: _handleNoteOn,
+                onNoteOff: _handleNoteOff,
+                activeNotes: _activeKeyboardNotes,
               ),
-            ],
+            ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNoteWidget(UiNote note) {
-    final top = (127 - note.key) * _keyHeight;
-    final left = note.startTick * _zoomX;
-    final width = note.duration * _zoomX;
-
-    return Positioned(
-      top: top + 1,
-      left: left,
-      width: width < 5 ? 5 : width,
-      height: _keyHeight - 2,
-      child: GestureDetector(
-        onTap: () {
-          // Select note logic
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.pinkAccent,
-            borderRadius: BorderRadius.circular(2),
-            border: Border.all(color: Colors.white30),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -231,11 +344,15 @@ class _PianoRollToolbar extends StatelessWidget {
   final String name;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
+  final int gridDenom;
+  final ValueChanged<int?> onGridDenomChanged;
 
   const _PianoRollToolbar({
     required this.name,
     required this.onZoomIn,
     required this.onZoomOut,
+    required this.gridDenom,
+    required this.onGridDenomChanged,
   });
 
   @override
@@ -253,7 +370,7 @@ class _PianoRollToolbar extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 20),
           IconButton(
             icon: const Icon(Icons.zoom_in, color: Colors.white70),
             onPressed: onZoomIn,
@@ -261,6 +378,20 @@ class _PianoRollToolbar extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.zoom_out, color: Colors.white70),
             onPressed: onZoomOut,
+          ),
+          const SizedBox(width: 20),
+          DropdownButton<int>(
+            value: gridDenom,
+            dropdownColor: Colors.grey.shade800,
+            style: const TextStyle(color: Colors.white),
+            items: const [
+              DropdownMenuItem(value: 1, child: Text("1/1 Bar")),
+              DropdownMenuItem(value: 2, child: Text("1/2 Note")),
+              DropdownMenuItem(value: 4, child: Text("1/4 Beat")),
+              DropdownMenuItem(value: 8, child: Text("1/8 Note")),
+              DropdownMenuItem(value: 16, child: Text("1/16 Note")),
+            ],
+            onChanged: onGridDenomChanged,
           ),
         ],
       ),
@@ -351,6 +482,8 @@ class _InteractiveNote extends StatefulWidget {
   final int? trackId; // Optional: To preview note while dragging
   final double zoomX;
   final double keyHeight;
+  final ToolSelection selectedTool;
+  final int snapTicks;
 
   const _InteractiveNote({
     super.key,
@@ -360,6 +493,8 @@ class _InteractiveNote extends StatefulWidget {
     this.trackId,
     required this.zoomX,
     required this.keyHeight,
+    required this.selectedTool,
+    required this.snapTicks,
   });
 
   @override
@@ -399,17 +534,33 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
 
   @override
   Widget build(BuildContext context) {
+    // Determine cursor based on tool
+    MouseCursor cursor = SystemMouseCursors.click;
+    if (widget.selectedTool == ToolSelection.delete) {
+      cursor = SystemMouseCursors.basic; // Or a delete icon if available
+    } else if (_mode != _NoteDragMode.none) {
+      cursor = SystemMouseCursors.grabbing;
+    } else {
+      cursor = SystemMouseCursors.click;
+    }
+
     return Positioned(
       top: _localTop + 1,
       left: _localLeft,
       width: _localWidth < 5 ? 5 : _localWidth,
       height: widget.keyHeight - 2,
       child: MouseRegion(
-        cursor: _mode == _NoteDragMode.none
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.grabbing,
+        cursor: cursor,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (widget.selectedTool == ToolSelection.delete) {
+              context.read<KarbeatState>().deletePatternNote(
+                patternId: widget.patternId,
+                noteId: widget.noteId,
+              );
+            }
+          },
           onDoubleTap: () {
             context.read<KarbeatState>().deletePatternNote(
               patternId: widget.patternId,
@@ -417,6 +568,8 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
             );
           },
           onPanStart: (details) {
+            if (widget.selectedTool == ToolSelection.delete) return;
+
             final renderBox = context.findRenderObject() as RenderBox;
             final localPos = renderBox.globalToLocal(details.globalPosition);
 
@@ -444,14 +597,15 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
           },
 
           onPanUpdate: (details) {
+            if (_mode == _NoteDragMode.none) return;
             setState(() {
               if (_mode == _NoteDragMode.move) {
                 _localLeft += details.delta.dx;
                 _localTop += details.delta.dy;
 
                 // Visual snapping to Y grid (Key)
-                _localTop =
-                    (_localTop / widget.keyHeight).round() * widget.keyHeight;
+                // _localTop =
+                //     (_localTop / widget.keyHeight).round() * widget.keyHeight;
               } else if (_mode == _NoteDragMode.resizeRight) {
                 _localWidth += details.delta.dx;
                 if (_localWidth < 5) _localWidth = 5;
@@ -463,18 +617,23 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
             final state = context.read<KarbeatState>();
 
             if (widget.trackId != null) {
-              context.read<KarbeatState>().previewNote(
+              state.previewNote(
                 trackId: widget.trackId!,
                 noteKey: widget.note.key,
                 isOn: false,
               );
             }
 
+            int snap = widget.snapTicks;
+
             if (_mode == _NoteDragMode.move) {
               int keyIndex = (_localTop / widget.keyHeight).round();
               int newKey = (127 - keyIndex).clamp(0, 127);
 
-              int newStartTick = (_localLeft / widget.zoomX).round();
+              // snap time
+              int rawTick = (_localLeft / widget.zoomX).round();
+
+              int newStartTick = (rawTick / snap).round() * snap;
               if (newStartTick < 0) newStartTick = 0;
 
               state.movePatternNote(
@@ -484,8 +643,9 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
                 newKey: newKey,
               );
             } else if (_mode == _NoteDragMode.resizeRight) {
-              int newDuration = (_localWidth / widget.zoomX).round();
-              if (newDuration < 10) newDuration = 10;
+              int rawDuration = (_localWidth / widget.zoomX).round();
+              int newDuration = (rawDuration / snap).round() * snap;
+              if (newDuration < 10) newDuration = snap;
 
               state.resizePatternNote(
                 patternId: widget.patternId,
@@ -495,8 +655,9 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
             }
             setState(() {
               _mode = _NoteDragMode.none;
-              _localTop =
-                  (_localTop / widget.keyHeight).round() * widget.keyHeight;
+              // Snap visual state immediately to grid so it looks clean
+              // _localTop =
+              //     (_localTop / widget.keyHeight).round() * widget.keyHeight;
             });
           },
           child: Container(
@@ -526,8 +687,13 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
 class _PianoGridPainter extends CustomPainter {
   final double zoomX;
   final double keyHeight;
+  final int gridDenom;
 
-  _PianoGridPainter({required this.zoomX, required this.keyHeight});
+  _PianoGridPainter({
+    required this.zoomX,
+    required this.keyHeight,
+    required this.gridDenom,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -540,22 +706,48 @@ class _PianoGridPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
 
-    // Vertical Lines (Beats)
-    // 960 ticks = 1 beat
-    final ticksPerBeat = 960 * zoomX;
-    final double pixelsPerBeat = ticksPerBeat * zoomX;
+    // Vertical Lines (Grid)
+    // 960 ticks = 1 Beat (1/4 Note)
+    // Ticks per grid line:
+    double ticksPerGrid = 960.0 * 4.0 / gridDenom;
+    double pixelsPerGrid = ticksPerGrid * zoomX;
 
-    if (pixelsPerBeat < 2) return;
+    if (pixelsPerGrid < 4) return;
 
-    for (double x = 0; x < size.width; x += pixelsPerBeat) {
-      int beatIndex = (x / pixelsPerBeat).round();
-      paint.color = (beatIndex % 4 == 0)
-          ? Colors.white24
-          : Colors.white10; // Bar vs Beat
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    double currentX = 0;
+    int gridIndex = 0;
+
+    while (currentX < size.width) {
+      // Determine line strength
+      // Beat lines (every 1/4 note) are stronger
+      // Bar lines (every 4 beats) are strongest
+
+      bool isBeat = (gridIndex * ticksPerGrid) % 960.0 == 0;
+      bool isBar = (gridIndex * ticksPerGrid) % (960.0 * 4.0) == 0;
+
+      if (isBar) {
+        paint.color = Colors.white54;
+        paint.strokeWidth = 1.5;
+      } else if (isBeat) {
+        paint.color = Colors.white24;
+        paint.strokeWidth = 1.0;
+      } else {
+        paint.color = Colors.white10;
+        paint.strokeWidth = 0.5;
+      }
+
+      canvas.drawLine(
+        Offset(currentX, 0),
+        Offset(currentX, size.height),
+        paint,
+      );
+
+      currentX += pixelsPerGrid;
+      gridIndex++;
     }
   }
 
   @override
-  bool shouldRepaint(covariant _PianoGridPainter old) => old.zoomX != zoomX;
+  bool shouldRepaint(covariant _PianoGridPainter old) =>
+      old.zoomX != zoomX || old.gridDenom != gridDenom;
 }

@@ -216,6 +216,11 @@ impl AudioEngine {
                 // it also requires the logic to handle input based on the ADSR of the voice generator
                 self.trigger_live_note(generator_id, note_key, velocity, is_note_on);
             }
+            AudioCommand::SetBPM(bpm) => {
+                self.current_state.transport.bpm = bpm;
+                self.emit_current_playback_position();
+
+            },
         }
     }
 
@@ -252,7 +257,7 @@ impl AudioEngine {
             if !self.position_producer.is_full() {
                 let _ = self
                     .position_producer
-                    .push(self.build_position_struct(true));
+                    .push(self.build_position_struct(Some(true)));
             }
             self.last_emitted_samples = self.playhead_samples;
         }
@@ -262,11 +267,12 @@ impl AudioEngine {
         if !self.position_producer.is_full() {
             let _ = self
                 .position_producer
-                .push(self.build_position_struct(false));
+                .push(self.build_position_struct(Some(false)));
         }
     }
 
-    fn build_position_struct(&self, is_playing: bool) -> PlaybackPosition {
+    fn build_position_struct(&self, is_playing: Option<bool>) -> PlaybackPosition {
+        let is_playing = is_playing.unwrap_or(self.current_state.transport.is_playing);
         PlaybackPosition {
             samples: self.playhead_samples,
             beat: self.current_beat,
@@ -274,6 +280,20 @@ impl AudioEngine {
             tempo: self.current_state.transport.bpm,
             sample_rate: self.current_state.graph.sample_rate,
             is_playing,
+        }
+    }
+
+    fn emit_position_toggle_play(&mut self, is_playing:bool) {
+        if !self.position_producer.is_full() {
+            let _ =  self.position_producer.push(self.build_position_struct(Some(is_playing)));
+        }
+    }
+
+    fn emit_current_playback_position(&mut self) {
+        if !self.position_producer.is_full() {
+            let _ = self
+                .position_producer
+                .push(self.build_position_struct(None));
         }
     }
 
@@ -837,7 +857,6 @@ impl AudioEngine {
         buffer_start: u64,
         buffer_end: u64,
     ) {
-        // ... (Keep existing logic) ...
         let samples_per_beat = (60.0 / tempo * sample_rate as f32) as u64;
         if samples_per_beat == 0 {
             return;
@@ -850,14 +869,17 @@ impl AudioEngine {
         }
 
         // Calculate overlap
-        let relative_start = buffer_start.saturating_sub(clip.start_time);
-        let relative_end = buffer_end - clip.start_time;
+        // let relative_start = buffer_start.saturating_sub(clip.start_time);
+        // let relative_end = buffer_end - clip.start_time;
 
-        let loop_read_start = relative_start + clip.offset_start;
-        let loop_read_end = relative_end + clip.offset_start;
+        // let loop_read_start = relative_start + clip.offset_start;
+        // let loop_read_end = relative_end + clip.offset_start;
 
-        let start_iter = loop_read_start / pattern_len_samples;
-        let end_iter = loop_read_end / pattern_len_samples;
+        // let start_iter = loop_read_start / pattern_len_samples;
+        // let end_iter = loop_read_end / pattern_len_samples;
+
+        let start_iter = 0;
+        let end_iter = 0;
 
         for i in start_iter..=end_iter {
             let pattern_offset = i * pattern_len_samples;
@@ -869,6 +891,8 @@ impl AudioEngine {
                 let abs_start = clip.start_time + pattern_offset + note_start - clip.offset_start;
                 let abs_end = abs_start + note_dur;
 
+                if abs_start < clip.offset_start { continue; }
+                
                 if abs_start >= buffer_start && abs_start < buffer_end {
                     events.push(MidiEvent {
                         sample_offset: (abs_start - buffer_start) as usize,

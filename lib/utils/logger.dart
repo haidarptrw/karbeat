@@ -26,7 +26,7 @@ class KarbeatLogger {
     final fileInfo = stackTrace.substring(stackTrace.indexOf('package:'));
 
     dev.log(
-      "[$timestamp][$fileInfo] $message",
+      "[$timestamp   $fileInfo] $message",
       name: _mapLogTypeToString(logType),
     );
   }

@@ -96,6 +96,9 @@ class KarbeatState extends ChangeNotifier {
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
 
+  // ================== OTHER STATES ====================
+  bool _pendingPlayRequest = false;
+
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
     // Initialize it ONCE.
@@ -103,12 +106,32 @@ class KarbeatState extends ChangeNotifier {
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
-      if (pos.isPlaying != _transportState.isPlaying) {
-        // Update local TransportState
-        _transportState = _transportState.copyWith(isPlaying: pos.isPlaying);
+// FIX 2: If the engine reports "Playing", our request is fulfilled. Clear the flag.
+      if (pos.isPlaying) {
+        _pendingPlayRequest = false;
+      }
 
-        // Notify UI (Control Panel Play Button will toggle off)
+      // Only react if the state has actually changed
+      if (pos.isPlaying != _transportState.isPlaying) {
+        
+        // FIX 3: LATENCY GUARD
+        // If we just clicked Play (_pendingPlayRequest is true), but the stream 
+        // is still reporting "Stopped" (false), IGNORE IT. 
+        // This prevents the UI from flickering back to "Stop" immediately.
+        if (_pendingPlayRequest && !pos.isPlaying) {
+          return;
+        }
+
+        // Update UI
+        _transportState = _transportState.copyWith(isPlaying: pos.isPlaying);
         notifyListeners();
+
+        // FIX 4: BACKEND SYNC (Uncommented and Safe now)
+        // If the engine stopped itself (e.g. End of Song), we MUST tell the backend.
+        // We only do this if we are NOT waiting for a play start.
+        if (!pos.isPlaying) {
+           setPlaying(val: false); 
+        }
       }
     });
     syncTrackState();
@@ -331,10 +354,18 @@ class KarbeatState extends ChangeNotifier {
   Future<void> togglePlay() async {
     try {
       final newPlaying = !_transportState.isPlaying;
+
+      // FIX: Set the flag if we are attempting to play
+      if (newPlaying) {
+        _pendingPlayRequest = true;
+      }
+
       await setPlaying(val: newPlaying);
       notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
       log("Failed to toggle play: $e");
+      // Reset flag on error
+      _pendingPlayRequest = false;
     }
   }
 
@@ -507,7 +538,9 @@ class KarbeatState extends ChangeNotifier {
         velocity: velocity,
         isOn: isOn,
       );
-      KarbeatLogger.info("Play ${numToMidiKey(noteKey)} with generator from $trackId");
+      KarbeatLogger.info(
+        "Play ${numToMidiKey(noteKey)} with generator from $trackId",
+      );
     } catch (e) {
       KarbeatLogger.error("Error previewing note: $e");
     }

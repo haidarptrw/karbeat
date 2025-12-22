@@ -104,9 +104,15 @@ pub fn add_note(
             .ok_or("Cannot find the pattern".to_string())?;
         let pattern = Arc::make_mut(pattern_arc);
 
+        let duration = duration.unwrap_or(960);
+        let note_end = start_tick + duration;
+        if note_end > pattern.length_ticks {
+            pattern.length_ticks = note_end;
+        }
+
         Some(
             pattern
-                .add_note(key as u8, start_tick, duration)
+                .add_note(key as u8, start_tick, Some(duration))
                 .map_err(|e| format!("{}", e))?,
         )
     };
@@ -193,6 +199,14 @@ pub fn move_note(
         .iter()
         .position(|n| n.id == note_id)
         .ok_or(format!("Note with ID {} not found", note_id))?;
+
+    let duration = pattern.notes[index].duration;
+
+    // Auto-Expand Pattern Length ---
+    let note_end = new_start_tick + duration;
+    if note_end > pattern.length_ticks {
+        pattern.length_ticks = note_end;
+    }
 
     let note = pattern
         .move_note(index, new_start_tick, new_key as u8)
