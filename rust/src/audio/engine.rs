@@ -202,7 +202,7 @@ impl AudioEngine {
                 self.playhead_samples = samples as u64;
                 self.recalculate_beat_bar();
                 self.last_emitted_samples = self.playhead_samples;
-                self.emit_static_position(); // Snap UI immediately
+                self.emit_current_playback_position(); // Snap UI immediately
             }
             AudioCommand::PlayPreviewNote {
                 note_key,
@@ -283,6 +283,7 @@ impl AudioEngine {
         }
     }
 
+    #[allow(dead_code)]
     fn emit_position_toggle_play(&mut self, is_playing:bool) {
         if !self.position_producer.is_full() {
             let _ =  self.position_producer.push(self.build_position_struct(Some(is_playing)));

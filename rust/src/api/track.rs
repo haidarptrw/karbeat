@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    APP_STATE, broadcast_state_change, core::project::{Clip, KarbeatSource, Pattern, TrackType}
+    APP_STATE, api::project::{UiClip, UiTrack}, broadcast_state_change, core::project::{Clip, KarbeatSource, Pattern, TrackType}
 };
 
 pub enum UiSourceType {
@@ -260,4 +260,26 @@ pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), Strin
     }
     broadcast_state_change();
     Ok(())
+}
+
+pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
+    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    
+    let track = app.tracks.get(&track_id)
+        .ok_or(format!("Track {} not found", track_id))?;
+
+    let clip = track.clips.iter()
+        .find(|c| c.id == clip_id)
+        .ok_or(format!("Clip {} not found in track {}", clip_id, track_id))?;
+
+    Ok(UiClip::from(clip.as_ref()))
+}
+
+// Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
+pub fn get_track(track_id: u32) -> Result<UiTrack, String> {
+    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let track = app.tracks.get(&track_id)
+        .ok_or(format!("Track {} not found", track_id))?;
+    
+    Ok(UiTrack::from(track.as_ref()))
 }

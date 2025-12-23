@@ -22,7 +22,7 @@ class MidiClipPainter extends CustomPainter {
     if (pattern.notes.isEmpty) return;
 
     final paint = Paint()
-      ..color = color.withAlpha((0.9 * 255).round())
+      ..color = color.withAlpha((255).round())
       ..style = PaintingStyle.fill;
 
     const ticksPerBeat = 960.0;
@@ -32,16 +32,18 @@ class MidiClipPainter extends CustomPainter {
     final pixelsPerTick = samplesPerTick / zoomLevel;
 
     // Pitch mapping
-    int minKey = 0;
-    int maxKey = 127;
+    int minKey = 127; 
+    int maxKey = 0;
+    
     for (final note in pattern.notes) {
       if (note.key < minKey) minKey = note.key;
       if (note.key > maxKey) maxKey = note.key;
     }
 
     // Add padding
-    minKey = (minKey - 5).clamp(0, 127);
-    maxKey = (maxKey + 5).clamp(0, 127);
+    const padding = 2; 
+    minKey = (minKey - padding).clamp(0, 127);
+    maxKey = (maxKey + padding).clamp(0, 127);
     final keyRange = maxKey - minKey;
     final noteHeight = size.height / (keyRange > 0 ? keyRange : 12);
 
@@ -62,7 +64,7 @@ class MidiClipPainter extends CustomPainter {
       final rect = Rect.fromLTWH(
         left,
         top,
-        width < 1 ? 1 : width, // Ensure at least 1px width
+        width < 2 ? 2 : width, // Ensure at least 1px width
         noteHeight - 1, // -1 for spacing
       );
 

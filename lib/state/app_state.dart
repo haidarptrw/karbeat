@@ -317,6 +317,39 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Efficiently syncs a SINGLE pattern instead of the whole list
+  Future<void> syncPattern(int patternId) async {
+    try {
+      // 1. Fetch only the specific pattern from Rust
+      final updatedPattern = await getPattern(patternId: patternId);
+      
+      // 2. Update the local map without replacing the whole thing
+      // Creating a new map reference ensures Selectors in UI will trigger a rebuild
+      final newMap = Map<int, UiPattern>.from(_patterns);
+      newMap[patternId] = updatedPattern;
+      _patterns = newMap;
+      
+      notifyListeners();
+    } catch (e) {
+      log("Error syncing single pattern $patternId: $e");
+    }
+  }
+
+  /// Efficiently syncs a SINGLE track (and its clips)
+  Future<void> syncTrack(int trackId) async {
+    try {
+      final updatedTrack = await getTrack(trackId: trackId);
+      
+      final newMap = Map<int, UiTrack>.from(_tracks);
+      newMap[trackId] = updatedTrack;
+      _tracks = newMap;
+      
+      notifyListeners();
+    } catch (e) {
+      log("Error syncing single track $trackId: $e");
+    }
+  }
+
   /// Triggers a state refresh. Call this after any Rust API action.
   void notifyBackendChange(ProjectEvent event) {
     if (!_stateEventController.isClosed) {
@@ -458,10 +491,11 @@ class KarbeatState extends ChangeNotifier {
       // Call Rust API
       await trackApi.deleteClip(trackId: trackId, clipId: clipId);
       // State updates automatically via Broadcast -> Stream -> UI Rebuild
-      notifyBackendChange(ProjectEvent.tracksChanged);
+      // notifyBackendChange(ProjectEvent.tracksChanged);
+      await syncTrack(trackId);
     } catch (e) {
       log("Error deleting clip: $e");
-      await syncTrackState();
+      // await syncTrackState();
     }
   }
 
@@ -479,10 +513,10 @@ class KarbeatState extends ChangeNotifier {
         edge: edge,
         newTimeVal: newTime,
       );
-      notifyBackendChange(ProjectEvent.tracksChanged);
+      await syncTrack(trackId);
     } catch (e) {
       log("Error resizing clip: $e");
-      await syncTrackState();
+      // await syncTrackState();
     }
   }
 
@@ -499,10 +533,16 @@ class KarbeatState extends ChangeNotifier {
         newStartTime: newStartTime,
         newTrackId: newTrackId,
       );
-      notifyBackendChange(ProjectEvent.tracksChanged);
+      // notifyBackendChange(ProjectEvent.tracksChanged);
+
+      // Fetch the old track ID and new track ID
+      await syncTrack(trackId);
+      if (newTrackId != null && newTrackId != trackId) {
+        await syncTrack(newTrackId);
+      }
     } catch (e) {
       log("Error moving clip: $e");
-      await syncTrackState();
+      // await syncTrackState();
     }
   }
 
@@ -517,10 +557,10 @@ class KarbeatState extends ChangeNotifier {
         startTime: startTime,
       );
       KarbeatLogger.info("New empty pattern clip is successfully created");
-      notifyBackendChange(ProjectEvent.tracksChanged);
+      // notifyBackendChange(ProjectEvent.tracksChanged);
+      await syncTrack(trackId);
     } catch (e) {
       KarbeatLogger.error("Error when creating new empty pattern clip: $e");
-      await syncTrackState(); // rollback
     }
   }
 
@@ -559,7 +599,8 @@ class KarbeatState extends ChangeNotifier {
         startTick: startTick,
         duration: duration,
       );
-      notifyBackendChange(ProjectEvent.patternChanged);
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
     } catch (e) {
       KarbeatLogger.error("Error adding note: $e");
     }
@@ -569,11 +610,14 @@ class KarbeatState extends ChangeNotifier {
     required int patternId,
     required int noteId,
   }) async {
+    _applyOptimisticNoteDeletion(patternId, noteId);
     try {
       await deleteNote(patternId: patternId, noteId: noteId);
-      notifyBackendChange(ProjectEvent.patternChanged);
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
     } catch (e) {
       KarbeatLogger.error("Error deleting note: $e");
+      await syncPattern(patternId);
     }
   }
 
@@ -590,7 +634,8 @@ class KarbeatState extends ChangeNotifier {
         newStartTick: newStartTick,
         newKey: newKey,
       );
-      notifyBackendChange(ProjectEvent.patternChanged);
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
     } catch (e) {
       log("Error moving note: $e");
     }
@@ -607,12 +652,14 @@ class KarbeatState extends ChangeNotifier {
         noteId: noteId,
         newDuration: newDuration,
       );
-      notifyBackendChange(ProjectEvent.patternChanged);
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
     } catch (e) {
       log("Error resizing note: $e");
     }
   }
 
+  // ==================== OPTIMISTIC HELPERS =============================
   // Helper
   void _applyOptimisticResize(
     int trackId,
@@ -678,6 +725,29 @@ class KarbeatState extends ChangeNotifier {
     _tracks[trackId] = updatedTrack;
 
     notifyListeners(); // This prevents the "Flashback" when Stop is pressed
+  }
+
+  void _applyOptimisticNoteDeletion(int patternId, int noteId) {
+    final pattern = _patterns[patternId];
+    if (pattern == null) return;
+
+    // Filter out the specific note
+    final updatedNotes = pattern.notes.where((n) => n.id != noteId).toList();
+
+    // Create updated Pattern object
+    final updatedPattern = UiPattern(
+      id: pattern.id,
+      name: pattern.name,
+      lengthTicks: pattern.lengthTicks,
+      notes: updatedNotes,
+    );
+
+    // Update Store & Notify UI immediately
+    final newPatterns = Map<int, UiPattern>.from(_patterns);
+    newPatterns[patternId] = updatedPattern;
+    _patterns = newPatterns;
+    
+    notifyListeners();
   }
 
   // ============= PLACEMENT MODE LOGIC =================

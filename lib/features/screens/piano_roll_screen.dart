@@ -385,9 +385,9 @@ class _PianoRollToolbar extends StatelessWidget {
             dropdownColor: Colors.grey.shade800,
             style: const TextStyle(color: Colors.white),
             items: const [
-              DropdownMenuItem(value: 1, child: Text("1/1 Bar")),
+              DropdownMenuItem(value: 1, child: Text("1/1 Note")),
               DropdownMenuItem(value: 2, child: Text("1/2 Note")),
-              DropdownMenuItem(value: 4, child: Text("1/4 Beat")),
+              DropdownMenuItem(value: 4, child: Text("1/4 Note")),
               DropdownMenuItem(value: 8, child: Text("1/8 Note")),
               DropdownMenuItem(value: 16, child: Text("1/16 Note")),
             ],
