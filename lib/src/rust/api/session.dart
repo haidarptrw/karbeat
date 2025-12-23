@@ -14,3 +14,32 @@ Future<void> updateSelectedClip({required int trackId, required int clipId}) =>
 
 Future<void> deselectClip() =>
     RustLib.instance.api.crateApiSessionDeselectClip();
+
+Future<void> undo() => RustLib.instance.api.crateApiSessionUndo();
+
+Future<void> redo() => RustLib.instance.api.crateApiSessionRedo();
+
+Future<void> copyPatternNotes({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiSessionCopyPatternNotes(
+  patternId: patternId,
+  noteIds: noteIds,
+);
+
+Future<void> cutPatternNotes({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiSessionCutPatternNotes(
+  patternId: patternId,
+  noteIds: noteIds,
+);
+
+/// Paste: Reads clipboard, creates new notes, creates Batch Add action
+Future<void> pastePatternNotes({
+  required int targetPatternId,
+  required int playheadTick,
+}) => RustLib.instance.api.crateApiSessionPastePatternNotes(
+  targetPatternId: targetPatternId,
+  playheadTick: playheadTick,
+);

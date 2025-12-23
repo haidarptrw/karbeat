@@ -25,41 +25,45 @@ impl Pattern {
         refs
     }
 
+    /// - Generates a new unique ID (ensuring validity).
+    /// - Auto-expands pattern length if the note goes out of bounds.
+    /// - Sorts the notes.
+    pub fn insert_note(&mut self, mut note: Note) -> anyhow::Result<Note> {
+        // 1. Validation
+        if note.key > 127 {
+            return Err(anyhow::anyhow!("MIDI key must be 0-127, got {}", note.key));
+        }
+        if note.duration == 0 {
+            return Err(anyhow::anyhow!("Note duration must be > 0"));
+        }
+
+        // 2. Auto-expand Pattern (CUD Integrity)
+        let note_end = note.start_tick + note.duration;
+        if note_end > self.length_ticks {
+            self.length_ticks = note_end;
+        }
+
+        // 3. ID Generation (Critical for Validity)
+        note.id = self.next_note_id;
+        self.next_note_id += 1;
+
+        // 4. Push & Sort
+        self.notes.push(note.clone());
+        self.sort_notes_unstable();
+
+        Ok(note)
+    }
+
     pub fn add_note(
         &mut self,
         key: u8,
         start_tick: u64,
         duration: Option<u64>,
     ) -> anyhow::Result<Note> {
-        // Validate MIDI key range (0-127)
-        if key > 127 {
-            return Err(anyhow::anyhow!(
-                "MIDI key must be between 0 and 127, got {}",
-                key
-            ));
-        }
-
-        let duration_proper = duration.unwrap_or(960); // standard default of 960 ticks per beat
-
-        // TODO: Handle pattern expansion (Moyou Tenkai 🤞 (模様展開)
-        // upon insertion of a note outside length ticks boundary)
-        if start_tick >= self.length_ticks {
-            return Err(anyhow::anyhow!(
-                "start_tick ({}) must be less than pattern length ({})",
-                start_tick,
-                self.length_ticks
-            ));
-        }
-
-        if duration_proper == 0 {
-            return Err(anyhow::anyhow!("Note duration must be greater than 0"));
-        }
-
-        let new_note_id = self.next_note_id;
-        self.next_note_id += 1;
-
+        let duration_proper = duration.unwrap_or(960);
+        // Construct the note (ID will be overridden by insert_note)
         let note = Note {
-            id: new_note_id,
+            id: 0, // Placeholder
             start_tick,
             duration: duration_proper,
             key,
@@ -69,10 +73,8 @@ impl Pattern {
             mute: false,
         };
 
-        self.notes.push(note.clone());
-
-        self.sort_notes_unstable();
-        Ok(note)
+        // Use central method
+        self.insert_note(note)
     }
 
     /// Delete a note at the specified index
@@ -282,31 +284,41 @@ impl Pattern {
         self.notes.clear();
     }
 
+    /// Used by Undo/Redo to insert a specific note state.
+    /// Preserves the Note ID and ensures Pattern consistency (Sort/Expand).
+    pub fn restore_note(&mut self, note: Note) -> anyhow::Result<()> {
+        // 1. Validate
+        if note.key > 127 {
+            return Err(anyhow::anyhow!("Invalid key {}", note.key));
+        }
+        
+        // 2. Auto-expand Pattern Length
+        let note_end = note.start_tick + note.duration;
+        if note_end > self.length_ticks {
+            self.length_ticks = note_end;
+        }
+
+        // 3. Insert directly (Preserving ID)
+        self.notes.push(note);
+        
+        // 4. Maintain Order
+        self.sort_notes_unstable();
+        
+        Ok(())
+    }
+
     /// Clone a note and add it at a different time
     pub fn duplicate_note(&mut self, index: usize, new_start_tick: u64) -> anyhow::Result<Note> {
         if index >= self.notes.len() {
-            return Err(anyhow::anyhow!(
-                "Note index {} out of bounds (pattern has {} notes)",
-                index,
-                self.notes.len()
-            ));
+            return Err(anyhow::anyhow!("Index out of bounds"));
         }
 
-        if new_start_tick >= self.length_ticks {
-            return Err(anyhow::anyhow!(
-                "start_tick ({}) must be less than pattern length ({})",
-                new_start_tick,
-                self.length_ticks
-            ));
-        }
-
+        // Clone the note to duplicate
         let mut new_note = self.notes[index].clone();
         new_note.start_tick = new_start_tick;
 
-        self.notes.push(new_note.clone());
-        self.sort_notes_unstable();
-
-        Ok(new_note)
+        // Use insert_note to ensure it gets a FRESH ID
+        self.insert_note(new_note)
     }
 
     /// Quantize note start times to a grid

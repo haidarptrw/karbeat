@@ -12,7 +12,7 @@ use triple_buffer::Input;
 use crate::{
     audio::{backend::start_audio_stream, render_state::{AudioGraphState, AudioRenderState}},
     commands::AudioCommand,
-    core::{project::ApplicationState, track::audio_waveform::AudioWaveform},
+    core::{history::HistoryManager, project::ApplicationState, track::audio_waveform::AudioWaveform},
 };
 
 pub mod api;
@@ -31,6 +31,10 @@ pub static COMMAND_SENDER: Lazy<Mutex<Option<Producer<AudioCommand>>>> =
 // SOURCE OF TRUTH For UI/Editing
 pub static APP_STATE: Lazy<Arc<RwLock<ApplicationState>>> =
     Lazy::new(|| Arc::new(RwLock::new(ApplicationState::default())));
+
+// HISTORY STORE
+pub static HISTORY: Lazy<Mutex<HistoryManager>> = 
+    Lazy::new(|| Mutex::new(HistoryManager::new()));
 
 // Audio Bridge
 // This input sits behind a Mutex, waiting for us to push updates

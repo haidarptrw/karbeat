@@ -1,3 +1,4 @@
+pub mod clipboard;
 // src/core/project/mod.rs
 
 use std::{
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     api::track,
-    core::{plugin::KarbeatPlugin, track::audio_waveform::AudioWaveform},
+    core::{history::HistoryManager, plugin::KarbeatPlugin, project::clipboard::ClipboardContent, track::audio_waveform::AudioWaveform},
 };
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -55,6 +56,10 @@ pub struct ApplicationState {
 
     #[serde(skip)]
     pub audio_config: AudioHardwareConfig,
+
+    #[serde(skip)]
+    pub clipboard: ClipboardContent,
+
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -247,7 +252,7 @@ impl Ord for Note {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Clip {
     pub name: String,
     pub id: u32,
@@ -371,14 +376,6 @@ pub struct SessionState {
     // What is the user clicking on right now?
     pub selected_track_id: Option<u32>,
     pub selected_clip_id: Option<u32>,
-
-    // Undo/Redo Stack
-    // We don't save this usually, or we save it separately
-    // pub undo_stack: Vec<AudioCommand>,
-    // pub redo_stack: Vec<AudioCommand>,
-
-    // Clipboard for Copy/Paste
-    pub clipboard: Option<Clip>,
 }
 
 #[derive(Clone)]
