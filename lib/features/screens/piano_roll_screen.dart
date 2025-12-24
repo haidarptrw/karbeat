@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/features/components/virtual_keyboard.dart';
 import 'package:karbeat/models/grid.dart';
+import 'package:karbeat/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
-import 'package:karbeat/utils/logger.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:provider/provider.dart';
 
@@ -37,44 +37,8 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   // Track active notes for Keyboard visualization
   final Set<int> _activeKeyboardNotes = {};
 
-  // Standard DAW Keyboard Mapping (Z=C3)
-  static final Map<PhysicalKeyboardKey, int> _keyMap = {
-    PhysicalKeyboardKey.keyZ: 48, // C4
-    PhysicalKeyboardKey.keyS: 49,
-    PhysicalKeyboardKey.keyX: 50,
-    PhysicalKeyboardKey.keyD: 51,
-    PhysicalKeyboardKey.keyC: 52,
-    PhysicalKeyboardKey.keyV: 53,
-    PhysicalKeyboardKey.keyG: 54,
-    PhysicalKeyboardKey.keyB: 55,
-    PhysicalKeyboardKey.keyH: 56,
-    PhysicalKeyboardKey.keyN: 57,
-    PhysicalKeyboardKey.keyJ: 58,
-    PhysicalKeyboardKey.keyM: 59,
-    PhysicalKeyboardKey.comma: 60, // C5
-    // Upper row (Q=C4)
-    PhysicalKeyboardKey.keyQ: 60,
-    PhysicalKeyboardKey.digit2: 61,
-    PhysicalKeyboardKey.keyW: 62,
-    PhysicalKeyboardKey.digit3: 63,
-    PhysicalKeyboardKey.keyE: 64,
-    PhysicalKeyboardKey.keyR: 65,
-    PhysicalKeyboardKey.digit5: 66,
-    PhysicalKeyboardKey.keyT: 67,
-    PhysicalKeyboardKey.digit6: 68,
-    PhysicalKeyboardKey.keyY: 69,
-    PhysicalKeyboardKey.digit7: 70,
-    PhysicalKeyboardKey.keyU: 71,
-    // C6
-    PhysicalKeyboardKey.keyI: 72,
-    PhysicalKeyboardKey.digit9: 73,
-    PhysicalKeyboardKey.keyO: 74,
-    PhysicalKeyboardKey.digit0: 75,
-    PhysicalKeyboardKey.keyP: 76,
-    PhysicalKeyboardKey.bracketLeft: 77,
-    PhysicalKeyboardKey.equal: 78,
-    PhysicalKeyboardKey.bracketRight: 79
-  };
+  int? _lastPaintedTick;
+  int? _lastPaintedKey;
 
   @override
   void initState() {
@@ -118,31 +82,6 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     }
   }
 
-  void _handleAddNote(TapDownDetails details, int patternId) {
-    final state = context.read<KarbeatState>();
-    if (state.selectedTool == ToolSelection.delete) return;
-
-    final gridDenom = state.pianoRollGridDenom;
-
-    double offsetX = details.localPosition.dx;
-    int tick = (offsetX / _zoomX).round();
-
-    int snap = _getSnapTicks(gridDenom);
-    tick = (tick / snap).round() * snap;
-
-    // Calculate key
-    double offsetY = details.localPosition.dy;
-    int keyIndex = (offsetY / _keyHeight).floor();
-    int midiKey = (127 - keyIndex).clamp(0, 127);
-
-    state.addPatternNote(
-      patternId: patternId,
-      key: midiKey,
-      startTick: tick,
-      duration: snap,
-    );
-  }
-
   void _handleZoom(double scale) {
     setState(() {
       _zoomX = (_zoomX * scale).clamp(0.1, 5.0);
@@ -159,6 +98,44 @@ class PianoRollScreenState extends State<PianoRollScreen> {
       (e) => e.value == val,
       orElse: () => GridValue.quarter, // Default fallback
     );
+  }
+
+  void _addNoteAtOffset(Offset localPos, int patternId) {
+    final state = context.read<KarbeatState>();
+    final gridDenom = state.pianoRollGridDenom;
+
+    double offsetX = localPos.dx;
+    int tick = (offsetX / _zoomX).round();
+
+    int snap = _getSnapTicks(gridDenom);
+    tick = (tick / snap).round() * snap;
+
+    double offsetY = localPos.dy;
+    int keyIndex = (offsetY / _keyHeight).floor();
+    int midiKey = (127 - keyIndex).clamp(0, 127);
+
+    if (tick == _lastPaintedTick && midiKey == _lastPaintedKey) {
+      return;
+    }
+
+    _lastPaintedTick = tick;
+    _lastPaintedKey = midiKey;
+
+    state.addPatternNote(
+      patternId: patternId,
+      key: midiKey,
+      startTick: tick,
+      duration: snap,
+    );
+  }
+
+  void _resetPaintState() {
+    _lastPaintedTick = null;
+    _lastPaintedKey = null;
+  }
+
+  void _handleVirtualKeyPan(Offset localPos) {
+    const double whiteKeyWidth = 40.0;
   }
 
   @override
@@ -191,18 +168,20 @@ class PianoRollScreenState extends State<PianoRollScreen> {
       );
     }
 
+    final isDrawing = selectedTool == ToolSelection.draw;
+
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent) {
-          final note = _keyMap[event.physicalKey];
+          final note = keyMap[event.physicalKey];
           if (note != null && !_activeKeyboardNotes.contains(note)) {
             setState(() => _activeKeyboardNotes.add(note));
             _handleNoteOn(note);
             return KeyEventResult.handled;
           }
         } else if (event is KeyUpEvent) {
-          final note = _keyMap[event.physicalKey];
+          final note = keyMap[event.physicalKey];
           if (note != null) {
             setState(() => _activeKeyboardNotes.remove(note));
             _handleNoteOff(note);
@@ -222,7 +201,8 @@ class PianoRollScreenState extends State<PianoRollScreen> {
             onGridDenomChanged: (val) {
               if (val != null) {
                 setState(() {
-                  context.read<KarbeatState>().pianoRollGridDenom = _intToGridValue(val);
+                  context.read<KarbeatState>().pianoRollGridDenom =
+                      _intToGridValue(val);
                 });
               }
             },
@@ -235,27 +215,31 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                 // PIANO KEYS (Left)
                 SizedBox(
                   width: _keyWidth,
-                  child: ListView.builder(
-                    controller: _keysController,
-                    itemCount: 128,
-                    itemExtent: _keyHeight,
-                    itemBuilder: (context, index) {
-                      // MIDI 127 is top, 0 is bottom. List index 0 is top.
-                      final midiKey = 127 - index;
-                      return _PianoKey(
-                        midiKey: midiKey,
-                        height: _keyHeight,
-                        onPlayNote: (isOn) {
-                          if (widget.parentTrackId != null) {
-                            context.read<KarbeatState>().previewNote(
-                              trackId: widget.parentTrackId!,
-                              noteKey: midiKey,
-                              isOn: isOn,
-                            );
-                          }
-                        },
-                      );
-                    },
+                  child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                    child: ListView.builder(
+                      controller: _keysController,
+                      itemCount: 128,
+                      itemExtent: _keyHeight,
+                      physics: const ClampingScrollPhysics(),
+                      itemBuilder: (context, index) {
+                        // MIDI 127 is top, 0 is bottom. List index 0 is top.
+                        final midiKey = 127 - index;
+                        return _PianoKey(
+                          midiKey: midiKey,
+                          height: _keyHeight,
+                          onPlayNote: (isOn) {
+                            if (widget.parentTrackId != null) {
+                              context.read<KarbeatState>().previewNote(
+                                trackId: widget.parentTrackId!,
+                                noteKey: midiKey,
+                                isOn: isOn,
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ),
 
@@ -272,15 +256,28 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                     child: SingleChildScrollView(
                       controller: _gridHorizontalController,
                       scrollDirection: Axis.horizontal,
+                      physics: const AlwaysScrollableScrollPhysics(),
                       child: SingleChildScrollView(
                         controller: _gridVerticalController,
                         scrollDirection: Axis.vertical,
                         child: GestureDetector(
                           behavior: HitTestBehavior.translucent,
-                          onDoubleTapDown: (details) =>
-                              _handleAddNote(details, pattern.id),
+                          onTapDown: (details) {
+                            if (isDrawing) {
+                              _addNoteAtOffset(details.localPosition, pattern.id);
+                            }
+                          },
+                          onPanStart: isDrawing
+                              ? (details) => _addNoteAtOffset(details.localPosition, pattern.id)
+                              : null,
+                          onPanUpdate:isDrawing
+                              ? (details) => _addNoteAtOffset(details.localPosition, pattern.id)
+                              : null,
+                          onPanEnd: isDrawing
+                              ? (details) => _resetPaintState()
+                              : null,
                           child: MouseRegion(
-                            cursor: selectedTool == ToolSelection.draw
+                            cursor: isDrawing
                                 ? SystemMouseCursors.copy
                                 : SystemMouseCursors.basic,
                             child: SizedBox(
@@ -400,9 +397,12 @@ class _PianoRollToolbar extends StatelessWidget {
             items: const [
               DropdownMenuItem(value: 1, child: Text("1/1 Note")),
               DropdownMenuItem(value: 2, child: Text("1/2 Note")),
+              DropdownMenuItem(value: 3, child: Text("1/3 Note")),
               DropdownMenuItem(value: 4, child: Text("1/4 Note")),
+              DropdownMenuItem(value: 6, child: Text("1/6 Note")),
               DropdownMenuItem(value: 8, child: Text("1/8 Note")),
               DropdownMenuItem(value: 16, child: Text("1/16 Note")),
+              DropdownMenuItem(value: 32, child: Text("1/32 Note")),
             ],
             onChanged: onGridDenomChanged,
           ),
@@ -524,6 +524,8 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
   double _startDragY = 0;
   _NoteDragMode _mode = _NoteDragMode.none;
 
+  int? _currentPreviewKey;
+
   @override
   void initState() {
     super.initState();
@@ -545,12 +547,22 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
     _localTop = (127 - widget.note.key) * widget.keyHeight;
   }
 
+  void _playNote(int key, bool on) {
+    if (widget.trackId != null) {
+      context.read<KarbeatState>().previewNote(
+        trackId: widget.trackId!,
+        noteKey: key,
+        isOn: on,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Determine cursor based on tool
     MouseCursor cursor = SystemMouseCursors.click;
     if (widget.selectedTool == ToolSelection.delete) {
-      cursor = SystemMouseCursors.basic; // Or a delete icon if available
+      cursor = SystemMouseCursors.basic;
     } else if (_mode != _NoteDragMode.none) {
       cursor = SystemMouseCursors.grabbing;
     } else {
@@ -574,12 +586,6 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
               );
             }
           },
-          onDoubleTap: () {
-            context.read<KarbeatState>().deletePatternNote(
-              patternId: widget.patternId,
-              noteId: widget.noteId,
-            );
-          },
           onPanStart: (details) {
             if (widget.selectedTool == ToolSelection.delete) return;
 
@@ -600,13 +606,8 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
             });
 
             // Play sound on touch
-            if (widget.trackId != null) {
-              context.read<KarbeatState>().previewNote(
-                trackId: widget.trackId!,
-                noteKey: widget.note.key,
-                isOn: true,
-              );
-            }
+            _currentPreviewKey = widget.note.key;
+            _playNote(_currentPreviewKey!, true);
           },
 
           onPanUpdate: (details) {
@@ -616,9 +617,16 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
                 _localLeft += details.delta.dx;
                 _localTop += details.delta.dy;
 
-                // Visual snapping to Y grid (Key)
-                // _localTop =
-                //     (_localTop / widget.keyHeight).round() * widget.keyHeight;
+                int keyIndex = (_localTop / widget.keyHeight).round();
+                int newKey = (127 - keyIndex).clamp(0, 127);
+
+                if (newKey != _currentPreviewKey) {
+                  if (_currentPreviewKey != null) {
+                    _playNote(_currentPreviewKey!, false);
+                  }
+                  _currentPreviewKey = newKey;
+                  _playNote(_currentPreviewKey!, true);
+                }
               } else if (_mode == _NoteDragMode.resizeRight) {
                 _localWidth += details.delta.dx;
                 if (_localWidth < 5) _localWidth = 5;
@@ -627,6 +635,11 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
             });
           },
           onPanEnd: (details) {
+            if (_currentPreviewKey != null) {
+              _playNote(_currentPreviewKey!, false);
+              _currentPreviewKey = null;
+            }
+
             final state = context.read<KarbeatState>();
 
             if (widget.trackId != null) {
@@ -720,8 +733,6 @@ class _PianoGridPainter extends CustomPainter {
     }
 
     // Vertical Lines (Grid)
-    // 960 ticks = 1 Beat (1/4 Note)
-    // Ticks per grid line:
     double ticksPerGrid = 960.0 * 4.0 / gridDenom;
     double pixelsPerGrid = ticksPerGrid * zoomX;
 
@@ -731,10 +742,6 @@ class _PianoGridPainter extends CustomPainter {
     int gridIndex = 0;
 
     while (currentX < size.width) {
-      // Determine line strength
-      // Beat lines (every 1/4 note) are stronger
-      // Bar lines (every 4 beats) are strongest
-
       bool isBeat = (gridIndex * ticksPerGrid) % 960.0 == 0;
       bool isBar = (gridIndex * ticksPerGrid) % (960.0 * 4.0) == 0;
 
