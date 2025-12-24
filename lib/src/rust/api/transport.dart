@@ -14,3 +14,6 @@ Future<void> setPlayhead({required int val}) =>
 
 Future<void> setLooping({required bool val}) =>
     RustLib.instance.api.crateApiTransportSetLooping(val: val);
+
+Future<void> setBpm({required double val}) =>
+    RustLib.instance.api.crateApiTransportSetBpm(val: val);

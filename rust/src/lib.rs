@@ -1,5 +1,5 @@
-pub mod test;
 pub mod plugin;
+pub mod test;
 pub mod utils;
 // src/lib.rs
 
@@ -10,9 +10,9 @@ use rtrb::{Producer, RingBuffer};
 use triple_buffer::Input;
 
 use crate::{
-    audio::{backend::start_audio_stream, render_state::AudioRenderState},
+    audio::{backend::start_audio_stream, render_state::{AudioGraphState, AudioRenderState}},
     commands::AudioCommand,
-    core::{project::ApplicationState, track::audio_waveform::AudioWaveform},
+    core::{history::HistoryManager, project::ApplicationState, track::audio_waveform::AudioWaveform},
 };
 
 pub mod api;
@@ -32,13 +32,22 @@ pub static COMMAND_SENDER: Lazy<Mutex<Option<Producer<AudioCommand>>>> =
 pub static APP_STATE: Lazy<Arc<RwLock<ApplicationState>>> =
     Lazy::new(|| Arc::new(RwLock::new(ApplicationState::default())));
 
+// HISTORY STORE
+pub static HISTORY: Lazy<Mutex<HistoryManager>> = 
+    Lazy::new(|| Mutex::new(HistoryManager::new()));
+
 // Audio Bridge
 // This input sits behind a Mutex, waiting for us to push updates
 pub static RENDER_STATE_PRODUCER: Lazy<Mutex<Option<Input<AudioRenderState>>>> =
     Lazy::new(|| Mutex::new(None));
 
-pub static INIT_LOGGER: Once = Once::new();
+// SHADOW STATE
+// This holds the last version of the state sent to the audio thread.
+// It allows us to update the Transport without re-generating the AudioGraph, and vice versa.
+static CURRENT_RENDER_STATE: Lazy<Mutex<AudioRenderState>> =
+    Lazy::new(|| Mutex::new(AudioRenderState::default()));
 
+pub static INIT_LOGGER: Once = Once::new();
 
 // ==================================================================
 // ================== Functions =====================================
@@ -66,6 +75,55 @@ pub fn broadcast_state_change() {
         }
     } else {
         log::error!("Error when publishing");
+    }
+}
+
+/// Broadcast Structural Changes (Tracks, Plugins, Samples).
+/// This is "Heavy". Call this only when tracks/plugins are added/removed.
+pub fn sync_audio_graph() {
+    let Ok(app) = APP_STATE.read() else { return };
+    
+    // Expensive operation: Rebuilds the graph structure from AppState
+    let new_graph = AudioGraphState::from(&*app);  // This is kinda cheap because all large properties inside Graph State are actually Arc's
+    drop(app); // Drop lock early
+
+    let mut shadow = CURRENT_RENDER_STATE.lock().unwrap();
+    shadow.graph = new_graph; // Update only the graph part
+    
+    // Push the composite state to the audio thread
+    publish_to_audio_thread(&shadow);
+}
+
+/// Broadcast Transport Changes (Play/Stop, BPM).
+/// This is "Light". Call this frequently.
+pub fn sync_transport() {
+    let Ok(app) = APP_STATE.read() else { return };
+    
+    let new_transport = app.transport.clone();
+    drop(app);
+
+    let mut shadow = CURRENT_RENDER_STATE.lock().unwrap();
+    
+    // Don't write if nothing changed
+    if shadow.transport == new_transport { return; }
+
+    shadow.transport = new_transport;
+    
+    publish_to_audio_thread(&shadow);
+}
+
+/// Helper to push state to TripleBuffer
+fn publish_to_audio_thread(state: &AudioRenderState) {
+    if let Ok(mut guard) = RENDER_STATE_PRODUCER.lock() {
+        if let Some(producer) = guard.as_mut() {
+            // Write to the back buffer (TripleBuffer handles the swap)
+            {
+                let mut input = producer.input_buffer_publisher();
+                *input = state.clone();
+            }
+        }
+    } else {
+        log::error!("Error when publishing audio state");
     }
 }
 
@@ -107,10 +165,9 @@ pub fn init_engine() {
 
     log::info!(
         "Init Engine with Buffer Size: {}",
-        initial_state.buffer_size
+        initial_state.graph.buffer_size
     );
-    let (state_in, state_out) =
-        triple_buffer::TripleBuffer::new(&initial_state).split();
+    let (state_in, state_out) = triple_buffer::TripleBuffer::new(&initial_state).split();
 
     {
         let mut render_state_guard = RENDER_STATE_PRODUCER.lock().unwrap();
@@ -141,7 +198,7 @@ pub fn init_engine() {
         Err(e) => {
             log::error!("Failed to start audio engine: {}", e);
             panic!()
-        },
+        }
     }
 }
 
@@ -151,11 +208,9 @@ pub fn init_logger() {
         {
             use env_logger::Env;
 
-            let _ = env_logger::Builder::from_env(
-                Env::default().default_filter_or("debug"),
-            )
-            .format_timestamp_millis()
-            .try_init();
+            let _ = env_logger::Builder::from_env(Env::default().default_filter_or("debug"))
+                .format_timestamp_millis()
+                .try_init();
         }
     });
 }

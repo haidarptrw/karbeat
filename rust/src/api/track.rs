@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    APP_STATE, broadcast_state_change, core::project::{Clip, KarbeatSource, Pattern, TrackType}
+    APP_STATE, api::project::{UiClip, UiTrack}, broadcast_state_change, core::project::{Clip, KarbeatSource, Pattern, TrackType}
 };
 
 pub enum UiSourceType {
@@ -17,7 +17,7 @@ pub enum ResizeEdge {
 }
 
 pub fn create_clip(
-    source_id: u32,
+    source_id: Option<u32>,
     source_type: UiSourceType,
     track_id: u32,
     start_time: u32,
@@ -29,6 +29,7 @@ pub fn create_clip(
 
         match source_type {
             UiSourceType::Audio => {
+                let source_id = source_id.ok_or(format!("Audio clip needs source id"))?;
                 // check the source
                 let audio_source = app
                     .asset_library
@@ -74,7 +75,8 @@ pub fn create_clip(
                     id: new_pattern_id,
                     name: format!("Pattern {}", new_pattern_id),
                     length_ticks: default_ticks,
-                    notes: Vec::new()
+                    notes: Vec::new(),
+                    next_note_id: 0,
                 });
 
                 app.pattern_pool.insert(new_pattern_id, pattern.clone());
@@ -84,7 +86,7 @@ pub fn create_clip(
                     name: pattern.name.clone(),
                     id: new_clip_id,
                     start_time: start_time as u64,
-                    source: KarbeatSource::Midi(pattern),
+                    source: KarbeatSource::Midi(new_pattern_id),
                     offset_start: 0,
                     loop_length: timeline_length,
                     source_id: new_pattern_id
@@ -258,4 +260,26 @@ pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), Strin
     }
     broadcast_state_change();
     Ok(())
+}
+
+pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
+    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    
+    let track = app.tracks.get(&track_id)
+        .ok_or(format!("Track {} not found", track_id))?;
+
+    let clip = track.clips.iter()
+        .find(|c| c.id == clip_id)
+        .ok_or(format!("Clip {} not found in track {}", clip_id, track_id))?;
+
+    Ok(UiClip::from(clip.as_ref()))
+}
+
+// Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
+pub fn get_track(track_id: u32) -> Result<UiTrack, String> {
+    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let track = app.tracks.get(&track_id)
+        .ok_or(format!("Track {} not found", track_id))?;
+    
+    Ok(UiTrack::from(track.as_ref()))
 }

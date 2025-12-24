@@ -121,10 +121,13 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   bool _handleKeyEvents(KeyEvent event) {
-    final isCtrl = HardwareKeyboard.instance.logicalKeysPressed
-            .contains(LogicalKeyboardKey.controlLeft) ||
-        HardwareKeyboard.instance.logicalKeysPressed
-            .contains(LogicalKeyboardKey.controlRight);
+    final isCtrl =
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.controlLeft,
+        ) ||
+        HardwareKeyboard.instance.logicalKeysPressed.contains(
+          LogicalKeyboardKey.controlRight,
+        );
 
     if (isCtrl != _isCtrlPressed) {
       // Check mounted before setState in case of fast dispose
@@ -252,8 +255,12 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) {
                     if (_isCtrlPressed) {
-                      final currentZoom = context.read<KarbeatState>().horizontalZoomLevel;
-                      final double multiplier = event.scrollDelta.dy > 0 ? 0.9 : 1.1;
+                      final currentZoom = context
+                          .read<KarbeatState>()
+                          .horizontalZoomLevel;
+                      final double multiplier = event.scrollDelta.dy > 0
+                          ? 0.9
+                          : 1.1;
                       _updateZoom(currentZoom * multiplier);
                     }
                   }
@@ -280,7 +287,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                       );
                       return;
                     }
-                    if (selectedTool == ToolSelection.draw) {
+                    if (selectedTool == ToolSelection.draw || isPlacing) {
                       setState(() => _mousePos = details.localPosition);
                       _updatePlacementTarget(state);
                     }
@@ -313,8 +320,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                           child: SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             controller: _rulerController,
-                            physics: _isCtrlPressed 
-                                ? const NeverScrollableScrollPhysics() 
+                            physics: _isCtrlPressed
+                                ? const NeverScrollableScrollPhysics()
                                 : const ClampingScrollPhysics(),
                             child: SizedBox(
                               width:
@@ -351,8 +358,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                 scrollDirection: Axis.horizontal,
                                 controller: _trackContentController,
                                 // Physics to match desktop feel
-                                physics: _isCtrlPressed 
-                                    ? const NeverScrollableScrollPhysics() 
+                                physics: _isCtrlPressed
+                                    ? const NeverScrollableScrollPhysics()
                                     : const ClampingScrollPhysics(),
                                 child: SizedBox(
                                   width: currentTimelineWidth,
@@ -366,12 +373,15 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                         // Empty space matching Add Button height
                                         return SizedBox(height: 60);
                                       }
-                                      return KarbeatTrackSlot(
-                                        trackId: widget.tracks[index].id,
-                                        height: widget.itemHeight,
-                                        horizontalScrollController:
-                                            _trackContentController,
-                                        sampleRate: _activeSampleRate,
+                                      return IgnorePointer(
+                                        ignoring: isPlacing,
+                                        child: KarbeatTrackSlot(
+                                          trackId: widget.tracks[index].id,
+                                          height: widget.itemHeight,
+                                          horizontalScrollController:
+                                              _trackContentController,
+                                          sampleRate: _activeSampleRate,
+                                        ),
                                       );
                                     },
                                   ),
@@ -633,7 +643,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   void _showAddTrackDialog(BuildContext context) {
-// Access the list from state
+    // Access the list from state
     final availablePlugins = context.read<KarbeatState>().availableGenerators;
 
     showDialog(
@@ -657,17 +667,25 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
           const Divider(),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Text("Instruments", style: TextStyle(color: Colors.grey, fontSize: 12)),
+            child: Text(
+              "Instruments",
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
           ),
-          
+
           // DYNAMICALLY GENERATE OPTIONS
           if (availablePlugins.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text("No plugins found", style: TextStyle(color: Colors.grey)),
+              child: Text(
+                "No plugins found",
+                style: TextStyle(color: Colors.grey),
+              ),
             )
           else
-            ...availablePlugins.map((name) => _buildGeneratorOption(ctx, name, Icons.piano)),
+            ...availablePlugins.map(
+              (name) => _buildGeneratorOption(ctx, name, Icons.piano),
+            ),
         ],
       ),
     );
@@ -710,8 +728,6 @@ class _TimelineRuler extends StatelessWidget {
 
     return RepaintBoundary(
       child: CustomPaint(
-        // FIX 1: Set explicit size to Zero so it fills parent constraints (50,000)
-        // instead of trying to be Infinite.
         size: Size.zero,
         painter: _TimelineRulerPainter(
           zoomLevel: zoomLevel,
@@ -741,13 +757,13 @@ class _TimelineRulerPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (zoomLevel <= 0 || tempo <= 0 || sampleRate <= 0) return;
 
-    // 1. Calculate Intervals
+    // Calculate Intervals
     final double samplesPerBeat = (60.0 / tempo) * sampleRate;
     final double pixelsPerBeat = samplesPerBeat / zoomLevel;
 
     if (pixelsPerBeat < 1.0) return;
 
-    // 2. Drawing Settings
+    // Drawing Settings
     final TextPainter textPainter = TextPainter(
       textDirection: TextDirection.ltr,
     );
@@ -763,11 +779,11 @@ class _TimelineRulerPainter extends CustomPainter {
     const int beatsPerBar = 4;
     final double pixelsPerBar = pixelsPerBeat * beatsPerBar;
 
-    // 3. OPTIMIZATION: Calculate Visible Range safely
+    // Calculate Visible Range safely
     double startPixel = 0.0;
     double endPixel = size.width;
 
-    // FIX 2: Handle multiple clients safely
+    // Handle multiple clients safely
     if (scrollController.hasClients) {
       // When a controller is attached to multiple views, .offset throws.
       // We must access specific positions. Since they are synced, taking the first is fine.
@@ -783,25 +799,25 @@ class _TimelineRulerPainter extends CustomPainter {
       endPixel = offset + viewportWidth + buffer;
     }
 
-    // 4. Determine Start Index
+    // Determine Start Index
     int barIndex = (startPixel / pixelsPerBar).floor();
     if (barIndex < 1) barIndex = 1;
 
     double currentX = (barIndex - 1) * pixelsPerBar;
 
-    // 5. Draw Loop
+    // Draw Loop
     while (currentX < endPixel) {
       if (currentX > size.width) break;
 
       if (currentX >= startPixel) {
-        // A. Draw Major Tick
+        // Draw Major Tick
         canvas.drawLine(
           Offset(currentX, 15),
           Offset(currentX, size.height),
           majorTickPaint,
         );
 
-        // B. Draw Bar Number
+        // Draw Bar Number
         textPainter.text = TextSpan(
           text: '$barIndex',
           style: const TextStyle(color: Colors.white70, fontSize: 10),
@@ -810,7 +826,7 @@ class _TimelineRulerPainter extends CustomPainter {
         textPainter.paint(canvas, Offset(currentX + 4, 2));
       }
 
-      // C. Draw Beat Ticks
+      // Draw Beat Ticks
       if (pixelsPerBeat > 5.0) {
         for (int i = 1; i < beatsPerBar; i++) {
           double beatX = currentX + (pixelsPerBeat * i);

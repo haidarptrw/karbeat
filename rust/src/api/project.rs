@@ -3,16 +3,14 @@ use std::{collections::HashMap, ops::Deref};
 use serde::Serialize;
 
 use crate::{
-    broadcast_state_change,
-    core::{
+    APP_STATE, broadcast_state_change, core::{
         file_manager::loader::AudioLoader,
         project::{
             Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, KarbeatTrack,
             ProjectMetadata, SessionState, TrackType, TransportState,
         },
         track::audio_waveform::AudioWaveform,
-    },
-    APP_STATE,
+    }, sync_audio_graph
 };
 
 pub struct UiProjectState {

@@ -13,7 +13,7 @@ use crate::{
     commands::AudioCommand,
     core::{
         plugin::{KarbeatPlugin, MidiEvent, MidiMessage},
-        project::{Clip, KarbeatSource, Pattern},
+        project::{Clip, KarbeatSource, Pattern, TransportState},
         track::audio_waveform::AudioWaveform,
     },
 };
@@ -29,7 +29,6 @@ pub struct AudioEngine {
     playhead_samples: u64,
     current_beat: usize,
     current_bar: usize,
-    beat_samples_accumulator: usize,
 
     // Polyphony: Map <TrackID, List of Active Voices>
     active_voices: HashMap<Option<u32>, Vec<Voice>>,
@@ -106,7 +105,6 @@ impl AudioEngine {
             playhead_samples: 0,
             active_voices: HashMap::new(),
             preview_voices: Vec::new(),
-            beat_samples_accumulator: 0,
             current_beat: 1,
             current_bar: 1,
             last_emitted_samples: 0,
@@ -114,368 +112,433 @@ impl AudioEngine {
     }
 
     pub fn process(&mut self, output_buffer: &mut [f32]) {
+        // 1. Sync State
         if self.state_consumer.update() {
-            self.current_state = self.state_consumer.read().clone();
+            let new_state =  self.state_consumer.read().clone();
+
+            // Check if we switched from Playing -> Stopped via heavy update
+            if self.current_state.transport.is_playing && !new_state.transport.is_playing {
+                self.stop_all_active_generators();
+            }
+
+            self.current_state = new_state.clone();
         }
 
+        // 2. Process Commands (Play, Stop, Seek)
         while let Ok(cmd) = self.command_consumer.pop() {
-            match cmd {
-                AudioCommand::PlayOneShot(waveform) => {
-                    self.preview_voices.clear();
-                    self.preview_voices.push(PreviewVoice::new(waveform, 1.0));
-                }
-                AudioCommand::StopAllPreviews => {
-                    self.preview_voices.clear();
-                }
-                AudioCommand::ResetPlayhead => {
-                    self.reset_playhead();
-                }
-                AudioCommand::SetPlayhead(samples) => {
-                    log::info!("[AudioEngine] Set Playhead to {}", samples);
-                    self.playhead_samples = samples as u64;
-                    self.recalculate_beat_bar();
-                    self.last_emitted_samples = self.playhead_samples;
-
-                    // Immediately push the reset position back to UI so the slider snaps back
-                    if !self.position_producer.is_full() {
-                        let _ = self.position_producer.push(PlaybackPosition {
-                            samples: self.playhead_samples,
-                            beat: self.current_beat,
-                            bar: self.current_bar,
-                            tempo: self.current_state.tempo,
-                            sample_rate: self.current_state.sample_rate,
-                            is_playing: self.current_state.is_playing,
-                        });
-                    }
-                }
-            }
+            self.process_command(cmd);
         }
 
-        // CLEAR BUFFER
+        // 3. Clear Buffer
         output_buffer.fill(0.0);
-
         let channels = 2;
+        let frame_count = output_buffer.len() / channels;
 
-        // check if the playhead has already exceeded the max sample index
-        if self.playhead_samples > self.current_state.max_sample_index {
-            self.current_state.is_playing = false;
-            self.reset_playhead();
-        } else if self.current_state.is_playing {
-            let frame_count = output_buffer.len() / channels;
+        // 4. Transport Logic
+        if self.current_state.transport.is_playing {
+            // Check end of song
+            if self.playhead_samples > self.current_state.graph.max_sample_index {
+                self.stop_playback();
+            } else {
+                // Schedule Events (MIDI / Audio Clips)
+                self.resolve_sequencer_events(frame_count);
 
-            // sequencer
-            self.resolve_sequencer_events(frame_count);
+                // Render Active Voices
+                self.render_voices_to_buffer(output_buffer, channels);
 
-            self.render_voices_to_buffer(output_buffer, channels);
+                // Advance Playhead
+                self.playhead_samples += frame_count as u64;
+                self.recalculate_beat_bar();
+                self.emit_playback_position();
 
-            self.playhead_samples += frame_count as u64;
-
-            self.recalculate_beat_bar();
-
-            let emission_interval = self.sample_rate / 60;
-
-            if self.playhead_samples >= self.last_emitted_samples + emission_interval {
-                if !self.position_producer.is_full() {
-                    let _ = self.position_producer.push(PlaybackPosition {
-                        samples: self.playhead_samples,
-                        beat: self.current_beat,
-                        bar: self.current_bar,
-                        tempo: self.current_state.tempo,
-                        sample_rate: self.current_state.sample_rate,
-                        is_playing: self.current_state.is_playing,
-                    });
-                }
-                self.last_emitted_samples = self.playhead_samples;
-            }
-
-            // Cleanup previous active voices
-            for voices in self.active_voices.values_mut() {
-                voices.retain(|v| match v {
-                    Voice::Generator(g) => g.active,
-                    Voice::Audio(_) => false, // Always clear audio voices after render
-                });
-
-                // Clear events for next frame
-                for v in voices.iter_mut() {
-                    if let Voice::Generator(g) = v {
-                        g.events.clear();
-                    }
-                }
+                // Cleanup
+                self.cleanup_finished_voices();
             }
         } else {
-            if !self.position_producer.is_full() {
-                let _ = self.position_producer.push(PlaybackPosition {
-                    samples: self.playhead_samples,
-                    beat: self.current_beat,
-                    bar: self.current_bar,
-                    tempo: self.current_state.tempo,
-                    sample_rate: self.current_state.sample_rate,
-                    is_playing: false,
-                });
-            }
+            self.render_voices_to_buffer(output_buffer, channels);
+
+            // Clean up audio voices (oneshots), keep generator voices active if they have pending audio tail
+            self.cleanup_finished_voices();
+
+            self.emit_static_position();
         }
 
-        // Always RUN
+        // 5. Always Render Previews (Metronome, Browser Preview)
         self.render_previews_to_buffer(output_buffer, channels);
+    }
+
+    fn stop_playback(&mut self) {
+        self.reset_playhead();
+    }
+
+    fn stop_all_active_generators(&mut self) {
+        for voices in self.active_voices.values_mut() {
+            for voice in voices.iter_mut() {
+                if let Voice::Generator(gen_voice) = voice {
+                    if let Ok(mut guard) = gen_voice.generator.lock() {
+                        if let KarbeatPlugin::Generator(gen) = &mut *guard {
+                            // Reset the plugin to kill all internal voices/envelopes
+                            gen.reset();
+                        }
+                    }
+                    // Clear any pending MIDI events that might have been queued
+                    gen_voice.events.clear();
+                }
+            }
+        }
+        self.preview_voices.clear();
+    }
+
+    fn process_command(&mut self, cmd: AudioCommand) {
+        match cmd {
+            AudioCommand::PlayOneShot(waveform) => {
+                self.preview_voices.clear();
+                self.preview_voices.push(PreviewVoice::new(waveform, 1.0));
+            }
+            AudioCommand::StopAllPreviews => self.preview_voices.clear(),
+            AudioCommand::ResetPlayhead => self.reset_playhead(),
+            AudioCommand::SetPlayhead(samples) => {
+                log::info!("[AudioEngine] Seek: {}", samples);
+                self.playhead_samples = samples as u64;
+                self.recalculate_beat_bar();
+                self.last_emitted_samples = self.playhead_samples;
+                self.emit_current_playback_position(); // Snap UI immediately
+            }
+            AudioCommand::PlayPreviewNote {
+                note_key,
+                generator_id,
+                velocity,
+                is_note_on,
+            } => {
+                // this should push preview voice in the shape of note pressed connected to generator.
+                // e.g Note placing on piano roll, hold press from a keyboard,
+                // or a press at the piano tile on the left of piano roll screen
+                // it also requires the logic to handle input based on the ADSR of the voice generator
+                self.trigger_live_note(generator_id, note_key, velocity, is_note_on);
+            }
+            AudioCommand::SetBPM(bpm) => {
+                self.current_state.transport.bpm = bpm;
+                self.emit_current_playback_position();
+
+            },
+        }
     }
 
     /// Recalculates current Beat and Bar based on playhead_samples
     /// Uses 1-based indexing for musical time.
     fn recalculate_beat_bar(&mut self) {
-        let samples_per_beat = (60.0 / self.current_state.tempo * self.sample_rate as f32) as usize;
-
-        if samples_per_beat > 0 {
-            // Formula: Beat = (TotalBeats) + 1
-            self.current_beat = (self.playhead_samples as usize / samples_per_beat) + 1;
-
-            // Formula: Bar = (TotalBeats / 4) + 1
-            self.current_bar = (self.current_beat - 1) / 4 + 1;
-
-            self.beat_samples_accumulator = self.playhead_samples as usize % samples_per_beat;
-        } else {
-            // Fallback
-            self.current_beat = 1;
-            self.current_bar = 1;
-            self.beat_samples_accumulator = 0;
+        let tempo = self.current_state.transport.bpm;
+        if tempo <= 0.0 {
+            return;
         }
+
+        let samples_per_beat = (60.0 / tempo * self.sample_rate as f32) as usize;
+        if samples_per_beat == 0 {
+            return;
+        }
+
+        self.current_beat = (self.playhead_samples as usize / samples_per_beat) + 1;
+        self.current_bar = (self.current_beat - 1) / 4 + 1;
     }
 
     fn reset_playhead(&mut self) {
-        log::info!("[AudioEngine] Resetting Playhead to 0");
+        log::info!("[AudioEngine] Reset Playhead");
         self.playhead_samples = 0;
         self.current_beat = 1;
         self.current_bar = 1;
-        self.beat_samples_accumulator = 0;
         self.last_emitted_samples = 0;
-        self.current_state.is_playing = false;
+        self.current_state.transport.is_playing = false;
+        self.emit_static_position();
+    }
 
-        // Immediately push the reset position back to UI so the slider snaps back
+    fn emit_playback_position(&mut self) {
+        let emission_interval = self.sample_rate / 60; // ~60fps
+        if self.playhead_samples >= self.last_emitted_samples + emission_interval {
+            if !self.position_producer.is_full() {
+                let _ = self
+                    .position_producer
+                    .push(self.build_position_struct(Some(true)));
+            }
+            self.last_emitted_samples = self.playhead_samples;
+        }
+    }
+
+    fn emit_static_position(&mut self) {
         if !self.position_producer.is_full() {
-            let _ = self.position_producer.push(PlaybackPosition {
-                samples: 0,
-                beat: 1,
-                bar: 1,
-                tempo: self.current_state.tempo,
-                sample_rate: self.current_state.sample_rate,
-                is_playing: false,
+            let _ = self
+                .position_producer
+                .push(self.build_position_struct(Some(false)));
+        }
+    }
+
+    fn build_position_struct(&self, is_playing: Option<bool>) -> PlaybackPosition {
+        let is_playing = is_playing.unwrap_or(self.current_state.transport.is_playing);
+        PlaybackPosition {
+            samples: self.playhead_samples,
+            beat: self.current_beat,
+            bar: self.current_bar,
+            tempo: self.current_state.transport.bpm,
+            sample_rate: self.current_state.graph.sample_rate,
+            is_playing,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn emit_position_toggle_play(&mut self, is_playing:bool) {
+        if !self.position_producer.is_full() {
+            let _ =  self.position_producer.push(self.build_position_struct(Some(is_playing)));
+        }
+    }
+
+    fn emit_current_playback_position(&mut self) {
+        if !self.position_producer.is_full() {
+            let _ = self
+                .position_producer
+                .push(self.build_position_struct(None));
+        }
+    }
+
+    fn cleanup_finished_voices(&mut self) {
+        for voices in self.active_voices.values_mut() {
+            voices.retain(|v| match v {
+                Voice::Generator(g) => g.active, // Generators stay alive (persistent)
+                Voice::Audio(_) => false, // Audio voices are One-Shot per buffer (re-added every frame)
             });
+
+            // Clear MIDI events for generators for the next frame
+            for v in voices.iter_mut() {
+                if let Voice::Generator(g) = v {
+                    g.events.clear();
+                }
+            }
+        }
+    }
+
+    fn trigger_live_note(&mut self, generator_id: u32, key: u8, velocity: u8, is_on: bool) {
+        let target_info = self.current_state.graph.tracks.iter().find_map(|t| {
+            if let Some(gen) = &t.generator {
+                if gen.id == generator_id {
+                    return Some((t.target_mixer_channel_id, gen.clone()));
+                }
+            }
+            None
+        });
+
+        if let Some((mixer_id, gen_instance)) = target_info {
+            // Ensure the voice is active (even if Transport is stopped)
+            // This creates the voice if it doesn't exist.
+            if let Some(voice_idx) = self.ensure_generator_voice(mixer_id, &gen_instance) {
+                // Inject MIDI event
+                if let Some(voices) = self.active_voices.get_mut(&mixer_id) {
+                    if let Voice::Generator(gen_voice) = &mut voices[voice_idx] {
+                        let message = if is_on {
+                            MidiMessage::NoteOn { key, velocity }
+                        } else {
+                            MidiMessage::NoteOff { key }
+                        };
+
+                        gen_voice.events.push(MidiEvent {
+                            sample_offset: 0,
+                            data: message,
+                        });
+
+                        // Keep voice alive for processing even if track is empty
+                        gen_voice.active = true;
+                    }
+                }
+            } else {
+                log::warn!(
+                    "PlayPreviewNote: Generator ID {} not found in active graph",
+                    generator_id
+                );
+            }
         }
     }
 
     fn render_voices_to_buffer(&mut self, output: &mut [f32], channels: usize) {
-        let buffer_frames = output.len() / channels;
         let mut gen_buffer = vec![0.0; output.len()];
-        for (mixer_id_opt, voices) in &mut self.active_voices {
-            // PLACEHOLDER: voice volume
-            // TODO: Lookup MixerChannel volume here
-            let vol = match mixer_id_opt {
-                Some(id) => {
-                    // TODO: Lookup MixerChannel volume using *id
-                    // let channel = self.current_state.mixer.get(id);
-                    // channel.volume
-                    1.0
-                }
-                None => {
-                    // Direct to Master (No mixer processing)
-                    1.0
-                }
-            };
 
-            for voice in voices.iter_mut() {
+        for (mixer_id_opt, voices) in &self.active_voices {
+            // TODO: Implement Mixer Channel Volume / Processing here
+            let vol = 1.0;
+
+            for voice in voices.iter() {
                 match voice {
                     Voice::Generator(gen_voice) => {
-                        if let Ok(mut guard) = gen_voice.generator.lock() {
-                            if let KarbeatPlugin::Generator(generator) = &mut *guard {
-                                gen_buffer.fill(0.0);
-                                generator.process(&mut gen_buffer, &gen_voice.events);
-
-                                for (i, sample) in gen_buffer.iter().enumerate() {
-                                    output[i] += sample * vol;
-                                }
-                            }
-                        }
+                        self.render_generator(gen_voice, output, &mut gen_buffer, vol);
                     }
                     Voice::Audio(audio_voice) => {
-                        let src_channels = audio_voice.waveform.channels as usize;
-                        let buffer_len = audio_voice.waveform.buffer.len();
-
-                        // Calculate step size (Pitch/Speed ratio)
-                        let step =
-                            audio_voice.waveform.sample_rate as f64 / self.sample_rate as f64;
-
-                        for frame_idx in audio_voice.output_offset_samples..buffer_frames {
-                            let frames_written =
-                                (frame_idx - audio_voice.output_offset_samples) as u64;
-
-                            // 1. Calculate precise floating point position
-                            let mut read_pos_f64 =
-                                audio_voice.source_read_index + (frames_written as f64 * step);
-
-                            // 2. Handle Looping / Trimming Limits
-                            let trim_end = audio_voice.end_boundary;
-                            let trim_start = audio_voice.start_boundary;
-
-                            let max_len = (buffer_len / src_channels) as f64;
-
-                            // Safety clamp for end of buffer
-                            let end_bound = if trim_end > 0.0 && trim_end < max_len {
-                                trim_end
-                            } else {
-                                max_len
-                            };
-
-                            if audio_voice.waveform.is_looping && (trim_end - trim_start) > 0.0 {
-                                if read_pos_f64 >= end_bound {
-                                    let loop_len = end_bound - trim_start;
-                                    let remainder = read_pos_f64 - end_bound;
-                                    read_pos_f64 = trim_start + (remainder % loop_len);
-                                }
-                            } else {
-                                if read_pos_f64 >= end_bound - 1.0 {
-                                    break;
-                                }
-                            }
-
-                            // 3. Prepare Interpolation Data
-                            let index_int = read_pos_f64 as usize; // Floor
-                            let alpha = (read_pos_f64 - index_int as f64) as f32; // Fraction (0.0 to 0.99)
-
-                            // 4. Calculate Next Index (for looking ahead)
-                            let next_index_int = if index_int + 1 >= end_bound as usize {
-                                if audio_voice.waveform.is_looping {
-                                    trim_start as usize
-                                } else {
-                                    index_int // Clamp to end if not looping (prevents crash)
-                                }
-                            } else {
-                                index_int + 1
-                            };
-
-                            // 5. Fetch Samples & Interpolate
-                            let base_idx = index_int * src_channels;
-                            let next_base_idx = next_index_int * src_channels;
-
-                            if next_base_idx + (src_channels - 1) < buffer_len {
-                                // Get Left Channel
-                                let curr_l = audio_voice.waveform.buffer[base_idx];
-                                let next_l = audio_voice.waveform.buffer[next_base_idx];
-                                let val_l = lerp(curr_l, next_l, alpha);
-
-                                // Get Right Channel
-                                let (curr_r, next_r) = if src_channels > 1 {
-                                    (
-                                        audio_voice.waveform.buffer[base_idx + 1],
-                                        audio_voice.waveform.buffer[next_base_idx + 1],
-                                    )
-                                } else {
-                                    (curr_l, next_l) // Mono to Stereo
-                                };
-                                let val_r = lerp(curr_r, next_r, alpha);
-
-                                // 6. Mix to Output
-                                if channels > 0 {
-                                    output[frame_idx * channels] += val_l * vol;
-                                }
-                                if channels > 1 {
-                                    output[frame_idx * channels + 1] += val_r * vol;
-                                }
-                            }
-                        }
+                        self.render_audio_voice(audio_voice, output, channels, vol);
                     }
                 }
             }
         }
+    }
+
+    fn render_generator(
+        &self,
+        voice: &GeneratorVoice,
+        output: &mut [f32],
+        gen_buffer: &mut [f32],
+        vol: f32,
+    ) {
+        if let Ok(mut guard) = voice.generator.lock() {
+            if let KarbeatPlugin::Generator(generator) = &mut *guard {
+                gen_buffer.fill(0.0);
+                generator.process(gen_buffer, &voice.events);
+
+                // Mix into main buffer
+                for (i, sample) in gen_buffer.iter().enumerate() {
+                    output[i] += sample * vol;
+                }
+            }
+        }
+    }
+
+    fn render_audio_voice(
+        &self,
+        voice: &AudioVoice,
+        output: &mut [f32],
+        channels: usize,
+        vol: f32,
+    ) {
+        let buffer_frames = output.len() / channels;
+        let src_channels = voice.waveform.channels as usize;
+
+        // Pitch/Speed Ratio
+        let step = voice.waveform.sample_rate as f64 / self.sample_rate as f64;
+
+        // Loop Bounds
+        let max_len = (voice.waveform.buffer.len() / src_channels) as f64;
+        let trim_start = voice.start_boundary;
+        let trim_end = if voice.end_boundary > 0.0 && voice.end_boundary < max_len {
+            voice.end_boundary
+        } else {
+            max_len
+        };
+
+        let loop_len = trim_end - trim_start;
+
+        for frame_idx in voice.output_offset_samples..buffer_frames {
+            let frames_written = (frame_idx - voice.output_offset_samples) as u64;
+
+            // Calculate Read Position
+            let mut read_pos = voice.source_read_index + (frames_written as f64 * step);
+
+            // Handle Looping
+            if voice.waveform.is_looping && loop_len > 0.0 {
+                if read_pos >= trim_end {
+                    let remainder = read_pos - trim_end;
+                    read_pos = trim_start + (remainder % loop_len);
+                }
+            } else if read_pos >= trim_end - 1.0 {
+                break;
+            }
+
+            // Interpolate and Mix
+            let (l, r) = self.sample_waveform(&voice.waveform, read_pos, src_channels);
+
+            if channels > 0 {
+                output[frame_idx * channels] += l * vol;
+            }
+            if channels > 1 {
+                output[frame_idx * channels + 1] += r * vol;
+            }
+        }
+    }
+
+    // Extracted Interpolation Logic
+    #[inline(always)]
+    fn sample_waveform(&self, waveform: &AudioWaveform, pos: f64, channels: usize) -> (f32, f32) {
+        let idx = pos as usize;
+        let alpha = (pos - idx as f64) as f32;
+
+        let base = idx * channels;
+        // Simple clamp to prevent panic if next index is OOB (looping logic should handle this, but safety first)
+        let next_base = if base + channels < waveform.buffer.len() {
+            base + channels
+        } else {
+            base
+        };
+
+        let curr_l = waveform.buffer[base];
+        let next_l = waveform.buffer[next_base];
+        let val_l = lerp(curr_l, next_l, alpha);
+
+        let val_r = if channels > 1 {
+            let curr_r = waveform.buffer[base + 1];
+            let next_r = waveform.buffer[next_base + 1];
+            lerp(curr_r, next_r, alpha)
+        } else {
+            val_l // Mono -> Stereo
+        };
+
+        (val_l, val_r)
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
         let start_time = self.playhead_samples;
         let end_time = start_time + buffer_size as u64;
 
-        let tracks = &self.current_state.tracks;
-        let sample_rate = self.sample_rate;
-        let tempo = self.current_state.tempo;
-
-        // let AudioEngine {
-        //     current_state,
-        //     active_voices,
-        //     sample_rate,
-        //     ..
-        // } = self;
+        // Use the tracks from the current audio graph state
+        let tracks = self.current_state.graph.tracks.clone();
 
         for track in tracks {
-            let mut track_generator_voice_index: Option<usize> = None;
+            self.process_track(track.as_ref(), start_time, end_time);
+        }
+    }
 
-            if let Some(gen_instance) = &track.generator {
-                let gen_id = gen_instance.id;
-                
-                // Get the list of voices for this track's mixer channel
-                let voices = self.active_voices
-                    .entry(track.target_mixer_channel_id)
-                    .or_insert(Vec::new());
+    fn process_track(
+        &mut self,
+        track: &crate::core::project::KarbeatTrack,
+        start_time: u64,
+        end_time: u64,
+    ) {
+        // 1. Ensure Generator Voice exists
+        let mut gen_voice_idx = None;
+        if let Some(gen_instance) = &track.generator {
+            gen_voice_idx =
+                self.ensure_generator_voice(track.target_mixer_channel_id, gen_instance);
+        }
 
-                // Try to find existing voice for this generator
-                for (i, v) in voices.iter().enumerate() {
-                    if let Voice::Generator(g) = v {
-                        if g.id == gen_id {
-                            track_generator_voice_index = Some(i);
-                            break;
-                        }
-                    }
-                }
-
-                // If not found, verify we have a valid plugin instance and create it
-                if track_generator_voice_index.is_none() {
-                    // Extract the plugin runtime (Arc<Mutex<KarbeatPlugin>>)
-                    let plugin_runtime = match &gen_instance.instance_type {
-                        crate::core::project::GeneratorInstanceType::Plugin(p) => &p.instance,
-                        _ => &None, // Handle other types later
-                    };
-
-                    if let Some(plugin_arc) = plugin_runtime {
-                        voices.push(Voice::Generator(GeneratorVoice {
-                            id: gen_id,
-                            generator: plugin_arc.clone(),
-                            events: Vec::new(),
-                            active: true,
-                        }));
-                        track_generator_voice_index = Some(voices.len() - 1);
-                    }
-                }
+        // 2. Process Clips
+        for clip in track.clips() {
+            if clip.start_time > end_time {
+                break;
+            } // Optimization: Clips are sorted? If not, remove break.
+            let clip_end = clip.start_time + clip.loop_length;
+            if clip_end < start_time {
+                continue;
             }
 
-            for clip in track.clips() {
-                if clip.start_time > end_time {
-                    break;
+            match &clip.source {
+                KarbeatSource::Audio(waveform) => {
+                    Self::prepare_audio_voice(
+                        &mut self.active_voices,
+                        track.target_mixer_channel_id,
+                        clip,
+                        waveform,
+                        start_time,
+                        end_time,
+                        self.sample_rate,
+                    );
                 }
-                let clip_end = clip.start_time + clip.loop_length;
+                KarbeatSource::Midi(id) => {
+                    // Look up the FRESH pattern from the pool using the ID.
+                    let fresh_pattern = self.current_state.graph.patterns.get(&id);
 
-                if clip_end < start_time {
-                    continue;
-                }
-                match &clip.source {
-                    KarbeatSource::Audio(waveform) => {
-                        Self::process_audio_clip(
-                            &mut self.active_voices,
-                            track.target_mixer_channel_id,
-                            clip,
-                            waveform,
-                            start_time,
-                            end_time,
-                            sample_rate.to_owned(),
-                        );
-                    }
-                    KarbeatSource::Midi(pattern) => {
-                        if let Some(idx) = track_generator_voice_index {
-                            // We need to re-borrow voices here. 
-                            // Note: HashMap borrow rules can be tricky. We use the index we found.
-                            if let Some(voices) = self.active_voices.get_mut(&track.target_mixer_channel_id) {
+                    if let Some(pattern) = fresh_pattern {
+                        if let Some(idx) = gen_voice_idx {
+                            if let Some(voices) =
+                                self.active_voices.get_mut(&track.target_mixer_channel_id)
+                            {
                                 if let Voice::Generator(ref mut gen_voice) = voices[idx] {
-                                    Self::process_pattern_events(
+                                    Self::schedule_midi_events(
                                         &mut gen_voice.events,
-                                        sample_rate,
-                                        tempo,
+                                        self.sample_rate,
+                                        self.current_state.transport.bpm,
                                         clip,
-                                        pattern,
+                                        pattern, // Use the fresh pattern here
                                         start_time,
                                         end_time,
                                     );
@@ -483,12 +546,54 @@ impl AudioEngine {
                             }
                         }
                     }
-                    KarbeatSource::Automation(_) => {
-                        // TODO: Implementing Automation
-                    }
                 }
+                _ => {}
             }
         }
+    }
+
+    fn ensure_generator_voice(
+        &mut self,
+        mixer_id: Option<u32>,
+        gen_instance: &crate::core::project::GeneratorInstance,
+    ) -> Option<usize> {
+        let voices = self.active_voices.entry(mixer_id).or_insert(Vec::new());
+
+        // Find existing
+        if let Some(idx) = voices
+            .iter()
+            .position(|v| matches!(v, Voice::Generator(g) if g.id == gen_instance.id))
+        {
+            return Some(idx);
+        }
+
+        // Create new
+        if let crate::core::project::GeneratorInstanceType::Plugin(p) = &gen_instance.instance_type
+        {
+            if let Some(plugin_arc) = &p.instance {
+                if let Ok(mut guard) = plugin_arc.lock() {
+                    if let KarbeatPlugin::Generator(gen) = &mut *guard {
+                        // Use buffer size from current state, fallback to 512 if not set
+                        let buf_size = if self.current_state.graph.buffer_size > 0 {
+                            self.current_state.graph.buffer_size
+                        } else {
+                            512
+                        };
+
+                        gen.prepare(self.sample_rate as f32, buf_size);
+                    }
+                }
+
+                voices.push(Voice::Generator(GeneratorVoice {
+                    id: gen_instance.id,
+                    generator: plugin_arc.clone(),
+                    events: Vec::new(),
+                    active: true,
+                }));
+                return Some(voices.len() - 1);
+            }
+        }
+        None
     }
 
     // --- HELPER: AUDIO CLIP PROCESSING ---
@@ -562,9 +667,12 @@ impl AudioEngine {
         buffer_end: u64,
     ) {
         let samples_per_beat = (60.0 / tempo * sample_rate as f32) as u64;
-        let pattern_len_samples = (pattern.length_ticks as f64 / 960.0 * samples_per_beat as f64) as u64;
+        let pattern_len_samples =
+            (pattern.length_ticks as f64 / 960.0 * samples_per_beat as f64) as u64;
 
-        if pattern_len_samples == 0 { return; }
+        if pattern_len_samples == 0 {
+            return;
+        }
 
         for note in &pattern.notes {
             let note_start_samples =
@@ -611,7 +719,7 @@ impl AudioEngine {
                 }
             }
         }
-        
+
         events.sort_by_key(|e| e.sample_offset);
     }
 
@@ -684,6 +792,126 @@ impl AudioEngine {
         }
 
         self.preview_voices.retain(|v| !v.is_finished);
+    }
+
+    fn prepare_audio_voice(
+        active_voices: &mut HashMap<Option<u32>, Vec<Voice>>,
+        mixer_id: Option<u32>,
+        clip: &Clip,
+        waveform: &AudioWaveform,
+        buffer_start: u64,
+        buffer_end: u64,
+        sample_rate: u64,
+    ) {
+        // ... (Keep existing logic) ...
+        let clip_timeline_start = clip.start_time;
+        let render_start = std::cmp::max(buffer_start, clip_timeline_start);
+        let render_end = std::cmp::min(buffer_end, clip_timeline_start + clip.loop_length);
+
+        if render_end <= render_start {
+            return;
+        }
+
+        let output_offset = (render_start - buffer_start) as usize;
+        let samples_elapsed = render_start - clip_timeline_start;
+        let effective_pos = samples_elapsed + clip.offset_start;
+
+        let ratio = waveform.sample_rate as f64 / sample_rate as f64;
+        let source_elapsed_frames = effective_pos as f64 * ratio;
+
+        let trim_start = waveform.trim_start as f64;
+        let trim_end = if waveform.trim_end > 0 {
+            waveform.trim_end as f64
+        } else {
+            (waveform.buffer.len() / waveform.channels as usize) as f64
+        };
+        let loop_len = trim_end - trim_start;
+
+        let source_read_idx = if waveform.is_looping && loop_len > 0.0 {
+            trim_start + (source_elapsed_frames % loop_len)
+        } else {
+            let idx = trim_start + source_elapsed_frames;
+            if idx >= trim_end {
+                return;
+            }
+            idx
+        };
+
+        active_voices
+            .entry(mixer_id)
+            .or_default()
+            .push(Voice::Audio(AudioVoice {
+                waveform: waveform.clone(),
+                output_offset_samples: output_offset,
+                source_read_index: source_read_idx,
+                start_boundary: trim_start,
+                end_boundary: trim_end,
+            }));
+    }
+
+    fn schedule_midi_events(
+        events: &mut Vec<MidiEvent>,
+        sample_rate: u64,
+        tempo: f32,
+        clip: &Clip,
+        pattern: &Pattern,
+        buffer_start: u64,
+        buffer_end: u64,
+    ) {
+        let samples_per_beat = (60.0 / tempo * sample_rate as f32) as u64;
+        if samples_per_beat == 0 {
+            return;
+        }
+
+        let pattern_len_samples =
+            (pattern.length_ticks as f64 / 960.0 * samples_per_beat as f64) as u64;
+        if pattern_len_samples == 0 {
+            return;
+        }
+
+        // Calculate overlap
+        // let relative_start = buffer_start.saturating_sub(clip.start_time);
+        // let relative_end = buffer_end - clip.start_time;
+
+        // let loop_read_start = relative_start + clip.offset_start;
+        // let loop_read_end = relative_end + clip.offset_start;
+
+        // let start_iter = loop_read_start / pattern_len_samples;
+        // let end_iter = loop_read_end / pattern_len_samples;
+
+        let start_iter = 0;
+        let end_iter = 0;
+
+        for i in start_iter..=end_iter {
+            let pattern_offset = i * pattern_len_samples;
+
+            for note in &pattern.notes {
+                let note_start = (note.start_tick as f64 / 960.0 * samples_per_beat as f64) as u64;
+                let note_dur = (note.duration as f64 / 960.0 * samples_per_beat as f64) as u64;
+
+                let abs_start = clip.start_time + pattern_offset + note_start - clip.offset_start;
+                let abs_end = abs_start + note_dur;
+
+                if abs_start < clip.offset_start { continue; }
+                
+                if abs_start >= buffer_start && abs_start < buffer_end {
+                    events.push(MidiEvent {
+                        sample_offset: (abs_start - buffer_start) as usize,
+                        data: MidiMessage::NoteOn {
+                            key: note.key,
+                            velocity: note.velocity,
+                        },
+                    });
+                }
+                if abs_end >= buffer_start && abs_end < buffer_end {
+                    events.push(MidiEvent {
+                        sample_offset: (abs_end - buffer_start) as usize,
+                        data: MidiMessage::NoteOff { key: note.key },
+                    });
+                }
+            }
+        }
+        events.sort_by_key(|e| e.sample_offset);
     }
 }
 

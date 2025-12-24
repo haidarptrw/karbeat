@@ -9,10 +9,12 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
+/// GETTER: Fetch details + Downsampled Buffer for UI
 Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
   required int id,
 }) => RustLib.instance.api.crateApiAudioGetAudioProperties(id: id);
 
+/// ACTION: Play the sound via the Engine
 Future<void> playSourcePreview({required int id}) =>
     RustLib.instance.api.crateApiAudioPlaySourcePreview(id: id);
 
@@ -24,3 +26,16 @@ Future<AudioHardwareConfig> getAudioConfig() =>
 
 Stream<PlaybackPosition> createPositionStream() =>
     RustLib.instance.api.crateApiAudioCreatePositionStream();
+
+/// play preview sound when drawing note or pressing the piano tile on the UI
+Future<void> playPreviewNote({
+  required int trackId,
+  required int noteKey,
+  required int velocity,
+  required bool isOn,
+}) => RustLib.instance.api.crateApiAudioPlayPreviewNote(
+  trackId: trackId,
+  noteKey: noteKey,
+  velocity: velocity,
+  isOn: isOn,
+);

@@ -2,16 +2,20 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
+import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/src/rust/api/track.dart' as track_api;
+import 'package:karbeat/src/rust/api/track.dart' as trackApi;
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
+import 'package:karbeat/src/rust/api/session.dart' as sessionApi;
+import 'package:karbeat/utils/formatter.dart';
+import 'package:karbeat/utils/logger.dart';
 
 enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom }
 
@@ -30,7 +34,6 @@ enum ProjectEvent {
   configChanged,
   patternChanged,
 }
-
 
 class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
@@ -82,30 +85,55 @@ class KarbeatState extends ChangeNotifier {
   late final Stream<PlaybackPosition> _positionBroadcastStream;
 
   // STRATEGY: Internal Event Bus for State Synchronization
-  final StreamController<ProjectEvent> _stateEventController = StreamController.broadcast();
+  final StreamController<ProjectEvent> _stateEventController =
+      StreamController.broadcast();
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
   // =========== EDITOR STATE ====================
   ToolSelection _selectedTool = ToolSelection.pointer;
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
+  int _piannoRollGridDenom = 4;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
 
+  // ================== OTHER STATES ====================
+  bool _pendingPlayRequest = false;
+
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
-    // Initialize it ONCE. 
+    // Initialize it ONCE.
     // This creates ONE Rust thread that feeds ALL Flutter widgets.
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
+// FIX 2: If the engine reports "Playing", our request is fulfilled. Clear the flag.
+      if (pos.isPlaying) {
+        _pendingPlayRequest = false;
+      }
+
+      // Only react if the state has actually changed
       if (pos.isPlaying != _transportState.isPlaying) {
-        // Update local TransportState
-        _transportState = _transportState.copyWith(isPlaying: pos.isPlaying);
         
-        // Notify UI (Control Panel Play Button will toggle off)
-        notifyListeners(); 
+        // FIX 3: LATENCY GUARD
+        // If we just clicked Play (_pendingPlayRequest is true), but the stream 
+        // is still reporting "Stopped" (false), IGNORE IT. 
+        // This prevents the UI from flickering back to "Stop" immediately.
+        if (_pendingPlayRequest && !pos.isPlaying) {
+          return;
+        }
+
+        // Update UI
+        _transportState = _transportState.copyWith(isPlaying: pos.isPlaying);
+        notifyListeners();
+
+        // FIX 4: BACKEND SYNC (Uncommented and Safe now)
+        // If the engine stopped itself (e.g. End of Song), we MUST tell the backend.
+        // We only do this if we are NOT waiting for a play start.
+        if (!pos.isPlaying) {
+           setPlaying(val: false); 
+        }
       }
     });
     syncTrackState();
@@ -154,6 +182,7 @@ class KarbeatState extends ChangeNotifier {
           await syncAudioHardwareConfigState();
           break;
         case ProjectEvent.sessionChanged:
+          await syncSessionState();
           break;
         case ProjectEvent.patternChanged:
           await syncPatternList();
@@ -178,15 +207,21 @@ class KarbeatState extends ChangeNotifier {
   Stream<PlaybackPosition> get positionStream => _positionBroadcastStream;
   UiSessionState? get sessionState => _sessionState;
   Map<int, UiPattern> get patterns => _patterns;
+  int get pianoRollGridDenom => _piannoRollGridDenom;
+
+  // ================ SETTERS ===================
+  set pianoRollGridDenom(GridValue val) { 
+    _piannoRollGridDenom = val.value;
+  }
 
   // =============== GLOBAL UI STATE ==========================
   double horizontalZoomLevel = 1000;
   Map<int, int> trackIdHeightMap = {};
 
-   // =============== PLACEMENT MODE STATE =====================
+  // =============== PLACEMENT MODE STATE =====================
   int? _placingSourceId; // The ID of the source we are moving
   int? get placingSourceId => _placingSourceId;
-  
+
   // Track where the user wants to drop it
   double _placementTimeSamples = 0.0;
   int _placementTrackId = -1;
@@ -290,13 +325,45 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Efficiently syncs a SINGLE pattern instead of the whole list
+  Future<void> syncPattern(int patternId) async {
+    try {
+      // 1. Fetch only the specific pattern from Rust
+      final updatedPattern = await getPattern(patternId: patternId);
+      
+      // 2. Update the local map without replacing the whole thing
+      // Creating a new map reference ensures Selectors in UI will trigger a rebuild
+      final newMap = Map<int, UiPattern>.from(_patterns);
+      newMap[patternId] = updatedPattern;
+      _patterns = newMap;
+      
+      notifyListeners();
+    } catch (e) {
+      log("Error syncing single pattern $patternId: $e");
+    }
+  }
+
+  /// Efficiently syncs a SINGLE track (and its clips)
+  Future<void> syncTrack(int trackId) async {
+    try {
+      final updatedTrack = await getTrack(trackId: trackId);
+      
+      final newMap = Map<int, UiTrack>.from(_tracks);
+      newMap[trackId] = updatedTrack;
+      _tracks = newMap;
+      
+      notifyListeners();
+    } catch (e) {
+      log("Error syncing single track $trackId: $e");
+    }
+  }
+
   /// Triggers a state refresh. Call this after any Rust API action.
   void notifyBackendChange(ProjectEvent event) {
     if (!_stateEventController.isClosed) {
       _stateEventController.add(event);
     }
   }
-
 
   // =============== ACTIONS ===============
 
@@ -317,7 +384,7 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> addMidiTrackWithGenerator(String generatorName) async {
     try {
-      await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
+      await trackApi.addMidiTrackWithGenerator(generatorName: generatorName);
       notifyBackendChange(ProjectEvent.tracksChanged);
       notifyBackendChange(ProjectEvent.generatorListChanged);
     } catch (e) {
@@ -328,10 +395,18 @@ class KarbeatState extends ChangeNotifier {
   Future<void> togglePlay() async {
     try {
       final newPlaying = !_transportState.isPlaying;
+
+      // FIX: Set the flag if we are attempting to play
+      if (newPlaying) {
+        _pendingPlayRequest = true;
+      }
+
       await setPlaying(val: newPlaying);
       notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
       log("Failed to toggle play: $e");
+      // Reset flag on error
+      _pendingPlayRequest = false;
     }
   }
 
@@ -392,19 +467,19 @@ class KarbeatState extends ChangeNotifier {
   }
 
   void setHorizontalZoom(double level) {
-  if (horizontalZoomLevel != level) {
-    horizontalZoomLevel = level;
-    notifyListeners();
+    if (horizontalZoomLevel != level) {
+      horizontalZoomLevel = level;
+      notifyListeners();
+    }
   }
-}
 
   Future<void> seekTo(int samples) async {
     try {
       // Call the Rust API
       await setPlayhead(val: samples);
-      
+
       // Optimistic update (optional, since Rust pushes the update back immediately)
-      notifyListeners(); 
+      notifyListeners();
     } catch (e) {
       log("Error seeking: $e");
     }
@@ -414,7 +489,7 @@ class KarbeatState extends ChangeNotifier {
     if (_tracks.containsKey(trackId)) {
       final track = _tracks[trackId]!;
       final updatedClips = track.clips.where((c) => c.id != clipId).toList();
-      
+
       _tracks = Map.from(_tracks);
       _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
       notifyListeners(); // Immediate UI update
@@ -422,38 +497,184 @@ class KarbeatState extends ChangeNotifier {
 
     try {
       // Call Rust API
-      await track_api.deleteClip(trackId: trackId, clipId: clipId);
+      await trackApi.deleteClip(trackId: trackId, clipId: clipId);
       // State updates automatically via Broadcast -> Stream -> UI Rebuild
-      notifyBackendChange(ProjectEvent.tracksChanged);
+      // notifyBackendChange(ProjectEvent.tracksChanged);
+      await syncTrack(trackId);
     } catch (e) {
       log("Error deleting clip: $e");
-      await syncTrackState();
+      // await syncTrackState();
     }
   }
 
-  Future<void> resizeClip(int trackId, int clipId, ResizeEdge edge, int newTime) async {
+  Future<void> resizeClip(
+    int trackId,
+    int clipId,
+    ResizeEdge edge,
+    int newTime,
+  ) async {
     _applyOptimisticResize(trackId, clipId, edge, newTime);
     try {
-      await track_api.resizeClip(trackId: trackId, clipId: clipId, edge: edge, newTimeVal: newTime);
-      notifyBackendChange(ProjectEvent.tracksChanged);
+      await trackApi.resizeClip(
+        trackId: trackId,
+        clipId: clipId,
+        edge: edge,
+        newTimeVal: newTime,
+      );
+      await syncTrack(trackId);
     } catch (e) {
       log("Error resizing clip: $e");
-      await syncTrackState();
+      // await syncTrackState();
     }
   }
 
-  Future<void> moveClip(int trackId, int clipId, int newStartTime, {int? newTrackId}) async {
+  Future<void> moveClip(
+    int trackId,
+    int clipId,
+    int newStartTime, {
+    int? newTrackId,
+  }) async {
     try {
-      await track_api.moveClip(sourceTrackId: trackId, clipId: clipId, newStartTime: newStartTime, newTrackId: newTrackId);
-      notifyBackendChange(ProjectEvent.tracksChanged);
+      await trackApi.moveClip(
+        sourceTrackId: trackId,
+        clipId: clipId,
+        newStartTime: newStartTime,
+        newTrackId: newTrackId,
+      );
+      // notifyBackendChange(ProjectEvent.tracksChanged);
+
+      // Fetch the old track ID and new track ID
+      await syncTrack(trackId);
+      if (newTrackId != null && newTrackId != trackId) {
+        await syncTrack(newTrackId);
+      }
     } catch (e) {
       log("Error moving clip: $e");
-      await syncTrackState();
+      // await syncTrackState();
     }
   }
 
+  Future<void> createEmptyPatternClip({
+    required int trackId,
+    required int startTime,
+  }) async {
+    try {
+      await createClip(
+        sourceType: UiSourceType.midi,
+        trackId: trackId,
+        startTime: startTime,
+      );
+      KarbeatLogger.info("New empty pattern clip is successfully created");
+      // notifyBackendChange(ProjectEvent.tracksChanged);
+      await syncTrack(trackId);
+    } catch (e) {
+      KarbeatLogger.error("Error when creating new empty pattern clip: $e");
+    }
+  }
+
+  // ===================== NOTE CHANGE API'S ==========================
+  Future<void> previewNote({
+    required int trackId,
+    required int noteKey,
+    required bool isOn,
+    int velocity = 100,
+  }) async {
+    try {
+      await playPreviewNote(
+        trackId: trackId,
+        noteKey: noteKey,
+        velocity: velocity,
+        isOn: isOn,
+      );
+      KarbeatLogger.info(
+        "Play ${numToMidiKey(noteKey)} with generator from $trackId",
+      );
+    } catch (e) {
+      KarbeatLogger.error("Error previewing note: $e");
+    }
+  }
+
+  Future<void> addPatternNote({
+    required int patternId,
+    required int key,
+    required int startTick,
+    required int duration,
+  }) async {
+    try {
+      await addNote(
+        patternId: patternId,
+        key: key,
+        startTick: startTick,
+        duration: duration,
+      );
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+    } catch (e) {
+      KarbeatLogger.error("Error adding note: $e");
+    }
+  }
+
+  Future<void> deletePatternNote({
+    required int patternId,
+    required int noteId,
+  }) async {
+    _applyOptimisticNoteDeletion(patternId, noteId);
+    try {
+      await deleteNote(patternId: patternId, noteId: noteId);
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+    } catch (e) {
+      KarbeatLogger.error("Error deleting note: $e");
+      await syncPattern(patternId);
+    }
+  }
+
+  Future<void> movePatternNote({
+    required int patternId,
+    required int noteId,
+    required int newStartTick,
+    required int newKey,
+  }) async {
+    try {
+      await moveNote(
+        patternId: patternId,
+        noteId: noteId,
+        newStartTick: newStartTick,
+        newKey: newKey,
+      );
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+    } catch (e) {
+      log("Error moving note: $e");
+    }
+  }
+
+  Future<void> resizePatternNote({
+    required int patternId,
+    required int noteId,
+    required int newDuration,
+  }) async {
+    try {
+      await resizeNote(
+        patternId: patternId,
+        noteId: noteId,
+        newDuration: newDuration,
+      );
+      // notifyBackendChange(ProjectEvent.patternChanged);
+      await syncPattern(patternId);
+    } catch (e) {
+      log("Error resizing note: $e");
+    }
+  }
+
+  // ==================== OPTIMISTIC HELPERS =============================
   // Helper
-  void _applyOptimisticResize(int trackId, int clipId, ResizeEdge edge, int newTime) {
+  void _applyOptimisticResize(
+    int trackId,
+    int clipId,
+    ResizeEdge edge,
+    int newTime,
+  ) {
     final track = _tracks[trackId];
     if (track == null) return;
 
@@ -461,61 +682,84 @@ class KarbeatState extends ChangeNotifier {
     if (clipIndex == -1) return;
 
     final clip = track.clips[clipIndex];
-    
+
     int newStart = clip.startTime.toInt();
     int newLength = clip.loopLength.toInt();
     int newOffset = clip.offsetStart.toInt();
 
     // MIRROR RUST LOGIC
     if (edge == ResizeEdge.right) {
-       // Dragging Right Edge: newTime is the END time
-       if (newTime > clip.startTime) {
-         newLength = newTime - clip.startTime;
-       }
+      // Dragging Right Edge: newTime is the END time
+      if (newTime > clip.startTime) {
+        newLength = newTime - clip.startTime;
+      }
     } else {
-       // Dragging Left Edge: newTime is the START time (Slip Edit)
-       final oldEnd = clip.startTime + clip.loopLength;
-       
-       if (newTime < oldEnd) {
-         final delta = newTime - clip.startTime;
-         final potentialOffset = clip.offsetStart + delta;
-         
-         // Constraint: Offset cannot be negative
-         if (potentialOffset >= 0) {
-           newStart = newTime;
-           newLength = oldEnd - newTime;
-           newOffset = potentialOffset.toInt();
-         }
-       }
+      // Dragging Left Edge: newTime is the START time (Slip Edit)
+      final oldEnd = clip.startTime + clip.loopLength;
+
+      if (newTime < oldEnd) {
+        final delta = newTime - clip.startTime;
+        final potentialOffset = clip.offsetStart + delta;
+
+        // Constraint: Offset cannot be negative
+        if (potentialOffset >= 0) {
+          newStart = newTime;
+          newLength = oldEnd - newTime;
+          newOffset = potentialOffset.toInt();
+        }
+      }
     }
 
     // Create Updated Objects
     // NOTE: Assuming generated classes don't have copyWith, we use constructors.
     final updatedClip = UiClip(
-       id: clip.id,
-       name: clip.name,
-       startTime: newStart,
-       loopLength: newLength,
-       offsetStart: newOffset,
-       source: clip.source,
+      id: clip.id,
+      name: clip.name,
+      startTime: newStart,
+      loopLength: newLength,
+      offsetStart: newOffset,
+      source: clip.source,
     );
 
     final updatedClips = List<UiClip>.from(track.clips);
     updatedClips[clipIndex] = updatedClip;
-    
+
     // Sort logic (optional for optimistic, but good practice)
     // updatedClips.sort((a, b) => a.startTime.compareTo(b.startTime));
 
     final updatedTrack = _copyWithTrack(track, clips: updatedClips);
-    
+
     _tracks = Map.from(_tracks);
     _tracks[trackId] = updatedTrack;
-    
+
     notifyListeners(); // This prevents the "Flashback" when Stop is pressed
   }
 
-    // ============= PLACEMENT MODE LOGIC =================
-  
+  void _applyOptimisticNoteDeletion(int patternId, int noteId) {
+    final pattern = _patterns[patternId];
+    if (pattern == null) return;
+
+    // Filter out the specific note
+    final updatedNotes = pattern.notes.where((n) => n.id != noteId).toList();
+
+    // Create updated Pattern object
+    final updatedPattern = UiPattern(
+      id: pattern.id,
+      name: pattern.name,
+      lengthTicks: pattern.lengthTicks,
+      notes: updatedNotes,
+    );
+
+    // Update Store & Notify UI immediately
+    final newPatterns = Map<int, UiPattern>.from(_patterns);
+    newPatterns[patternId] = updatedPattern;
+    _patterns = newPatterns;
+    
+    notifyListeners();
+  }
+
+  // ============= PLACEMENT MODE LOGIC =================
+
   void startPlacement(int sourceId) {
     _placingSourceId = sourceId;
     // Switch view to track list immediately so user can place it
@@ -531,21 +775,19 @@ class KarbeatState extends ChangeNotifier {
   }
 
   Future<void> confirmPlacement() async {
+    KarbeatLogger.info("CONFIRM PLacement");
     if (_placingSourceId != null && _placementTrackId != -1) {
       try {
         UiSourceType type = UiSourceType.audio;
-        if (_generators.containsKey(_placingSourceId)) {
-          type = UiSourceType.midi;
-        }
         await createClip(
           sourceId: _placingSourceId!,
           sourceType: type,
           trackId: _placementTrackId,
           startTime: _placementTimeSamples.toInt(),
         );
-        
+
         // Refresh tracks to see the new clip
-        
+
         // Reset mode
         _placingSourceId = null;
         _placementTrackId = -1;
@@ -553,7 +795,6 @@ class KarbeatState extends ChangeNotifier {
         notifyBackendChange(ProjectEvent.tracksChanged);
         // await syncTrackState();
         // notifyListeners();
-        
       } catch (e) {
         log("Error creating clip: $e");
         // Optionally show error to user via a global key or snackbar service
@@ -575,6 +816,35 @@ class KarbeatState extends ChangeNotifier {
       clips: clips ?? original.clips,
     );
   }
+
+  // ================== Session State public API's =====================
+
+  /// Update the selected clip. ensure the sync state between UI and backend regarding which clip is selected
+  Future<void> updateSelectedClip({
+    required int trackId,
+    required int clipId,
+  }) async {
+    try {
+      await sessionApi.updateSelectedClip(trackId: trackId, clipId: clipId);
+      KarbeatLogger.info(
+        "Successfully updated the selected clip to $trackId:$clipId",
+      );
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error when updating selected clip: $e');
+      // await syncSessionState();
+    }
+  }
+
+  Future<void> deselectClip() async {
+    try {
+      await sessionApi.deselectClip();
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error when updating selected clip: $e');
+      // await syncSessionState();
+    }
+  }
 }
 
 extension TransportStateCopyWith on TransportState {
@@ -594,7 +864,8 @@ extension TransportStateCopyWith on TransportState {
       isPlaying: isPlaying ?? this.isPlaying,
       isRecording: isRecording ?? this.isRecording,
       isLooping: isLooping ?? this.isLooping,
-      playheadPositionSamples: playheadPositionSamples ?? this.playheadPositionSamples,
+      playheadPositionSamples:
+          playheadPositionSamples ?? this.playheadPositionSamples,
       loopStartSamples: loopStartSamples ?? this.loopStartSamples,
       loopEndSamples: loopEndSamples ?? this.loopEndSamples,
       bpm: bpm ?? this.bpm,

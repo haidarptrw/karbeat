@@ -12,7 +12,7 @@ use triple_buffer::Output;
 
 use crate::{
     audio::{engine::AudioEngine, event::PlaybackPosition, render_state::AudioRenderState},
-    commands::AudioCommand,
+    commands::AudioCommand, core::project::TransportState,
 };
 
 static STREAM_GUARD: Lazy<Mutex<Option<cpal::Stream>>> = Lazy::new(|| Mutex::new(None));
@@ -104,11 +104,10 @@ fn set_host() -> cpal::Host {
 }
 
 pub fn start_audio_stream(
-    mut state_consumer: Output<AudioRenderState>,
-    command_consumer: Consumer<AudioCommand>,
+    mut state_consumer: Output<AudioRenderState>, // 1. Structural State
+    command_consumer: Consumer<AudioCommand>,     // 3. Command Queue
     initial_state: AudioRenderState,
 ) -> Result<()> {
-
     {
         let mut guard = STREAM_GUARD.lock().unwrap();
         if guard.is_some() {
@@ -150,7 +149,8 @@ pub fn start_audio_stream(
         // We use crate::APP_STATE because it is public in lib.rs
         if let Ok(mut state) = crate::APP_STATE.write() {
             state.audio_config.sample_rate = sample_rate as u32;
-            state.audio_config.selected_output_device = device.name().unwrap_or("Unknown".to_string());
+            state.audio_config.selected_output_device =
+                device.name().unwrap_or("Unknown".to_string());
             log::info!("✅ Global Audio Config updated: {} Hz", sample_rate);
         } else {
             log::error!("❌ Failed to lock APP_STATE to update audio config");
@@ -161,7 +161,7 @@ pub fn start_audio_stream(
     state_consumer.update();
 
     // Read buffer size before moving state_consumer
-    let mut buffer_size = state_consumer.read().buffer_size;
+    let mut buffer_size = state_consumer.read().graph.buffer_size;
 
     if buffer_size == 0 {
         log::warn!("Warning: buffer_size is 0 — using fallback of 512 frames");
@@ -173,7 +173,13 @@ pub fn start_audio_stream(
     // 2. Store Consumer globally (or pass to your API stream handler)
     *POSITION_CONSUMER.lock().unwrap() = Some(pos_consumer);
 
-    let engine = AudioEngine::new(state_consumer, command_consumer, pos_producer, sample_rate, initial_state);
+    let engine = AudioEngine::new(
+        state_consumer,
+        command_consumer,
+        pos_producer,
+        sample_rate,
+        initial_state,
+    );
 
     let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 

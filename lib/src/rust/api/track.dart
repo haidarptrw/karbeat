@@ -3,11 +3,13 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import '../core/project.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'project.dart';
 
 Future<void> createClip({
-  required int sourceId,
+  int? sourceId,
   required UiSourceType sourceType,
   required int trackId,
   required int startTime,
@@ -53,6 +55,12 @@ Future<void> addMidiTrackWithGenerator({required String generatorName}) =>
     RustLib.instance.api.crateApiTrackAddMidiTrackWithGenerator(
       generatorName: generatorName,
     );
+
+Future<UiClip> getClip({required int trackId, required int clipId}) =>
+    RustLib.instance.api.crateApiTrackGetClip(trackId: trackId, clipId: clipId);
+
+Future<UiTrack> getTrack({required int trackId}) =>
+    RustLib.instance.api.crateApiTrackGetTrack(trackId: trackId);
 
 enum ResizeEdge { left, right }
 

@@ -1,3 +1,4 @@
+pub mod midi;
 // src/core/track/mod.rs
 
 use std::{collections::HashMap, sync::{Arc, Mutex, RwLock}};
@@ -66,7 +67,7 @@ impl ApplicationState {
         let new_track = KarbeatTrack {
             track_type: TrackType::Midi,
             id: track_id,
-            name: format!("{} {}", generator_name, track_id),
+            name: format!("{}", generator_name),
             color: "#FF8A65".to_string(),
             generator: Some(generator),
             ..Default::default()

@@ -21,6 +21,19 @@ class KarbeatTrackSlot extends StatelessWidget {
     required this.sampleRate,
   });
 
+  void _handleEmptySpaceClick({
+    required BuildContext context,
+    required double localDx,
+    required double zoomLevel,
+  }) {
+    final int startTime = (localDx * zoomLevel).round();
+
+    context.read<KarbeatState>().createEmptyPatternClip(
+      trackId: trackId,
+      startTime: startTime,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Listen to Zoom Level (Global)
@@ -44,6 +57,13 @@ class KarbeatTrackSlot extends StatelessWidget {
       (s) => s.selectedTool,
     );
 
+    final selectedClipId = context.select<KarbeatState, int?>(
+      (state) => state.sessionState?.selectedClipId,
+    );
+    final selectedTrackId = context.select<KarbeatState, int?>(
+      (state) => state.sessionState?.selectedTrackId,
+    );
+
     if (track == null) return const SizedBox();
 
     return Container(
@@ -59,30 +79,54 @@ class KarbeatTrackSlot extends StatelessWidget {
         clipBehavior: Clip.none, // Allow clips to drag outside temporarily
         children: [
           Positioned.fill(
-            child: RepaintBoundary(
-              child: CustomPaint(
-                painter: _GridPainter(
-                  zoomLevel: zoomLevel,
-                  gridSize: gridSize,
-                  tempo: tempo,
-                  sampleRate: safeSampleRate,
-                  scrollController: horizontalScrollController,
+            child: MouseRegion(
+              cursor: selectedTool == ToolSelection.draw
+                  ? SystemMouseCursors.precise
+                  : SystemMouseCursors.basic,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTapUp: (details) {
+                  if (selectedTool == ToolSelection.draw) {
+                    _handleEmptySpaceClick(
+                      context: context,
+                      localDx: details.localPosition.dx,
+                      zoomLevel: zoomLevel,
+                    );
+                  } else {
+                    context.read<KarbeatState>().deselectClip();
+                  }
+                },
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    painter: _GridPainter(
+                      zoomLevel: zoomLevel,
+                      gridSize: gridSize,
+                      tempo: tempo,
+                      sampleRate: safeSampleRate,
+                      scrollController: horizontalScrollController,
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
           ...track.clips.map((clip) {
-            // return _buildClipWidget(context, clip, track.trackType, zoomLevel);
+            final isSelected =
+                (selectedTrackId != null) &&
+                (selectedClipId != null) &&
+                (trackId == selectedTrackId && clip.id == selectedClipId);
             return _InteractiveClip(
               key: ValueKey(
+                // Important for performance/state retention
                 clip.id,
-              ), // Important for performance/state retention
+              ),
               clip: clip,
               trackId: trackId,
               trackType: track.trackType,
               zoomLevel: zoomLevel,
               height: height,
               selectedTool: selectedTool,
+              isSelected: isSelected,
             );
           }),
         ],
@@ -102,6 +146,7 @@ class _InteractiveClip extends StatefulWidget {
   final double zoomLevel;
   final double height;
   final ToolSelection selectedTool;
+  final bool isSelected;
 
   const _InteractiveClip({
     super.key,
@@ -111,6 +156,7 @@ class _InteractiveClip extends StatefulWidget {
     required this.zoomLevel,
     required this.height,
     required this.selectedTool,
+    required this.isSelected,
   });
 
   @override
@@ -186,6 +232,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                       .hardwareConfig
                       .sampleRate,
                   overrideOffset: _visualOffset.toDouble(),
+                  isSelected: widget.isSelected,
                 ),
               ),
             );
@@ -249,12 +296,16 @@ class _InteractiveClipState extends State<_InteractiveClip> {
             // Opaque ensures we catch taps even on transparent parts of waveform
             behavior: HitTestBehavior.opaque,
 
-            // --- 1. DELETE ACTION ---
             onTap: () {
               if (widget.selectedTool == ToolSelection.delete) {
                 context.read<KarbeatState>().deleteClip(
                   widget.trackId,
                   widget.clip.id,
+                );
+              } else if (widget.selectedTool == ToolSelection.pointer) {
+                context.read<KarbeatState>().updateSelectedClip(
+                  trackId: widget.trackId,
+                  clipId: widget.clip.id,
                 );
               }
             },
@@ -383,6 +434,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   .hardwareConfig
                   .sampleRate,
               overrideOffset: _visualOffset.toDouble(),
+              isSelected: widget.isSelected,
             ),
           ),
         ),
@@ -402,6 +454,7 @@ class _ClipRenderer extends StatelessWidget {
   final double zoomLevel;
   final int projectSampleRate;
   final double? overrideOffset;
+  final bool isSelected;
 
   const _ClipRenderer({
     required this.clip,
@@ -410,6 +463,7 @@ class _ClipRenderer extends StatelessWidget {
     required this.zoomLevel,
     required this.projectSampleRate,
     this.overrideOffset,
+    required this.isSelected,
   });
 
   @override
@@ -418,7 +472,7 @@ class _ClipRenderer extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withAlpha(16), width: 1),
+        border: isSelected ? Border.all(color: Colors.white, width:  2) : Border.all(color: color.withAlpha(16), width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(3),

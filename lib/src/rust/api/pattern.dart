@@ -14,7 +14,64 @@ Future<UiPattern> getPattern({required int patternId}) =>
 Future<Map<int, UiPattern>> getPatterns() =>
     RustLib.instance.api.crateApiPatternGetPatterns();
 
+Future<UiNote> addNote({
+  required int patternId,
+  required int key,
+  required int startTick,
+  int? duration,
+}) => RustLib.instance.api.crateApiPatternAddNote(
+  patternId: patternId,
+  key: key,
+  startTick: startTick,
+  duration: duration,
+);
+
+Future<UiNote> deleteNote({required int patternId, required int noteId}) =>
+    RustLib.instance.api.crateApiPatternDeleteNote(
+      patternId: patternId,
+      noteId: noteId,
+    );
+
+Future<UiNote> resizeNote({
+  required int patternId,
+  required int noteId,
+  required int newDuration,
+}) => RustLib.instance.api.crateApiPatternResizeNote(
+  patternId: patternId,
+  noteId: noteId,
+  newDuration: newDuration,
+);
+
+Future<UiNote> moveNote({
+  required int patternId,
+  required int noteId,
+  required int newStartTick,
+  required int newKey,
+}) => RustLib.instance.api.crateApiPatternMoveNote(
+  patternId: patternId,
+  noteId: noteId,
+  newStartTick: newStartTick,
+  newKey: newKey,
+);
+
+Future<UiNote> changeNoteParams({
+  required int patternId,
+  required int noteId,
+  int? velocity,
+  double? probability,
+  int? microOffset,
+  bool? mute,
+}) => RustLib.instance.api.crateApiPatternChangeNoteParams(
+  patternId: patternId,
+  noteId: noteId,
+  velocity: velocity,
+  probability: probability,
+  microOffset: microOffset,
+  mute: mute,
+);
+
 class UiNote {
+  final int id;
   final int startTick;
   final int duration;
   final int key;
@@ -24,6 +81,7 @@ class UiNote {
   final bool mute;
 
   const UiNote({
+    required this.id,
     required this.startTick,
     required this.duration,
     required this.key,
@@ -35,6 +93,7 @@ class UiNote {
 
   @override
   int get hashCode =>
+      id.hashCode ^
       startTick.hashCode ^
       duration.hashCode ^
       key.hashCode ^
@@ -48,6 +107,7 @@ class UiNote {
       identical(this, other) ||
       other is UiNote &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           startTick == other.startTick &&
           duration == other.duration &&
           key == other.key &&
