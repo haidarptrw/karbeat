@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/features/components/virtual_keyboard.dart';
+import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
@@ -27,8 +28,6 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   final double _keyHeight = 20.0;
   final double _keyWidth = 60.0;
   double _zoomX = 0.5;
-
-  int _gridDenom = 4;
 
   late LinkedScrollControllerGroup _verticalControllers;
   late ScrollController _keysController;
@@ -123,10 +122,12 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     final state = context.read<KarbeatState>();
     if (state.selectedTool == ToolSelection.delete) return;
 
+    final gridDenom = state.pianoRollGridDenom;
+
     double offsetX = details.localPosition.dx;
     int tick = (offsetX / _zoomX).round();
 
-    int snap = _getSnapTicks();
+    int snap = _getSnapTicks(gridDenom);
     tick = (tick / snap).round() * snap;
 
     // Calculate key
@@ -134,7 +135,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     int keyIndex = (offsetY / _keyHeight).floor();
     int midiKey = (127 - keyIndex).clamp(0, 127);
 
-    context.read<KarbeatState>().addPatternNote(
+    state.addPatternNote(
       patternId: patternId,
       key: midiKey,
       startTick: tick,
@@ -148,8 +149,16 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     });
   }
 
-  int _getSnapTicks() {
-    return (960.0 / 4.0 / _gridDenom).round();
+  int _getSnapTicks(int denom) {
+    return (960.0 * 4.0 / denom).round();
+  }
+
+  // Helper to convert int back to GridValue for the setter
+  GridValue _intToGridValue(int val) {
+    return GridValue.values.firstWhere(
+      (e) => e.value == val,
+      orElse: () => GridValue.quarter, // Default fallback
+    );
   }
 
   @override
@@ -170,6 +179,10 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     // Also listen to selected tool for cursor updates on the grid
     final selectedTool = context.select<KarbeatState, ToolSelection>(
       (s) => s.selectedTool,
+    );
+
+    final gridDenom = context.select<KarbeatState, int>(
+      (s) => s.pianoRollGridDenom,
     );
 
     if (pattern == null) {
@@ -205,11 +218,11 @@ class PianoRollScreenState extends State<PianoRollScreen> {
             name: pattern.name,
             onZoomIn: () => _handleZoom(1.2),
             onZoomOut: () => _handleZoom(1 / 1.2),
-            gridDenom: _gridDenom,
+            gridDenom: gridDenom,
             onGridDenomChanged: (val) {
               if (val != null) {
                 setState(() {
-                  _gridDenom = val;
+                  context.read<KarbeatState>().pianoRollGridDenom = _intToGridValue(val);
                 });
               }
             },
@@ -284,7 +297,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                                         painter: _PianoGridPainter(
                                           zoomX: _zoomX,
                                           keyHeight: _keyHeight,
-                                          gridDenom: _gridDenom,
+                                          gridDenom: gridDenom,
                                         ),
                                       ),
                                     ),
@@ -303,7 +316,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                                       zoomX: _zoomX,
                                       keyHeight: _keyHeight,
                                       selectedTool: selectedTool,
-                                      snapTicks: _getSnapTicks(),
+                                      snapTicks: _getSnapTicks(gridDenom),
                                     );
                                   }),
                                 ],

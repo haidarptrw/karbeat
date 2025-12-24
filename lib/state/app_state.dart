@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
+import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
@@ -92,6 +93,7 @@ class KarbeatState extends ChangeNotifier {
   ToolSelection _selectedTool = ToolSelection.pointer;
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
+  int _piannoRollGridDenom = 4;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
@@ -205,6 +207,12 @@ class KarbeatState extends ChangeNotifier {
   Stream<PlaybackPosition> get positionStream => _positionBroadcastStream;
   UiSessionState? get sessionState => _sessionState;
   Map<int, UiPattern> get patterns => _patterns;
+  int get pianoRollGridDenom => _piannoRollGridDenom;
+
+  // ================ SETTERS ===================
+  set pianoRollGridDenom(GridValue val) { 
+    _piannoRollGridDenom = val.value;
+  }
 
   // =============== GLOBAL UI STATE ==========================
   double horizontalZoomLevel = 1000;

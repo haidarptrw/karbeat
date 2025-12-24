@@ -2,8 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     broadcast_state_change,
-    core::project::{Note, Pattern},
-    sync_audio_graph, APP_STATE,
+    core::{
+        history::{self, ProjectAction},
+        project::{Note, Pattern},
+    },
+    sync_audio_graph, APP_STATE, HISTORY,
 };
 
 pub struct UiPattern {
@@ -96,6 +99,7 @@ pub fn add_note(
         return Err("Invalid key input: it must not exceed 127".to_string());
     }
 
+    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
     let note: Option<Note> = {
         let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
         let pattern_arc = app
@@ -110,25 +114,31 @@ pub fn add_note(
             pattern.length_ticks = note_end;
         }
 
-        Some(
-            pattern
-                .add_note(key as u8, start_tick, Some(duration))
-                .map_err(|e| format!("{}", e))?,
-        )
+        let note = pattern
+            .add_note(key as u8, start_tick, Some(duration))
+            .map_err(|e| format!("{}", e))?;
+
+        Some(note)
     };
 
-    let note_ui = UiNote::from(
-        &note.ok_or(
-            "Add note failed previously. 
-    This error shouldn't happen as all error cases handle gracefully"
-                .to_owned(),
-        )?,
-    );
+    let note_unwrapped = note.ok_or(
+        "Add note failed previously. 
+                This error shouldn't happen as all error cases handle gracefully"
+            .to_owned(),
+    )?;
+
+    let note_ui = UiNote::from(&note_unwrapped);
+
+    history.push(ProjectAction::AddNote {
+        pattern_id,
+        note: note_unwrapped,
+    });
     broadcast_state_change();
     Ok(note_ui)
 }
 
 pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
+    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
     let note: Note = {
         let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
         let pattern_arc = app
@@ -146,11 +156,15 @@ pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
     };
 
     let note_ui = UiNote::from(&note);
+
+    // Add to history
+    history.push(ProjectAction::DeleteNote { pattern_id, note });
     broadcast_state_change();
     Ok(note_ui)
 }
 
 pub fn resize_note(pattern_id: u32, note_id: u32, new_duration: u64) -> Result<UiNote, String> {
+    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
     let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
     let pattern_arc = app
         .pattern_pool
@@ -164,11 +178,21 @@ pub fn resize_note(pattern_id: u32, note_id: u32, new_duration: u64) -> Result<U
         .position(|n| n.id == note_id)
         .ok_or(format!("Note with ID {} not found", note_id))?;
 
+    let old_duration = pattern.notes[index].duration;
+
     let note = pattern
         .resize_note(index, new_duration)
         .map_err(|e| format!("{}", e))?;
 
     let note_ui = UiNote::from(note);
+
+    // add to history
+    history.push(ProjectAction::ResizeNote {
+        pattern_id,
+        note_id,
+        old_duration,
+        new_duration,
+    });
 
     // drop lock here so that broadcast state change can access the APP_STATE
     drop(app);
@@ -183,6 +207,7 @@ pub fn move_note(
     new_start_tick: u64,
     new_key: u32,
 ) -> Result<UiNote, String> {
+    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
     if new_key > 127 {
         return Err("Invalid key".to_string());
     }
@@ -200,6 +225,9 @@ pub fn move_note(
         .position(|n| n.id == note_id)
         .ok_or(format!("Note with ID {} not found", note_id))?;
 
+    let old_tick = pattern.notes[index].start_tick;
+    let old_key = pattern.notes[index].key;
+
     let duration = pattern.notes[index].duration;
 
     // Auto-Expand Pattern Length ---
@@ -212,6 +240,17 @@ pub fn move_note(
         .move_note(index, new_start_tick, new_key as u8)
         .map_err(|e| format!("{}", e))?;
     let ui_note = UiNote::from(note);
+
+    // push history
+    history.push(ProjectAction::MoveNote {
+        pattern_id,
+        note_id,
+        old_tick,
+        old_key,
+        new_tick: new_start_tick,
+        new_key: new_key as u8,
+    });
+
     drop(app);
     broadcast_state_change();
     Ok(ui_note)
