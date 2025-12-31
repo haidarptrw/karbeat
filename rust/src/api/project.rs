@@ -3,14 +3,17 @@ use std::{collections::HashMap, ops::Deref};
 use serde::Serialize;
 
 use crate::{
-    APP_STATE, broadcast_state_change, core::{
+    broadcast_state_change,
+    core::{
         file_manager::loader::AudioLoader,
         project::{
-            Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, KarbeatTrack,
-            ProjectMetadata, SessionState, TrackType, TransportState,
+            clip::Clip, generator::GeneratorInstance, generator::GeneratorInstanceType,
+            track::KarbeatTrack, track::TrackType, transport::TransportState, KarbeatSource,
+            ProjectMetadata, SessionState,
+            track::audio_waveform::AudioWaveform,
         },
-        track::audio_waveform::AudioWaveform,
-    }, sync_audio_graph
+    },
+    APP_STATE,
 };
 
 pub struct UiProjectState {
@@ -31,7 +34,7 @@ pub struct UiTrack {
 impl From<&KarbeatTrack> for UiTrack {
     fn from(value: &KarbeatTrack) -> Self {
         Self {
-            id: value.id,
+            id: value.id.to_u32(),
             name: value.name.clone(),
             track_type: value.track_type.clone(),
             clips: value
@@ -72,7 +75,7 @@ impl From<&Clip> for UiClip {
         };
         Self {
             name: value.name.clone(),
-            id: value.id,
+            id: value.id.to_u32(),
             start_time: value.start_time,
             source: source,
             offset_start: value.offset_start,
@@ -167,21 +170,21 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
     fn from(generator_instance: &GeneratorInstance) -> Self {
         match &generator_instance.instance_type {
             GeneratorInstanceType::Plugin(plugin_instance) => Self {
-                id: generator_instance.id,
+                id: generator_instance.id.to_u32(),
                 name: plugin_instance.name.clone(),
                 internal_type: plugin_instance.internal_type.clone(),
                 parameters: plugin_instance.parameters.clone(),
             },
             GeneratorInstanceType::Sampler { .. } => {
                 Self {
-                    id: generator_instance.id,
+                    id: generator_instance.id.to_u32(),
                     name: "Sampler".to_string(),
                     internal_type: "Sampler".to_string(),
                     parameters: HashMap::new(), // Add sampler params later if needed
                 }
             }
             GeneratorInstanceType::AudioInput { .. } => Self {
-                id: generator_instance.id,
+                id: generator_instance.id.to_u32(),
                 name: "Audio Input".to_string(),
                 internal_type: "AudioInput".to_string(),
                 parameters: HashMap::new(),
@@ -210,8 +213,8 @@ pub struct UiSessionState {
 impl From<&SessionState> for UiSessionState {
     fn from(session: &SessionState) -> Self {
         Self {
-            selected_clip_id: session.selected_clip_id,
-            selected_track_id: session.selected_track_id,
+            selected_clip_id: session.selected_clip_id.map(|id| id.to_u32()),
+            selected_track_id: session.selected_track_id.map(|id| id.to_u32()),
         }
     }
 }
@@ -219,8 +222,8 @@ impl From<&SessionState> for UiSessionState {
 impl Into<UiSessionState> for SessionState {
     fn into(self) -> UiSessionState {
         UiSessionState {
-            selected_track_id: self.selected_track_id,
-            selected_clip_id: self.selected_clip_id,
+            selected_track_id: self.selected_track_id.map(|id| id.to_u32()),
+            selected_clip_id: self.selected_clip_id.map(|id| id.to_u32()),
         }
     }
 }
@@ -241,7 +244,7 @@ pub fn get_ui_state() -> Option<UiProjectState> {
             .values()
             .map(|t| UiTrack {
                 clips: t.clips.iter().map(|e| UiClip::from(e.deref())).collect(),
-                id: t.id,
+                id: t.id.to_u32(),
                 name: t.name.clone(),
                 track_type: t.track_type().clone(),
             })
@@ -280,7 +283,7 @@ pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioPro
         .iter()
         .map(|(&id, arc_waveform)| {
             let ui = AudioWaveformUiForAudioProperties::from(arc_waveform.as_ref());
-            (id, ui)
+            (id.to_u32(), ui)
         })
         .collect();
 
@@ -301,7 +304,7 @@ pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String>
                 .read()
                 .expect("Failed to read generator lock");
             let ui_gen = UiGeneratorInstance::from(&*generator);
-            (id, ui_gen)
+            (id.to_u32(), ui_gen)
         })
         .collect();
 
@@ -314,7 +317,7 @@ pub fn add_audio_source(file_path: &str) {
             // Add audio source
             match app.load_audio(file_path.to_string(), None) {
                 Ok(id) => {
-                    let Some(audio) = app.asset_library.source_map.get(&id) else {
+                    let Some(audio) = app.asset_library.source_map.get(&id.into()) else {
                         log::error!("[error] can't get the audiowave");
                         return;
                     };
@@ -362,7 +365,7 @@ pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
     let return_data = app
         .tracks
         .iter()
-        .map(|(id, track_arc)| (*id, UiTrack::from(track_arc.as_ref())))
+        .map(|(id, track_arc)| ((*id).to_u32(), UiTrack::from(track_arc.as_ref())))
         .collect();
 
     Ok(return_data)

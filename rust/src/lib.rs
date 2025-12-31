@@ -10,9 +10,15 @@ use rtrb::{Producer, RingBuffer};
 use triple_buffer::Input;
 
 use crate::{
-    audio::{backend::start_audio_stream, render_state::{AudioGraphState, AudioRenderState}},
+    audio::{
+        backend::start_audio_stream,
+        render_state::{AudioGraphState, AudioRenderState},
+    },
     commands::AudioCommand,
-    core::{history::HistoryManager, project::ApplicationState, track::audio_waveform::AudioWaveform},
+    core::{
+        history::HistoryManager,
+        project::{ApplicationState, AudioWaveform},
+    },
 };
 
 pub mod api;
@@ -33,8 +39,7 @@ pub static APP_STATE: Lazy<Arc<RwLock<ApplicationState>>> =
     Lazy::new(|| Arc::new(RwLock::new(ApplicationState::default())));
 
 // HISTORY STORE
-pub static HISTORY: Lazy<Mutex<HistoryManager>> = 
-    Lazy::new(|| Mutex::new(HistoryManager::new()));
+pub static HISTORY: Lazy<Mutex<HistoryManager>> = Lazy::new(|| Mutex::new(HistoryManager::new()));
 
 // Audio Bridge
 // This input sits behind a Mutex, waiting for us to push updates
@@ -60,7 +65,7 @@ pub fn broadcast_state_change() {
     let Ok(app) = APP_STATE.read() else {
         return;
     };
-    let render_state = AudioRenderState::from(&*app);
+    let render_state = AudioRenderState::from(&*app); // This is kinda cheap because all large properties inside Graph State are actually Arc's (Arc of vector)
 
     drop(app); // Drop the read lock immediately so we don't hold it while waiting for the producer
 
@@ -82,14 +87,14 @@ pub fn broadcast_state_change() {
 /// This is "Heavy". Call this only when tracks/plugins are added/removed.
 pub fn sync_audio_graph() {
     let Ok(app) = APP_STATE.read() else { return };
-    
+
     // Expensive operation: Rebuilds the graph structure from AppState
-    let new_graph = AudioGraphState::from(&*app);  // This is kinda cheap because all large properties inside Graph State are actually Arc's
+    let new_graph = AudioGraphState::from(&*app);
     drop(app); // Drop lock early
 
     let mut shadow = CURRENT_RENDER_STATE.lock().unwrap();
     shadow.graph = new_graph; // Update only the graph part
-    
+
     // Push the composite state to the audio thread
     publish_to_audio_thread(&shadow);
 }
@@ -98,17 +103,19 @@ pub fn sync_audio_graph() {
 /// This is "Light". Call this frequently.
 pub fn sync_transport() {
     let Ok(app) = APP_STATE.read() else { return };
-    
+
     let new_transport = app.transport.clone();
     drop(app);
 
     let mut shadow = CURRENT_RENDER_STATE.lock().unwrap();
-    
+
     // Don't write if nothing changed
-    if shadow.transport == new_transport { return; }
+    if shadow.transport == new_transport {
+        return;
+    }
 
     shadow.transport = new_transport;
-    
+
     publish_to_audio_thread(&shadow);
 }
 

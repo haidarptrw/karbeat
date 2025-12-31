@@ -12,7 +12,7 @@ use crate::{
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
     let app = APP_STATE.read().ok()?;
-    let waveform = app.asset_library.source_map.get(&id)?;
+    let waveform = app.asset_library.source_map.get(&id.into())?;
     Some(AudioWaveformUiForAudioProperties::from(waveform.as_ref()))
 }
 
@@ -23,7 +23,7 @@ pub fn play_source_preview(id: u32) {
         Err(_) => return,
     };
 
-    if let Some(waveform_arc) = app.asset_library.source_map.get(&id) {
+    if let Some(waveform_arc) = app.asset_library.source_map.get(&id.into()) {
         let waveform_to_play = (**waveform_arc).clone();
 
         if let Ok(mut guard) = COMMAND_SENDER.lock() {
@@ -104,7 +104,7 @@ pub fn play_preview_note(
         let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
         let track = app
             .tracks
-            .get(&track_id)
+            .get(&track_id.into())
             .ok_or("Can't find requested track")?;
         track.generator.as_ref().ok_or("Track has no generator")?.id
     };
@@ -113,7 +113,7 @@ pub fn play_preview_note(
         if let Some(sender) = command_guard.as_mut() {
             let _ = sender.push(AudioCommand::PlayPreviewNote {
                 note_key: note_key,
-                generator_id,
+                generator_id: generator_id.into(),
                 velocity,
                 is_note_on: is_on,
             });

@@ -3,7 +3,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    APP_STATE, api::project::{UiClip, UiTrack}, broadcast_state_change, core::project::{Clip, KarbeatSource, Pattern, TrackType}
+    api::project::{UiClip, UiTrack},
+    broadcast_state_change,
+    core::project::{
+        clip::ClipId,
+        track::{audio_waveform::AudioSourceId, midi::{PatternId, Pattern}, TrackId, TrackType},
+        clip::Clip, KarbeatSource,
+    },
+    APP_STATE,
 };
 
 pub enum UiSourceType {
@@ -22,6 +29,8 @@ pub fn create_clip(
     track_id: u32,
     start_time: u32,
 ) -> Result<(), String> {
+    let track_id = TrackId::from(track_id);
+
     {
         let Ok(mut app) = APP_STATE.write() else {
             return Err("error acquiring write lock for create_clip".to_string());
@@ -30,6 +39,7 @@ pub fn create_clip(
         match source_type {
             UiSourceType::Audio => {
                 let source_id = source_id.ok_or(format!("Audio clip needs source id"))?;
+                let source_id = AudioSourceId::from(source_id);
                 // check the source
                 let audio_source = app
                     .asset_library
@@ -48,40 +58,41 @@ pub fn create_clip(
                     source_frames // Fallback to avoid division by zero
                 };
 
-                app.clip_counter += 1;
-                let new_clip_id = app.clip_counter;
+                let new_clip_id = ClipId::next(&mut app.clip_counter);
 
                 let clip = Clip {
                     name: audio_source.name.clone(),
                     id: new_clip_id,
                     start_time: start_time as u64,
-                    source: crate::core::project::KarbeatSource::Audio(audio_source.clone()),
+                    source: crate::core::project::KarbeatSource::Audio(source_id),
                     offset_start: 0,
                     loop_length: timeline_length,
-                    source_id: source_id,
+                    source_id: source_id.into(),
                 };
                 app.add_clip_to_track(track_id, clip);
             }
             UiSourceType::Midi => {
-                app.pattern_counter += 1;
-                let new_pattern_id = app.pattern_counter;
+                let new_pattern_id = PatternId::next(&mut app.pattern_counter);
                 let sample_rate = app.audio_config.sample_rate;
-                let bpm = if app.transport.bpm == 0.0 {120.0} else {app.transport.bpm};
-                let samples_per_beat = (sample_rate as f32 / (bpm/60.0)) as u64;
+                let bpm = if app.transport.bpm == 0.0 {
+                    120.0
+                } else {
+                    app.transport.bpm
+                };
+                let samples_per_beat = (sample_rate as f32 / (bpm / 60.0)) as u64;
                 let timeline_length = 4 * samples_per_beat;
 
                 let default_ticks = 4 * 960;
                 let pattern = Arc::new(Pattern {
                     id: new_pattern_id,
-                    name: format!("Pattern {}", new_pattern_id),
+                    name: format!("Pattern {:?}", new_pattern_id),
                     length_ticks: default_ticks,
                     notes: Vec::new(),
                     next_note_id: 0,
                 });
 
                 app.pattern_pool.insert(new_pattern_id, pattern.clone());
-                app.clip_counter += 1;
-                let new_clip_id = app.clip_counter;
+                let new_clip_id = ClipId::next(&mut app.clip_counter);
                 let clip = Clip {
                     name: pattern.name.clone(),
                     id: new_clip_id,
@@ -89,7 +100,7 @@ pub fn create_clip(
                     source: KarbeatSource::Midi(new_pattern_id),
                     offset_start: 0,
                     loop_length: timeline_length,
-                    source_id: new_pattern_id
+                    source_id: new_pattern_id.into(),
                 };
 
                 app.add_clip_to_track(track_id, clip);
@@ -101,6 +112,9 @@ pub fn create_clip(
 }
 
 pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
+    let track_id = TrackId::from(track_id);
+    let clip_id = ClipId::from(clip_id);
+
     {
         let Ok(mut app) = APP_STATE.write() else {
             return Err("error acquiring write lock for create_clip".to_string());
@@ -120,9 +134,15 @@ pub fn resize_clip(
     edge: ResizeEdge,
     new_time_val: u64,
 ) -> Result<(), String> {
+    let track_id = TrackId::from(track_id);
+    let clip_id = ClipId::from(clip_id);
+    
     {
         let mut app = APP_STATE.write().map_err(|_| "Failed to lock state")?;
-        let track_arc = app.tracks.get_mut(&track_id).ok_or("Track not found")?;
+        let track_arc = app
+            .tracks
+            .get_mut(&track_id)
+            .ok_or("Track not found")?;
 
         let track = Arc::make_mut(track_arc);
 
@@ -186,9 +206,13 @@ pub fn move_clip(
     new_start_time: u64,
     new_track_id: Option<u32>,
 ) -> Result<(), String> {
+    let source_track_id = TrackId::from(source_track_id);
+    let clip_id = ClipId::from(clip_id);
+    let new_track_id_opt = new_track_id.map(TrackId::from);
+
     {
         let mut app = APP_STATE.write().map_err(|_| "failed to lock state")?;
-        let target_track_id = new_track_id.unwrap_or(source_track_id);
+        let target_track_id = new_track_id_opt.unwrap_or(source_track_id);
         let target_type = if let Some(target) = app.tracks.get(&target_track_id) {
             target.track_type.clone()
         } else {
@@ -241,10 +265,12 @@ pub fn move_clip(
 
             let mut new_clip = (*clip).clone();
             new_clip.start_time = new_start_time;
-            
+
             // get target track. this is already checked at the beginning, so it will never throws error
-            let target_track = Arc::make_mut(app.tracks.get_mut(&target_track_id).unwrap()); 
-            let _ = target_track.add_clip(new_clip).map_err(|e| format!("{}", e));
+            let target_track = Arc::make_mut(app.tracks.get_mut(&target_track_id.into()).unwrap());
+            let _ = target_track
+                .add_clip(new_clip)
+                .map_err(|e| format!("{}", e));
         }
         app.update_max_sample_index();
     }
@@ -255,31 +281,45 @@ pub fn move_clip(
 
 pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), String> {
     {
-        let mut app = APP_STATE.write().map_err(|e| format!("Lock failed: {}", e))?;
-        app.add_new_midi_track_with_generator(&generator_name).map_err(|e| format!("{}", e))?;
+        let mut app = APP_STATE
+            .write()
+            .map_err(|e| format!("Lock failed: {}", e))?;
+        app.add_new_midi_track_with_generator(&generator_name)
+            .map_err(|e| format!("{}", e))?;
     }
     broadcast_state_change();
     Ok(())
 }
 
 pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
-    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let track_id = TrackId::from(track_id);
+    let clip_id = ClipId::from(clip_id);
     
-    let track = app.tracks.get(&track_id)
-        .ok_or(format!("Track {} not found", track_id))?;
+    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
 
-    let clip = track.clips.iter()
+    let track = app
+        .tracks
+        .get(&track_id)
+        .ok_or(format!("Track {:?} not found", track_id))?;
+
+    let clip = track
+        .clips
+        .iter()
         .find(|c| c.id == clip_id)
-        .ok_or(format!("Clip {} not found in track {}", clip_id, track_id))?;
+        .ok_or(format!("Clip {:?} not found in track {:?}", clip_id, track_id))?;
 
     Ok(UiClip::from(clip.as_ref()))
 }
 
 // Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
 pub fn get_track(track_id: u32) -> Result<UiTrack, String> {
-    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
-    let track = app.tracks.get(&track_id)
-        .ok_or(format!("Track {} not found", track_id))?;
+    let track_id = TrackId::from(track_id);
     
+    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let track = app
+        .tracks
+        .get(&track_id)
+        .ok_or(format!("Track {:?} not found", track_id))?;
+
     Ok(UiTrack::from(track.as_ref()))
 }

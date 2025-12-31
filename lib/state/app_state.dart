@@ -9,11 +9,11 @@ import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/src/rust/api/track.dart' as trackApi;
+import 'package:karbeat/src/rust/api/track.dart' as track_api;
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
-import 'package:karbeat/src/rust/api/session.dart' as sessionApi;
+import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
@@ -164,7 +164,7 @@ class KarbeatState extends ChangeNotifier {
       switch (event) {
         case ProjectEvent.tracksChanged:
           await syncTrackState();
-          await syncMaxSampleIndex(); // Tracks changing usually affects song length
+          await syncMaxSampleIndex();
           break;
         case ProjectEvent.transportChanged:
           await syncTransportState();
@@ -218,8 +218,8 @@ class KarbeatState extends ChangeNotifier {
   double horizontalZoomLevel = 1000;
   Map<int, int> trackIdHeightMap = {};
 
-  // =============== PLACEMENT MODE STATE =====================
-  int? _placingSourceId; // The ID of the source we are moving
+  // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
+  int? _placingSourceId;
   int? get placingSourceId => _placingSourceId;
 
   // Track where the user wants to drop it
@@ -328,10 +328,8 @@ class KarbeatState extends ChangeNotifier {
   /// Efficiently syncs a SINGLE pattern instead of the whole list
   Future<void> syncPattern(int patternId) async {
     try {
-      // 1. Fetch only the specific pattern from Rust
       final updatedPattern = await getPattern(patternId: patternId);
       
-      // 2. Update the local map without replacing the whole thing
       // Creating a new map reference ensures Selectors in UI will trigger a rebuild
       final newMap = Map<int, UiPattern>.from(_patterns);
       newMap[patternId] = updatedPattern;
@@ -347,7 +345,6 @@ class KarbeatState extends ChangeNotifier {
   Future<void> syncTrack(int trackId) async {
     try {
       final updatedTrack = await getTrack(trackId: trackId);
-      
       final newMap = Map<int, UiTrack>.from(_tracks);
       newMap[trackId] = updatedTrack;
       _tracks = newMap;
@@ -384,7 +381,7 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> addMidiTrackWithGenerator(String generatorName) async {
     try {
-      await trackApi.addMidiTrackWithGenerator(generatorName: generatorName);
+      await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
       notifyBackendChange(ProjectEvent.tracksChanged);
       notifyBackendChange(ProjectEvent.generatorListChanged);
     } catch (e) {
@@ -496,9 +493,7 @@ class KarbeatState extends ChangeNotifier {
     }
 
     try {
-      // Call Rust API
-      await trackApi.deleteClip(trackId: trackId, clipId: clipId);
-      // State updates automatically via Broadcast -> Stream -> UI Rebuild
+      await track_api.deleteClip(trackId: trackId, clipId: clipId);
       // notifyBackendChange(ProjectEvent.tracksChanged);
       await syncTrack(trackId);
     } catch (e) {
@@ -515,7 +510,7 @@ class KarbeatState extends ChangeNotifier {
   ) async {
     _applyOptimisticResize(trackId, clipId, edge, newTime);
     try {
-      await trackApi.resizeClip(
+      await track_api.resizeClip(
         trackId: trackId,
         clipId: clipId,
         edge: edge,
@@ -535,7 +530,7 @@ class KarbeatState extends ChangeNotifier {
     int? newTrackId,
   }) async {
     try {
-      await trackApi.moveClip(
+      await track_api.moveClip(
         sourceTrackId: trackId,
         clipId: clipId,
         newStartTime: newStartTime,
@@ -742,7 +737,6 @@ class KarbeatState extends ChangeNotifier {
     // Filter out the specific note
     final updatedNotes = pattern.notes.where((n) => n.id != noteId).toList();
 
-    // Create updated Pattern object
     final updatedPattern = UiPattern(
       id: pattern.id,
       name: pattern.name,
@@ -825,7 +819,7 @@ class KarbeatState extends ChangeNotifier {
     required int clipId,
   }) async {
     try {
-      await sessionApi.updateSelectedClip(trackId: trackId, clipId: clipId);
+      await session_api.updateSelectedClip(trackId: trackId, clipId: clipId);
       KarbeatLogger.info(
         "Successfully updated the selected clip to $trackId:$clipId",
       );
@@ -838,7 +832,7 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> deselectClip() async {
     try {
-      await sessionApi.deselectClip();
+      await session_api.deselectClip();
       notifyBackendChange(ProjectEvent.sessionChanged);
     } catch (e) {
       KarbeatLogger.error('Error when updating selected clip: $e');

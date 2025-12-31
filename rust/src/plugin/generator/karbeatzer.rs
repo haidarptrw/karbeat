@@ -1,7 +1,9 @@
 // src/plugin/generator/karbeatzer.rs
 
-use crate::core::plugin::{KarbeatGenerator, MidiEvent, MidiMessage};
+// use crate::core::plugin::{KarbeatGenerator, MidiEvent, MidiMessage};
 use std::{collections::HashMap, f32::consts::PI};
+
+use crate::core::project::plugin::{KarbeatGenerator, MidiEvent, MidiMessage};
 
 /// **Karbeatzer**, an enhanced subtractive synthesizer
 pub struct Karbeatzer {

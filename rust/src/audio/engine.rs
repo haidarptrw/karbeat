@@ -11,10 +11,10 @@ use triple_buffer::Output;
 use crate::{
     audio::{event::PlaybackPosition, render_state::AudioRenderState},
     commands::AudioCommand,
-    core::{
-        plugin::{KarbeatPlugin, MidiEvent, MidiMessage},
-        project::{Clip, KarbeatSource, Pattern, TransportState},
-        track::audio_waveform::AudioWaveform,
+    core::project::plugin::{MidiEvent, MidiMessage},
+    core::project::{
+        AudioSourceId, AudioWaveform, Clip, GeneratorId, GeneratorInstance, GeneratorInstanceType,
+        KarbeatPlugin, KarbeatSource, KarbeatTrack, Pattern, TrackId, TransportState,
     },
 };
 
@@ -31,7 +31,7 @@ pub struct AudioEngine {
     current_bar: usize,
 
     // Polyphony: Map <TrackID, List of Active Voices>
-    active_voices: HashMap<Option<u32>, Vec<Voice>>,
+    active_voices: HashMap<TrackId, Vec<Voice>>,
 
     // Real-time Command Queue
     command_consumer: Consumer<AudioCommand>,
@@ -49,7 +49,7 @@ pub enum Voice {
 }
 
 pub struct GeneratorVoice {
-    pub id: u32,
+    pub id: GeneratorId,
     // The shared plugin instance (Thread-safe)
     pub generator: Arc<Mutex<KarbeatPlugin>>,
     // Events queued for the CURRENT buffer block only
@@ -114,7 +114,7 @@ impl AudioEngine {
     pub fn process(&mut self, output_buffer: &mut [f32]) {
         // 1. Sync State
         if self.state_consumer.update() {
-            let new_state =  self.state_consumer.read().clone();
+            let new_state = self.state_consumer.read().clone();
 
             // Check if we switched from Playing -> Stopped via heavy update
             if self.current_state.transport.is_playing && !new_state.transport.is_playing {
@@ -214,13 +214,12 @@ impl AudioEngine {
                 // e.g Note placing on piano roll, hold press from a keyboard,
                 // or a press at the piano tile on the left of piano roll screen
                 // it also requires the logic to handle input based on the ADSR of the voice generator
-                self.trigger_live_note(generator_id, note_key, velocity, is_note_on);
+                self.trigger_live_note(generator_id.into(), note_key, velocity, is_note_on);
             }
             AudioCommand::SetBPM(bpm) => {
                 self.current_state.transport.bpm = bpm;
                 self.emit_current_playback_position();
-
-            },
+            }
         }
     }
 
@@ -284,9 +283,11 @@ impl AudioEngine {
     }
 
     #[allow(dead_code)]
-    fn emit_position_toggle_play(&mut self, is_playing:bool) {
+    fn emit_position_toggle_play(&mut self, is_playing: bool) {
         if !self.position_producer.is_full() {
-            let _ =  self.position_producer.push(self.build_position_struct(Some(is_playing)));
+            let _ = self
+                .position_producer
+                .push(self.build_position_struct(Some(is_playing)));
         }
     }
 
@@ -314,22 +315,23 @@ impl AudioEngine {
         }
     }
 
-    fn trigger_live_note(&mut self, generator_id: u32, key: u8, velocity: u8, is_on: bool) {
+    fn trigger_live_note(&mut self, generator_id: GeneratorId, key: u8, velocity: u8, is_on: bool) {
+        // Find the track that has this generator
         let target_info = self.current_state.graph.tracks.iter().find_map(|t| {
             if let Some(gen) = &t.generator {
                 if gen.id == generator_id {
-                    return Some((t.target_mixer_channel_id, gen.clone()));
+                    return Some((t.id, gen.clone()));
                 }
             }
             None
         });
 
-        if let Some((mixer_id, gen_instance)) = target_info {
+        if let Some((track_id, gen_instance)) = target_info {
             // Ensure the voice is active (even if Transport is stopped)
             // This creates the voice if it doesn't exist.
-            if let Some(voice_idx) = self.ensure_generator_voice(mixer_id, &gen_instance) {
+            if let Some(voice_idx) = self.ensure_generator_voice(track_id, &gen_instance) {
                 // Inject MIDI event
-                if let Some(voices) = self.active_voices.get_mut(&mixer_id) {
+                if let Some(voices) = self.active_voices.get_mut(&track_id) {
                     if let Voice::Generator(gen_voice) = &mut voices[voice_idx] {
                         let message = if is_on {
                             MidiMessage::NoteOn { key, velocity }
@@ -348,7 +350,7 @@ impl AudioEngine {
                 }
             } else {
                 log::warn!(
-                    "PlayPreviewNote: Generator ID {} not found in active graph",
+                    "PlayPreviewNote: Generator ID {:?} not found in active graph",
                     generator_id
                 );
             }
@@ -488,17 +490,13 @@ impl AudioEngine {
         }
     }
 
-    fn process_track(
-        &mut self,
-        track: &crate::core::project::KarbeatTrack,
-        start_time: u64,
-        end_time: u64,
-    ) {
+    fn process_track(&mut self, track: &KarbeatTrack, start_time: u64, end_time: u64) {
+        let track_id = track.id;
+
         // 1. Ensure Generator Voice exists
         let mut gen_voice_idx = None;
         if let Some(gen_instance) = &track.generator {
-            gen_voice_idx =
-                self.ensure_generator_voice(track.target_mixer_channel_id, gen_instance);
+            gen_voice_idx = self.ensure_generator_voice(track_id, gen_instance);
         }
 
         // 2. Process Clips
@@ -512,16 +510,25 @@ impl AudioEngine {
             }
 
             match &clip.source {
-                KarbeatSource::Audio(waveform) => {
-                    Self::prepare_audio_voice(
-                        &mut self.active_voices,
-                        track.target_mixer_channel_id,
-                        clip,
-                        waveform,
-                        start_time,
-                        end_time,
-                        self.sample_rate,
-                    );
+                KarbeatSource::Audio(source_id) => {
+                    // Look up the actual waveform from asset library
+                    if let Some(waveform) = self
+                        .current_state
+                        .graph
+                        .asset_library
+                        .source_map
+                        .get(source_id)
+                    {
+                        Self::prepare_audio_voice(
+                            &mut self.active_voices,
+                            track_id,
+                            clip,
+                            waveform.as_ref(),
+                            start_time,
+                            end_time,
+                            self.sample_rate,
+                        );
+                    }
                 }
                 KarbeatSource::Midi(id) => {
                     // Look up the FRESH pattern from the pool using the ID.
@@ -529,9 +536,7 @@ impl AudioEngine {
 
                     if let Some(pattern) = fresh_pattern {
                         if let Some(idx) = gen_voice_idx {
-                            if let Some(voices) =
-                                self.active_voices.get_mut(&track.target_mixer_channel_id)
-                            {
+                            if let Some(voices) = self.active_voices.get_mut(&track_id) {
                                 if let Voice::Generator(ref mut gen_voice) = voices[idx] {
                                     Self::schedule_midi_events(
                                         &mut gen_voice.events,
@@ -554,10 +559,10 @@ impl AudioEngine {
 
     fn ensure_generator_voice(
         &mut self,
-        mixer_id: Option<u32>,
-        gen_instance: &crate::core::project::GeneratorInstance,
+        track_id: TrackId,
+        gen_instance: &GeneratorInstance,
     ) -> Option<usize> {
-        let voices = self.active_voices.entry(mixer_id).or_insert(Vec::new());
+        let voices = self.active_voices.entry(track_id).or_insert(Vec::new());
 
         // Find existing
         if let Some(idx) = voices
@@ -568,8 +573,7 @@ impl AudioEngine {
         }
 
         // Create new
-        if let crate::core::project::GeneratorInstanceType::Plugin(p) = &gen_instance.instance_type
-        {
+        if let GeneratorInstanceType::Plugin(p) = &gen_instance.instance_type {
             if let Some(plugin_arc) = &p.instance {
                 if let Ok(mut guard) = plugin_arc.lock() {
                     if let KarbeatPlugin::Generator(gen) = &mut *guard {
@@ -597,9 +601,10 @@ impl AudioEngine {
     }
 
     // --- HELPER: AUDIO CLIP PROCESSING ---
+    #[allow(dead_code)]
     fn process_audio_clip(
-        active_voices: &mut HashMap<Option<u32>, Vec<Voice>>,
-        mixer_id: Option<u32>,
+        active_voices: &mut HashMap<TrackId, Vec<Voice>>,
+        track_id: TrackId,
         clip: &Clip,
         waveform: &AudioWaveform,
         buffer_start: u64,
@@ -646,7 +651,7 @@ impl AudioEngine {
             }
         }
 
-        let voices = active_voices.entry(mixer_id).or_insert(Vec::new());
+        let voices = active_voices.entry(track_id).or_insert(Vec::new());
 
         voices.push(Voice::Audio(AudioVoice {
             waveform: waveform.clone(),
@@ -795,8 +800,8 @@ impl AudioEngine {
     }
 
     fn prepare_audio_voice(
-        active_voices: &mut HashMap<Option<u32>, Vec<Voice>>,
-        mixer_id: Option<u32>,
+        active_voices: &mut HashMap<TrackId, Vec<Voice>>,
+        track_id: TrackId,
         clip: &Clip,
         waveform: &AudioWaveform,
         buffer_start: u64,
@@ -838,7 +843,7 @@ impl AudioEngine {
         };
 
         active_voices
-            .entry(mixer_id)
+            .entry(track_id)
             .or_default()
             .push(Voice::Audio(AudioVoice {
                 waveform: waveform.clone(),
@@ -892,8 +897,10 @@ impl AudioEngine {
                 let abs_start = clip.start_time + pattern_offset + note_start - clip.offset_start;
                 let abs_end = abs_start + note_dur;
 
-                if abs_start < clip.offset_start { continue; }
-                
+                if abs_start < clip.offset_start {
+                    continue;
+                }
+
                 if abs_start >= buffer_start && abs_start < buffer_end {
                     events.push(MidiEvent {
                         sample_offset: (abs_start - buffer_start) as usize,

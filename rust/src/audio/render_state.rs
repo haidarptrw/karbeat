@@ -1,7 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    core::project::{ApplicationState, AssetLibrary, KarbeatTrack, MixerChannel, MixerState, Pattern, TransportState},
+    core::project::{
+        track::{
+            midi::{Pattern, PatternId},
+            KarbeatTrack,
+        },
+        transport::TransportState,
+        ApplicationState, AssetLibrary, MixerChannel, MixerState,
+    },
     utils::math::is_power_of_two,
 };
 
@@ -9,7 +16,7 @@ use crate::{
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
     pub tracks: Vec<Arc<KarbeatTrack>>,
-    pub patterns: HashMap<u32, Arc<Pattern>>,
+    pub patterns: HashMap<PatternId, Arc<Pattern>>,
     pub mixer_state: MixerState,
     pub asset_library: Arc<AssetLibrary>,
     pub max_sample_index: u64,
@@ -43,11 +50,11 @@ impl From<&ApplicationState> for AudioGraphState {
 pub struct AudioRenderState {
     pub graph: AudioGraphState,
     // Transport is now separate to allow fast updates without full graph clone
-    // However, for backward compatibility with your TripleBuffer setup, 
+    // However, for backward compatibility with your TripleBuffer setup,
     // we can keep a unified struct if your architecture requires a single atomic update.
     // If you implemented the split buffers (graph_in, transport_in), this struct is not needed as a monolith.
     // Assuming we stick to the monolithic struct for `state_consumer` in `AudioEngine`:
-    pub transport: TransportState, 
+    pub transport: TransportState,
 }
 
 impl Default for AudioRenderState {

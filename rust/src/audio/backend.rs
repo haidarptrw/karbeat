@@ -12,7 +12,8 @@ use triple_buffer::Output;
 
 use crate::{
     audio::{engine::AudioEngine, event::PlaybackPosition, render_state::AudioRenderState},
-    commands::AudioCommand, core::project::TransportState,
+    commands::AudioCommand,
+    core::project::transport::TransportState,
 };
 
 static STREAM_GUARD: Lazy<Mutex<Option<cpal::Stream>>> = Lazy::new(|| Mutex::new(None));

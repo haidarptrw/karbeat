@@ -134,9 +134,9 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     _lastPaintedKey = null;
   }
 
-  void _handleVirtualKeyPan(Offset localPos) {
-    const double whiteKeyWidth = 40.0;
-  }
+  // void _handleVirtualKeyPan(Offset localPos) {
+  //   const double whiteKeyWidth = 40.0;
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -520,8 +520,8 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
   late double _localLeft;
   late double _localWidth;
   late double _localTop;
-  double _startDragX = 0;
-  double _startDragY = 0;
+  // double _startDragX = 0;
+  // double _startDragY = 0;
   _NoteDragMode _mode = _NoteDragMode.none;
 
   int? _currentPreviewKey;
@@ -601,8 +601,8 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
               } else {
                 _mode = _NoteDragMode.move;
               }
-              _startDragX = _localLeft;
-              _startDragY = _localTop;
+              // _startDragX = _localLeft;
+              // _startDragY = _localTop;
             });
 
             // Play sound on touch

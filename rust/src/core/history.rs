@@ -1,29 +1,29 @@
 use std::sync::Arc;
 
-use crate::core::project::{ApplicationState, Note};
+use crate::core::project::{track::midi::PatternId, ApplicationState, Note, NoteId};
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
 pub enum ProjectAction {
     AddNote {
-        pattern_id: u32,
+        pattern_id: PatternId,
         note: Note,
     },
     DeleteNote {
-        pattern_id: u32,
+        pattern_id: PatternId,
         note: Note, // Keep the data to restore it on Undo
     },
     MoveNote {
-        pattern_id: u32,
-        note_id: u32,
+        pattern_id: PatternId,
+        note_id: NoteId,
         old_tick: u64,
         old_key: u8,
         new_tick: u64,
         new_key: u8,
     },
     ResizeNote {
-        pattern_id: u32,
-        note_id: u32,
+        pattern_id: PatternId,
+        note_id: NoteId,
         old_duration: u64,
         new_duration: u64,
     },
@@ -83,9 +83,12 @@ impl HistoryManager {
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = Arc::make_mut(pattern);
-                let index = p.notes.iter().position(|n| n.id == note.id)
+                let index = p
+                    .notes
+                    .iter()
+                    .position(|n| n.id == note.id)
                     .ok_or("Note not found")?;
-                
+
                 p.delete_note(index).map_err(|e| e.to_string())?;
             }
             ProjectAction::DeleteNote { pattern_id, note } => {
@@ -110,8 +113,13 @@ impl HistoryManager {
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = Arc::make_mut(pattern);
-                let index = p.notes.iter().position(|n| n.id == *note_id).ok_or("Note not found")?;
-                p.move_note(index, *old_tick, *old_key).map_err(|e| e.to_string())?;
+                let index = p
+                    .notes
+                    .iter()
+                    .position(|n| n.id == *note_id)
+                    .ok_or("Note not found")?;
+                p.move_note(index, *old_tick, *old_key)
+                    .map_err(|e| e.to_string())?;
             }
             ProjectAction::ResizeNote {
                 pattern_id,
@@ -124,8 +132,13 @@ impl HistoryManager {
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = Arc::make_mut(pattern);
-                let index = p.notes.iter().position(|n| n.id == *note_id).ok_or("Note not found")?;
-                p.resize_note(index, *old_duration).map_err(|e| e.to_string())?;
+                let index = p
+                    .notes
+                    .iter()
+                    .position(|n| n.id == *note_id)
+                    .ok_or("Note not found")?;
+                p.resize_note(index, *old_duration)
+                    .map_err(|e| e.to_string())?;
             }
             ProjectAction::Batch(actions) => {
                 // Inverse of Batch: Undo actions in REVERSE order
@@ -158,7 +171,11 @@ impl HistoryManager {
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = Arc::make_mut(pattern);
-                let index = p.notes.iter().position(|n| n.id == note.id).ok_or("Note not found")?;
+                let index = p
+                    .notes
+                    .iter()
+                    .position(|n| n.id == note.id)
+                    .ok_or("Note not found")?;
                 p.delete_note(index).map_err(|e| e.to_string())?;
             }
             ProjectAction::MoveNote {
@@ -173,8 +190,13 @@ impl HistoryManager {
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = Arc::make_mut(pattern);
-                let index = p.notes.iter().position(|n| n.id == *note_id).ok_or("Note not found")?;
-                p.move_note(index, *new_tick, *new_key).map_err(|e| e.to_string())?;
+                let index = p
+                    .notes
+                    .iter()
+                    .position(|n| n.id == *note_id)
+                    .ok_or("Note not found")?;
+                p.move_note(index, *new_tick, *new_key)
+                    .map_err(|e| e.to_string())?;
             }
             ProjectAction::ResizeNote {
                 pattern_id,
@@ -187,8 +209,13 @@ impl HistoryManager {
                     .get_mut(pattern_id)
                     .ok_or("Pattern not found")?;
                 let p = Arc::make_mut(pattern);
-                let index = p.notes.iter().position(|n| n.id == *note_id).ok_or("Note not found")?;
-                p.resize_note(index, *new_duration).map_err(|e| e.to_string())?;
+                let index = p
+                    .notes
+                    .iter()
+                    .position(|n| n.id == *note_id)
+                    .ok_or("Note not found")?;
+                p.resize_note(index, *new_duration)
+                    .map_err(|e| e.to_string())?;
             }
             ProjectAction::Batch(actions) => {
                 // Forward of Batch: Apply actions in NORMAL order
