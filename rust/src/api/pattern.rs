@@ -1,15 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    broadcast_state_change,
-    core::{
+    APP_STATE, HISTORY, broadcast_state_change, core::{
         history::ProjectAction,
         project::{
-            track::midi::{Pattern, PatternId},
-            Note, NoteId,
+            Note, NoteId, track::midi::{Pattern, PatternId}
         },
-    },
-    sync_audio_graph, APP_STATE, HISTORY,
+    }, sync_audio_graph, utils::lock::{get_app_read, get_app_write, get_history_lock}
 };
 
 pub struct UiPattern {
@@ -61,7 +58,7 @@ impl From<&Pattern> for UiPattern {
 
 pub fn get_pattern(pattern_id: u32) -> Result<UiPattern, String> {
     let pattern_id = PatternId::from(pattern_id);
-    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let app = get_app_read();
     let pattern_arc = app
         .pattern_pool
         .get(&pattern_id)
@@ -72,7 +69,7 @@ pub fn get_pattern(pattern_id: u32) -> Result<UiPattern, String> {
 }
 
 pub fn get_patterns() -> Result<HashMap<u32, UiPattern>, String> {
-    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let app = get_app_read();
     let patterns = app
         .pattern_pool
         .iter()
@@ -95,9 +92,9 @@ pub fn add_note(
         return Err("Invalid key input: it must not exceed 127".to_string());
     }
 
-    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
+    let mut history = get_history_lock();
     let note: Option<Note> = {
-        let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+        let mut app = get_app_write();
         let pattern_arc = app
             .pattern_pool
             .get_mut(&PatternId::from(pattern_id))
@@ -134,9 +131,9 @@ pub fn add_note(
 }
 
 pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
-    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
+    let mut history = get_history_lock();
     let note: Note = {
-        let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+        let mut app = get_app_write();
         let pattern_arc = app
             .pattern_pool
             .get_mut(&PatternId::from(pattern_id))
@@ -164,8 +161,8 @@ pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
 }
 
 pub fn resize_note(pattern_id: u32, note_id: u32, new_duration: u64) -> Result<UiNote, String> {
-    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
-    let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+    let mut history = get_history_lock();
+    let mut app = get_app_write();
     let pattern_arc = app
         .pattern_pool
         .get_mut(&PatternId::from(pattern_id))
@@ -211,12 +208,12 @@ pub fn move_note(
     let pattern_id = PatternId::from(pattern_id);
     let note_id = NoteId::from(note_id);
 
-    let mut history = HISTORY.lock().map_err(|e| format!("{}", e))?;
+    let mut history = get_history_lock();
     if new_key > 127 {
         return Err("Invalid key".to_string());
     }
 
-    let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+    let mut app = get_app_write();
     let pattern_arc = app
         .pattern_pool
         .get_mut(&pattern_id)
@@ -275,7 +272,7 @@ pub fn change_note_params(
     let velocity = velocity.and_then(|v| u8::try_from(v).ok());
     let micro_offset = micro_offset.and_then(|m| i8::try_from(m).ok());
 
-    let mut app = APP_STATE.write().map_err(|e| format!("{}", e))?;
+    let mut app = get_app_write();
     let pattern_arc = app
         .pattern_pool
         .get_mut(&pattern_id)

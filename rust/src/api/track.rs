@@ -3,14 +3,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    api::project::{UiClip, UiTrack},
-    broadcast_state_change,
-    core::project::{
-        clip::ClipId,
-        track::{audio_waveform::AudioSourceId, midi::{PatternId, Pattern}, TrackId, TrackType},
-        clip::Clip, KarbeatSource,
-    },
-    APP_STATE,
+    APP_STATE, api::project::{UiClip, UiTrack}, broadcast_state_change, core::project::{
+        KarbeatSource, clip::{Clip, ClipId}, track::{TrackId, TrackType, audio_waveform::AudioSourceId, midi::{Pattern, PatternId}}
+    }, utils::lock::{get_app_read, get_app_write}
 };
 
 pub enum UiSourceType {
@@ -32,9 +27,7 @@ pub fn create_clip(
     let track_id = TrackId::from(track_id);
 
     {
-        let Ok(mut app) = APP_STATE.write() else {
-            return Err("error acquiring write lock for create_clip".to_string());
-        };
+        let mut app = get_app_write();
 
         match source_type {
             UiSourceType::Audio => {
@@ -116,9 +109,7 @@ pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
     let clip_id = ClipId::from(clip_id);
 
     {
-        let Ok(mut app) = APP_STATE.write() else {
-            return Err("error acquiring write lock for create_clip".to_string());
-        };
+        let mut app = get_app_write();
 
         app.delete_clip_from_track(track_id, clip_id);
     }
@@ -138,7 +129,7 @@ pub fn resize_clip(
     let clip_id = ClipId::from(clip_id);
     
     {
-        let mut app = APP_STATE.write().map_err(|_| "Failed to lock state")?;
+        let mut app = get_app_write();
         let track_arc = app
             .tracks
             .get_mut(&track_id)
@@ -211,7 +202,7 @@ pub fn move_clip(
     let new_track_id_opt = new_track_id.map(TrackId::from);
 
     {
-        let mut app = APP_STATE.write().map_err(|_| "failed to lock state")?;
+        let mut app = get_app_write();
         let target_track_id = new_track_id_opt.unwrap_or(source_track_id);
         let target_type = if let Some(target) = app.tracks.get(&target_track_id) {
             target.track_type.clone()
@@ -281,9 +272,7 @@ pub fn move_clip(
 
 pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), String> {
     {
-        let mut app = APP_STATE
-            .write()
-            .map_err(|e| format!("Lock failed: {}", e))?;
+        let mut app = get_app_write();
         app.add_new_midi_track_with_generator(&generator_name)
             .map_err(|e| format!("{}", e))?;
     }
@@ -295,7 +284,7 @@ pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
     let track_id = TrackId::from(track_id);
     let clip_id = ClipId::from(clip_id);
     
-    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let app = get_app_read();
 
     let track = app
         .tracks
@@ -315,7 +304,7 @@ pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
 pub fn get_track(track_id: u32) -> Result<UiTrack, String> {
     let track_id = TrackId::from(track_id);
     
-    let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+    let app = get_app_read();
     let track = app
         .tracks
         .get(&track_id)
