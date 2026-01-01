@@ -26,7 +26,7 @@ pub struct KarbeatTrack {
     pub name: String,
     pub color: String,
     pub track_type: TrackType,
-    pub clips: Arc<BTreeSet<Arc<Clip>>>,
+    pub clips: BTreeSet<Arc<Clip>>,
     pub max_sample_index: u64,
     pub generator: Option<GeneratorInstance>,
 }
@@ -38,7 +38,7 @@ impl Default for KarbeatTrack {
             name: Default::default(),
             color: Default::default(),
             track_type: TrackType::Audio,
-            clips: Arc::new(BTreeSet::new()),
+            clips: BTreeSet::new(),
             max_sample_index: 0,
             generator: None,
         }
@@ -67,7 +67,7 @@ impl std::str::FromStr for TrackType {
 
 impl KarbeatTrack {
     pub fn clips(&self) -> &BTreeSet<Arc<Clip>> {
-        return self.clips.as_ref();
+        return &self.clips;
     }
 
     pub fn clips_to_vec(&self) -> Vec<Arc<Clip>> {
@@ -94,9 +94,8 @@ impl KarbeatTrack {
             let clip_arc = Arc::new(clip);
 
             // 2. COW: Get mutable access to the vector
-            let clips_set = Arc::make_mut(&mut self.clips);
+            let clips_set = &mut self.clips;
 
-            // 4. Insert pointer (Cheap!)
             clips_set.insert(clip_arc);
 
             // update the max sample index
@@ -115,7 +114,7 @@ impl KarbeatTrack {
 
     /// Remove the clip, change max_index_sample if the deleted clip are the latest end sample index
     pub fn remove_clip(&mut self, clip_id: ClipId) -> bool {
-        let clips_set = Arc::make_mut(&mut self.clips);
+        let clips_set = &mut self.clips;
 
         let initial_len = clips_set.len();
 
@@ -137,7 +136,7 @@ impl KarbeatTrack {
 
     pub fn remove_clip_by_source_id(&mut self, source_id: impl Into<u32>, is_generator: bool) {
         let source_id_u32: u32 = source_id.into();
-        let clips_set = Arc::make_mut(&mut self.clips);
+        let clips_set = &mut self.clips;
 
         clips_set.retain(|clip_arc| match &clip_arc.source {
             KarbeatSource::Audio(_) => {
@@ -154,7 +153,7 @@ impl KarbeatTrack {
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
     pub fn add_clips_bulk(&mut self, new_clips: Vec<Arc<Clip>>) {
-        let clips_vec = Arc::make_mut(&mut self.clips);
+        let clips_vec = &mut self.clips;
         clips_vec.extend(new_clips);
 
         self.max_sample_index = clips_vec

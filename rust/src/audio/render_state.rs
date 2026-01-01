@@ -15,7 +15,7 @@ use crate::{
 /// Structural State: Tracks, Patterns, Mixer, Assets (Heavy, changes rarely)
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
-    pub tracks: Vec<Arc<KarbeatTrack>>,
+    pub tracks: Arc<[Arc<KarbeatTrack>]>,
     pub patterns: HashMap<PatternId, Arc<Pattern>>,
     pub mixer_state: MixerState,
     pub asset_library: Arc<AssetLibrary>,
@@ -26,11 +26,11 @@ pub struct AudioGraphState {
 
 impl From<&ApplicationState> for AudioGraphState {
     fn from(app: &ApplicationState) -> Self {
-        let mut tracks: Vec<Arc<KarbeatTrack>> = app.tracks.values().cloned().collect();
-        tracks.sort_by_key(|t| t.id);
+        let mut tracks_vec: Vec<Arc<KarbeatTrack>> = app.tracks.values().cloned().collect();
+        tracks_vec.sort_by_key(|t| t.id);
 
         Self {
-            tracks,
+            tracks: Arc::from(tracks_vec),
             patterns: app.pattern_pool.clone(),
             mixer_state: app.mixer.clone(),
             asset_library: app.asset_library.clone(),

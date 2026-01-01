@@ -85,7 +85,7 @@ pub fn create_clip(
                 let default_ticks = 4 * 960;
                 let pattern = Arc::new(Pattern {
                     id: new_pattern_id,
-                    name: format!("Pattern {:?}", new_pattern_id),
+                    name: format!("Pattern {}", new_pattern_id.to_u32()),
                     length_ticks: default_ticks,
                     notes: Vec::new(),
                     next_note_id: 0,
@@ -146,7 +146,7 @@ pub fn resize_clip(
 
         let track = Arc::make_mut(track_arc);
 
-        let clips = Arc::make_mut(&mut track.clips);
+        let clips = &mut track.clips;
 
         if let Some(clip) = clips.iter().find(|c| c.id == clip_id).cloned() {
             clips.remove(&clip);
@@ -226,7 +226,7 @@ pub fn move_clip(
 
         if source_track_id == target_track_id {
             let track = Arc::make_mut(track_arc);
-            let clips = Arc::make_mut(&mut track.clips);
+            let clips = &mut track.clips;
             if let Some(clip) = clips.iter().find(|c| c.id == clip_id).cloned() {
                 // remove old clip
                 clips.remove(&clip);
@@ -239,7 +239,7 @@ pub fn move_clip(
             }
         } else {
             let track = Arc::make_mut(track_arc);
-            let clips = Arc::make_mut(&mut track.clips);
+            let clips = &mut track.clips;
 
             let clip = clips
                 .iter()
