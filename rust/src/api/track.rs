@@ -3,9 +3,18 @@
 use std::sync::Arc;
 
 use crate::{
-    api::project::{UiClip, UiTrack}, broadcast_state_change, core::project::{
-        KarbeatSource, clip::{Clip, ClipId}, track::{TrackId, TrackType, audio_waveform::AudioSourceId, midi::{Pattern, PatternId}}
-    }, utils::lock::{get_app_read, get_app_write}
+    api::project::{UiClip, UiTrack},
+    broadcast_state_change,
+    core::project::{
+        clip::{Clip, ClipId},
+        track::{
+            audio_waveform::AudioSourceId,
+            midi::{Pattern, PatternId},
+            TrackId, TrackType,
+        },
+        KarbeatSource,
+    },
+    utils::lock::{get_app_read, get_app_write},
 };
 
 pub enum UiSourceType {
@@ -44,9 +53,9 @@ pub fn create_clip(
                 let project_sample_rate = app.audio_config.sample_rate as f64;
                 let source_sample_rate = audio_source.sample_rate as f64;
 
-                let source_frames = audio_source.buffer.len() as u64 / audio_source.channels as u64;
+                let source_frames = audio_source.buffer.len() as u32 / audio_source.channels as u32;
                 let timeline_length = if source_sample_rate > 0.0 {
-                    (source_frames as f64 * (project_sample_rate / source_sample_rate)) as u64
+                    (source_frames as f64 * (project_sample_rate / source_sample_rate)) as u32
                 } else {
                     source_frames // Fallback to avoid division by zero
                 };
@@ -56,7 +65,7 @@ pub fn create_clip(
                 let clip = Clip {
                     name: audio_source.name.clone(),
                     id: new_clip_id,
-                    start_time: start_time as u64,
+                    start_time,
                     source: crate::core::project::KarbeatSource::Audio(source_id),
                     offset_start: 0,
                     loop_length: timeline_length,
@@ -65,35 +74,58 @@ pub fn create_clip(
                 app.add_clip_to_track(track_id, clip);
             }
             UiSourceType::Midi => {
-                let new_pattern_id = PatternId::next(&mut app.pattern_counter);
                 let sample_rate = app.audio_config.sample_rate;
                 let bpm = if app.transport.bpm == 0.0 {
                     120.0
                 } else {
                     app.transport.bpm
                 };
-                let samples_per_beat = (sample_rate as f32 / (bpm / 60.0)) as u64;
-                let timeline_length = 4 * samples_per_beat;
+                let samples_per_beat = (sample_rate as f32 / (bpm / 60.0)) as u32;
 
-                let default_ticks = 4 * 960;
-                let pattern = Arc::new(Pattern {
-                    id: new_pattern_id,
-                    name: format!("Pattern {}", new_pattern_id.to_u32()),
-                    length_ticks: default_ticks,
-                    notes: Vec::new(),
-                    next_note_id: 0,
-                });
+                // Use existing pattern if source_id provided, otherwise create new
+                let (pattern_id, timeline_length) = if let Some(id) = source_id {
+                    let pattern_id = PatternId::from(id);
+                    let pattern = app
+                        .pattern_pool
+                        .get(&pattern_id)
+                        .ok_or(format!("Pattern {} not found", id))?;
 
-                app.pattern_pool.insert(new_pattern_id, pattern.clone());
+                    // Calculate length from pattern's ticks
+                    let samples_per_tick = samples_per_beat as f32 / 960.0;
+                    let length = (pattern.length_ticks as f32 * samples_per_tick) as u32;
+                    (pattern_id, length)
+                } else {
+                    // Create new pattern
+                    let new_pattern_id = PatternId::next(&mut app.pattern_counter);
+                    let default_ticks = 4 * 960;
+                    let timeline_length = 4 * samples_per_beat;
+
+                    let pattern = Arc::new(Pattern {
+                        id: new_pattern_id,
+                        name: format!("Pattern {}", new_pattern_id.to_u32()),
+                        length_ticks: default_ticks,
+                        notes: Vec::new(),
+                        next_note_id: 0,
+                    });
+                    app.pattern_pool.insert(new_pattern_id, pattern);
+                    (new_pattern_id, timeline_length)
+                };
+
+                let pattern_name = app
+                    .pattern_pool
+                    .get(&pattern_id)
+                    .map(|p| p.name.clone())
+                    .unwrap_or_else(|| format!("Pattern {}", pattern_id.to_u32()));
+
                 let new_clip_id = ClipId::next(&mut app.clip_counter);
                 let clip = Clip {
-                    name: pattern.name.clone(),
+                    name: pattern_name,
                     id: new_clip_id,
-                    start_time: start_time as u64,
-                    source: KarbeatSource::Midi(new_pattern_id),
+                    start_time,
+                    source: KarbeatSource::Midi(pattern_id),
                     offset_start: 0,
                     loop_length: timeline_length,
-                    source_id: new_pattern_id.into(),
+                    source_id: pattern_id.into(),
                 };
 
                 app.add_clip_to_track(track_id, clip);
@@ -123,17 +155,14 @@ pub fn resize_clip(
     track_id: u32,
     clip_id: u32,
     edge: ResizeEdge,
-    new_time_val: u64,
+    new_time_val: u32,
 ) -> Result<(), String> {
     let track_id = TrackId::from(track_id);
     let clip_id = ClipId::from(clip_id);
-    
+
     {
         let mut app = get_app_write();
-        let track_arc = app
-            .tracks
-            .get_mut(&track_id)
-            .ok_or("Track not found")?;
+        let track_arc = app.tracks.get_mut(&track_id).ok_or("Track not found")?;
 
         let track = Arc::make_mut(track_arc);
 
@@ -171,7 +200,7 @@ pub fn resize_clip(
                             modified_clip.start_time = new_start;
                             // Length shrinks as start moves right (or grows as it moves left)
                             modified_clip.loop_length = old_end - new_start;
-                            modified_clip.offset_start = new_offset as u64;
+                            modified_clip.offset_start = new_offset as u32;
                         }
                     }
                 }
@@ -194,7 +223,7 @@ pub fn resize_clip(
 pub fn move_clip(
     source_track_id: u32,
     clip_id: u32,
-    new_start_time: u64,
+    new_start_time: u32,
     new_track_id: Option<u32>,
 ) -> Result<(), String> {
     let source_track_id = TrackId::from(source_track_id);
@@ -283,7 +312,7 @@ pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), Strin
 pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
     let track_id = TrackId::from(track_id);
     let clip_id = ClipId::from(clip_id);
-    
+
     let app = get_app_read();
 
     let track = app
@@ -291,11 +320,10 @@ pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
         .get(&track_id)
         .ok_or(format!("Track {:?} not found", track_id))?;
 
-    let clip = track
-        .clips
-        .iter()
-        .find(|c| c.id == clip_id)
-        .ok_or(format!("Clip {:?} not found in track {:?}", clip_id, track_id))?;
+    let clip = track.clips.iter().find(|c| c.id == clip_id).ok_or(format!(
+        "Clip {:?} not found in track {:?}",
+        clip_id, track_id
+    ))?;
 
     Ok(UiClip::from(clip.as_ref()))
 }
@@ -303,7 +331,7 @@ pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
 // Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
 pub fn get_track(track_id: u32) -> Result<UiTrack, String> {
     let track_id = TrackId::from(track_id);
-    
+
     let app = get_app_read();
     let track = app
         .tracks

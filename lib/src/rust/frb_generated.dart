@@ -13,6 +13,8 @@ import 'api/track.dart';
 import 'api/transport.dart';
 import 'audio/event.dart';
 import 'core/project.dart';
+import 'core/project/track.dart';
+import 'core/project/transport.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -864,7 +866,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_CastedPrimitive_u_64,
+          decodeSuccessData: sse_decode_u_32,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiProjectGetMaxSampleIndexConstMeta,
@@ -1158,7 +1160,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_32(sourceTrackId, serializer);
           sse_encode_u_32(clipId, serializer);
-          sse_encode_CastedPrimitive_u_64(newStartTime, serializer);
+          sse_encode_u_32(newStartTime, serializer);
           sse_encode_opt_box_autoadd_u_32(newTrackId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -1364,7 +1366,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(trackId, serializer);
           sse_encode_u_32(clipId, serializer);
           sse_encode_resize_edge(edge, serializer);
-          sse_encode_CastedPrimitive_u_64(newTimeVal, serializer);
+          sse_encode_u_32(newTimeVal, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1751,8 +1753,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       duration: dco_decode_f_64(arr[5]),
       rootNote: dco_decode_u_8(arr[6]),
       fineTune: dco_decode_i_16(arr[7]),
-      trimStart: dco_decode_CastedPrimitive_u_64(arr[8]),
-      trimEnd: dco_decode_CastedPrimitive_u_64(arr[9]),
+      trimStart: dco_decode_u_32(arr[8]),
+      trimEnd: dco_decode_u_32(arr[9]),
       isLooping: dco_decode_bool(arr[10]),
       normalized: dco_decode_bool(arr[11]),
       muted: dco_decode_bool(arr[12]),
@@ -1985,7 +1987,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return PlaybackPosition(
-      samples: dco_decode_CastedPrimitive_u_64(arr[0]),
+      samples: dco_decode_u_32(arr[0]),
       beat: dco_decode_CastedPrimitive_usize(arr[1]),
       bar: dco_decode_CastedPrimitive_usize(arr[2]),
       tempo: dco_decode_f_32(arr[3]),
@@ -2139,10 +2141,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return UiClip(
       name: dco_decode_String(arr[0]),
       id: dco_decode_u_32(arr[1]),
-      startTime: dco_decode_CastedPrimitive_u_64(arr[2]),
+      startTime: dco_decode_u_32(arr[2]),
       source: dco_decode_ui_clip_source(arr[3]),
-      offsetStart: dco_decode_CastedPrimitive_u_64(arr[4]),
-      loopLength: dco_decode_CastedPrimitive_u_64(arr[5]),
+      offsetStart: dco_decode_u_32(arr[4]),
+      loopLength: dco_decode_u_32(arr[5]),
     );
   }
 
@@ -2386,8 +2388,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_duration = sse_decode_f_64(deserializer);
     var var_rootNote = sse_decode_u_8(deserializer);
     var var_fineTune = sse_decode_i_16(deserializer);
-    var var_trimStart = sse_decode_CastedPrimitive_u_64(deserializer);
-    var var_trimEnd = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_trimStart = sse_decode_u_32(deserializer);
+    var var_trimEnd = sse_decode_u_32(deserializer);
     var var_isLooping = sse_decode_bool(deserializer);
     var var_normalized = sse_decode_bool(deserializer);
     var var_muted = sse_decode_bool(deserializer);
@@ -2740,7 +2742,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   PlaybackPosition sse_decode_playback_position(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_samples = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_samples = sse_decode_u_32(deserializer);
     var var_beat = sse_decode_CastedPrimitive_usize(deserializer);
     var var_bar = sse_decode_CastedPrimitive_usize(deserializer);
     var var_tempo = sse_decode_f_32(deserializer);
@@ -2900,10 +2902,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
     var var_id = sse_decode_u_32(deserializer);
-    var var_startTime = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_startTime = sse_decode_u_32(deserializer);
     var var_source = sse_decode_ui_clip_source(deserializer);
-    var var_offsetStart = sse_decode_CastedPrimitive_u_64(deserializer);
-    var var_loopLength = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_offsetStart = sse_decode_u_32(deserializer);
+    var var_loopLength = sse_decode_u_32(deserializer);
     return UiClip(
       name: var_name,
       id: var_id,
@@ -3177,8 +3179,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.duration, serializer);
     sse_encode_u_8(self.rootNote, serializer);
     sse_encode_i_16(self.fineTune, serializer);
-    sse_encode_CastedPrimitive_u_64(self.trimStart, serializer);
-    sse_encode_CastedPrimitive_u_64(self.trimEnd, serializer);
+    sse_encode_u_32(self.trimStart, serializer);
+    sse_encode_u_32(self.trimEnd, serializer);
     sse_encode_bool(self.isLooping, serializer);
     sse_encode_bool(self.normalized, serializer);
     sse_encode_bool(self.muted, serializer);
@@ -3510,7 +3512,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_CastedPrimitive_u_64(self.samples, serializer);
+    sse_encode_u_32(self.samples, serializer);
     sse_encode_CastedPrimitive_usize(self.beat, serializer);
     sse_encode_CastedPrimitive_usize(self.bar, serializer);
     sse_encode_f_32(self.tempo, serializer);
@@ -3646,10 +3648,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
     sse_encode_u_32(self.id, serializer);
-    sse_encode_CastedPrimitive_u_64(self.startTime, serializer);
+    sse_encode_u_32(self.startTime, serializer);
     sse_encode_ui_clip_source(self.source, serializer);
-    sse_encode_CastedPrimitive_u_64(self.offsetStart, serializer);
-    sse_encode_CastedPrimitive_u_64(self.loopLength, serializer);
+    sse_encode_u_32(self.offsetStart, serializer);
+    sse_encode_u_32(self.loopLength, serializer);
   }
 
   @protected

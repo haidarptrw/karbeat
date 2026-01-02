@@ -159,7 +159,7 @@ fn generate_startup_beep() -> AudioWaveform {
         sample_rate,
         channels: 2,
         duration: duration_secs as f64,
-        trim_end: total_frames as u64,
+        trim_end: total_frames as u32,
         ..Default::default()
     }
 }

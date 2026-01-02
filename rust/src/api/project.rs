@@ -44,10 +44,10 @@ impl From<&KarbeatTrack> for UiTrack {
 pub struct UiClip {
     pub name: String,
     pub id: u32,
-    pub start_time: u64,
+    pub start_time: u32,
     pub source: UiClipSource,
-    pub offset_start: u64,
-    pub loop_length: u64,
+    pub offset_start: u32,
+    pub loop_length: u32,
 }
 
 pub enum UiClipSource {
@@ -99,8 +99,8 @@ pub struct AudioWaveformUiForAudioProperties {
     pub duration: f64,
     pub root_note: u8,
     pub fine_tune: i16,
-    pub trim_start: u64,
-    pub trim_end: u64,
+    pub trim_start: u32,
+    pub trim_end: u32,
     pub is_looping: bool,
     pub normalized: bool,
     pub muted: bool, // this only affects when play stream, not when doing preview sound
@@ -345,7 +345,7 @@ pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
     Ok(return_data)
 }
 
-pub fn get_max_sample_index() -> Result<u64, String> {
+pub fn get_max_sample_index() -> Result<u32, String> {
     let app = get_app_read();
 
     Ok(app.max_sample_index)

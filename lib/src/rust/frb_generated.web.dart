@@ -16,6 +16,8 @@ import 'api/track.dart';
 import 'api/transport.dart';
 import 'audio/event.dart';
 import 'core/project.dart';
+import 'core/project/track.dart';
+import 'core/project/transport.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';

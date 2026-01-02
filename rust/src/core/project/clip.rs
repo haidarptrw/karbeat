@@ -14,11 +14,11 @@ pub struct Clip {
     pub name: String,
     pub id: ClipId,
     /// Refer to where it sits on the global timeline
-    pub start_time: u64,
+    pub start_time: u32,
     pub source: KarbeatSource,
     pub source_id: u32,
-    pub offset_start: u64, // currently this does nothing since we set it always to 0
-    pub loop_length: u64,  // Refer to length of the entire clip when not shrinked
+    pub offset_start: u32, // currently this does nothing since we set it always to 0
+    pub loop_length: u32,  // Refer to length of the entire clip when not shrinked
 }
 
 impl PartialEq for Clip {

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:provider/provider.dart';
 

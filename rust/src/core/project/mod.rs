@@ -3,14 +3,14 @@
 pub mod clip;
 pub mod clipboard;
 pub mod generator;
+pub mod mixer;
 pub mod plugin;
 pub mod track;
 pub mod transport;
-pub mod mixer;
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap},
+    collections::HashMap,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -65,7 +65,7 @@ pub struct ApplicationState {
     pub clip_counter: u32,
 
     // Max samples index in the timeline
-    pub max_sample_index: u64,
+    pub max_sample_index: u32,
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load

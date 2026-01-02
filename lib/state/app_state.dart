@@ -14,6 +14,8 @@ import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
+import 'package:karbeat/src/rust/core/project/track.dart';
+import 'package:karbeat/src/rust/core/project/transport.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
@@ -94,6 +96,7 @@ class KarbeatState extends ChangeNotifier {
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
   int _piannoRollGridDenom = 4;
+  int? _editingPatternId;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
@@ -108,17 +111,16 @@ class KarbeatState extends ChangeNotifier {
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
-// FIX 2: If the engine reports "Playing", our request is fulfilled. Clear the flag.
+      // FIX 2: If the engine reports "Playing", our request is fulfilled. Clear the flag.
       if (pos.isPlaying) {
         _pendingPlayRequest = false;
       }
 
       // Only react if the state has actually changed
       if (pos.isPlaying != _transportState.isPlaying) {
-        
         // FIX 3: LATENCY GUARD
-        // If we just clicked Play (_pendingPlayRequest is true), but the stream 
-        // is still reporting "Stopped" (false), IGNORE IT. 
+        // If we just clicked Play (_pendingPlayRequest is true), but the stream
+        // is still reporting "Stopped" (false), IGNORE IT.
         // This prevents the UI from flickering back to "Stop" immediately.
         if (_pendingPlayRequest && !pos.isPlaying) {
           return;
@@ -132,7 +134,7 @@ class KarbeatState extends ChangeNotifier {
         // If the engine stopped itself (e.g. End of Song), we MUST tell the backend.
         // We only do this if we are NOT waiting for a play start.
         if (!pos.isPlaying) {
-           setPlaying(val: false); 
+          setPlaying(val: false);
         }
       }
     });
@@ -208,9 +210,10 @@ class KarbeatState extends ChangeNotifier {
   UiSessionState? get sessionState => _sessionState;
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
+  int? get editingPatternId => _editingPatternId;
 
   // ================ SETTERS ===================
-  set pianoRollGridDenom(GridValue val) { 
+  set pianoRollGridDenom(GridValue val) {
     _piannoRollGridDenom = val.value;
   }
 
@@ -220,6 +223,7 @@ class KarbeatState extends ChangeNotifier {
 
   // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
   int? _placingSourceId;
+  UiSourceType? _placingSourceType;
   int? get placingSourceId => _placingSourceId;
 
   // Track where the user wants to drop it
@@ -329,12 +333,12 @@ class KarbeatState extends ChangeNotifier {
   Future<void> syncPattern(int patternId) async {
     try {
       final updatedPattern = await getPattern(patternId: patternId);
-      
+
       // Creating a new map reference ensures Selectors in UI will trigger a rebuild
       final newMap = Map<int, UiPattern>.from(_patterns);
       newMap[patternId] = updatedPattern;
       _patterns = newMap;
-      
+
       notifyListeners();
     } catch (e) {
       log("Error syncing single pattern $patternId: $e");
@@ -348,7 +352,7 @@ class KarbeatState extends ChangeNotifier {
       final newMap = Map<int, UiTrack>.from(_tracks);
       newMap[trackId] = updatedTrack;
       _tracks = newMap;
-      
+
       notifyListeners();
     } catch (e) {
       log("Error syncing single track $trackId: $e");
@@ -454,6 +458,12 @@ class KarbeatState extends ChangeNotifier {
       _currentView = view;
       notifyListeners();
     }
+  }
+
+  /// Opens the piano roll view with a specific pattern (from source list).
+  void openPattern(int patternId) {
+    _editingPatternId = patternId;
+    navigateTo(WorkspaceView.pianoRoll);
   }
 
   void setGridSize(int newSize) {
@@ -748,14 +758,15 @@ class KarbeatState extends ChangeNotifier {
     final newPatterns = Map<int, UiPattern>.from(_patterns);
     newPatterns[patternId] = updatedPattern;
     _patterns = newPatterns;
-    
+
     notifyListeners();
   }
 
   // ============= PLACEMENT MODE LOGIC =================
 
-  void startPlacement(int sourceId) {
+  void startPlacement(int sourceId, {required UiSourceType type}) {
     _placingSourceId = sourceId;
+    _placingSourceType = type;
     // Switch view to track list immediately so user can place it
     navigateTo(WorkspaceView.trackList);
     notifyListeners();
@@ -769,35 +780,33 @@ class KarbeatState extends ChangeNotifier {
   }
 
   Future<void> confirmPlacement() async {
-    KarbeatLogger.info("CONFIRM PLacement");
-    if (_placingSourceId != null && _placementTrackId != -1) {
+    KarbeatLogger.info("CONFIRM Placement");
+    if (_placingSourceId != null &&
+        _placingSourceType != null &&
+        _placementTrackId != -1) {
       try {
-        UiSourceType type = UiSourceType.audio;
         await createClip(
           sourceId: _placingSourceId!,
-          sourceType: type,
+          sourceType: _placingSourceType!,
           trackId: _placementTrackId,
           startTime: _placementTimeSamples.toInt(),
         );
 
-        // Refresh tracks to see the new clip
-
         // Reset mode
         _placingSourceId = null;
+        _placingSourceType = null;
         _placementTrackId = -1;
 
         notifyBackendChange(ProjectEvent.tracksChanged);
-        // await syncTrackState();
-        // notifyListeners();
       } catch (e) {
         log("Error creating clip: $e");
-        // Optionally show error to user via a global key or snackbar service
       }
     }
   }
 
   void cancelPlacement() {
     _placingSourceId = null;
+    _placingSourceType = null;
     _placementTrackId = -1;
     notifyListeners();
   }

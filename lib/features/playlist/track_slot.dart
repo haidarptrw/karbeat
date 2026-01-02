@@ -4,6 +4,7 @@ import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/core/project.dart';
+import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:provider/provider.dart';
 

@@ -27,7 +27,7 @@ pub struct KarbeatTrack {
     pub color: String,
     pub track_type: TrackType,
     pub clips: BTreeSet<Arc<Clip>>,
-    pub max_sample_index: u64,
+    pub max_sample_index: u32,
     pub generator: Option<GeneratorInstance>,
 }
 
@@ -77,7 +77,7 @@ impl KarbeatTrack {
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
-    pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u64> {
+    pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u32> {
         let is_valid = match (&self.track_type, &clip.source) {
             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
             (TrackType::Midi, KarbeatSource::Midi { .. }) => true,

@@ -137,7 +137,7 @@ pub fn start_audio_stream(
 
     let sample_format = supported_config.sample_format();
     let config: cpal::StreamConfig = supported_config.into();
-    let sample_rate: u64 = config.sample_rate.0.into();
+    let sample_rate: u32 = config.sample_rate.0.into();
     let channels = config.channels as usize;
 
     log::info!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);

@@ -136,7 +136,8 @@ fn wire__crate__api__project__add_new_track_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_track_type = <crate::core::project::TrackType>::sse_decode(&mut deserializer);
+            let api_track_type =
+                <crate::core::project::track::TrackType>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -1055,7 +1056,7 @@ fn wire__crate__api__track__move_clip_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_source_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
-            let api_new_start_time = <u64>::sse_decode(&mut deserializer);
+            let api_new_start_time = <u32>::sse_decode(&mut deserializer);
             let api_new_track_id = <Option<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -1283,7 +1284,7 @@ fn wire__crate__api__track__resize_clip_impl(
             let api_track_id = <u32>::sse_decode(&mut deserializer);
             let api_clip_id = <u32>::sse_decode(&mut deserializer);
             let api_edge = <crate::api::track::ResizeEdge>::sse_decode(&mut deserializer);
-            let api_new_time_val = <u64>::sse_decode(&mut deserializer);
+            let api_new_time_val = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
@@ -1678,8 +1679,8 @@ impl SseDecode for crate::api::project::AudioWaveformUiForAudioProperties {
         let mut var_duration = <f64>::sse_decode(deserializer);
         let mut var_rootNote = <u8>::sse_decode(deserializer);
         let mut var_fineTune = <i16>::sse_decode(deserializer);
-        let mut var_trimStart = <u64>::sse_decode(deserializer);
-        let mut var_trimEnd = <u64>::sse_decode(deserializer);
+        let mut var_trimStart = <u32>::sse_decode(deserializer);
+        let mut var_trimEnd = <u32>::sse_decode(deserializer);
         let mut var_isLooping = <bool>::sse_decode(deserializer);
         let mut var_normalized = <bool>::sse_decode(deserializer);
         let mut var_muted = <bool>::sse_decode(deserializer);
@@ -2003,7 +2004,7 @@ impl SseDecode for Option<crate::api::project::UiProjectState> {
 impl SseDecode for crate::audio::event::PlaybackPosition {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_samples = <u64>::sse_decode(deserializer);
+        let mut var_samples = <u32>::sse_decode(deserializer);
         let mut var_beat = <usize>::sse_decode(deserializer);
         let mut var_bar = <usize>::sse_decode(deserializer);
         let mut var_tempo = <f32>::sse_decode(deserializer);
@@ -2103,20 +2104,20 @@ impl SseDecode for crate::api::track::ResizeEdge {
     }
 }
 
-impl SseDecode for crate::core::project::TrackType {
+impl SseDecode for crate::core::project::track::TrackType {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
-            0 => crate::core::project::TrackType::Audio,
-            1 => crate::core::project::TrackType::Midi,
-            2 => crate::core::project::TrackType::Automation,
+            0 => crate::core::project::track::TrackType::Audio,
+            1 => crate::core::project::track::TrackType::Midi,
+            2 => crate::core::project::track::TrackType::Automation,
             _ => unreachable!("Invalid variant for TrackType: {}", inner),
         };
     }
 }
 
-impl SseDecode for crate::core::project::TransportState {
+impl SseDecode for crate::core::project::transport::TransportState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_isPlaying = <bool>::sse_decode(deserializer);
@@ -2129,7 +2130,7 @@ impl SseDecode for crate::core::project::TransportState {
         let mut var_timeSignature = <(u8, u8)>::sse_decode(deserializer);
         let mut var_beatTracker = <usize>::sse_decode(deserializer);
         let mut var_barTracker = <usize>::sse_decode(deserializer);
-        return crate::core::project::TransportState {
+        return crate::core::project::transport::TransportState {
             is_playing: var_isPlaying,
             is_recording: var_isRecording,
             is_looping: var_isLooping,
@@ -2177,10 +2178,10 @@ impl SseDecode for crate::api::project::UiClip {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_id = <u32>::sse_decode(deserializer);
-        let mut var_startTime = <u64>::sse_decode(deserializer);
+        let mut var_startTime = <u32>::sse_decode(deserializer);
         let mut var_source = <crate::api::project::UiClipSource>::sse_decode(deserializer);
-        let mut var_offsetStart = <u64>::sse_decode(deserializer);
-        let mut var_loopLength = <u64>::sse_decode(deserializer);
+        let mut var_offsetStart = <u32>::sse_decode(deserializer);
+        let mut var_loopLength = <u32>::sse_decode(deserializer);
         return crate::api::project::UiClip {
             name: var_name,
             id: var_id,
@@ -2316,7 +2317,7 @@ impl SseDecode for crate::api::project::UiTrack {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u32>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
-        let mut var_trackType = <crate::core::project::TrackType>::sse_decode(deserializer);
+        let mut var_trackType = <crate::core::project::track::TrackType>::sse_decode(deserializer);
         let mut var_clips = <Vec<crate::api::project::UiClip>>::sse_decode(deserializer);
         return crate::api::project::UiTrack {
             id: var_id,
@@ -2557,7 +2558,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::track::ResizeEdge>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::core::project::TrackType {
+impl flutter_rust_bridge::IntoDart for crate::core::project::track::TrackType {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::Audio => 0.into_dart(),
@@ -2568,18 +2569,18 @@ impl flutter_rust_bridge::IntoDart for crate::core::project::TrackType {
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::core::project::TrackType
+    for crate::core::project::track::TrackType
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::core::project::TrackType>
-    for crate::core::project::TrackType
+impl flutter_rust_bridge::IntoIntoDart<crate::core::project::track::TrackType>
+    for crate::core::project::track::TrackType
 {
-    fn into_into_dart(self) -> crate::core::project::TrackType {
+    fn into_into_dart(self) -> crate::core::project::track::TrackType {
         self
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::core::project::TransportState {
+impl flutter_rust_bridge::IntoDart for crate::core::project::transport::TransportState {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.is_playing.into_into_dart().into_dart(),
@@ -2597,13 +2598,13 @@ impl flutter_rust_bridge::IntoDart for crate::core::project::TransportState {
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::core::project::TransportState
+    for crate::core::project::transport::TransportState
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::core::project::TransportState>
-    for crate::core::project::TransportState
+impl flutter_rust_bridge::IntoIntoDart<crate::core::project::transport::TransportState>
+    for crate::core::project::transport::TransportState
 {
-    fn into_into_dart(self) -> crate::core::project::TransportState {
+    fn into_into_dart(self) -> crate::core::project::transport::TransportState {
         self
     }
 }
@@ -2908,8 +2909,8 @@ impl SseEncode for crate::api::project::AudioWaveformUiForAudioProperties {
         <f64>::sse_encode(self.duration, serializer);
         <u8>::sse_encode(self.root_note, serializer);
         <i16>::sse_encode(self.fine_tune, serializer);
-        <u64>::sse_encode(self.trim_start, serializer);
-        <u64>::sse_encode(self.trim_end, serializer);
+        <u32>::sse_encode(self.trim_start, serializer);
+        <u32>::sse_encode(self.trim_end, serializer);
         <bool>::sse_encode(self.is_looping, serializer);
         <bool>::sse_encode(self.normalized, serializer);
         <bool>::sse_encode(self.muted, serializer);
@@ -3174,7 +3175,7 @@ impl SseEncode for Option<crate::api::project::UiProjectState> {
 impl SseEncode for crate::audio::event::PlaybackPosition {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u64>::sse_encode(self.samples, serializer);
+        <u32>::sse_encode(self.samples, serializer);
         <usize>::sse_encode(self.beat, serializer);
         <usize>::sse_encode(self.bar, serializer);
         <f32>::sse_encode(self.tempo, serializer);
@@ -3257,14 +3258,14 @@ impl SseEncode for crate::api::track::ResizeEdge {
     }
 }
 
-impl SseEncode for crate::core::project::TrackType {
+impl SseEncode for crate::core::project::track::TrackType {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(
             match self {
-                crate::core::project::TrackType::Audio => 0,
-                crate::core::project::TrackType::Midi => 1,
-                crate::core::project::TrackType::Automation => 2,
+                crate::core::project::track::TrackType::Audio => 0,
+                crate::core::project::track::TrackType::Midi => 1,
+                crate::core::project::track::TrackType::Automation => 2,
                 _ => {
                     unimplemented!("");
                 }
@@ -3274,7 +3275,7 @@ impl SseEncode for crate::core::project::TrackType {
     }
 }
 
-impl SseEncode for crate::core::project::TransportState {
+impl SseEncode for crate::core::project::transport::TransportState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_playing, serializer);
@@ -3323,10 +3324,10 @@ impl SseEncode for crate::api::project::UiClip {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.name, serializer);
         <u32>::sse_encode(self.id, serializer);
-        <u64>::sse_encode(self.start_time, serializer);
+        <u32>::sse_encode(self.start_time, serializer);
         <crate::api::project::UiClipSource>::sse_encode(self.source, serializer);
-        <u64>::sse_encode(self.offset_start, serializer);
-        <u64>::sse_encode(self.loop_length, serializer);
+        <u32>::sse_encode(self.offset_start, serializer);
+        <u32>::sse_encode(self.loop_length, serializer);
     }
 }
 
@@ -3423,7 +3424,7 @@ impl SseEncode for crate::api::project::UiTrack {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.id, serializer);
         <String>::sse_encode(self.name, serializer);
-        <crate::core::project::TrackType>::sse_encode(self.track_type, serializer);
+        <crate::core::project::track::TrackType>::sse_encode(self.track_type, serializer);
         <Vec<crate::api::project::UiClip>>::sse_encode(self.clips, serializer);
     }
 }
