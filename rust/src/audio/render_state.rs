@@ -7,7 +7,7 @@ use crate::{
             KarbeatTrack,
         },
         transport::TransportState,
-        ApplicationState, AssetLibrary, MixerChannel, MixerState,
+        ApplicationState, AssetLibrary, mixer::{MixerState},
     },
     utils::math::is_power_of_two,
 };

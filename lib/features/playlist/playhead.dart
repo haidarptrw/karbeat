@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:karbeat/utils/logger.dart';
 import 'package:provider/provider.dart';
 
 class TimelinePlayheadSeeker extends StatefulWidget {
@@ -43,9 +42,7 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportWidth = constraints.maxWidth;
-        final viewportHeight = constraints.maxHeight;
 
-        // 1. Create a Stack here to serve as the anchor for Positioned
         return Stack(
           clipBehavior: Clip.none,
           children: [
@@ -67,53 +64,48 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
                       scrollOffset = widget.scrollController.offset;
                     }
 
-                    // 2. Calculate Screen X
-                    // Header Width + (SongPos - ScrollPos)
+                    // Calculate Screen X
                     final double left =
                         widget.headerWidth + playheadAbsoluteX - scrollOffset;
 
-                    // 3. Optimization: Don't render if completely off-screen
+                    // Optimization: Don't render if completely off-screen
                     if (left > viewportWidth + 50) return const SizedBox();
 
                     // Hide if it goes behind the header (scrolled too far left)
                     if (left < widget.headerWidth) return const SizedBox();
 
-                    // 4. Return the Positioned widget here.
-                    // It is now valid because it is inside the Stack at the top of this build method.
                     return Positioned(
                       left: left - 10, // Center the 20px wide handle
                       top: 0,
                       bottom: 0,
                       width: 20, // Hitbox
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onHorizontalDragUpdate: (details) {
-                          final deltaPixels = details.delta.dx;
-                          final deltaSamples = deltaPixels * zoomLevel;
-                          final newSamples = currentSamples + deltaSamples;
-                          widget.onSeek(newSamples.toInt());
-                        },
-                        child: Column(
-                          children: [
-                            // Triangle
-                            SizedBox(
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onHorizontalDragUpdate: (details) {
+                              final deltaPixels = details.delta.dx;
+                              final deltaSamples = deltaPixels * zoomLevel;
+                              final newSamples = currentSamples + deltaSamples;
+                              widget.onSeek(newSamples.toInt());
+                            },
+                            child: SizedBox(
                               height: 20,
                               width: 20,
                               child: CustomPaint(
                                 painter: _PlayheadHandlePainter(),
                               ),
                             ),
-                            // Line
-                            Expanded(
-                              child: Container(
-                                width: 1.5,
-                                color: Colors.yellowAccent.withAlpha(
-                                  (0.8 * 255).round(),
-                                ),
+                          ),
+                          Expanded(
+                            child: Container(
+                              width: 1.5,
+                              color: Colors.yellowAccent.withAlpha(
+                                (0.8 * 255).round(),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     );
                   },

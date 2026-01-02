@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    APP_STATE, COMMAND_SENDER, api::project::AudioWaveformUiForAudioProperties, audio::{backend::POSITION_CONSUMER, event::PlaybackPosition}, commands::AudioCommand, core::project::AudioHardwareConfig, frb_generated::StreamSink, utils::lock::get_app_read
+    COMMAND_SENDER, api::project::AudioWaveformUiForAudioProperties, audio::{backend::POSITION_CONSUMER, event::PlaybackPosition}, commands::AudioCommand, core::project::AudioHardwareConfig, frb_generated::StreamSink, utils::lock::get_app_read
 };
 
 /// GETTER: Fetch details + Downsampled Buffer for UI
@@ -50,7 +50,6 @@ pub fn create_position_stream(sink: StreamSink<PlaybackPosition>) -> Result<(), 
                 if let Some(consumer) = guard.as_mut() {
                     //Read everything currently in the buffer
                     while let Ok(pos_data) = consumer.pop() {
-                        // We map the Rust struct to something Dart understands
                         if sink.add(pos_data).is_err() {
                             println!(
                                 "[Rust] PlaybackPosition Stream disconnected! Stopping thread."

@@ -8,10 +8,11 @@ use triple_buffer::Output;
 use crate::{
     audio::{event::PlaybackPosition, render_state::AudioRenderState},
     commands::AudioCommand,
-    core::project::plugin::{MidiEvent, MidiMessage},
     core::project::{
-        AudioSourceId, AudioWaveform, Clip, GeneratorId, GeneratorInstance, GeneratorInstanceType,
-        KarbeatPlugin, KarbeatSource, KarbeatTrack, Pattern, TrackId, TransportState,
+        mixer::MixerChannel,
+        plugin::{MidiEvent, MidiMessage},
+        AudioWaveform, Clip, GeneratorId, GeneratorInstance, GeneratorInstanceType,
+        KarbeatPlugin, KarbeatSource, KarbeatTrack, Pattern, TrackId,
     },
 };
 
@@ -53,6 +54,7 @@ pub struct GeneratorVoice {
 }
 
 pub struct AudioVoice {
+    pub track_id: TrackId,
     pub waveform: AudioWaveform,
     /// Where in the output buffer do we start writing? (0 to buffer_len)
     pub output_offset_samples: usize,
@@ -343,51 +345,102 @@ impl AudioEngine {
     }
 
     fn render_voices_to_buffer(&mut self, output: &mut [f32], channels: usize) {
-        // Render all generators
-        self.render_generator(output);
-
-        // Render all oneshot audio voices
-        self.render_oneshots(output, channels);
-    }
-
-    fn render_generator(&mut self, output: &mut [f32]) {
         let buf_len = output.len();
 
-        for voice in self.active_generators.iter_mut() {
-            if !voice.active {
+        let is_any_solo = self
+            .current_state
+            .graph
+            .mixer_state
+            .channels
+            .values()
+            .any(|ch| ch.solo);
+
+        for track in self.current_state.graph.tracks.iter() {
+            let track_id = track.id;
+
+            let default_channel = Arc::new(MixerChannel {
+                volume: 1.0,
+                pan: 0.0,
+                mute: false,
+                solo: false,
+                inverted_phase: false,
+                effects: Arc::from([]),
+            });
+
+            let channel = self
+                .current_state
+                .graph
+                .mixer_state
+                .channels
+                .get(&track_id)
+                .unwrap_or(&default_channel);
+            if channel.mute {
+                continue;
+            }
+            if is_any_solo && !channel.solo {
                 continue;
             }
 
-            // Optimization: Try-lock to prevent audio thread stalls
-            // If the UI is holding the lock for too long, we skip one frame of this synth
-            // rather than freezing the entire audio engine.
-            if let Ok(mut guard) = voice.generator.try_lock() {
-                if let KarbeatPlugin::Generator(generator) = &mut *guard {
-                    // Ensure scratch buffer is sized correctly and silent
-                    self.mix_buffer.resize(buf_len, 0.0);
-                    self.mix_buffer.fill(0.0);
+            if self.mix_buffer.len() != buf_len {
+                self.mix_buffer.resize(buf_len, 0.0);
+            }
+            self.mix_buffer.fill(0.0);
 
-                    // Render into scratch buffer
-                    generator.process(&mut self.mix_buffer, &voice.events);
+            let mut has_signal = false;
 
-                    // Mix scratch buffer into main output
-                    // TODO: SIMD optimization here eventually
-                    for i in 0..buf_len {
-                        output[i] += self.mix_buffer[i]; // * volume
+            // Generator Voice
+            if let Some(gen_voice) = self
+                .active_generators
+                .iter_mut()
+                .find(|g| g.track_id == track_id && g.active)
+            {
+                if let Ok(mut guard) = gen_voice.generator.try_lock() {
+                    if let KarbeatPlugin::Generator(generator) = &mut *guard {
+                        generator.process(&mut self.mix_buffer, &gen_voice.events);
+                        has_signal = true;
                     }
                 }
-            } else {
-                // Log warning or count dropped frames if needed
+            }
+
+            // Audio Voice
+            if Self::render_oneshots(
+                &mut self.active_oneshots,
+                self.sample_rate,
+                track_id,
+                &mut self.mix_buffer,
+                channels,
+            ) {
+                has_signal = true;
+            }
+
+            if !has_signal {
+                continue;
+            }
+
+            Self::apply_mixer_channel(channel, &mut self.mix_buffer, channels);
+
+            for i in 0..buf_len {
+                output[i] += self.mix_buffer[i];
             }
         }
     }
 
-    fn render_oneshots(&mut self, output: &mut [f32], channels: usize) {
+    fn render_oneshots(
+        active_oneshots: &mut [AudioVoice],
+        sample_rate: u64,
+        track_id: TrackId,
+        output: &mut [f32],
+        channels: usize,
+    ) -> bool {
+        let mut did_render = false;
         let buffer_frames = output.len() / channels;
-
-        for voice in self.active_oneshots.iter_mut() {
+        for voice in active_oneshots
+            .iter_mut()
+            .filter(|v| v.track_id == track_id)
+        {
+            did_render = true;
             let src_channels = voice.waveform.channels as usize;
-            let step = voice.waveform.sample_rate as f64 / self.sample_rate as f64;
+            let step = voice.waveform.sample_rate as f64 / sample_rate as f64;
 
             // Pre-calculate Loop Bounds to hoist out of the loop
             let max_len = (voice.waveform.buffer.len() / src_channels) as f64;
@@ -422,6 +475,49 @@ impl AudioEngine {
                 if channels > 1 {
                     output[frame_idx * channels + 1] += r;
                 }
+            }
+        }
+        did_render
+    }
+
+    fn apply_mixer_channel(mixer_channel: &MixerChannel, buffer: &mut [f32], channels: usize) {
+        let frame_count = buffer.len() / channels;
+
+        // Invert Phase
+        if mixer_channel.inverted_phase {
+            for sample in buffer.iter_mut() {
+                *sample = -*sample;
+            }
+        }
+
+        // Effects chain
+        for effect in mixer_channel.effects.iter() {
+            if let Some(instance_arc) = &effect.instance {
+                if let Ok(mut guard) = instance_arc.lock() {
+                    if let KarbeatPlugin::Effect(fx) = &mut *guard {
+                        fx.process(buffer);
+                    }
+                }
+            }
+        }
+
+        // Volume and Pan using Linear Pan
+        let pan = mixer_channel.pan.clamp(-1.0, 1.0);
+        let volume = mixer_channel.volume;
+        let (left_gain, right_gain) = if channels == 2 {
+            let p = (pan + 1.0) * 0.5;
+            ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
+        } else {
+            (volume, volume)
+        };
+
+        // Apply gain
+        for i in 0..frame_count {
+            if channels > 0 {
+                buffer[i * channels] *= left_gain;
+            }
+            if channels > 1 {
+                buffer[i * channels + 1] *= right_gain;
             }
         }
     }
@@ -460,7 +556,6 @@ impl AudioEngine {
             match &clip.source {
                 KarbeatSource::Audio(source_id) => {
                     // Look up the actual waveform from asset library
-                    // Clone the waveform to avoid borrow conflict with self
                     let waveform_opt = self
                         .current_state
                         .graph
@@ -469,7 +564,7 @@ impl AudioEngine {
                         .get(source_id)
                         .cloned();
                     if let Some(waveform) = waveform_opt {
-                        self.prepare_audio_voice(clip, &waveform, start_time, end_time);
+                        self.prepare_audio_voice(track.id, clip, &waveform, start_time, end_time);
                     }
                 }
                 KarbeatSource::Midi(id) => {
@@ -537,64 +632,6 @@ impl AudioEngine {
             }
         }
         None
-    }
-
-    // --- HELPER: AUDIO CLIP PROCESSING ---
-    #[allow(dead_code)]
-    fn process_audio_clip(
-        &mut self,
-        clip: &Clip,
-        waveform: &AudioWaveform,
-        buffer_start: u64,
-        buffer_end: u64,
-    ) {
-        let clip_timeline_start = clip.start_time;
-        let clip_timeline_end = clip.start_time + clip.loop_length;
-
-        let render_start = std::cmp::max(buffer_start, clip_timeline_start);
-        let render_end = std::cmp::min(buffer_end, clip_timeline_end);
-
-        if render_end <= render_start {
-            return;
-        }
-
-        let output_offset = (render_start - buffer_start) as usize;
-
-        let samples_elapsed_timeline = render_start - clip_timeline_start;
-        let effective_play_pos_timeline = samples_elapsed_timeline + clip.offset_start;
-
-        let ratio = waveform.sample_rate as f64 / self.sample_rate as f64;
-        let source_elapsed_frames = effective_play_pos_timeline as f64 * ratio;
-
-        let trim_start_source = waveform.trim_start as f64;
-
-        let trim_end_source = if waveform.trim_end > 0 {
-            waveform.trim_end as f64
-        } else {
-            // Fallback to full buffer length if 0
-            (waveform.buffer.len() / waveform.channels as usize) as f64
-        };
-
-        let source_read_idx;
-        let loop_region_len = trim_end_source - trim_start_source;
-
-        if waveform.is_looping && loop_region_len > 0.0 {
-            let offset_in_loop = source_elapsed_frames % loop_region_len;
-            source_read_idx = trim_start_source + offset_in_loop;
-        } else {
-            source_read_idx = trim_start_source + source_elapsed_frames;
-            if source_read_idx >= trim_end_source {
-                return;
-            }
-        }
-
-        self.active_oneshots.push(AudioVoice {
-            waveform: waveform.clone(),
-            output_offset_samples: output_offset,
-            source_read_index: source_read_idx,
-            start_boundary: trim_start_source,
-            end_boundary: trim_end_source,
-        });
     }
 
     fn render_previews_to_buffer(&mut self, output: &mut [f32], channels: usize) {
@@ -668,8 +705,10 @@ impl AudioEngine {
         self.preview_voices.retain(|v| !v.is_finished);
     }
 
+    /// Prepare audio voice from Audio Waveform that will be rendered
     fn prepare_audio_voice(
         &mut self,
+        track_id: TrackId,
         clip: &Clip,
         waveform: &AudioWaveform,
         buffer_start: u64,
@@ -709,6 +748,7 @@ impl AudioEngine {
         };
 
         self.active_oneshots.push(AudioVoice {
+            track_id,
             waveform: waveform.clone(),
             output_offset_samples: output_offset,
             source_read_index: source_read_idx,
@@ -736,16 +776,6 @@ impl AudioEngine {
         if pattern_len_samples == 0 {
             return;
         }
-
-        // Calculate overlap
-        // let relative_start = buffer_start.saturating_sub(clip.start_time);
-        // let relative_end = buffer_end - clip.start_time;
-
-        // let loop_read_start = relative_start + clip.offset_start;
-        // let loop_read_end = relative_end + clip.offset_start;
-
-        // let start_iter = loop_read_start / pattern_len_samples;
-        // let end_iter = loop_read_end / pattern_len_samples;
 
         let start_iter = 0;
         let end_iter = 0;

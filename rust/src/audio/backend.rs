@@ -5,7 +5,6 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     OutputCallbackInfo,
 };
-use log::debug;
 use once_cell::sync::Lazy;
 use rtrb::{Consumer, RingBuffer};
 use triple_buffer::Output;
@@ -13,7 +12,6 @@ use triple_buffer::Output;
 use crate::{
     audio::{engine::AudioEngine, event::PlaybackPosition, render_state::AudioRenderState},
     commands::AudioCommand,
-    core::project::transport::TransportState,
 };
 
 static STREAM_GUARD: Lazy<Mutex<Option<cpal::Stream>>> = Lazy::new(|| Mutex::new(None));
@@ -24,7 +22,6 @@ struct AudioContext {
     engine: AudioEngine,
     producer: rtrb::Producer<f32>,
     staging_buffer: Vec<f32>,
-    channels: usize,
 }
 
 /// Macro to generate the stream building logic
@@ -193,7 +190,6 @@ pub fn start_audio_stream(
         engine,
         producer,
         staging_buffer,
-        channels,
     };
 
     let stream = match sample_format {

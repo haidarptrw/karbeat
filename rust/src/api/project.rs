@@ -3,7 +3,7 @@ use std::{collections::HashMap, ops::Deref};
 use serde::Serialize;
 
 use crate::{
-    APP_STATE, broadcast_state_change, core::{
+    broadcast_state_change, core::{
         file_manager::loader::AudioLoader,
         project::{
             KarbeatSource, ProjectMetadata, SessionState, clip::Clip, generator::{GeneratorInstance, GeneratorInstanceType}, track::{KarbeatTrack, TrackType, audio_waveform::AudioWaveform}, transport::TransportState

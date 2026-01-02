@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{APP_STATE, HISTORY, broadcast_state_change, core::{history::ProjectAction, project::{Note, clipboard::ClipboardContent}}, utils::lock::{get_app_write, get_history_lock}};
+use crate::{broadcast_state_change, core::{history::ProjectAction, project::{Note, clipboard::ClipboardContent}}, utils::lock::{get_app_write, get_history_lock}};
 
 pub fn update_selected_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
     {

@@ -1,7 +1,7 @@
 // src/api/transport.rs
 // collections of transport API
 
-use crate::{APP_STATE, COMMAND_SENDER, broadcast_state_change, commands::AudioCommand, sync_transport, utils::lock::get_app_write};
+use crate::{COMMAND_SENDER, broadcast_state_change, commands::AudioCommand, utils::lock::get_app_write};
 
 pub fn set_playing(val: bool) -> Result<(), String> {
     {

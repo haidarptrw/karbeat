@@ -1,9 +1,9 @@
 // rust\src\api\track.rs
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
-    APP_STATE, api::project::{UiClip, UiTrack}, broadcast_state_change, core::project::{
+    api::project::{UiClip, UiTrack}, broadcast_state_change, core::project::{
         KarbeatSource, clip::{Clip, ClipId}, track::{TrackId, TrackType, audio_waveform::AudioSourceId, midi::{Pattern, PatternId}}
     }, utils::lock::{get_app_read, get_app_write}
 };
