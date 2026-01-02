@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use once_cell::sync::Lazy; // Add 'once_cell' to Cargo.toml if needed
 
-use crate::core::plugin::{KarbeatGenerator, KarbeatPlugin};
+use crate::core::project::plugin::KarbeatGenerator;
 // Import your concrete plugins here
 use crate::plugin::generator::karbeatzer::Karbeatzer;
 

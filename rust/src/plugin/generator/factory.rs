@@ -1,6 +1,6 @@
 // src/plugin/generator/factory.rs
 
-use crate::{core::plugin::KarbeatPlugin, plugin::generator::karbeatzer::Karbeatzer};
+use crate::{core::project::plugin::KarbeatPlugin, plugin::generator::karbeatzer::Karbeatzer};
 
 pub struct KarbeatGeneratorFactory {}
 

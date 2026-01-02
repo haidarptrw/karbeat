@@ -1,4 +1,4 @@
-use crate::core::{project::Pattern, track::audio_waveform::AudioWaveform};
+use crate::core::{project::track::audio_waveform::AudioWaveform};
 
 pub enum AudioCommand {
     PlayOneShot(AudioWaveform),

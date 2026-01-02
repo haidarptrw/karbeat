@@ -1,13 +1,11 @@
 // src/api/transport.rs
 // collections of transport API
 
-use crate::{APP_STATE, COMMAND_SENDER, broadcast_state_change, commands::AudioCommand, sync_transport};
+use crate::{APP_STATE, COMMAND_SENDER, broadcast_state_change, commands::AudioCommand, sync_transport, utils::lock::get_app_write};
 
 pub fn set_playing(val: bool) -> Result<(), String> {
     {
-        let Ok(mut app) = APP_STATE.write() else {
-            return Err("Failed acquiring lock".to_string()); // send empty
-        };
+        let mut app = get_app_write();
 
         app.transport.is_playing = val;
     }
@@ -29,9 +27,7 @@ pub fn set_playhead(val: u32) -> Result<(), String> {
 
 pub fn set_looping(val: bool) -> Result<(), String> {
     {
-        let Ok(mut app) = APP_STATE.write() else {
-            return Err("Failed acquiring write lock".to_string()); // send empty
-        };
+        let mut app = get_app_write();
         app.transport.is_looping = val;
     }
     broadcast_state_change();
@@ -41,7 +37,7 @@ pub fn set_looping(val: bool) -> Result<(), String> {
 
 pub fn set_bpm(val: f32) -> Result<(), String> {
     {
-        let mut app = APP_STATE.write().map_err(|e| format!("POISON ERROR: {}", e))?;
+        let mut app = get_app_write();
         app.transport.bpm = val;
     }
 

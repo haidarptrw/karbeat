@@ -2,9 +2,11 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::project::PluginInstance;
+use crate::{core::project::PluginInstance, define_id};
 
 pub type AudioFrame = [f32; 2];
+
+define_id!(AudioSourceId);
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AudioWaveform {

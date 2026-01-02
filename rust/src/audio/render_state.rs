@@ -1,15 +1,22 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    core::project::{ApplicationState, AssetLibrary, KarbeatTrack, MixerChannel, MixerState, Pattern, TransportState},
+    core::project::{
+        track::{
+            midi::{Pattern, PatternId},
+            KarbeatTrack,
+        },
+        transport::TransportState,
+        ApplicationState, AssetLibrary, MixerChannel, MixerState,
+    },
     utils::math::is_power_of_two,
 };
 
 /// Structural State: Tracks, Patterns, Mixer, Assets (Heavy, changes rarely)
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
-    pub tracks: Vec<Arc<KarbeatTrack>>,
-    pub patterns: HashMap<u32, Arc<Pattern>>,
+    pub tracks: Arc<[Arc<KarbeatTrack>]>,
+    pub patterns: HashMap<PatternId, Arc<Pattern>>,
     pub mixer_state: MixerState,
     pub asset_library: Arc<AssetLibrary>,
     pub max_sample_index: u64,
@@ -19,11 +26,11 @@ pub struct AudioGraphState {
 
 impl From<&ApplicationState> for AudioGraphState {
     fn from(app: &ApplicationState) -> Self {
-        let mut tracks: Vec<Arc<KarbeatTrack>> = app.tracks.values().cloned().collect();
-        tracks.sort_by_key(|t| t.id);
+        let mut tracks_vec: Vec<Arc<KarbeatTrack>> = app.tracks.values().cloned().collect();
+        tracks_vec.sort_by_key(|t| t.id);
 
         Self {
-            tracks,
+            tracks: Arc::from(tracks_vec),
             patterns: app.pattern_pool.clone(),
             mixer_state: app.mixer.clone(),
             asset_library: app.asset_library.clone(),
@@ -43,11 +50,11 @@ impl From<&ApplicationState> for AudioGraphState {
 pub struct AudioRenderState {
     pub graph: AudioGraphState,
     // Transport is now separate to allow fast updates without full graph clone
-    // However, for backward compatibility with your TripleBuffer setup, 
+    // However, for backward compatibility with your TripleBuffer setup,
     // we can keep a unified struct if your architecture requires a single atomic update.
     // If you implemented the split buffers (graph_in, transport_in), this struct is not needed as a monolith.
     // Assuming we stick to the monolithic struct for `state_consumer` in `AudioEngine`:
-    pub transport: TransportState, 
+    pub transport: TransportState,
 }
 
 impl Default for AudioRenderState {

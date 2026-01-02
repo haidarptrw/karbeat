@@ -7,7 +7,7 @@ use std::{fs::File, io::BufReader, path::{Path, PathBuf}, sync::Arc};
 use anyhow::{anyhow, Context, Result};
 use rodio::Source;
 
-use crate::core::{project::ApplicationState, track::audio_waveform::AudioWaveform};
+use crate::core::{project::ApplicationState, project::track::audio_waveform::AudioWaveform};
 
 trait FileNameExt {
     fn file_name_string(&self) -> String;
@@ -80,11 +80,11 @@ impl AudioLoader for ApplicationState {
         asset_library.next_id += 1;
 
         asset_library.sample_paths.insert(
-            id, 
+            id.into(), 
             PathBuf::from(&path)
         );
         asset_library.source_map.insert(
-            id, 
+            id.into(), 
             Arc::new(waveform)
         );
 
@@ -94,6 +94,6 @@ impl AudioLoader for ApplicationState {
     }
     
     fn get_audio_source(&self, id: u32) -> Option<Arc<AudioWaveform>> {
-        self.asset_library.source_map.get(&id).cloned()
+        self.asset_library.source_map.get(&id.into()).cloned()
     }
 }

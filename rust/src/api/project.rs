@@ -6,11 +6,9 @@ use crate::{
     APP_STATE, broadcast_state_change, core::{
         file_manager::loader::AudioLoader,
         project::{
-            Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, KarbeatTrack,
-            ProjectMetadata, SessionState, TrackType, TransportState,
+            KarbeatSource, ProjectMetadata, SessionState, clip::Clip, generator::{GeneratorInstance, GeneratorInstanceType}, track::{KarbeatTrack, TrackType, audio_waveform::AudioWaveform}, transport::TransportState
         },
-        track::audio_waveform::AudioWaveform,
-    }, sync_audio_graph
+    }, utils::lock::{get_app_read, get_app_write}
 };
 
 pub struct UiProjectState {
@@ -31,7 +29,7 @@ pub struct UiTrack {
 impl From<&KarbeatTrack> for UiTrack {
     fn from(value: &KarbeatTrack) -> Self {
         Self {
-            id: value.id,
+            id: value.id.to_u32(),
             name: value.name.clone(),
             track_type: value.track_type.clone(),
             clips: value
@@ -72,7 +70,7 @@ impl From<&Clip> for UiClip {
         };
         Self {
             name: value.name.clone(),
-            id: value.id,
+            id: value.id.to_u32(),
             start_time: value.start_time,
             source: source,
             offset_start: value.offset_start,
@@ -167,21 +165,21 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
     fn from(generator_instance: &GeneratorInstance) -> Self {
         match &generator_instance.instance_type {
             GeneratorInstanceType::Plugin(plugin_instance) => Self {
-                id: generator_instance.id,
+                id: generator_instance.id.to_u32(),
                 name: plugin_instance.name.clone(),
                 internal_type: plugin_instance.internal_type.clone(),
                 parameters: plugin_instance.parameters.clone(),
             },
             GeneratorInstanceType::Sampler { .. } => {
                 Self {
-                    id: generator_instance.id,
+                    id: generator_instance.id.to_u32(),
                     name: "Sampler".to_string(),
                     internal_type: "Sampler".to_string(),
                     parameters: HashMap::new(), // Add sampler params later if needed
                 }
             }
             GeneratorInstanceType::AudioInput { .. } => Self {
-                id: generator_instance.id,
+                id: generator_instance.id.to_u32(),
                 name: "Audio Input".to_string(),
                 internal_type: "AudioInput".to_string(),
                 parameters: HashMap::new(),
@@ -210,8 +208,8 @@ pub struct UiSessionState {
 impl From<&SessionState> for UiSessionState {
     fn from(session: &SessionState) -> Self {
         Self {
-            selected_clip_id: session.selected_clip_id,
-            selected_track_id: session.selected_track_id,
+            selected_clip_id: session.selected_clip_id.map(|id| id.to_u32()),
+            selected_track_id: session.selected_track_id.map(|id| id.to_u32()),
         }
     }
 }
@@ -219,17 +217,15 @@ impl From<&SessionState> for UiSessionState {
 impl Into<UiSessionState> for SessionState {
     fn into(self) -> UiSessionState {
         UiSessionState {
-            selected_track_id: self.selected_track_id,
-            selected_clip_id: self.selected_clip_id,
+            selected_track_id: self.selected_track_id.map(|id| id.to_u32()),
+            selected_clip_id: self.selected_clip_id.map(|id| id.to_u32()),
         }
     }
 }
 // ============================ APIs ==================================
 
 pub fn get_ui_state() -> Option<UiProjectState> {
-    let Ok(app) = APP_STATE.read() else {
-        return None; // send empty
-    };
+    let app = get_app_read();
 
     let project_state = UiProjectState {
         // Cloning shared structs is cheap and clean
@@ -241,7 +237,7 @@ pub fn get_ui_state() -> Option<UiProjectState> {
             .values()
             .map(|t| UiTrack {
                 clips: t.clips.iter().map(|e| UiClip::from(e.deref())).collect(),
-                id: t.id,
+                id: t.id.to_u32(),
                 name: t.name.clone(),
                 track_type: t.track_type().clone(),
             })
@@ -252,18 +248,14 @@ pub fn get_ui_state() -> Option<UiProjectState> {
 }
 
 pub fn get_project_metadata() -> Result<ProjectMetadata, String> {
-    let Ok(app) = APP_STATE.read() else {
-        return Err("Failed to acquire read lock on APP_STATE".to_string());
-    };
+    let app = get_app_read();
 
     let metadata = app.metadata.clone();
     Ok(metadata)
 }
 
 pub fn get_transport_state() -> Result<TransportState, String> {
-    let Ok(app) = APP_STATE.read() else {
-        return Err("Failed to acquire read lock on APP_STATE".to_string());
-    };
+    let app = get_app_read();
 
     let ts = app.transport.clone();
     Ok(ts)
@@ -271,16 +263,14 @@ pub fn get_transport_state() -> Result<TransportState, String> {
 
 pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioProperties>> {
     // Read from app state
-    let Ok(app) = APP_STATE.read() else {
-        return None; // Send empty
-    };
+    let app = get_app_read();
     let map = app
         .asset_library
         .source_map
         .iter()
         .map(|(&id, arc_waveform)| {
             let ui = AudioWaveformUiForAudioProperties::from(arc_waveform.as_ref());
-            (id, ui)
+            (id.to_u32(), ui)
         })
         .collect();
 
@@ -289,9 +279,7 @@ pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioPro
 
 /// Get generator list used in the project
 pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String> {
-    let app = APP_STATE
-        .read()
-        .map_err(|e| format!("Poisoned error: {}", e))?;
+    let app = get_app_read();
 
     let generators = app
         .generator_pool
@@ -301,7 +289,7 @@ pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String>
                 .read()
                 .expect("Failed to read generator lock");
             let ui_gen = UiGeneratorInstance::from(&*generator);
-            (id, ui_gen)
+            (id.to_u32(), ui_gen)
         })
         .collect();
 
@@ -310,22 +298,21 @@ pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String>
 
 pub fn add_audio_source(file_path: &str) {
     {
-        if let Ok(mut app) = APP_STATE.write() {
-            // Add audio source
-            match app.load_audio(file_path.to_string(), None) {
-                Ok(id) => {
-                    let Some(audio) = app.asset_library.source_map.get(&id) else {
-                        log::error!("[error] can't get the audiowave");
-                        return;
-                    };
+        let mut app = get_app_write();
+        // Add audio source
+        match app.load_audio(file_path.to_string(), None) {
+            Ok(id) => {
+                let Some(audio) = app.asset_library.source_map.get(&id.into()) else {
+                    log::error!("[error] can't get the audiowave");
+                    return;
+                };
 
-                    log::info!("Sucessfully add {}", audio.name);
-                }
-                Err(e) => {
-                    log::error!("[error] failed to load the audio: {}", e);
-                }
+                log::info!("Sucessfully add {}", audio.name);
             }
-        };
+            Err(e) => {
+                log::error!("[error] failed to load the audio: {}", e);
+            }
+        }
     }
 
     broadcast_state_change();
@@ -334,15 +321,7 @@ pub fn add_audio_source(file_path: &str) {
 /// Add new track to the track list. Throws an error, so it must handled gracefully
 pub fn add_new_track(track_type: TrackType) -> Result<(), String> {
     {
-        let mut app = match APP_STATE.write() {
-            Ok(a) => a,
-            Err(e) => {
-                return Err(format!(
-                    "[error] error when acquaring write lock for APP_STATE: {}",
-                    e
-                ))
-            }
-        };
+        let mut app = get_app_write();
         app.add_new_track(track_type);
         log::info!("[add_new_track] successfully add new track")
     }
@@ -354,32 +333,26 @@ pub fn add_new_track(track_type: TrackType) -> Result<(), String> {
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
-    let app = APP_STATE
-        .read()
-        .map_err(|e| format!("Error acquiring read lock of APP_STATE: {}", e))?;
+    let app = get_app_read();
 
     // convert the tracks into UI-Friendly type
     let return_data = app
         .tracks
         .iter()
-        .map(|(id, track_arc)| (*id, UiTrack::from(track_arc.as_ref())))
+        .map(|(id, track_arc)| ((*id).to_u32(), UiTrack::from(track_arc.as_ref())))
         .collect();
 
     Ok(return_data)
 }
 
 pub fn get_max_sample_index() -> Result<u64, String> {
-    let app = APP_STATE
-        .read()
-        .map_err(|e| format!("Error acquiring read lock of APP_STATE: {}", e))?;
+    let app = get_app_read();
 
     Ok(app.max_sample_index)
 }
 
 pub fn get_session_state() -> Result<UiSessionState, String> {
-    let app = APP_STATE
-        .read()
-        .map_err(|e| format!("APP_STATE got poisoned: {}", e))?;
+    let app = get_app_read();
 
     let session = UiSessionState::from(&app.session);
     Ok(session)

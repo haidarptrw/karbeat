@@ -8,6 +8,7 @@ import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:provider/provider.dart';
@@ -97,8 +98,6 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
         ? state.hardwareConfig.sampleRate
         : 44100;
 
-    // FIX: Listen to the stream to detect the REAL negotiated sample rate (e.g. 48000)
-    // The engine sends this in every position update.
     _posSub = state.positionStream.listen((pos) {
       if (!mounted) return;
       if (pos.sampleRate > 0 && pos.sampleRate != _activeSampleRate) {
@@ -213,12 +212,11 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
       children: [
         Row(
           children: [
-            // --- LEFT: TRACK HEADERS ---
+            // ======== LEFT: TRACK HEADERS ==========
             SizedBox(
               width: widget.headerWidth,
               child: Column(
                 children: [
-                  // Optional: Fixed Header Row (e.g. "Name", "Mute")
                   Container(
                     height: 30,
                     color: Colors.grey.shade800,
@@ -246,10 +244,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               ),
             ),
 
-            // --- DIVIDER ---
             Container(width: 1, color: Colors.black),
 
-            // --- RIGHT: TIMELINE ---
+            // ============ RIGHT: TIMELINE ==============
             Expanded(
               child: Listener(
                 onPointerSignal: (event) {
@@ -294,8 +291,6 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                   },
                   child: Column(
                     children: [
-                      // Optional: Time Ruler Header (Horizontal Scrollable)
-                      // We would need another sync controller for the ruler + body horizontal scroll.
                       GestureDetector(
                         onTapDown: (details) {
                           double scrollX = _rulerController.hasClients
@@ -406,14 +401,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               headerWidth: widget.headerWidth,
               scrollController: _trackContentController,
               onSeek: (int newSamples) {
-                // Clamp to 0
                 final safeSamples = newSamples < 0 ? 0 : newSamples;
-
-                // Call your state to update position
-                // Assuming you have a method like this:
                 context.read<KarbeatState>().seekTo(safeSamples);
 
-                print("Seeking to: $safeSamples samples");
+                KarbeatLogger.info("Seeking to: $safeSamples samples");
               },
             ),
           ),

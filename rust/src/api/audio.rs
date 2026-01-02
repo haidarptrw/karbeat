@@ -1,29 +1,21 @@
 use std::time::Duration;
 
 use crate::{
-    api::project::AudioWaveformUiForAudioProperties,
-    audio::{backend::POSITION_CONSUMER, event::PlaybackPosition},
-    commands::AudioCommand,
-    core::project::AudioHardwareConfig,
-    frb_generated::StreamSink,
-    APP_STATE, COMMAND_SENDER,
+    APP_STATE, COMMAND_SENDER, api::project::AudioWaveformUiForAudioProperties, audio::{backend::POSITION_CONSUMER, event::PlaybackPosition}, commands::AudioCommand, core::project::AudioHardwareConfig, frb_generated::StreamSink, utils::lock::get_app_read
 };
 
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
-    let app = APP_STATE.read().ok()?;
-    let waveform = app.asset_library.source_map.get(&id)?;
+    let app = get_app_read();
+    let waveform = app.asset_library.source_map.get(&id.into())?;
     Some(AudioWaveformUiForAudioProperties::from(waveform.as_ref()))
 }
 
 /// ACTION: Play the sound via the Engine
 pub fn play_source_preview(id: u32) {
-    let app = match APP_STATE.read() {
-        Ok(a) => a,
-        Err(_) => return,
-    };
+    let app = get_app_read();
 
-    if let Some(waveform_arc) = app.asset_library.source_map.get(&id) {
+    if let Some(waveform_arc) = app.asset_library.source_map.get(&id.into()) {
         let waveform_to_play = (**waveform_arc).clone();
 
         if let Ok(mut guard) = COMMAND_SENDER.lock() {
@@ -45,10 +37,7 @@ pub fn stop_all_previews() {
 }
 
 pub fn get_audio_config() -> Result<AudioHardwareConfig, String> {
-    let Ok(app_state) = APP_STATE.read() else {
-        return Err("failed to acquire Lock State".to_string());
-    };
-
+    let app_state = get_app_read();
     Ok(app_state.audio_config.clone())
 }
 
@@ -101,10 +90,10 @@ pub fn play_preview_note(
     let velocity: u8 = velocity as u8;
 
     let generator_id = {
-        let app = APP_STATE.read().map_err(|e| format!("{}", e))?;
+        let app = get_app_read();
         let track = app
             .tracks
-            .get(&track_id)
+            .get(&track_id.into())
             .ok_or("Can't find requested track")?;
         track.generator.as_ref().ok_or("Track has no generator")?.id
     };
@@ -113,7 +102,7 @@ pub fn play_preview_note(
         if let Some(sender) = command_guard.as_mut() {
             let _ = sender.push(AudioCommand::PlayPreviewNote {
                 note_key: note_key,
-                generator_id,
+                generator_id: generator_id.into(),
                 velocity,
                 is_note_on: is_on,
             });

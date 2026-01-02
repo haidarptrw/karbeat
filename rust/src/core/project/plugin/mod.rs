@@ -1,3 +1,4 @@
+pub mod instance;
 // src/core/plugin/mod.rs
 
 use std::{any::Any, collections::HashMap, fmt::Debug};

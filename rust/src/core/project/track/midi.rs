@@ -1,4 +1,21 @@
-use crate::core::project::{Note, Pattern};
+use serde::{Deserialize, Serialize};
+
+use crate::core::project::Note;
+use crate::core::project::NoteId;
+use crate::define_id;
+
+define_id!(PatternId);
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Pattern {
+    pub id: PatternId,
+    pub name: String,
+    pub length_ticks: u64,
+
+    pub notes: Vec<Note>,
+
+    pub next_note_id: u32,
+}
 
 impl Pattern {
     /// Sort notes by start time (in-place)
@@ -44,8 +61,7 @@ impl Pattern {
         }
 
         // 3. ID Generation (Critical for Validity)
-        note.id = self.next_note_id;
-        self.next_note_id += 1;
+        note.id = NoteId::next(&mut self.next_note_id);
 
         // 4. Push & Sort
         self.notes.push(note.clone());
@@ -63,7 +79,7 @@ impl Pattern {
         let duration_proper = duration.unwrap_or(960);
         // Construct the note (ID will be overridden by insert_note)
         let note = Note {
-            id: 0, // Placeholder
+            id: NoteId::default(), // Placeholder, will be assigned by insert_note
             start_tick,
             duration: duration_proper,
             key,
@@ -291,7 +307,7 @@ impl Pattern {
         if note.key > 127 {
             return Err(anyhow::anyhow!("Invalid key {}", note.key));
         }
-        
+
         // 2. Auto-expand Pattern Length
         let note_end = note.start_tick + note.duration;
         if note_end > self.length_ticks {
@@ -300,10 +316,10 @@ impl Pattern {
 
         // 3. Insert directly (Preserving ID)
         self.notes.push(note);
-        
+
         // 4. Maintain Order
         self.sort_notes_unstable();
-        
+
         Ok(())
     }
 
