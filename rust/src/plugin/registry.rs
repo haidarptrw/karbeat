@@ -1,12 +1,9 @@
 // src/core/plugin/registry.rs
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use once_cell::sync::Lazy; // Add 'once_cell' to Cargo.toml if needed
 
 use crate::core::project::plugin::KarbeatGenerator;
-// Import your concrete plugins here
-use crate::plugin::generator::karbeatzer::Karbeatzer;
+use crate::plugin::generator::karbeatzer_v2::create_karbeatzer;
 
 /// A function pointer type that creates a new Generator instance
 type GeneratorFactory = Box<dyn Fn() -> Box<dyn KarbeatGenerator + Send + Sync> + Send + Sync>;
@@ -20,6 +17,20 @@ impl PluginRegistry {
         Self {
             generators: HashMap::new(),
         }
+    }
+
+    /// Create a new registry with default built-in plugins registered
+    pub fn new_with_defaults() -> Self {
+        let mut registry = Self::new();
+
+        // Karbeatzer V2 - our main synth
+        registry.register("Karbeatzer V2", || {
+            // We pass None for sample_rate here because 'prepare()' will be called
+            // by the engine later with the correct rate.
+            Box::new(create_karbeatzer(None))
+        });
+
+        registry
     }
 
     /// Register a new plugin factory
@@ -44,25 +55,3 @@ impl PluginRegistry {
         self.generators.keys().cloned().collect()
     }
 }
-
-// Global Static Registry
-pub static PLUGIN_REGISTRY: Lazy<RwLock<PluginRegistry>> = Lazy::new(|| {
-    let mut registry = PluginRegistry::new();
-
-    // =========================================================
-    // REGISTER YOUR PLUGINS HERE
-    // This replaces the match statement in your old Factory
-    // =========================================================
-    
-    // 1. Karbeatzer
-    registry.register("Karbeatzer", || {
-        // We pass None for sample_rate here because 'prepare()' will be called 
-        // by the engine later with the correct rate.
-        Box::new(Karbeatzer::new(None)) 
-    });
-
-    // 2. Add future plugins here...
-    // registry.register("Sampler", || Box::new(Sampler::new()));
-
-    RwLock::new(registry)
-});

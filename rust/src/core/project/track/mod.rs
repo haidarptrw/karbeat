@@ -14,8 +14,7 @@ use crate::{
         clip::ClipId, generator::GeneratorId, plugin::KarbeatPlugin, ApplicationState, Clip,
         GeneratorInstance, GeneratorInstanceType, KarbeatSource, PluginInstance,
     },
-    define_id,
-    plugin::registry::PLUGIN_REGISTRY,
+    ctx, define_id,
 };
 
 define_id!(TrackId);
@@ -192,7 +191,10 @@ impl ApplicationState {
         let track_id = TrackId::next(&mut self.track_counter);
 
         let plugin_runtime = {
-            let registry = PLUGIN_REGISTRY.read().expect("Failed to lock registry");
+            let registry = ctx()
+                .plugin_registry
+                .read()
+                .expect("Failed to lock registry");
 
             if let Some(generator_box) = registry.create_generator(&generator_name) {
                 // Wrap the Box<dyn Generator> into our Runtime Enum and Mutex

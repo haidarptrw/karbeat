@@ -1,14 +1,10 @@
-use crate::core::project::plugin::KarbeatGenerator;
-
-/// Wavetable Synthesizer with modern algorithm that reduce the
-/// anti-aliasing effect
-pub struct KarbeatzerWT {}
+use crate::{core::project::plugin::KarbeatGenerator, plugin::wrapper::{RawSynthEngine, SynthWrapper}};
 
 #[derive(Clone, Copy)]
 struct Oscillator {
     waveform: Waveform,
-    detune: f32, // In semitones
-    mix: f32,    // 0.0 to 1.0
+    detune: f32,      // In semitones
+    mix: f32,         // 0.0 to 1.0
     pulse_width: f32, // 0.0 to 1.0 (For Pulse/Square)
 }
 
@@ -33,86 +29,69 @@ impl From<f32> for Waveform {
     }
 }
 
-// --- FILTER ---
-#[derive(Clone, Copy)]
-struct Filter {
-    cutoff: f32,    // Hz
-    resonance: f32, // 0.0 to 1.0 (Q)
-    mode: FilterMode,
-    // Internal state (Stereo)
-    s1_l: f32, s2_l: f32,
-    s1_r: f32, s2_r: f32,
+
+/// Wavetable Synthesizer with modern algorithm that reduce the
+/// anti-aliasing effect
+#[derive(Clone)]
+pub struct KarbeatzerWTEngine {
+    oscillators: [Oscillator; 3],
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum FilterMode {
-    LowPass = 0,
-    HighPass = 1,
-    BandPass = 2,
-    Off = 3,
+impl Default for KarbeatzerWTEngine {
+    fn default() -> Self {
+        Self {
+            oscillators: [
+                Oscillator {
+                    waveform: Waveform::Sine,
+                    detune: 0.0,
+                    mix: 1.0,
+                    pulse_width: 0.5,
+                },
+                Oscillator {
+                    waveform: Waveform::Square,
+                    detune: 0.1,
+                    mix: 0.5,
+                    pulse_width: 0.5,
+                },
+                Oscillator {
+                    waveform: Waveform::Sine,
+                    detune: -12.0,
+                    mix: 0.3,
+                    pulse_width: 0.5,
+                },
+            ],
+        }
+    }
 }
 
-// --- ENVELOPE ---
-#[derive(Clone, Copy)]
-struct AdsrSettings {
-    attack: f32,  // Seconds
-    decay: f32,   // Seconds
-    sustain: f32, // 0.0 to 1.0
-    release: f32, // Seconds
+impl RawSynthEngine for KarbeatzerWTEngine {
+    fn process(&mut self, base: &mut crate::plugin::synth_base::SynthBase, output: &mut [f32], midi: &[crate::core::project::plugin::MidiEvent]) {
+        todo!()
+    }
+
+    fn set_custom_parameter(&mut self, id: u32, value: f32) {
+        todo!()
+    }
+
+    fn get_custom_parameter(&self, id: u32) -> Option<f32> {
+        todo!()
+    }
+
+    fn custom_default_parameters() -> std::collections::HashMap<u32, f32>
+    where
+        Self: Sized {
+        todo!()
+    }
+
+    fn name() -> &'static str
+    where
+        Self: Sized {
+        todo!()
+    }
 }
 
-enum EnvelopeStage {
-    Attack,
-    Decay,
-    Sustain,
-    Release,
-    Idle,
-}
+pub type KarbeatzerWaveTable = SynthWrapper<KarbeatzerWTEngine>;
 
-struct Voice {
-    note: u8,
-    velocity: u8,
-    phase: [f32; 3], // Phase for each oscillator
-    
-    // Envelope State
-    env_stage: EnvelopeStage,
-    env_level: f32,
-    env_timer: f32, // Seconds elapsed in current stage
-    release_start_level: f32, // Level when note-off happened
-    
-    is_active: bool,
-}
-
-impl KarbeatGenerator for KarbeatzerWT {
-    fn name(&self) -> &str {
-        return "Karbeatzer WT";
-    }
-
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
-        todo!()
-    }
-
-    fn reset(&mut self) {
-        todo!()
-    }
-
-    fn process(&mut self, output_buffer: &mut [f32], midi_events: &[crate::core::project::plugin::MidiEvent]) {
-        todo!()
-    }
-
-    fn set_parameter(&mut self, id: u32, value: f32) {
-        todo!()
-    }
-
-    fn get_parameter(&self, id: u32) -> f32 {
-        todo!()
-    }
-
-    fn default_parameters(&self) -> std::collections::HashMap<u32, f32> {
-        todo!()
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        todo!()
-    }
+pub fn create_karbeatzer_wt(sample_rate: Option<f32>) -> KarbeatzerWaveTable {
+    SynthWrapper::new(KarbeatzerWTEngine::default(), sample_rate.unwrap_or(48000.0))
 }

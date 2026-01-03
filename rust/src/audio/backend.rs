@@ -1,22 +1,16 @@
-use std::sync::Mutex;
-
 use anyhow::{anyhow, Context, Result};
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     OutputCallbackInfo,
 };
-use once_cell::sync::Lazy;
 use rtrb::{Consumer, RingBuffer};
 use triple_buffer::Output;
 
 use crate::{
     audio::{engine::AudioEngine, event::PlaybackPosition, render_state::AudioRenderState},
     commands::AudioCommand,
+    ctx,
 };
-
-static STREAM_GUARD: Lazy<Mutex<Option<cpal::Stream>>> = Lazy::new(|| Mutex::new(None));
-
-pub static POSITION_CONSUMER: Mutex<Option<rtrb::Consumer<PlaybackPosition>>> = Mutex::new(None);
 
 struct AudioContext {
     engine: AudioEngine,
@@ -32,8 +26,8 @@ struct AudioContext {
 /// $sample_type: The primitive type (f32, i16, etc)
 /// $converter: A closure |f32_sample| -> $sample_type
 macro_rules! run_stream {
-    ($device:expr, $config:expr, $ctx:expr, $consumer:expr, $sample_type:ty, $converter:expr, $err_fn:expr) => {{
-        let mut ctx = $ctx;
+    ($device:expr, $config:expr, $audio_ctx:expr, $consumer:expr, $sample_type:ty, $converter:expr, $err_fn:expr) => {{
+        let mut audio_ctx = $audio_ctx;
         let mut consumer = $consumer;
         // Internal buffer for reading from ringbuffer before conversion
         let mut read_buffer: Vec<f32> = Vec::new();
@@ -47,12 +41,12 @@ macro_rules! run_stream {
                 // While readable samples < needed samples
                 while consumer.slots() < samples_needed {
                     // Process fixed block
-                    ctx.engine.process(&mut ctx.staging_buffer);
+                    audio_ctx.engine.process(&mut audio_ctx.staging_buffer);
 
                     // Push to RingBuffer
                     // Note: process() fills staging_buffer completely
-                    for sample in &ctx.staging_buffer {
-                        if let Err(_) = ctx.producer.push(*sample) {
+                    for sample in &audio_ctx.staging_buffer {
+                        if let Err(_) = audio_ctx.producer.push(*sample) {
                             break;
                         }
                     }
@@ -107,7 +101,7 @@ pub fn start_audio_stream(
     initial_state: AudioRenderState,
 ) -> Result<()> {
     {
-        let mut guard = STREAM_GUARD.lock().unwrap();
+        let mut guard = ctx().stream_guard.lock().unwrap();
         if guard.is_some() {
             log::info!("🛑 Stopping previous audio stream...");
             *guard = None; // This drops the stream, stopping the audio thread
@@ -144,14 +138,14 @@ pub fn start_audio_stream(
     log::info!("Sample format: {}", sample_format);
 
     {
-        // We use crate::APP_STATE because it is public in lib.rs
-        if let Ok(mut state) = crate::APP_STATE.write() {
+        // Update audio config via context
+        if let Ok(mut state) = ctx().app_state.write() {
             state.audio_config.sample_rate = sample_rate as u32;
             state.audio_config.selected_output_device =
                 device.name().unwrap_or("Unknown".to_string());
             log::info!("✅ Global Audio Config updated: {} Hz", sample_rate);
         } else {
-            log::error!("❌ Failed to lock APP_STATE to update audio config");
+            log::error!("❌ Failed to lock app_state to update audio config");
             panic!();
         }
     }
@@ -168,8 +162,8 @@ pub fn start_audio_stream(
 
     let (pos_producer, pos_consumer) = RingBuffer::<PlaybackPosition>::new(100);
 
-    // 2. Store Consumer globally (or pass to your API stream handler)
-    *POSITION_CONSUMER.lock().unwrap() = Some(pos_consumer);
+    // 2. Store Consumer in context
+    *ctx().position_consumer.lock().unwrap() = Some(pos_consumer);
 
     let engine = AudioEngine::new(
         state_consumer,
@@ -186,7 +180,7 @@ pub fn start_audio_stream(
 
     let staging_buffer = vec![0.0; buffer_size * channels];
 
-    let ctx = AudioContext {
+    let audio_ctx = AudioContext {
         engine,
         producer,
         staging_buffer,
@@ -196,7 +190,7 @@ pub fn start_audio_stream(
         cpal::SampleFormat::F32 => run_stream!(
             device,
             config,
-            ctx,
+            audio_ctx,
             consumer,
             f32,
             |s| s, // Identity
@@ -206,7 +200,7 @@ pub fn start_audio_stream(
         cpal::SampleFormat::I16 => run_stream!(
             device,
             config,
-            ctx,
+            audio_ctx,
             consumer,
             i16,
             |s: f32| (s * i16::MAX as f32).clamp(i16::MIN as f32, i16::MAX as f32) as i16,
@@ -216,7 +210,7 @@ pub fn start_audio_stream(
         cpal::SampleFormat::U16 => run_stream!(
             device,
             config,
-            ctx,
+            audio_ctx,
             consumer,
             u16,
             |s: f32| ((s + 1.0) * 0.5 * u16::MAX as f32).clamp(0.0, u16::MAX as f32) as u16,
@@ -226,7 +220,7 @@ pub fn start_audio_stream(
         cpal::SampleFormat::U8 => run_stream!(
             device,
             config,
-            ctx,
+            audio_ctx,
             consumer,
             u8,
             |s: f32| ((s + 1.0) * 0.5 * 255.0).clamp(0.0, 255.0) as u8,
@@ -243,8 +237,8 @@ pub fn start_audio_stream(
         .play()
         .map_err(|e| anyhow!("Failed to play stream: {}", e))?;
 
-    // store the stream globally so it does not get dropped
-    let mut guard = STREAM_GUARD.lock().unwrap();
+    // store the stream in context so it does not get dropped
+    let mut guard = ctx().stream_guard.lock().unwrap();
     *guard = Some(stream);
 
     Ok(())

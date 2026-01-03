@@ -1,6 +1,6 @@
-use crate::plugin::registry::PLUGIN_REGISTRY;
+use crate::ctx;
 
 pub fn get_available_generators() -> Result<Vec<String>, String> {
-    let registry = PLUGIN_REGISTRY.read().unwrap();
+    let registry = ctx().plugin_registry.read().unwrap();
     Ok(registry.list_generators())
 }
