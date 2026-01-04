@@ -1,5 +1,7 @@
 use crate::{core::project::plugin::KarbeatGenerator, plugin::wrapper::{RawSynthEngine, SynthWrapper}};
 
+#[allow(dead_code)]
+
 #[derive(Clone, Copy)]
 struct Oscillator {
     waveform: Waveform,

@@ -60,11 +60,11 @@ impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
         let source = match &value.source {
-            KarbeatSource::Audio(_) => UiClipSource::Audio {
-                source_id: value.source_id,
+            KarbeatSource::Audio(source_id) => UiClipSource::Audio {
+                source_id: source_id.to_u32(),
             },
-            KarbeatSource::Midi(_) => UiClipSource::Midi {
-                pattern_id: value.source_id,
+            KarbeatSource::Midi(pattern_id) => UiClipSource::Midi {
+                pattern_id: pattern_id.to_u32(),
             },
             _ => UiClipSource::None,
         };

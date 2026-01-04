@@ -5,16 +5,19 @@ use std::sync::Arc;
 use crate::{
     api::project::{UiClip, UiTrack},
     broadcast_state_change,
-    core::project::{
-        clip::{Clip, ClipId},
-        track::{
-            audio_waveform::AudioSourceId,
-            midi::{Pattern, PatternId},
-            TrackId, TrackType,
+    core::{
+        history::ProjectAction,
+        project::{
+            clip::{Clip, ClipId},
+            track::{
+                audio_waveform::AudioSourceId,
+                midi::{Pattern, PatternId},
+                TrackId, TrackType,
+            },
+            KarbeatSource,
         },
-        KarbeatSource,
     },
-    utils::lock::{get_app_read, get_app_write},
+    utils::lock::{get_app_read, get_app_write, get_history_lock},
 };
 
 pub enum UiSourceType {
@@ -37,6 +40,7 @@ pub fn create_clip(
 
     {
         let mut app = get_app_write();
+        let mut history_manager = get_history_lock();
 
         match source_type {
             UiSourceType::Audio => {
@@ -69,9 +73,10 @@ pub fn create_clip(
                     source: crate::core::project::KarbeatSource::Audio(source_id),
                     offset_start: 0,
                     loop_length: timeline_length,
-                    source_id: source_id.into(),
                 };
-                app.add_clip_to_track(track_id, clip);
+                app.add_clip_to_track(track_id, clip.clone());
+
+                history_manager.push(ProjectAction::AddClip { track_id, clip });
             }
             UiSourceType::Midi => {
                 let sample_rate = app.audio_config.sample_rate;
@@ -125,10 +130,10 @@ pub fn create_clip(
                     source: KarbeatSource::Midi(pattern_id),
                     offset_start: 0,
                     loop_length: timeline_length,
-                    source_id: pattern_id.into(),
                 };
 
-                app.add_clip_to_track(track_id, clip);
+                app.add_clip_to_track(track_id, clip.clone());
+                history_manager.push(ProjectAction::AddClip { track_id, clip });
             }
         }
     }
@@ -142,8 +147,18 @@ pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
 
     {
         let mut app = get_app_write();
+        let mut history_manager = get_history_lock();
 
-        app.delete_clip_from_track(track_id, clip_id);
+        let deleted_clip_arc = app
+            .delete_clip_from_track(track_id, clip_id)
+            .map_err(|e| format!("Failed to delete clip: {}", e))?;
+
+        let deleted_clip = deleted_clip_arc.as_ref().to_owned();
+
+        history_manager.push(ProjectAction::DeleteClip {
+            track_id,
+            clip:deleted_clip,
+        });
     }
     broadcast_state_change();
     Ok(())

@@ -76,6 +76,8 @@ impl KarbeatTrack {
     pub fn track_type(&self) -> &TrackType {
         return &self.track_type;
     }
+    /// Add a new clip to the track. it will return Err if
+    /// the clip type is incompatible with the track type
     pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u32> {
         let is_valid = match (&self.track_type, &clip.source) {
             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
@@ -112,12 +114,16 @@ impl KarbeatTrack {
     }
 
     /// Remove the clip, change max_index_sample if the deleted clip are the latest end sample index
-    pub fn remove_clip(&mut self, clip_id: ClipId) -> bool {
+    pub fn remove_clip(&mut self, clip_id: &ClipId) -> anyhow::Result<Arc<Clip>> {
         let clips_set = &mut self.clips;
 
         let initial_len = clips_set.len();
-
-        clips_set.retain(|c| c.id != clip_id);
+        let clip = clips_set
+            .iter()
+            .find(|c| c.id == *clip_id)
+            .ok_or(anyhow::anyhow!("Clip not found"))?
+            .clone();
+        clips_set.retain(|c| c.id != *clip_id);
 
         if clips_set.len() < initial_len {
             // Recalculate max sample index if something was removed
@@ -127,20 +133,22 @@ impl KarbeatTrack {
                 .max()
                 .unwrap_or(0);
 
-            true
+            Ok(clip)
         } else {
-            false
+            Err(anyhow::anyhow!("Clip not found"))
         }
     }
 
+    /// Remove all clips that have the same source ID (only remove
+    /// audio clip because it needs a cascading remove upon an audio source deletion)
     pub fn remove_clip_by_source_id(&mut self, source_id: impl Into<u32>, is_generator: bool) {
         let source_id_u32: u32 = source_id.into();
         let clips_set = &mut self.clips;
 
         clips_set.retain(|clip_arc| match &clip_arc.source {
-            KarbeatSource::Audio(_) => {
+            KarbeatSource::Audio(source_id) => {
                 if !is_generator {
-                    clip_arc.source_id != source_id_u32
+                    source_id != &source_id_u32
                 } else {
                     true
                 }

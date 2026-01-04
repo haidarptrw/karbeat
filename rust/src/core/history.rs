@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::core::project::{track::midi::PatternId, ApplicationState, Note, NoteId};
+use crate::core::project::{
+    track::midi::PatternId, ApplicationState, Clip, ClipId, Note, NoteId, TrackId,
+};
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
@@ -26,6 +28,26 @@ pub enum ProjectAction {
         note_id: NoteId,
         old_duration: u64,
         new_duration: u64,
+    },
+    AddClip {
+        track_id: TrackId,
+        clip: Clip,
+    },
+    DeleteClip {
+        track_id: TrackId,
+        clip: Clip, // Store full clip data to enable undo
+    },
+    MoveClip {
+        old_track_id: TrackId,
+        new_track_id: TrackId,
+        clip_id: ClipId,
+        old_start_time: u32,
+        new_start_time: u32,
+    },
+    ResizeClip {
+        track_id: TrackId,
+        old_clip: Clip, // Store full clip state before resize
+        new_clip: Clip, // Store full clip state after resize
     },
     /// Groups multiple actions into one Undo/Redo step (e.g. Paste)
     Batch(Vec<ProjectAction>),
@@ -146,6 +168,38 @@ impl HistoryManager {
                     self.apply_inverse(action, app)?;
                 }
             }
+            ProjectAction::AddClip { track_id, clip } => {
+                // Inverse of AddClip: Delete the clip
+                app.delete_clip_from_track(*track_id, clip.id)
+                    .map_err(|e| e.to_string())?;
+            }
+            ProjectAction::DeleteClip { track_id, clip } => {
+                // Inverse of DeleteClip: Restore the clip to the track
+                app.add_clip_to_track(*track_id, clip.clone());
+            }
+            ProjectAction::MoveClip {
+                old_track_id,
+                new_track_id,
+                clip_id,
+                old_start_time,
+                ..
+            } => {
+                // Inverse: Move clip back to old_track_id with old_start_time
+                app.move_clip(*new_track_id, *old_track_id, *clip_id, *old_start_time)?;
+            }
+            ProjectAction::ResizeClip {
+                track_id, old_clip, ..
+            } => {
+                // Inverse: Restore the old clip state
+                let track_arc = app.tracks.get_mut(track_id).ok_or("Track not found")?;
+                let track = Arc::make_mut(track_arc);
+
+                // Remove current clip and insert old clip
+                track.clips.retain(|c| c.id != old_clip.id);
+                track.clips.insert(Arc::new(old_clip.clone()));
+                track.update_max_sample_index();
+                app.update_max_sample_index();
+            }
         }
 
         Ok(())
@@ -222,6 +276,39 @@ impl HistoryManager {
                 for action in actions.iter() {
                     self.apply_forward(action, app)?;
                 }
+            }
+            ProjectAction::AddClip { track_id, clip } => {
+                let track = app.tracks.get_mut(track_id).ok_or("Track not found")?;
+                let t = Arc::make_mut(track);
+                t.add_clip(clip.clone()).map_err(|e| e.to_string())?;
+            }
+            ProjectAction::DeleteClip { track_id, clip } => {
+                // Forward: Delete the clip from the track
+                app.delete_clip_from_track(*track_id, clip.id)
+                    .map_err(|e| e.to_string())?;
+            }
+            ProjectAction::MoveClip {
+                old_track_id,
+                new_track_id,
+                clip_id,
+                new_start_time,
+                ..
+            } => {
+                // Forward: Move clip from old_track_id to new_track_id with new_start_time
+                app.move_clip(*old_track_id, *new_track_id, *clip_id, *new_start_time)?;
+            }
+            ProjectAction::ResizeClip {
+                track_id, new_clip, ..
+            } => {
+                // Forward: Apply the new clip state
+                let track_arc = app.tracks.get_mut(track_id).ok_or("Track not found")?;
+                let track = Arc::make_mut(track_arc);
+
+                // Remove old clip and insert new clip
+                track.clips.retain(|c| c.id != new_clip.id);
+                track.clips.insert(Arc::new(new_clip.clone()));
+                track.update_max_sample_index();
+                app.update_max_sample_index();
             }
         }
         Ok(())
