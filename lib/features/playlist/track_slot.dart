@@ -177,7 +177,10 @@ class _InteractiveClipState extends State<_InteractiveClip> {
   // Track vertical drag to determine target track
   double _verticalDragDy = 0.0;
 
-  // Overlay for global draggin
+  /// Track dynamic cursor override
+  MouseCursor? _cursorOverride;
+
+  // Overlay for global dragging
   OverlayEntry? _overlayEntry;
   final ValueNotifier<Offset> _overlayPosition = ValueNotifier(Offset.zero);
 
@@ -264,7 +267,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
     final isMoving = _currentAction == _DragAction.move;
 
-    final double top = 2 + _verticalDragDy;
+    // final double top = 2 + _verticalDragDy;
 
     // Determine Cursor
     MouseCursor cursor = SystemMouseCursors.basic;
@@ -272,6 +275,11 @@ class _InteractiveClipState extends State<_InteractiveClip> {
       cursor = SystemMouseCursors.click;
     } else if (widget.selectedTool == ToolSelection.move) {
       cursor = SystemMouseCursors.move;
+    }
+
+    // Apply Override
+    if (_cursorOverride != null) {
+      cursor = _cursorOverride!;
     }
 
     return Positioned(
@@ -289,8 +297,24 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
             final x = event.localPosition.dx;
             if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
-              // TODO: Ideally use a ValueNotifier to switch cursor to resizeLeftRight
-              // For now, standard cursor is fine or implementation specific
+              if (_cursorOverride != SystemMouseCursors.resizeLeftRight) {
+                setState(() {
+                  _cursorOverride = SystemMouseCursors.resizeLeftRight;
+                });
+              } else {
+                if (_cursorOverride != null) {
+                  setState(() {
+                    _cursorOverride = null;
+                  });
+                }
+              }
+            }
+          },
+          onExit: (event) {
+            if (_cursorOverride != null) {
+              setState(() {
+                _cursorOverride = null;
+              });
             }
           },
           child: GestureDetector(
@@ -473,7 +497,9 @@ class _ClipRenderer extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
-        border: isSelected ? Border.all(color: Colors.white, width:  2) : Border.all(color: color.withAlpha(16), width: 1),
+        border: isSelected
+            ? Border.all(color: Colors.white, width: 2)
+            : Border.all(color: color.withAlpha(16), width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(3),

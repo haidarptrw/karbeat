@@ -13,7 +13,7 @@ pub enum ProjectAction {
     },
     DeleteNote {
         pattern_id: PatternId,
-        note: Note, // Keep the data to restore it on Undo
+        note: Note,
     },
     MoveNote {
         pattern_id: PatternId,

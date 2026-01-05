@@ -1,10 +1,9 @@
-import 'dart:developer';
-import 'dart:ui';
-
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
+import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:provider/provider.dart';
 
@@ -149,7 +148,7 @@ class DefaultControlPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final builder = ControlPanelBuilder();
 
-    // -- Navigation (Stateless) --
+    // Screen Navigation
     builder.addItem(
       ControlPanelToolbarItem(
         name: "Tracks",
@@ -168,8 +167,11 @@ class DefaultControlPanel extends StatelessWidget {
         name: "Piano Roll",
         icon: Icons.piano,
         color: Colors.cyanAccent,
-        onTap: () => context.read<KarbeatState>().navigateTo(WorkspaceView.pianoRoll),
-        isActive: context.select<KarbeatState, bool>((s)=> s.currentView == WorkspaceView.pianoRoll)
+        onTap: () =>
+            context.read<KarbeatState>().navigateTo(WorkspaceView.pianoRoll),
+        isActive: context.select<KarbeatState, bool>(
+          (s) => s.currentView == WorkspaceView.pianoRoll,
+        ),
       ),
     );
 
@@ -178,7 +180,7 @@ class DefaultControlPanel extends StatelessWidget {
         name: "Mixer",
         icon: Icons.tune,
         color: Colors.cyanAccent,
-        onTap: () => log("Nav to mixer"),
+        onTap: () => KarbeatLogger.info("Nav to mixer"),
       ),
     );
 
@@ -197,7 +199,7 @@ class DefaultControlPanel extends StatelessWidget {
 
     builder.addDivider();
 
-    // -- Transport --
+    // Transport Panel
     builder.addWidget(
       Selector<KarbeatState, bool>(
         selector: (_, state) => state.isPlaying,
@@ -224,7 +226,6 @@ class DefaultControlPanel extends StatelessWidget {
       ),
     );
 
-    // -- Loop --
     builder.addWidget(
       Selector<KarbeatState, bool>(
         selector: (_, state) => state.isLooping,
@@ -242,12 +243,12 @@ class DefaultControlPanel extends StatelessWidget {
 
     builder.addDivider();
 
-    // -- Info Display --
+    // Info Display
     builder.addWidget(_buildInfoDisplay(context));
 
     builder.addDivider();
 
-    // -- Tools --
+    // Tools
     builder.addWidget(
       Selector<KarbeatState, ToolSelection>(
         selector: (_, state) => state.selectedTool,
@@ -285,7 +286,8 @@ class DefaultControlPanel extends StatelessWidget {
                 icon: Icons.open_with,
                 color: Colors.blueAccent,
                 isActive: selectedTool == ToolSelection.move,
-                onTap: () => context.read<KarbeatState>().selectTool(ToolSelection.move),
+                onTap: () =>
+                    context.read<KarbeatState>().selectTool(ToolSelection.move),
               ),
               ControlPanelToolbarItem(
                 name: "Delete",
@@ -334,7 +336,7 @@ class DefaultControlPanel extends StatelessWidget {
                   formatTimeFromSamples(samples, sampleRate),
                 ),
                 const VerticalDivider(color: Colors.grey, width: 20),
-                _buildInfoText("BPM", bpm.toStringAsFixed(1)),
+                const BpmControl(),
                 const VerticalDivider(color: Colors.grey, width: 20),
                 _buildInfoText("SIG", "4/4"),
               ],
@@ -368,5 +370,66 @@ class DefaultControlPanel extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class BpmControl extends StatelessWidget {
+  const BpmControl({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    return Selector<KarbeatState, double>(
+      selector: (_, KarbeatState state) {
+        return state.tempo;
+      },
+      builder: (BuildContext context, double bpm, Widget? child) {
+        return Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              final dy = event.scrollDelta.dy;
+              final change = dy < 0 ? 0.1 : -0.1;
+              _updateBpm(context, bpm + change);
+            }
+          },
+          child: GestureDetector(
+            onVerticalDragUpdate: (details) {
+              final change = details.primaryDelta! * -0.5;
+              _updateBpm(context, bpm + change);
+            },
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeUpDown,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "BPM",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    bpm.toStringAsFixed(1),
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _updateBpm(BuildContext context, double newBpm) {
+    final clamped = newBpm.clamp(10.0, 999.0);
+    context.read<KarbeatState>().setBpm(clamped);
   }
 }
