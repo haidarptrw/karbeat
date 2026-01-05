@@ -1,3 +1,4 @@
+pub mod effect;
 pub mod automation;
 pub mod effect_base;
 pub mod generator;

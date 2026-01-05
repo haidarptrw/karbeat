@@ -262,7 +262,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     final double left = _visualStartTime / widget.zoomLevel;
     final double width = _visualLoopLength / widget.zoomLevel;
     final double safeWidth = width < 1 ? 1 : width;
-    const resizeEdgeSize = 15.0;
+    const resizeEdgeSize = 20.0;
 
     final isMoving = _currentAction == _DragAction.move;
 
@@ -339,15 +339,13 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
               final x = details.localPosition.dx;
 
-              if (widget.selectedTool == ToolSelection.move) {
-                if (x < resizeEdgeSize) {
-                  setState(() => _currentAction = _DragAction.resizeLeft);
-                } else if (x > safeWidth - resizeEdgeSize) {
-                  setState(() => _currentAction = _DragAction.resizeRight);
-                } else {
-                  setState(() => _currentAction = _DragAction.move);
-                  _createOverlay(context);
-                }
+              if (x < resizeEdgeSize) {
+                setState(() => _currentAction = _DragAction.resizeLeft);
+              } else if (x > safeWidth - resizeEdgeSize) {
+                setState(() => _currentAction = _DragAction.resizeRight);
+              } else {
+                setState(() => _currentAction = _DragAction.move);
+                _createOverlay(context);
               }
             },
 

@@ -3,6 +3,11 @@
 // Automation system for parameter modulation over time.
 // Works with both generators (SynthWrapper) and effects (EffectWrapper).
 
+use serde::{Deserialize, Serialize};
+
+// Generate automation ID
+define_id!(AutomationId);
+
 // ============================================================================
 // CURVE TYPES
 // ============================================================================
@@ -59,6 +64,7 @@ impl AutomationPoint {
 /// An automation lane that controls a single parameter
 #[derive(Clone, Debug)]
 pub struct AutomationLane {
+    pub id: AutomationId,
     /// The parameter ID this lane controls
     pub target_param_id: u32,
     /// Automation points sorted by time
@@ -71,6 +77,7 @@ impl AutomationLane {
     /// Create a new empty automation lane for a parameter
     pub fn new(param_id: u32) -> Self {
         Self {
+            id: 0.into(),
             target_param_id: param_id,
             points: Vec::new(),
             enabled: true,
@@ -183,6 +190,8 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
 // ============================================================================
 
 use std::collections::HashMap;
+
+use crate::define_id;
 
 /// Manages multiple automation lanes for a plugin
 #[derive(Clone, Debug, Default)]
