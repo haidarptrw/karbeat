@@ -183,7 +183,6 @@ class _PianoKeyState extends State<_PianoKey> {
   }
 
   String _getNoteLabel(int note) {
-    const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     // Only show C notes label to reduce clutter
     if (note % 12 == 0) return "C${(note / 12).floor()}";
     return "";

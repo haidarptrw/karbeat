@@ -5,7 +5,13 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'pattern.dart';
+import 'project.dart';
 import 'track.dart';
+part 'session.freezed.dart';
+
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `from`
 
 /// Update selected clip in the session.
 Future<void> updateSelectedClip({required int trackId, required int clipId}) =>
@@ -25,7 +31,7 @@ Future<void> undo() => RustLib.instance.api.crateApiSessionUndo();
 Future<void> redo() => RustLib.instance.api.crateApiSessionRedo();
 
 /// Copy selected pattern notes to the clipboard.
-Future<void> copyPatternNotes({
+Future<UiClipboardContent> copyPatternNotes({
   required int patternId,
   required List<int> noteIds,
 }) => RustLib.instance.api.crateApiSessionCopyPatternNotes(
@@ -51,13 +57,24 @@ Future<void> pastePatternNotes({
   playheadTick: playheadTick,
 );
 
+/// Delete notes in group. useful for range and group deletion
+Future<void> deletePatternNotes({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiSessionDeletePatternNotes(
+  patternId: patternId,
+  noteIds: noteIds,
+);
+
 /// Copy selected clips to the clipboard.
 /// Each (track_id, clip_id) pair identifies a clip to copy.
-Future<void> copyClips({required int trackId, required List<int> clipIds}) =>
-    RustLib.instance.api.crateApiSessionCopyClips(
-      trackId: trackId,
-      clipIds: clipIds,
-    );
+Future<UiClipboardContent> copyClips({
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiSessionCopyClips(
+  trackId: trackId,
+  clipIds: clipIds,
+);
 
 /// Cut selected clips: copies them to clipboard then deletes with history.
 Future<void> cutClips({required int trackId, required List<int> clipIds}) =>
@@ -109,3 +126,20 @@ Future<void> resizeClip({
   edge: edge,
   newTimeVal: newTimeVal,
 );
+
+Future<UiClipboardContent> getClipboardContents() =>
+    RustLib.instance.api.crateApiSessionGetClipboardContents();
+
+@freezed
+sealed class UiClipboardContent with _$UiClipboardContent {
+  const UiClipboardContent._();
+
+  const factory UiClipboardContent.empty() = UiClipboardContent_Empty;
+  const factory UiClipboardContent.notes(List<UiNote> field0) =
+      UiClipboardContent_Notes;
+  const factory UiClipboardContent.clips(List<UiClip> field0) =
+      UiClipboardContent_Clips;
+
+  static Future<UiClipboardContent> default_() =>
+      RustLib.instance.api.crateApiSessionUiClipboardContentDefault();
+}

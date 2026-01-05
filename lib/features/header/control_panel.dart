@@ -248,7 +248,7 @@ class DefaultControlPanel extends StatelessWidget {
 
     builder.addDivider();
 
-    // Tools
+    // Control Panel Tools
     builder.addWidget(
       Selector<KarbeatState, ToolSelection>(
         selector: (_, state) => state.selectedTool,
@@ -257,7 +257,7 @@ class DefaultControlPanel extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ControlPanelToolbarItem(
-                name: "Select",
+                name: "Pointer",
                 icon: Icons.near_me,
                 color: Colors.blueAccent,
                 isActive: selectedTool == ToolSelection.pointer,
@@ -298,6 +298,15 @@ class DefaultControlPanel extends StatelessWidget {
                   ToolSelection.delete,
                 ),
               ),
+              ControlPanelToolbarItem(
+                name: "Range Select",
+                icon: Icons.crop_free, 
+                color: Colors.blueAccent,
+                isActive: selectedTool == ToolSelection.select,
+                onTap: () => context.read<KarbeatState>().selectTool(
+                  ToolSelection.select
+                ),
+              ),
             ],
           );
         },
@@ -323,7 +332,6 @@ class DefaultControlPanel extends StatelessWidget {
             final bar = pos?.bar ?? 0;
             final beat = pos?.beat ?? 0;
             final samples = pos?.samples ?? 0;
-            final bpm = pos?.tempo ?? 0.0;
             final sampleRate = pos?.sampleRate ?? 44100;
             return Row(
               children: [
@@ -378,7 +386,6 @@ class BpmControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
     return Selector<KarbeatState, double>(
       selector: (_, KarbeatState state) {
         return state.tempo;

@@ -9,6 +9,7 @@ use crate::{
     }, utils::lock::{get_app_read, get_app_write, get_history_lock}
 };
 
+#[derive(Clone)]
 pub struct UiPattern {
     pub id: u32,
     pub name: String,
@@ -16,6 +17,8 @@ pub struct UiPattern {
 
     pub notes: Vec<UiNote>,
 }
+
+#[derive(Clone)]
 pub struct UiNote {
     pub id: u32,
     pub start_tick: u64,

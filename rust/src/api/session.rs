@@ -1,14 +1,48 @@
 use std::sync::Arc;
 
 use crate::{
-    api::track::ResizeEdge,
+    api::{pattern::UiNote, project::UiClip, track::ResizeEdge},
     broadcast_state_change,
     core::{
         history::ProjectAction,
-        project::{clipboard::ClipboardContent, track::TrackId, Clip, ClipId, Note},
+        project::{clipboard::ClipboardContent, track::TrackId, Clip, ClipId, Note, NoteId},
     },
-    utils::lock::{get_app_write, get_history_lock},
+    utils::lock::{get_app_read, get_app_write, get_history_lock},
 };
+
+// =======================================
+// Data type definition
+// =======================================
+
+#[derive(Clone, Default)]
+
+/// UI-compatible representation of [ClipboardContent](crate::core::project::clipboard::ClipboardContent)
+pub enum UiClipboardContent {
+    #[default]
+    Empty,
+    Notes(Vec<UiNote>), // A list of notes (for Pattern View)
+    Clips(Vec<UiClip>), // A list of clips (for Track View)
+}
+
+impl From<&ClipboardContent> for UiClipboardContent {
+    fn from(clipboard: &ClipboardContent) -> Self {
+        match clipboard {
+            ClipboardContent::Empty => UiClipboardContent::Empty,
+            ClipboardContent::Notes(notes) => {
+                let ui_notes = notes.iter().map(|note| UiNote::from(note)).collect();
+                UiClipboardContent::Notes(ui_notes)
+            }
+            ClipboardContent::Clips(clips) => {
+                let ui_clips = clips.iter().map(|note| UiClip::from(note)).collect();
+                UiClipboardContent::Clips(ui_clips)
+            }
+        }
+    }
+}
+
+// =======================================
+// APIs for frontend
+// =======================================
 
 /// Update selected clip in the session.
 pub fn update_selected_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
@@ -56,7 +90,10 @@ pub fn redo() -> Result<(), String> {
 // =============================================
 
 /// Copy selected pattern notes to the clipboard.
-pub fn copy_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
+pub fn copy_pattern_notes(
+    pattern_id: u32,
+    note_ids: Vec<u32>,
+) -> Result<UiClipboardContent, String> {
     let mut app = get_app_write();
     let pattern = app
         .pattern_pool
@@ -73,45 +110,16 @@ pub fn copy_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), Str
 
     if !notes_to_copy.is_empty() {
         app.clipboard = ClipboardContent::Notes(notes_to_copy);
+        Ok(UiClipboardContent::from(&app.clipboard))
+    } else {
+        Ok(UiClipboardContent::Empty)
     }
-    Ok(())
 }
 
 /// Cut pattern notes: copies them to clipboard then deletes with history.
 pub fn cut_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
     copy_pattern_notes(pattern_id, note_ids.clone())?;
-
-    let mut app = get_app_write();
-    let pattern_arc = app
-        .pattern_pool
-        .get_mut(&pattern_id.into())
-        .ok_or("Pattern not found")?;
-    let pattern = Arc::make_mut(pattern_arc);
-
-    let mut actions = Vec::new();
-
-    let notes_to_delete: Vec<Note> = pattern
-        .notes
-        .iter()
-        .filter(|n| note_ids.contains(&n.id.to_u32()))
-        .cloned()
-        .collect();
-
-    pattern.notes.retain(|n| !note_ids.contains(&n.id.to_u32()));
-
-    for note in notes_to_delete {
-        actions.push(ProjectAction::DeleteNote {
-            pattern_id: pattern_id.into(),
-            note,
-        });
-    }
-
-    if !actions.is_empty() {
-        let mut history = get_history_lock();
-        history.push(ProjectAction::Batch(actions));
-    }
-    drop(app);
-    broadcast_state_change();
+    delete_pattern_notes(pattern_id, note_ids)?;
     Ok(())
 }
 
@@ -175,13 +183,56 @@ pub fn paste_pattern_notes(target_pattern_id: u32, playhead_tick: u64) -> Result
     Ok(())
 }
 
+/// Delete notes in group. useful for range and group deletion
+pub fn delete_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), String> {
+    let mut app = get_app_write();
+    let pattern_arc = app
+        .pattern_pool
+        .get_mut(&pattern_id.into())
+        .ok_or("Pattern not found")?;
+    let pattern = Arc::make_mut(pattern_arc);
+
+    let mut actions = Vec::new();
+
+    let notes_to_delete: Vec<Note> = pattern
+        .notes
+        .iter()
+        .filter(|n| note_ids.contains(&n.id.to_u32()))
+        .cloned()
+        .collect();
+
+    let deleted_count =
+        pattern.delete_notes_by_id(note_ids.iter().map(|id| NoteId::from(*id)).collect());
+
+    log::info!(
+        "deleted {} notes in pattern {}",
+        deleted_count,
+        pattern.id.to_u32()
+    );
+
+    for note in notes_to_delete {
+        actions.push(ProjectAction::DeleteNote {
+            pattern_id: pattern_id.into(),
+            note,
+        });
+    }
+
+    if !actions.is_empty() {
+        let mut history = get_history_lock();
+        history.push(ProjectAction::Batch(actions));
+    }
+    drop(app);
+    broadcast_state_change();
+    Ok(())
+}
+
 // =============================================
 // Clip Actions
 // =============================================
 
 /// Copy selected clips to the clipboard.
 /// Each (track_id, clip_id) pair identifies a clip to copy.
-pub fn copy_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
+pub fn copy_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<UiClipboardContent, String> {
     let mut app = get_app_write();
     let mut clips_to_copy = Vec::new();
 
@@ -198,8 +249,10 @@ pub fn copy_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
 
     if !clips_to_copy.is_empty() {
         app.clipboard = ClipboardContent::Clips(clips_to_copy);
+        Ok(UiClipboardContent::from(&app.clipboard))
+    } else {
+        Ok(UiClipboardContent::Empty)
     }
-    Ok(())
 }
 
 /// Cut selected clips: copies them to clipboard then deletes with history.
@@ -314,7 +367,9 @@ pub fn delete_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
         // Find and clone the clip data before removing
         if let Some(clip_arc) = track.clips.iter().find(|c| c.id == clip_id_typed).cloned() {
             let clip_data = (*clip_arc).clone();
-            track.remove_clip(&clip_id_typed).map_err(|e| e.to_string())?;
+            track
+                .remove_clip(&clip_id_typed)
+                .map_err(|e| e.to_string())?;
 
             actions.push(ProjectAction::DeleteClip {
                 track_id: track_id_typed,
@@ -434,4 +489,14 @@ pub fn resize_clip(
     drop(app);
     broadcast_state_change();
     Ok(())
+}
+
+// ==================================
+// Getters
+// ==================================
+
+pub fn get_clipboard_contents() -> UiClipboardContent {
+    let app = get_app_read();
+    let clipboard_content = &app.clipboard;
+    UiClipboardContent::from(clipboard_content)
 }

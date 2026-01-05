@@ -239,6 +239,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiClipSource dco_decode_ui_clip_source(dynamic raw);
 
   @protected
+  UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw);
+
+  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
@@ -501,6 +504,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer);
+
+  @protected
+  UiClipboardContent sse_decode_ui_clipboard_content(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
@@ -812,6 +820,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_clipboard_content(
+    UiClipboardContent self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_generator_instance(

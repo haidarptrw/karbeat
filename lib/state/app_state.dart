@@ -19,7 +19,7 @@ import 'package:karbeat/src/rust/core/project/transport.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
-enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom }
+enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom, select }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
@@ -67,6 +67,8 @@ class KarbeatState extends ChangeNotifier {
     cpuLoad: 0,
   );
 
+  // List<Clipboard>
+
   // =================== STORES ==========================
   Map<int, UiTrack> _tracks = {};
   Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
@@ -89,6 +91,8 @@ class KarbeatState extends ChangeNotifier {
   // STRATEGY: Internal Event Bus for State Synchronization
   final StreamController<ProjectEvent> _stateEventController =
       StreamController.broadcast();
+  
+  // ignore:unused_field
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
   // =========== EDITOR STATE ====================

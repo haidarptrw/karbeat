@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/src/rust/core/project.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
@@ -77,6 +76,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   double _timelineWidth = 2000.0;
 
   int _activeSampleRate = 44100;
+
+  // ignore:unused_field
   StreamSubscription? _posSub;
 
   bool _isCtrlPressed = false;

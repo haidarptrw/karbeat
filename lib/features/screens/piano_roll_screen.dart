@@ -486,6 +486,7 @@ class _PianoKeyState extends State<_PianoKey> {
   }
 }
 
+// ignore: unused_field
 enum _NoteDragMode { none, move, resizeLeft, resizeRight }
 
 class _InteractiveNote extends StatefulWidget {

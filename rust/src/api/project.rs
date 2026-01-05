@@ -41,6 +41,7 @@ impl From<&KarbeatTrack> for UiTrack {
     }
 }
 
+#[derive(Clone)]
 pub struct UiClip {
     pub name: String,
     pub id: u32,
@@ -50,6 +51,7 @@ pub struct UiClip {
     pub loop_length: u32,
 }
 
+#[derive(Clone)]
 pub enum UiClipSource {
     Audio { source_id: u32 },
     Midi { pattern_id: u32 },
