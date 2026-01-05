@@ -14,6 +14,83 @@ use super::effect_base::EffectBase;
 use super::synth_base::SynthBase;
 
 // ============================================================================
+// PARAMETER API
+// ============================================================================
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ParameterValueType {
+    Float,
+    Int,
+    Bool,
+    Choice,
+}
+
+/// Generic description of a plugin parameter for UI generation
+#[derive(Clone, Debug)]
+pub struct PluginParameter {
+    pub id: u32,
+    pub name: String,
+    pub group: String,     // e.g., "Oscillator 1", "Master"
+    pub value: f32,        // Current value
+    pub min: f32,
+    pub max: f32,
+    pub default_value: f32,
+    pub step: f32,         // 0.0 for continuous
+    pub value_type: ParameterValueType,
+    pub choices: Vec<String>, // Labels for Choice type (index = value)
+}
+
+impl PluginParameter {
+    /// Create a new float parameter
+    pub fn new_float(id: u32, name: &str, group: &str, val: f32, min: f32, max: f32, default: f32) -> Self {
+        Self {
+            id,
+            name: name.to_string(),
+            group: group.to_string(),
+            value: val,
+            min,
+            max,
+            default_value: default,
+            step: 0.0,
+            value_type: ParameterValueType::Float,
+            choices: Vec::new(),
+        }
+    }
+
+    /// Create a new boolean parameter
+    pub fn new_bool(id: u32, name: &str, group: &str, val: bool, default: bool) -> Self {
+        Self {
+            id,
+            name: name.to_string(),
+            group: group.to_string(),
+            value: if val { 1.0 } else { 0.0 },
+            min: 0.0,
+            max: 1.0,
+            default_value: if default { 1.0 } else { 0.0 },
+            step: 1.0,
+            value_type: ParameterValueType::Bool,
+            choices: Vec::new(),
+        }
+    }
+
+    /// Create a new choice parameter
+    pub fn new_choice(id: u32, name: &str, group: &str, val: u32, choices: Vec<String>, default: u32) -> Self {
+        Self {
+            id,
+            name: name.to_string(),
+            group: group.to_string(),
+            value: val as f32,
+            min: 0.0,
+            max: (choices.len().saturating_sub(1)) as f32,
+            default_value: default as f32,
+            step: 1.0,
+            value_type: ParameterValueType::Choice,
+            choices,
+        }
+    }
+}
+
+// ============================================================================
 // RAW ENGINE TRAITS
 // ============================================================================
 
@@ -54,6 +131,8 @@ pub trait RawSynthEngine: Send + Sync {
     fn custom_default_parameters() -> HashMap<u32, f32>
     where
         Self: Sized;
+    /// Get definition of all custom parameters
+    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
 
     /// Get the synth name
     fn name() -> &'static str
@@ -80,12 +159,16 @@ pub trait RawEffectEngine: Send + Sync {
     /// Get default values for custom parameters
     fn custom_default_parameters() -> HashMap<u32, f32>
     where
-        Self: Sized;
+    Self: Sized;
+    
+    /// Get definition of all custom parameters
+    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
 
     /// Get the effect name
     fn name() -> &'static str
     where
         Self: Sized;
+
 }
 
 // ============================================================================
@@ -126,6 +209,13 @@ impl<T: RawSynthEngine + Clone> SynthWrapper<T> {
         if !self.base.set_parameter(id, value) {
             self.engine.set_custom_parameter(id, value);
         }
+    }
+
+    /// Public API to get ALL parameters (Base + Custom) for the UI
+    pub fn get_all_parameters(&self) -> Vec<PluginParameter> {
+        let mut params = self.base.get_parameter_specs();
+        params.extend(self.engine.get_parameter_specs());
+        params
     }
 }
 
@@ -211,6 +301,12 @@ impl<T: RawEffectEngine + Clone> EffectWrapper<T> {
         if !self.base.set_parameter(id, value) {
             self.engine.set_custom_parameter(id, value);
         }
+    }
+
+    pub fn get_all_parameters(&self) -> Vec<PluginParameter> {
+        let mut params = self.base.get_parameter_specs();
+        params.extend(self.engine.get_parameter_specs());
+        params
     }
 }
 

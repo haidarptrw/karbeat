@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:karbeat/features/plugins/karbeatzer_screen.dart';
 import 'package:karbeat/features/screens/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -89,7 +90,18 @@ class SourceListScreen extends StatelessWidget {
                 icon: Icons.piano,
                 color: Colors.orangeAccent,
                 onTap: () {
-                  // TODO: Navigate to plugin editor
+                  // Navigate to Karbeatzer-specific editor for Karbeatzer generators
+                  if (gen.internalType == 'Karbeatzer V2') {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => KarbeatzerScreen(
+                          generatorId: id,
+                          generatorName: gen.name,
+                        ),
+                      ),
+                    );
+                  }
+                  // TODO: Add other plugin editors
                 },
                 onPlace: null,
                 // onDelete: () => context.read<KarbeatState>().removeGenerator(id), // TODO implement

@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use crate::plugin::wrapper::PluginParameter;
+
 // ============================================================================
 // FILTER
 // ============================================================================
@@ -401,6 +403,81 @@ impl SynthBase {
         map.insert(6, 0.7); // env_sustain
         map.insert(7, 0.5); // env_release
         map
+    }
+
+    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        vec![
+            PluginParameter::new_float(0, "Master Gain", "Output", self.gain, 0.0, 1.0, 0.5),
+            // Filter
+            PluginParameter::new_float(
+                1,
+                "Cutoff",
+                "Filter",
+                self.filter.cutoff,
+                20.0,
+                20000.0,
+                2000.0,
+            ),
+            PluginParameter::new_float(
+                2,
+                "Resonance",
+                "Filter",
+                self.filter.resonance,
+                0.0,
+                0.95,
+                0.2,
+            ),
+            PluginParameter::new_choice(
+                3,
+                "Mode",
+                "Filter",
+                self.filter.mode as u32,
+                vec![
+                    "LowPass".into(),
+                    "HighPass".into(),
+                    "BandPass".into(),
+                    "Off".into(),
+                ],
+                0,
+            ),
+            // Envelope
+            PluginParameter::new_float(
+                4,
+                "Attack",
+                "Envelope",
+                self.amp_envelope.attack,
+                0.001,
+                5.0,
+                0.01,
+            ),
+            PluginParameter::new_float(
+                5,
+                "Decay",
+                "Envelope",
+                self.amp_envelope.decay,
+                0.001,
+                5.0,
+                0.2,
+            ),
+            PluginParameter::new_float(
+                6,
+                "Sustain",
+                "Envelope",
+                self.amp_envelope.sustain,
+                0.0,
+                1.0,
+                0.7,
+            ),
+            PluginParameter::new_float(
+                7,
+                "Release",
+                "Envelope",
+                self.amp_envelope.release,
+                0.001,
+                10.0,
+                0.5,
+            ),
+        ]
     }
 
     /// Base parameter IDs reserved by SynthBase (0-7)

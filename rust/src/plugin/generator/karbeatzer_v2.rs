@@ -328,6 +328,131 @@ impl RawSynthEngine for KarbeatzerEngine {
 
         map
     }
+
+    fn get_parameter_specs(&self) -> Vec<crate::plugin::wrapper::PluginParameter> {
+        use crate::plugin::wrapper::PluginParameter;
+
+        let waveform_choices = vec![
+            "Sine".into(),
+            "Saw".into(),
+            "Square".into(),
+            "Triangle".into(),
+            "Noise".into(),
+        ];
+
+        vec![
+            // Drive
+            PluginParameter::new_float(8, "Drive", "Master", self.drive, 0.0, 1.0, 0.0),
+            // Osc 1
+            PluginParameter::new_choice(
+                10,
+                "Waveform",
+                "Oscillator 1",
+                self.oscillators[0].waveform as u32,
+                waveform_choices.clone(),
+                1, // Saw default
+            ),
+            PluginParameter::new_float(
+                11,
+                "Detune",
+                "Oscillator 1",
+                self.oscillators[0].detune,
+                -24.0,
+                24.0,
+                0.0,
+            ),
+            PluginParameter::new_float(
+                12,
+                "Mix",
+                "Oscillator 1",
+                self.oscillators[0].mix,
+                0.0,
+                1.0,
+                1.0,
+            ),
+            PluginParameter::new_float(
+                13,
+                "Pulse Width",
+                "Oscillator 1",
+                self.oscillators[0].pulse_width,
+                0.01,
+                0.99,
+                0.5,
+            ),
+            // Osc 2
+            PluginParameter::new_choice(
+                20,
+                "Waveform",
+                "Oscillator 2",
+                self.oscillators[1].waveform as u32,
+                waveform_choices.clone(),
+                2, // Square default
+            ),
+            PluginParameter::new_float(
+                21,
+                "Detune",
+                "Oscillator 2",
+                self.oscillators[1].detune,
+                -24.0,
+                24.0,
+                0.1,
+            ),
+            PluginParameter::new_float(
+                22,
+                "Mix",
+                "Oscillator 2",
+                self.oscillators[1].mix,
+                0.0,
+                1.0,
+                0.5,
+            ),
+            PluginParameter::new_float(
+                23,
+                "Pulse Width",
+                "Oscillator 2",
+                self.oscillators[1].pulse_width,
+                0.01,
+                0.99,
+                0.5,
+            ),
+            // Osc 3
+            PluginParameter::new_choice(
+                30,
+                "Waveform",
+                "Oscillator 3",
+                self.oscillators[2].waveform as u32,
+                waveform_choices,
+                0, // Sine default
+            ),
+            PluginParameter::new_float(
+                31,
+                "Detune",
+                "Oscillator 3",
+                self.oscillators[2].detune,
+                -24.0,
+                24.0,
+                -12.0,
+            ),
+            PluginParameter::new_float(
+                32,
+                "Mix",
+                "Oscillator 3",
+                self.oscillators[2].mix,
+                0.0,
+                1.0,
+                0.3,
+            ),
+            PluginParameter::new_float(
+                33,
+                "Pulse Width",
+                "Oscillator 3",
+                self.oscillators[2].pulse_width,
+                0.01,
+                0.99,
+                0.5,
+            ),
+        ]
+    }
 }
 
 // ============================================================================

@@ -8,3 +8,28 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 Future<List<String>> getAvailableGenerators() =>
     RustLib.instance.api.crateApiPluginGetAvailableGenerators();
+
+/// Set a parameter on a generator plugin.
+///
+/// # Arguments
+/// * `generator_id` - The ID of the generator
+/// * `param_id` - The parameter ID
+/// * `value` - The new value for the parameter
+Future<void> setGeneratorParameter({
+  required int generatorId,
+  required int paramId,
+  required double value,
+}) => RustLib.instance.api.crateApiPluginSetGeneratorParameter(
+  generatorId: generatorId,
+  paramId: paramId,
+  value: value,
+);
+
+/// Get a parameter value from a generator plugin.
+Future<double> getGeneratorParameter({
+  required int generatorId,
+  required int paramId,
+}) => RustLib.instance.api.crateApiPluginGetGeneratorParameter(
+  generatorId: generatorId,
+  paramId: paramId,
+);

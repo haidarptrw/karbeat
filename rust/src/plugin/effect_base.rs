@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use crate::plugin::wrapper::PluginParameter;
+
 // ============================================================================
 // EFFECT BASE (Composition Pattern)
 // ============================================================================
@@ -108,6 +110,13 @@ impl EffectBase {
         map.insert(0, 0.0); // bypass off
         map.insert(1, 1.0); // fully wet
         map
+    }
+
+    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        vec![
+            PluginParameter::new_bool(0, "Bypass", "General", self.bypass, false),
+            PluginParameter::new_float(1, "Mix", "General", self.mix, 0.0, 1.0, 1.0),
+        ]
     }
 
     /// Base parameter IDs reserved by EffectBase (0-1)
