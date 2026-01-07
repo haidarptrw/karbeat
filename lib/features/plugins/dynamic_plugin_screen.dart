@@ -226,8 +226,8 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
       case plugin_api.UiParameterType.choice:
         return _buildChoiceParameter(param);
       case plugin_api.UiParameterType.float:
+        return _buildSliderParameter(param);
       case plugin_api.UiParameterType.int:
-      default:
         return _buildSliderParameter(param);
     }
   }
