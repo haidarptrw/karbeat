@@ -5,11 +5,17 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'project.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `eq`, `fmt`, `fmt`, `from`
 
+/// Get all available generators in Plugin Registry
 Future<List<String>> getAvailableGenerators() =>
     RustLib.instance.api.crateApiPluginGetAvailableGenerators();
+
+/// Get a single generator state from the Generator Pool
+Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
+    RustLib.instance.api.crateApiPluginGetGenerator(generatorId: generatorId);
 
 /// Get parameter specifications for a generator plugin.
 /// Returns a list of all parameters with their metadata for UI generation.

@@ -81,7 +81,9 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
       );
       // Sync generator list so Flutter state matches backend
       if (mounted) {
-        await context.read<KarbeatState>().syncGeneratorList();
+        await context.read<KarbeatState>().syncGenerator(
+          generatorId: widget.generatorId,
+        );
       }
     } catch (e) {
       debugPrint('Error setting parameter: $e');

@@ -3,12 +3,18 @@ use std::{collections::HashMap, ops::Deref};
 use serde::Serialize;
 
 use crate::{
-    broadcast_state_change, core::{
+    broadcast_state_change,
+    core::{
         file_manager::loader::AudioLoader,
         project::{
-            KarbeatSource, ProjectMetadata, SessionState, clip::Clip, generator::{GeneratorInstance, GeneratorInstanceType}, track::{KarbeatTrack, TrackType, audio_waveform::AudioWaveform}, transport::TransportState
+            clip::Clip,
+            generator::{GeneratorInstance, GeneratorInstanceType},
+            track::{audio_waveform::AudioWaveform, KarbeatTrack, TrackType},
+            transport::TransportState,
+            KarbeatSource, ProjectMetadata, SessionState,
         },
-    }, utils::lock::{get_app_read, get_app_write}
+    },
+    utils::lock::{get_app_read, get_app_write},
 };
 
 pub struct UiProjectState {
@@ -195,23 +201,28 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
 // ============================================================
 
 pub struct UiSessionState {
-    // What is the user clicking on right now?
+    // Track-locked multi-selection
     pub selected_track_id: Option<u32>,
-    pub selected_clip_id: Option<u32>,
-    // Undo/Redo Stack
-    // We don't save this usually, or we save it separately
-    // pub undo_stack: Vec<AudioCommandUi>,
-    // pub redo_stack: Vec<AudioCommandUi>,
+    pub selected_clip_ids: Vec<u32>,
 
-    // Clipboard for Copy/Paste
-    // pub clipboard: Option<Clip>, Option<Clipboard>
+    // For piano roll navigation - most recently interacted clip
+    pub focus_clip_id: Option<u32>,
+
+    // Optional override for piano roll preview generator
+    pub preview_generator_id: Option<u32>,
 }
 
 impl From<&SessionState> for UiSessionState {
     fn from(session: &SessionState) -> Self {
         Self {
-            selected_clip_id: session.selected_clip_id.map(|id| id.to_u32()),
             selected_track_id: session.selected_track_id.map(|id| id.to_u32()),
+            selected_clip_ids: session
+                .selected_clip_ids
+                .iter()
+                .map(|id| id.to_u32())
+                .collect(),
+            focus_clip_id: session.focus_clip_id.map(|id| id.to_u32()),
+            preview_generator_id: session.preview_generator_id.map(|id| id.to_u32()),
         }
     }
 }
@@ -220,12 +231,17 @@ impl Into<UiSessionState> for SessionState {
     fn into(self) -> UiSessionState {
         UiSessionState {
             selected_track_id: self.selected_track_id.map(|id| id.to_u32()),
-            selected_clip_id: self.selected_clip_id.map(|id| id.to_u32()),
+            selected_clip_ids: self
+                .selected_clip_ids
+                .iter()
+                .map(|id| id.to_u32())
+                .collect(),
+            focus_clip_id: self.focus_clip_id.map(|id| id.to_u32()),
+            preview_generator_id: self.preview_generator_id.map(|id| id.to_u32()),
         }
     }
 }
 // ============================ APIs ==================================
-
 pub fn get_ui_state() -> Option<UiProjectState> {
     let app = get_app_read();
 
@@ -249,6 +265,7 @@ pub fn get_ui_state() -> Option<UiProjectState> {
     Some(project_state)
 }
 
+/// Get the current project metadata state from the backend
 pub fn get_project_metadata() -> Result<ProjectMetadata, String> {
     let app = get_app_read();
 
@@ -256,6 +273,7 @@ pub fn get_project_metadata() -> Result<ProjectMetadata, String> {
     Ok(metadata)
 }
 
+/// Get the transport state from the backend
 pub fn get_transport_state() -> Result<TransportState, String> {
     let app = get_app_read();
 
@@ -263,6 +281,7 @@ pub fn get_transport_state() -> Result<TransportState, String> {
     Ok(ts)
 }
 
+/// Get all audio waveform source list from the backend
 pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioProperties>> {
     // Read from app state
     let app = get_app_read();
@@ -298,6 +317,10 @@ pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String>
     Ok(generators)
 }
 
+/// Add a new audio source to the project
+///
+/// ## Parameters:
+/// - file_path: Path to the audio file to be added
 pub fn add_audio_source(file_path: &str) {
     {
         let mut app = get_app_write();
@@ -347,12 +370,14 @@ pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
     Ok(return_data)
 }
 
+/// Get the newest max sample index of the project
 pub fn get_max_sample_index() -> Result<u32, String> {
     let app = get_app_read();
 
     Ok(app.max_sample_index)
 }
 
+/// Get the session state of from the project
 pub fn get_session_state() -> Result<UiSessionState, String> {
     let app = get_app_read();
 

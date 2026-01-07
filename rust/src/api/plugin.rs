@@ -1,4 +1,5 @@
 use crate::{
+    api::project::UiGeneratorInstance,
     broadcast_state_change,
     core::project::generator::{GeneratorId, GeneratorInstanceType},
     ctx,
@@ -49,9 +50,28 @@ pub struct UiPluginParameter {
 // PLUGIN API FUNCTIONS
 // ============================================================================
 
+/// Get all available generators in Plugin Registry
 pub fn get_available_generators() -> Result<Vec<String>, String> {
     let registry = ctx().plugin_registry.read().unwrap();
     Ok(registry.list_generators())
+}
+
+/// Get a single generator state from the Generator Pool
+pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
+    let app = get_app_read();
+    let gen_id = GeneratorId::from(generator_id);
+
+    let generator_lock = app
+        .generator_pool
+        .get(&gen_id)
+        .ok_or_else(|| format!("Generator {} not found", generator_id))?;
+
+    let generator = generator_lock
+        .read()
+        .map_err(|e| format!("Failed to read generator lock: {}", e))?;
+
+    let ui_generator = UiGeneratorInstance::from(&*generator);
+    Ok(ui_generator)
 }
 
 /// Get parameter specifications for a generator plugin.

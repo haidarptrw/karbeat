@@ -13,16 +13,41 @@ part 'session.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `from`
 
-/// Update selected clip in the session.
-Future<void> updateSelectedClip({required int trackId, required int clipId}) =>
-    RustLib.instance.api.crateApiSessionUpdateSelectedClip(
+/// Select a single clip (replaces any existing selection).
+/// Sets the focus clip to the selected clip.
+Future<void> selectClip({required int trackId, required int clipId}) => RustLib
+    .instance
+    .api
+    .crateApiSessionSelectClip(trackId: trackId, clipId: clipId);
+
+/// Add a clip to the current selection (for Ctrl+Click or range select).
+/// Only works if the clip is on the same track as existing selection.
+/// Sets the focus clip to the newly added clip.
+Future<void> addClipToSelection({required int trackId, required int clipId}) =>
+    RustLib.instance.api.crateApiSessionAddClipToSelection(
       trackId: trackId,
       clipId: clipId,
     );
 
-/// Deselect the selected clip
-Future<void> deselectClip() =>
-    RustLib.instance.api.crateApiSessionDeselectClip();
+/// Remove a clip from the current selection (for Ctrl+Click toggle).
+Future<void> removeClipFromSelection({required int clipId}) =>
+    RustLib.instance.api.crateApiSessionRemoveClipFromSelection(clipId: clipId);
+
+/// Select multiple clips at once (for range select).
+/// All clips must be on the same track.
+Future<void> selectClips({required int trackId, required List<int> clipIds}) =>
+    RustLib.instance.api.crateApiSessionSelectClips(
+      trackId: trackId,
+      clipIds: clipIds,
+    );
+
+/// Clear all clip selection.
+Future<void> deselectAllClips() =>
+    RustLib.instance.api.crateApiSessionDeselectAllClips();
+
+/// Set the preview generator ID for piano roll.
+Future<void> setPreviewGenerator({int? generatorId}) => RustLib.instance.api
+    .crateApiSessionSetPreviewGenerator(generatorId: generatorId);
 
 /// Undo the last action.
 Future<void> undo() => RustLib.instance.api.crateApiSessionUndo();

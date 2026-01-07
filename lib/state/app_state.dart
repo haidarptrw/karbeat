@@ -293,6 +293,18 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> syncGenerator({required int generatorId}) async {
+    try {
+      final generator = await getGenerator(generatorId: generatorId);
+      final newMap = Map<int, UiGeneratorInstance>.from(_generators);
+      newMap[generatorId] = generator;
+      _generators = newMap;
+      notifyListeners();
+    } catch (error) {
+      KarbeatLogger.error("Failed to sync generator $generatorId: $error");
+    }
+  }
+
   Future<void> syncSessionState() async {
     try {
       final newState = await getSessionState();
@@ -826,30 +838,72 @@ class KarbeatState extends ChangeNotifier {
 
   // ================== Session State public API's =====================
 
-  /// Update the selected clip. ensure the sync state between UI and backend regarding which clip is selected
-  Future<void> updateSelectedClip({
+  /// Select a single clip (replaces any existing selection)
+  Future<void> selectClip({required int trackId, required int clipId}) async {
+    try {
+      await session_api.selectClip(trackId: trackId, clipId: clipId);
+      KarbeatLogger.info(
+        "Successfully selected clip $clipId on track $trackId",
+      );
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error when selecting clip: $e');
+    }
+  }
+
+  /// Add a clip to the current selection (for Ctrl+Click)
+  Future<void> addClipToSelection({
     required int trackId,
     required int clipId,
   }) async {
     try {
-      await session_api.updateSelectedClip(trackId: trackId, clipId: clipId);
-      KarbeatLogger.info(
-        "Successfully updated the selected clip to $trackId:$clipId",
-      );
+      await session_api.addClipToSelection(trackId: trackId, clipId: clipId);
       notifyBackendChange(ProjectEvent.sessionChanged);
     } catch (e) {
-      KarbeatLogger.error('Error when updating selected clip: $e');
-      // await syncSessionState();
+      KarbeatLogger.error('Error adding clip to selection: $e');
     }
   }
 
-  Future<void> deselectClip() async {
+  /// Remove a clip from the current selection
+  Future<void> removeClipFromSelection({required int clipId}) async {
     try {
-      await session_api.deselectClip();
+      await session_api.removeClipFromSelection(clipId: clipId);
       notifyBackendChange(ProjectEvent.sessionChanged);
     } catch (e) {
-      KarbeatLogger.error('Error when updating selected clip: $e');
-      // await syncSessionState();
+      KarbeatLogger.error('Error removing clip from selection: $e');
+    }
+  }
+
+  /// Select multiple clips at once (for range select)
+  Future<void> selectClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.selectClips(trackId: trackId, clipIds: clipIds);
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error selecting clips: $e');
+    }
+  }
+
+  /// Clear all clip selection
+  Future<void> deselectAllClips() async {
+    try {
+      await session_api.deselectAllClips();
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error deselecting clips: $e');
+    }
+  }
+
+  /// Set the preview generator for piano roll
+  Future<void> setPreviewGenerator({int? generatorId}) async {
+    try {
+      await session_api.setPreviewGenerator(generatorId: generatorId);
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error setting preview generator: $e');
     }
   }
 }

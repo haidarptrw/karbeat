@@ -44,23 +44,96 @@ impl From<&ClipboardContent> for UiClipboardContent {
 // APIs for frontend
 // =======================================
 
-/// Update selected clip in the session.
-pub fn update_selected_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
+/// Select a single clip (replaces any existing selection).
+/// Sets the focus clip to the selected clip.
+pub fn select_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
     {
         let mut app = get_app_write();
-
         app.session.selected_track_id = Some(track_id.into());
-        app.session.selected_clip_id = Some(clip_id.into());
+        app.session.selected_clip_ids = vec![clip_id.into()];
+        app.session.focus_clip_id = Some(clip_id.into());
     }
     Ok(())
 }
 
-/// Deselect the selected clip
-pub fn deselect_clip() -> Result<(), String> {
+/// Add a clip to the current selection (for Ctrl+Click or range select).
+/// Only works if the clip is on the same track as existing selection.
+/// Sets the focus clip to the newly added clip.
+pub fn add_clip_to_selection(track_id: u32, clip_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+
+        // Check if we're on the same track or starting a new selection
+        if let Some(existing_track) = app.session.selected_track_id {
+            if existing_track.to_u32() != track_id {
+                // Different track - clear and start fresh
+                app.session.selected_clip_ids.clear();
+            }
+        }
+
+        app.session.selected_track_id = Some(track_id.into());
+
+        let clip_id_typed: ClipId = clip_id.into();
+        if !app.session.selected_clip_ids.contains(&clip_id_typed) {
+            app.session.selected_clip_ids.push(clip_id_typed);
+        }
+        app.session.focus_clip_id = Some(clip_id_typed);
+    }
+    Ok(())
+}
+
+/// Remove a clip from the current selection (for Ctrl+Click toggle).
+pub fn remove_clip_from_selection(clip_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        let clip_id_typed: ClipId = clip_id.into();
+        app.session
+            .selected_clip_ids
+            .retain(|&id| id != clip_id_typed);
+
+        // If we removed the focus clip, update focus to the last selected clip
+        if app.session.focus_clip_id == Some(clip_id_typed) {
+            app.session.focus_clip_id = app.session.selected_clip_ids.last().copied();
+        }
+
+        // If no clips left, clear the track selection too
+        if app.session.selected_clip_ids.is_empty() {
+            app.session.selected_track_id = None;
+            app.session.focus_clip_id = None;
+        }
+    }
+    Ok(())
+}
+
+/// Select multiple clips at once (for range select).
+/// All clips must be on the same track.
+pub fn select_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.session.selected_track_id = Some(track_id.into());
+        app.session.selected_clip_ids = clip_ids.iter().map(|&id| id.into()).collect();
+        // Set focus to the last clip in the selection
+        app.session.focus_clip_id = clip_ids.last().map(|&id| id.into());
+    }
+    Ok(())
+}
+
+/// Clear all clip selection.
+pub fn deselect_all_clips() -> Result<(), String> {
     {
         let mut app = get_app_write();
         app.session.selected_track_id = None;
-        app.session.selected_clip_id = None;
+        app.session.selected_clip_ids.clear();
+        app.session.focus_clip_id = None;
+    }
+    Ok(())
+}
+
+/// Set the preview generator ID for piano roll.
+pub fn set_preview_generator(generator_id: Option<u32>) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.session.preview_generator_id = generator_id.map(|id| id.into());
     }
     Ok(())
 }

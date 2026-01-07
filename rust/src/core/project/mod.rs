@@ -180,9 +180,15 @@ impl Default for AssetLibrary {
 
 #[derive(Default, Clone)]
 pub struct SessionState {
-    // What is the user clicking on right now?
+    // Track-locked multi-selection
     pub selected_track_id: Option<TrackId>,
-    pub selected_clip_id: Option<ClipId>,
+    pub selected_clip_ids: Vec<ClipId>,
+
+    // For piano roll navigation - most recently interacted clip
+    pub focus_clip_id: Option<ClipId>,
+
+    // Optional override for piano roll preview generator
+    pub preview_generator_id: Option<GeneratorId>,
 }
 
 #[derive(Clone)]

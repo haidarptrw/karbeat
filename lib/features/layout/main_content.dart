@@ -37,8 +37,8 @@ class MainContent extends StatelessWidget {
                   case WorkspaceView.pianoRoll:
                     return Selector<KarbeatState, (int?, int?)>(
                       selector: (_, state) {
-                        // 1. Try to get pattern from selected clip
-                        final clipId = state.sessionState?.selectedClipId;
+                        // 1. Try to get pattern from focused clip (most recently selected)
+                        final clipId = state.sessionState?.focusClipId;
                         final trackId = state.sessionState?.selectedTrackId;
 
                         if (clipId != null && trackId != null) {

@@ -57,8 +57,8 @@ class KarbeatTrackSlot extends StatelessWidget {
       (s) => s.selectedTool,
     );
 
-    final selectedClipId = context.select<KarbeatState, int?>(
-      (state) => state.sessionState?.selectedClipId,
+    final selectedClipIds = context.select<KarbeatState, List<int>>(
+      (state) => state.sessionState?.selectedClipIds ?? [],
     );
     final selectedTrackId = context.select<KarbeatState, int?>(
       (state) => state.sessionState?.selectedTrackId,
@@ -93,7 +93,7 @@ class KarbeatTrackSlot extends StatelessWidget {
                       zoomLevel: zoomLevel,
                     );
                   } else {
-                    context.read<KarbeatState>().deselectClip();
+                    context.read<KarbeatState>().deselectAllClips();
                   }
                 },
                 child: RepaintBoundary(
@@ -113,8 +113,8 @@ class KarbeatTrackSlot extends StatelessWidget {
           ...track.clips.map((clip) {
             final isSelected =
                 (selectedTrackId != null) &&
-                (selectedClipId != null) &&
-                (trackId == selectedTrackId && clip.id == selectedClipId);
+                (trackId == selectedTrackId &&
+                    selectedClipIds.contains(clip.id));
             return _InteractiveClip(
               key: ValueKey(
                 // Important for performance/state retention
@@ -327,7 +327,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   widget.clip.id,
                 );
               } else if (widget.selectedTool == ToolSelection.pointer) {
-                context.read<KarbeatState>().updateSelectedClip(
+                context.read<KarbeatState>().selectClip(
                   trackId: widget.trackId,
                   clipId: widget.clip.id,
                 );
