@@ -1,14 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    APP_STATE, HISTORY, broadcast_state_change, core::{
+    broadcast_state_change, core::{
         history::ProjectAction,
         project::{
             Note, NoteId, track::midi::{Pattern, PatternId}
         },
-    }, sync_audio_graph, utils::lock::{get_app_read, get_app_write, get_history_lock}
+    }, utils::lock::{get_app_read, get_app_write, get_history_lock}
 };
 
+#[derive(Clone)]
 pub struct UiPattern {
     pub id: u32,
     pub name: String,
@@ -16,6 +17,8 @@ pub struct UiPattern {
 
     pub notes: Vec<UiNote>,
 }
+
+#[derive(Clone)]
 pub struct UiNote {
     pub id: u32,
     pub start_tick: u64,

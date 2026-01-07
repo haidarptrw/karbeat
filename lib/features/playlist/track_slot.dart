@@ -3,7 +3,7 @@ import 'package:karbeat/features/components/midi_drawer.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/src/rust/core/project.dart';
+import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:provider/provider.dart';
 
@@ -57,8 +57,8 @@ class KarbeatTrackSlot extends StatelessWidget {
       (s) => s.selectedTool,
     );
 
-    final selectedClipId = context.select<KarbeatState, int?>(
-      (state) => state.sessionState?.selectedClipId,
+    final selectedClipIds = context.select<KarbeatState, List<int>>(
+      (state) => state.sessionState?.selectedClipIds ?? [],
     );
     final selectedTrackId = context.select<KarbeatState, int?>(
       (state) => state.sessionState?.selectedTrackId,
@@ -93,7 +93,7 @@ class KarbeatTrackSlot extends StatelessWidget {
                       zoomLevel: zoomLevel,
                     );
                   } else {
-                    context.read<KarbeatState>().deselectClip();
+                    context.read<KarbeatState>().deselectAllClips();
                   }
                 },
                 child: RepaintBoundary(
@@ -113,8 +113,8 @@ class KarbeatTrackSlot extends StatelessWidget {
           ...track.clips.map((clip) {
             final isSelected =
                 (selectedTrackId != null) &&
-                (selectedClipId != null) &&
-                (trackId == selectedTrackId && clip.id == selectedClipId);
+                (trackId == selectedTrackId &&
+                    selectedClipIds.contains(clip.id));
             return _InteractiveClip(
               key: ValueKey(
                 // Important for performance/state retention
@@ -176,7 +176,10 @@ class _InteractiveClipState extends State<_InteractiveClip> {
   // Track vertical drag to determine target track
   double _verticalDragDy = 0.0;
 
-  // Overlay for global draggin
+  /// Track dynamic cursor override
+  MouseCursor? _cursorOverride;
+
+  // Overlay for global dragging
   OverlayEntry? _overlayEntry;
   final ValueNotifier<Offset> _overlayPosition = ValueNotifier(Offset.zero);
 
@@ -259,11 +262,11 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     final double left = _visualStartTime / widget.zoomLevel;
     final double width = _visualLoopLength / widget.zoomLevel;
     final double safeWidth = width < 1 ? 1 : width;
-    const resizeEdgeSize = 15.0;
+    const resizeEdgeSize = 20.0;
 
     final isMoving = _currentAction == _DragAction.move;
 
-    final double top = 2 + _verticalDragDy;
+    // final double top = 2 + _verticalDragDy;
 
     // Determine Cursor
     MouseCursor cursor = SystemMouseCursors.basic;
@@ -271,6 +274,11 @@ class _InteractiveClipState extends State<_InteractiveClip> {
       cursor = SystemMouseCursors.click;
     } else if (widget.selectedTool == ToolSelection.move) {
       cursor = SystemMouseCursors.move;
+    }
+
+    // Apply Override
+    if (_cursorOverride != null) {
+      cursor = _cursorOverride!;
     }
 
     return Positioned(
@@ -288,8 +296,24 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
             final x = event.localPosition.dx;
             if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
-              // TODO: Ideally use a ValueNotifier to switch cursor to resizeLeftRight
-              // For now, standard cursor is fine or implementation specific
+              if (_cursorOverride != SystemMouseCursors.resizeLeftRight) {
+                setState(() {
+                  _cursorOverride = SystemMouseCursors.resizeLeftRight;
+                });
+              } else {
+                if (_cursorOverride != null) {
+                  setState(() {
+                    _cursorOverride = null;
+                  });
+                }
+              }
+            }
+          },
+          onExit: (event) {
+            if (_cursorOverride != null) {
+              setState(() {
+                _cursorOverride = null;
+              });
             }
           },
           child: GestureDetector(
@@ -303,7 +327,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   widget.clip.id,
                 );
               } else if (widget.selectedTool == ToolSelection.pointer) {
-                context.read<KarbeatState>().updateSelectedClip(
+                context.read<KarbeatState>().selectClip(
                   trackId: widget.trackId,
                   clipId: widget.clip.id,
                 );
@@ -315,15 +339,13 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
               final x = details.localPosition.dx;
 
-              if (widget.selectedTool == ToolSelection.move) {
-                if (x < resizeEdgeSize) {
-                  setState(() => _currentAction = _DragAction.resizeLeft);
-                } else if (x > safeWidth - resizeEdgeSize) {
-                  setState(() => _currentAction = _DragAction.resizeRight);
-                } else {
-                  setState(() => _currentAction = _DragAction.move);
-                  _createOverlay(context);
-                }
+              if (x < resizeEdgeSize) {
+                setState(() => _currentAction = _DragAction.resizeLeft);
+              } else if (x > safeWidth - resizeEdgeSize) {
+                setState(() => _currentAction = _DragAction.resizeRight);
+              } else {
+                setState(() => _currentAction = _DragAction.move);
+                _createOverlay(context);
               }
             },
 
@@ -472,7 +494,9 @@ class _ClipRenderer extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(4),
-        border: isSelected ? Border.all(color: Colors.white, width:  2) : Border.all(color: color.withAlpha(16), width: 1),
+        border: isSelected
+            ? Border.all(color: Colors.white, width: 2)
+            : Border.all(color: color.withAlpha(16), width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(3),

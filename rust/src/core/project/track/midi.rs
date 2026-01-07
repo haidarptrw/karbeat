@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use crate::core::project::Note;
@@ -121,6 +123,12 @@ impl Pattern {
         let initial_len = self.notes.len();
         self.notes
             .retain(|n| n.start_tick < start_tick || n.start_tick >= end_tick);
+        initial_len - self.notes.len()
+    }
+
+    pub fn delete_notes_by_id(&mut self, note_ids: Arc<[NoteId]>) -> usize {
+        let initial_len = self.notes.len();
+        self.notes.retain(|n| !note_ids.contains(&n.id));
         initial_len - self.notes.len()
     }
 

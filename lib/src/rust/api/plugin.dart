@@ -5,6 +5,106 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'project.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `eq`, `fmt`, `fmt`, `from`
+
+/// Get all available generators in Plugin Registry
 Future<List<String>> getAvailableGenerators() =>
     RustLib.instance.api.crateApiPluginGetAvailableGenerators();
+
+/// Get a single generator state from the Generator Pool
+Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
+    RustLib.instance.api.crateApiPluginGetGenerator(generatorId: generatorId);
+
+/// Get parameter specifications for a generator plugin.
+/// Returns a list of all parameters with their metadata for UI generation.
+Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(
+  generatorId: generatorId,
+);
+
+/// Set a parameter on a generator plugin.
+///
+/// # Arguments
+/// * `generator_id` - The ID of the generator
+/// * `param_id` - The parameter ID
+/// * `value` - The new value for the parameter
+Future<void> setGeneratorParameter({
+  required int generatorId,
+  required int paramId,
+  required double value,
+}) => RustLib.instance.api.crateApiPluginSetGeneratorParameter(
+  generatorId: generatorId,
+  paramId: paramId,
+  value: value,
+);
+
+/// Get a parameter value from a generator plugin.
+Future<double> getGeneratorParameter({
+  required int generatorId,
+  required int paramId,
+}) => RustLib.instance.api.crateApiPluginGetGeneratorParameter(
+  generatorId: generatorId,
+  paramId: paramId,
+);
+
+/// Parameter type enum for FRB
+enum UiParameterType { float, int, bool, choice }
+
+/// Plugin parameter description for UI generation
+class UiPluginParameter {
+  final int id;
+  final String name;
+  final String group;
+  final double value;
+  final double min;
+  final double max;
+  final double defaultValue;
+  final double step;
+  final UiParameterType paramType;
+  final List<String> choices;
+
+  const UiPluginParameter({
+    required this.id,
+    required this.name,
+    required this.group,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.defaultValue,
+    required this.step,
+    required this.paramType,
+    required this.choices,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      group.hashCode ^
+      value.hashCode ^
+      min.hashCode ^
+      max.hashCode ^
+      defaultValue.hashCode ^
+      step.hashCode ^
+      paramType.hashCode ^
+      choices.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiPluginParameter &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          group == other.group &&
+          value == other.value &&
+          min == other.min &&
+          max == other.max &&
+          defaultValue == other.defaultValue &&
+          step == other.step &&
+          paramType == other.paramType &&
+          choices == other.choices;
+}

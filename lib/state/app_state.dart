@@ -10,14 +10,16 @@ import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/track.dart' as track_api;
-import 'package:karbeat/src/rust/api/transport.dart';
+import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
+import 'package:karbeat/src/rust/core/project/track.dart';
+import 'package:karbeat/src/rust/core/project/transport.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
-enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom }
+enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom, select }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
@@ -65,6 +67,8 @@ class KarbeatState extends ChangeNotifier {
     cpuLoad: 0,
   );
 
+  // List<Clipboard>
+
   // =================== STORES ==========================
   Map<int, UiTrack> _tracks = {};
   Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
@@ -87,6 +91,8 @@ class KarbeatState extends ChangeNotifier {
   // STRATEGY: Internal Event Bus for State Synchronization
   final StreamController<ProjectEvent> _stateEventController =
       StreamController.broadcast();
+
+  // ignore:unused_field
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
   // =========== EDITOR STATE ====================
@@ -94,6 +100,7 @@ class KarbeatState extends ChangeNotifier {
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
   int _piannoRollGridDenom = 4;
+  int? _editingPatternId;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
@@ -103,23 +110,15 @@ class KarbeatState extends ChangeNotifier {
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
-    // Initialize it ONCE.
-    // This creates ONE Rust thread that feeds ALL Flutter widgets.
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
-// FIX 2: If the engine reports "Playing", our request is fulfilled. Clear the flag.
       if (pos.isPlaying) {
         _pendingPlayRequest = false;
       }
 
       // Only react if the state has actually changed
       if (pos.isPlaying != _transportState.isPlaying) {
-        
-        // FIX 3: LATENCY GUARD
-        // If we just clicked Play (_pendingPlayRequest is true), but the stream 
-        // is still reporting "Stopped" (false), IGNORE IT. 
-        // This prevents the UI from flickering back to "Stop" immediately.
         if (_pendingPlayRequest && !pos.isPlaying) {
           return;
         }
@@ -128,11 +127,8 @@ class KarbeatState extends ChangeNotifier {
         _transportState = _transportState.copyWith(isPlaying: pos.isPlaying);
         notifyListeners();
 
-        // FIX 4: BACKEND SYNC (Uncommented and Safe now)
-        // If the engine stopped itself (e.g. End of Song), we MUST tell the backend.
-        // We only do this if we are NOT waiting for a play start.
         if (!pos.isPlaying) {
-           setPlaying(val: false); 
+          transport_api.setPlaying(val: false);
         }
       }
     });
@@ -208,9 +204,10 @@ class KarbeatState extends ChangeNotifier {
   UiSessionState? get sessionState => _sessionState;
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
+  int? get editingPatternId => _editingPatternId;
 
   // ================ SETTERS ===================
-  set pianoRollGridDenom(GridValue val) { 
+  set pianoRollGridDenom(GridValue val) {
     _piannoRollGridDenom = val.value;
   }
 
@@ -220,6 +217,7 @@ class KarbeatState extends ChangeNotifier {
 
   // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
   int? _placingSourceId;
+  UiSourceType? _placingSourceType;
   int? get placingSourceId => _placingSourceId;
 
   // Track where the user wants to drop it
@@ -237,7 +235,7 @@ class KarbeatState extends ChangeNotifier {
       _tracks = newState;
       notifyListeners();
     } catch (e) {
-      log("error when syncing the track state: $e");
+      KarbeatLogger.error("error when syncing the track state: $e");
     }
   }
 
@@ -250,7 +248,7 @@ class KarbeatState extends ChangeNotifier {
       _transportState = newState;
       notifyListeners();
     } catch (e) {
-      log("Transport sync failed: $e");
+      KarbeatLogger.error("Transport sync failed: $e");
     }
   }
 
@@ -261,7 +259,7 @@ class KarbeatState extends ChangeNotifier {
       _metadata = newState;
       notifyListeners();
     } catch (e) {
-      log("failed when syncing metadata: $e");
+      KarbeatLogger.error("failed when syncing metadata: $e");
     }
   }
 
@@ -271,7 +269,7 @@ class KarbeatState extends ChangeNotifier {
       maxSamplesIndex = newState;
       notifyListeners();
     } catch (e) {
-      log("failed when syncing max sample index: $e");
+      KarbeatLogger.error("failed when syncing max sample index: $e");
     }
   }
 
@@ -291,7 +289,19 @@ class KarbeatState extends ChangeNotifier {
       _generators = generators;
       notifyListeners();
     } catch (e) {
-      log("Failed to sync generators: $e");
+      KarbeatLogger.error("Failed to sync generators: $e");
+    }
+  }
+
+  Future<void> syncGenerator({required int generatorId}) async {
+    try {
+      final generator = await getGenerator(generatorId: generatorId);
+      final newMap = Map<int, UiGeneratorInstance>.from(_generators);
+      newMap[generatorId] = generator;
+      _generators = newMap;
+      notifyListeners();
+    } catch (error) {
+      KarbeatLogger.error("Failed to sync generator $generatorId: $error");
     }
   }
 
@@ -301,7 +311,7 @@ class KarbeatState extends ChangeNotifier {
       _sessionState = newState;
       notifyListeners();
     } catch (e) {
-      log("Failed to sync session state: $e");
+      KarbeatLogger.error("Failed to sync session state: $e");
     }
   }
 
@@ -311,7 +321,7 @@ class KarbeatState extends ChangeNotifier {
       _hardwareConfig = newState;
       notifyListeners();
     } catch (e) {
-      log("Failed to sync audio hardware state: $e");
+      KarbeatLogger.error("Failed to sync audio hardware state: $e");
     }
   }
 
@@ -321,7 +331,7 @@ class KarbeatState extends ChangeNotifier {
       _patterns = result;
       notifyListeners();
     } catch (e) {
-      log("Failed to sync pattern list: $e");
+      KarbeatLogger.error("Failed to sync pattern list: $e");
     }
   }
 
@@ -329,15 +339,15 @@ class KarbeatState extends ChangeNotifier {
   Future<void> syncPattern(int patternId) async {
     try {
       final updatedPattern = await getPattern(patternId: patternId);
-      
+
       // Creating a new map reference ensures Selectors in UI will trigger a rebuild
       final newMap = Map<int, UiPattern>.from(_patterns);
       newMap[patternId] = updatedPattern;
       _patterns = newMap;
-      
+
       notifyListeners();
     } catch (e) {
-      log("Error syncing single pattern $patternId: $e");
+      KarbeatLogger.error("Error syncing single pattern $patternId: $e");
     }
   }
 
@@ -348,10 +358,10 @@ class KarbeatState extends ChangeNotifier {
       final newMap = Map<int, UiTrack>.from(_tracks);
       newMap[trackId] = updatedTrack;
       _tracks = newMap;
-      
+
       notifyListeners();
     } catch (e) {
-      log("Error syncing single track $trackId: $e");
+      KarbeatLogger.error("Error syncing single track $trackId: $e");
     }
   }
 
@@ -375,7 +385,7 @@ class KarbeatState extends ChangeNotifier {
       await addNewTrack(trackType: type);
       notifyBackendChange(ProjectEvent.tracksChanged);
     } catch (e) {
-      log("Failed to add track: $e");
+      KarbeatLogger.error("Failed to add track: $e");
     }
   }
 
@@ -385,7 +395,7 @@ class KarbeatState extends ChangeNotifier {
       notifyBackendChange(ProjectEvent.tracksChanged);
       notifyBackendChange(ProjectEvent.generatorListChanged);
     } catch (e) {
-      log("Failed to add midi track: $e");
+      KarbeatLogger.error("Failed to add midi track: $e");
     }
   }
 
@@ -398,7 +408,7 @@ class KarbeatState extends ChangeNotifier {
         _pendingPlayRequest = true;
       }
 
-      await setPlaying(val: newPlaying);
+      await transport_api.setPlaying(val: newPlaying);
       notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
       log("Failed to toggle play: $e");
@@ -409,24 +419,39 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> stop() async {
     try {
-      await setPlaying(val: false);
-      await setPlayhead(val: 0);
+      await transport_api.setPlaying(val: false);
+      await transport_api.setPlayhead(val: 0);
       notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
-      log("Failed to stop play: $e");
+      KarbeatLogger.error("Failed to stop play: $e");
     }
   }
 
   Future<void> toggleLoop() async {
     try {
       final newLooping = !_transportState.isLooping;
-      await setLooping(val: newLooping);
+      await transport_api.setLooping(val: newLooping);
       await syncTransportState();
     } catch (e) {
-      log("Failed to toggle loop: $e");
+      KarbeatLogger.error("Failed to toggle loop: $e");
     }
   }
 
+  /// Sets the BPM.
+  /// Updates local state optimistically and calls the backend API.
+  Future<void> setBpm(double value) async {
+    try {
+      _transportState = _transportState.copyWith(bpm: value);
+      notifyListeners();
+
+      await transport_api.setBpm(val: value);
+      notifyBackendChange(ProjectEvent.transportChanged);
+    } catch (e) {
+      KarbeatLogger.error("Failed to set bpm: $e");
+    }
+  }
+
+  /// Change the selected tool to a desired tool
   void selectTool(ToolSelection tool) {
     if (_selectedTool != tool) {
       _selectedTool = tool;
@@ -456,6 +481,12 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Opens the piano roll view with a specific pattern (from source list).
+  void openPattern(int patternId) {
+    _editingPatternId = patternId;
+    navigateTo(WorkspaceView.pianoRoll);
+  }
+
   void setGridSize(int newSize) {
     if (gridSize != newSize) {
       gridSize = newSize;
@@ -473,12 +504,12 @@ class KarbeatState extends ChangeNotifier {
   Future<void> seekTo(int samples) async {
     try {
       // Call the Rust API
-      await setPlayhead(val: samples);
+      await transport_api.setPlayhead(val: samples);
 
       // Optimistic update (optional, since Rust pushes the update back immediately)
       notifyListeners();
     } catch (e) {
-      log("Error seeking: $e");
+      KarbeatLogger.error("Error seeking: $e");
     }
   }
 
@@ -489,7 +520,7 @@ class KarbeatState extends ChangeNotifier {
 
       _tracks = Map.from(_tracks);
       _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
-      notifyListeners(); // Immediate UI update
+      notifyListeners();
     }
 
     try {
@@ -497,7 +528,7 @@ class KarbeatState extends ChangeNotifier {
       // notifyBackendChange(ProjectEvent.tracksChanged);
       await syncTrack(trackId);
     } catch (e) {
-      log("Error deleting clip: $e");
+      KarbeatLogger.error("Error deleting clip: $e");
       // await syncTrackState();
     }
   }
@@ -518,7 +549,7 @@ class KarbeatState extends ChangeNotifier {
       );
       await syncTrack(trackId);
     } catch (e) {
-      log("Error resizing clip: $e");
+      KarbeatLogger.error("Error resizing clip: $e");
       // await syncTrackState();
     }
   }
@@ -544,7 +575,7 @@ class KarbeatState extends ChangeNotifier {
         await syncTrack(newTrackId);
       }
     } catch (e) {
-      log("Error moving clip: $e");
+      KarbeatLogger.error("Error moving clip: $e");
       // await syncTrackState();
     }
   }
@@ -572,7 +603,7 @@ class KarbeatState extends ChangeNotifier {
     required int trackId,
     required int noteKey,
     required bool isOn,
-    int velocity = 100,
+    int velocity = 0,
   }) async {
     try {
       await playPreviewNote(
@@ -640,7 +671,7 @@ class KarbeatState extends ChangeNotifier {
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
     } catch (e) {
-      log("Error moving note: $e");
+      KarbeatLogger.error("Error moving note: $e");
     }
   }
 
@@ -658,7 +689,7 @@ class KarbeatState extends ChangeNotifier {
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
     } catch (e) {
-      log("Error resizing note: $e");
+      KarbeatLogger.error("Error resizing note: $e");
     }
   }
 
@@ -682,7 +713,6 @@ class KarbeatState extends ChangeNotifier {
     int newLength = clip.loopLength.toInt();
     int newOffset = clip.offsetStart.toInt();
 
-    // MIRROR RUST LOGIC
     if (edge == ResizeEdge.right) {
       // Dragging Right Edge: newTime is the END time
       if (newTime > clip.startTime) {
@@ -706,7 +736,6 @@ class KarbeatState extends ChangeNotifier {
     }
 
     // Create Updated Objects
-    // NOTE: Assuming generated classes don't have copyWith, we use constructors.
     final updatedClip = UiClip(
       id: clip.id,
       name: clip.name,
@@ -719,15 +748,12 @@ class KarbeatState extends ChangeNotifier {
     final updatedClips = List<UiClip>.from(track.clips);
     updatedClips[clipIndex] = updatedClip;
 
-    // Sort logic (optional for optimistic, but good practice)
-    // updatedClips.sort((a, b) => a.startTime.compareTo(b.startTime));
-
     final updatedTrack = _copyWithTrack(track, clips: updatedClips);
 
     _tracks = Map.from(_tracks);
     _tracks[trackId] = updatedTrack;
 
-    notifyListeners(); // This prevents the "Flashback" when Stop is pressed
+    notifyListeners();
   }
 
   void _applyOptimisticNoteDeletion(int patternId, int noteId) {
@@ -748,14 +774,15 @@ class KarbeatState extends ChangeNotifier {
     final newPatterns = Map<int, UiPattern>.from(_patterns);
     newPatterns[patternId] = updatedPattern;
     _patterns = newPatterns;
-    
+
     notifyListeners();
   }
 
   // ============= PLACEMENT MODE LOGIC =================
 
-  void startPlacement(int sourceId) {
+  void startPlacement(int sourceId, {required UiSourceType type}) {
     _placingSourceId = sourceId;
+    _placingSourceType = type;
     // Switch view to track list immediately so user can place it
     navigateTo(WorkspaceView.trackList);
     notifyListeners();
@@ -769,35 +796,33 @@ class KarbeatState extends ChangeNotifier {
   }
 
   Future<void> confirmPlacement() async {
-    KarbeatLogger.info("CONFIRM PLacement");
-    if (_placingSourceId != null && _placementTrackId != -1) {
+    KarbeatLogger.info("CONFIRM Placement");
+    if (_placingSourceId != null &&
+        _placingSourceType != null &&
+        _placementTrackId != -1) {
       try {
-        UiSourceType type = UiSourceType.audio;
         await createClip(
           sourceId: _placingSourceId!,
-          sourceType: type,
+          sourceType: _placingSourceType!,
           trackId: _placementTrackId,
           startTime: _placementTimeSamples.toInt(),
         );
 
-        // Refresh tracks to see the new clip
-
         // Reset mode
         _placingSourceId = null;
+        _placingSourceType = null;
         _placementTrackId = -1;
 
         notifyBackendChange(ProjectEvent.tracksChanged);
-        // await syncTrackState();
-        // notifyListeners();
       } catch (e) {
-        log("Error creating clip: $e");
-        // Optionally show error to user via a global key or snackbar service
+        KarbeatLogger.error("Error creating clip: $e");
       }
     }
   }
 
   void cancelPlacement() {
     _placingSourceId = null;
+    _placingSourceType = null;
     _placementTrackId = -1;
     notifyListeners();
   }
@@ -813,30 +838,72 @@ class KarbeatState extends ChangeNotifier {
 
   // ================== Session State public API's =====================
 
-  /// Update the selected clip. ensure the sync state between UI and backend regarding which clip is selected
-  Future<void> updateSelectedClip({
+  /// Select a single clip (replaces any existing selection)
+  Future<void> selectClip({required int trackId, required int clipId}) async {
+    try {
+      await session_api.selectClip(trackId: trackId, clipId: clipId);
+      KarbeatLogger.info(
+        "Successfully selected clip $clipId on track $trackId",
+      );
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error when selecting clip: $e');
+    }
+  }
+
+  /// Add a clip to the current selection (for Ctrl+Click)
+  Future<void> addClipToSelection({
     required int trackId,
     required int clipId,
   }) async {
     try {
-      await session_api.updateSelectedClip(trackId: trackId, clipId: clipId);
-      KarbeatLogger.info(
-        "Successfully updated the selected clip to $trackId:$clipId",
-      );
+      await session_api.addClipToSelection(trackId: trackId, clipId: clipId);
       notifyBackendChange(ProjectEvent.sessionChanged);
     } catch (e) {
-      KarbeatLogger.error('Error when updating selected clip: $e');
-      // await syncSessionState();
+      KarbeatLogger.error('Error adding clip to selection: $e');
     }
   }
 
-  Future<void> deselectClip() async {
+  /// Remove a clip from the current selection
+  Future<void> removeClipFromSelection({required int clipId}) async {
     try {
-      await session_api.deselectClip();
+      await session_api.removeClipFromSelection(clipId: clipId);
       notifyBackendChange(ProjectEvent.sessionChanged);
     } catch (e) {
-      KarbeatLogger.error('Error when updating selected clip: $e');
-      // await syncSessionState();
+      KarbeatLogger.error('Error removing clip from selection: $e');
+    }
+  }
+
+  /// Select multiple clips at once (for range select)
+  Future<void> selectClips({
+    required int trackId,
+    required List<int> clipIds,
+  }) async {
+    try {
+      await session_api.selectClips(trackId: trackId, clipIds: clipIds);
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error selecting clips: $e');
+    }
+  }
+
+  /// Clear all clip selection
+  Future<void> deselectAllClips() async {
+    try {
+      await session_api.deselectAllClips();
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error deselecting clips: $e');
+    }
+  }
+
+  /// Set the preview generator for piano roll
+  Future<void> setPreviewGenerator({int? generatorId}) async {
+    try {
+      await session_api.setPreviewGenerator(generatorId: generatorId);
+      notifyBackendChange(ProjectEvent.sessionChanged);
+    } catch (e) {
+      KarbeatLogger.error('Error setting preview generator: $e');
     }
   }
 }

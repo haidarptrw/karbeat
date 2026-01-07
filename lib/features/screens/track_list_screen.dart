@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/src/rust/core/project.dart';
+import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
@@ -76,6 +76,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   double _timelineWidth = 2000.0;
 
   int _activeSampleRate = 44100;
+
+  // ignore:unused_field
   StreamSubscription? _posSub;
 
   bool _isCtrlPressed = false;
@@ -320,7 +322,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                 : const ClampingScrollPhysics(),
                             child: SizedBox(
                               width:
-                                  currentTimelineWidth, // Matches track list width
+                                  currentTimelineWidth,
                               height: 30,
                               child: _TimelineRuler(
                                 scrollController: _rulerController,
@@ -361,6 +363,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                   child: ListView.builder(
                                     controller:
                                         _timelineController, // Controller 2 (Synced Vertically)
+                                    physics: _isCtrlPressed
+                                        ? const NeverScrollableScrollPhysics()
+                                        : const ClampingScrollPhysics(),
                                     padding: EdgeInsets.zero,
                                     itemCount: itemCount,
                                     itemBuilder: (context, index) {
@@ -440,19 +445,19 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   void _updatePlacementTarget(KarbeatState state) {
     if (_mousePos == null) return;
 
-    // 1. Calculate Absolute Y (Mouse + Scroll)
+    // Calculate Absolute Y (Mouse + Scroll)
     double scrollY = 0;
     if (_timelineController.hasClients) {
       scrollY = _timelineController.offset;
     }
     double absoluteY = _mousePos!.dy + scrollY;
 
-    // 2. Determine Track Index
+    // Determine Track Index
     int trackIndex = (absoluteY / widget.itemHeight).floor();
     trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
     final targetTrack = widget.tracks[trackIndex];
 
-    // 3. Calculate Absolute X (Mouse + Scroll)
+    // Calculate Absolute X (Mouse + Scroll)
     double scrollX = 0;
     if (_trackContentController.hasClients) {
       scrollX = _trackContentController.offset;
@@ -461,11 +466,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
 
     if (absoluteX < 0) absoluteX = 0;
 
-    // 4. Convert X Pixels -> Samples
+    // Convert X Pixels -> Samples
     final zoomLevel = context.read<KarbeatState>().horizontalZoomLevel;
     double samples = absoluteX * zoomLevel;
 
-    // 5. Update State
     state.updatePlacementTarget(targetTrack.id, samples);
   }
 
@@ -474,7 +478,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     // This is essentially just drawing where the mouse is, but snapped to rows
 
     // We need logic to snap the ghost Y to the row, but let X float
-    // 1. Get current Scroll Offset Y to align grid
+    // Get current Scroll Offset Y to align grid
     double scrollY = 0;
     if (_timelineController.hasClients) {
       scrollY = _timelineController.offset;

@@ -19,8 +19,8 @@ pub struct AudioWaveform {
     pub duration: f64,
     pub root_note: u8,
     pub fine_tune: i16,
-    pub trim_start: u64,
-    pub trim_end: u64,
+    pub trim_start: u32,
+    pub trim_end: u32,
     pub is_looping: bool,
     pub normalized: bool,
     pub muted: bool,
@@ -28,25 +28,23 @@ pub struct AudioWaveform {
     pub effects: Arc<Vec<PluginInstance>>,
 }
 
-
 impl Default for AudioWaveform {
     fn default() -> Self {
-        Self { 
+        Self {
             buffer: Arc::new(Vec::new()),
             file_path: String::new(),
             name: "Sample".to_string(),
-            sample_rate: 44100, 
-            channels: 2, 
-            duration: 0.0, 
+            sample_rate: 44100,
+            channels: 2,
+            duration: 0.0,
             root_note: 60, // C5
-            fine_tune: 0, 
-            trim_start: 0, 
-            trim_end: 0, 
-            is_looping: false, 
+            fine_tune: 0,
+            trim_start: 0,
+            trim_end: 0,
+            is_looping: false,
             normalized: false,
             muted: false,
-            effects: Default::default()
+            effects: Default::default(),
         }
     }
 }
-

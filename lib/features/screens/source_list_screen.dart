@@ -1,7 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:karbeat/features/plugins/dynamic_plugin_screen.dart';
 import 'package:karbeat/features/screens/audio_properties_screen.dart';
+import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:provider/provider.dart';
 
@@ -35,6 +38,10 @@ class SourceListScreen extends StatelessWidget {
           (value) => value.generators,
         );
 
+    final patterns = context.select<KarbeatState, Map<int, UiPattern>>(
+      (value) => value.patterns,
+    );
+
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
       floatingActionButton: FloatingActionButton(
@@ -48,42 +55,55 @@ class SourceListScreen extends StatelessWidget {
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text("Instruments / Generators", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+              child: Text(
+                "Instruments / Generators",
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
-          
+
           if (generators.isEmpty)
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
-                child: Text("No Instruments.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                child: Text(
+                  "No Instruments.",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ),
             ),
 
           SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final id = generators.keys.elementAt(index);
-                final gen = generators.values.elementAt(index);
-                return _SourceTile(
-                  title: gen.name,
-                  subtitle: "ID: $id | ${gen.internalType}",
-                  icon: Icons.piano,
-                  color: Colors.orangeAccent,
-                  onTap: () {
-                    // Navigate to Plugin Editor
-                    // Navigator.of(context).push(
-                    //   MaterialPageRoute(
-                    //     builder: (_) => PluginEditorScreen(generatorId: id),
-                    //   ),
-                    // );
-                  },
-                  onPlace: () => context.read<KarbeatState>().startPlacement(id),
-                  // onDelete: () => context.read<KarbeatState>().removeGenerator(id), // TODO implement
-                );
-              },
-              childCount: generators.length,
-            ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final id = generators.keys.elementAt(index);
+              final gen = generators.values.elementAt(index);
+              return _SourceTile(
+                title: gen.name,
+                subtitle: "ID: $id | ${gen.internalType}",
+                icon: Icons.piano,
+                color: Colors.orangeAccent,
+                onTap: () {
+                  // Navigate to dynamic plugin editor for all generator types
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => DynamicPluginScreen(
+                        generatorId: id,
+                        generatorName: gen.name,
+                      ),
+                    ),
+                  );
+                },
+                onPlace: null,
+                // onDelete: () => context.read<KarbeatState>().removeGenerator(id), // TODO implement
+              );
+            }, childCount: generators.length),
           ),
 
           const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
@@ -92,7 +112,14 @@ class SourceListScreen extends StatelessWidget {
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Text("Audio Clips", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+              child: Text(
+                "Audio Clips",
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
 
@@ -100,41 +127,98 @@ class SourceListScreen extends StatelessWidget {
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
-                child: Text("No Audio Files.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                child: Text(
+                  "No Audio Files.",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ),
             ),
 
           SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                final id = audioSources.keys.elementAt(index);
-                final source = audioSources.values.elementAt(index);
-                return _SourceTile(
-                  title: source.name,
-                  subtitle: "ID: $id | ${source.sampleRate} Hz",
-                  icon: Icons.audio_file,
-                  color: Colors.cyanAccent,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AudioPropertiesScreen(
-                          sourceId: id,
-                          sourceName: source.name,
-                        ),
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final id = audioSources.keys.elementAt(index);
+              final source = audioSources.values.elementAt(index);
+              return _SourceTile(
+                title: source.name,
+                subtitle: "ID: $id | ${source.sampleRate} Hz",
+                icon: Icons.audio_file,
+                color: Colors.cyanAccent,
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AudioPropertiesScreen(
+                        sourceId: id,
+                        sourceName: source.name,
                       ),
-                    );
-                  },
-                  onPlace: () => context.read<KarbeatState>().startPlacement(id),
-                );
-              },
-              childCount: audioSources.length,
+                    ),
+                  );
+                },
+                onPlace: () => context.read<KarbeatState>().startPlacement(
+                  id,
+                  type: UiSourceType.audio,
+                ),
+              );
+            }, childCount: audioSources.length),
+          ),
+
+          const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
+
+          // Patterns list
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Text(
+                "Patterns",
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
-          
+
+          if (patterns.isEmpty)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  "No Patterns.",
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ),
+
+          SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final id = patterns.keys.elementAt(index);
+              final pattern = patterns.values.elementAt(index);
+              return _SourceTile(
+                title: pattern.name,
+                subtitle: "ID: $id | ${pattern.name}",
+                icon: Icons.music_note,
+                color: Colors.purpleAccent,
+                onTap: () {
+                  context.read<KarbeatState>().openPattern(id);
+                },
+                onPlace: () => context.read<KarbeatState>().startPlacement(
+                  id,
+                  type: UiSourceType.midi,
+                ),
+              );
+            }, childCount: patterns.length),
+          ),
+
           // Extra padding at bottom for FAB
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
-      ),    
+      ),
     );
   }
 }
@@ -145,7 +229,7 @@ class _SourceTile extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-  final VoidCallback onPlace;
+  final VoidCallback? onPlace;
 
   const _SourceTile({
     required this.title,
@@ -153,7 +237,7 @@ class _SourceTile extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.onTap,
-    required this.onPlace,
+    this.onPlace,
   });
 
   @override
@@ -165,19 +249,20 @@ class _SourceTile extends StatelessWidget {
       trailing: PopupMenuButton<String>(
         icon: const Icon(Icons.more_vert, color: Colors.white),
         onSelected: (value) {
-          if (value == 'place') onPlace();
+          if (value == 'place') onPlace?.call();
         },
         itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: 'place',
-            child: Row(
-              children: [
-                Icon(Icons.input, color: Colors.black54),
-                SizedBox(width: 8),
-                Text("Put in timeline"),
-              ],
+          if (onPlace != null)
+            const PopupMenuItem(
+              value: 'place',
+              child: Row(
+                children: [
+                  Icon(Icons.input, color: Colors.black54),
+                  SizedBox(width: 8),
+                  Text("Put in timeline"),
+                ],
+              ),
             ),
-          ),
           const PopupMenuItem(
             value: 'delete',
             child: Row(

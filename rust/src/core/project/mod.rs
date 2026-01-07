@@ -1,14 +1,16 @@
+// src/core/project/mod.rs
+
 pub mod clip;
 pub mod clipboard;
 pub mod generator;
+pub mod mixer;
 pub mod plugin;
 pub mod track;
 pub mod transport;
-// src/core/project/mod.rs
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap},
+    collections::HashMap,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
@@ -16,7 +18,6 @@ use std::{
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
-// Re-export commonly used types for convenience
 pub use clip::{Clip, ClipId};
 pub use clipboard::ClipboardContent;
 pub use generator::{GeneratorId, GeneratorInstance, GeneratorInstanceType};
@@ -28,7 +29,7 @@ pub use track::{
 };
 pub use transport::TransportState;
 
-use crate::define_id;
+use crate::{core::project::mixer::MixerState, define_id};
 
 define_id!(SourceId);
 define_id!(NoteId);
@@ -64,7 +65,7 @@ pub struct ApplicationState {
     pub clip_counter: u32,
 
     // Max samples index in the timeline
-    pub max_sample_index: u64,
+    pub max_sample_index: u32,
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
@@ -156,38 +157,6 @@ impl Ord for Note {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct MixerState {
-    // Map Track ID -> Mixer Channel
-    pub channels: HashMap<TrackId, Arc<MixerChannel>>,
-    pub master_bus: Arc<MixerChannel>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct MixerChannel {
-    pub volume: f32, // 0.0 to 1.0 (or dB)
-    pub pan: f32,    // -1.0 to 1.0
-    pub mute: bool,
-    pub solo: bool,
-    pub inverted_phase: bool,
-
-    // The effects chain (EQ, Compressor) comes AFTER the generator
-    pub effects: Arc<Vec<PluginInstance>>,
-}
-
-impl Default for MixerChannel {
-    fn default() -> Self {
-        Self {
-            volume: 0.0,
-            pan: 0.0,
-            mute: Default::default(),
-            solo: Default::default(),
-            inverted_phase: Default::default(),
-            effects: Arc::new(Vec::new()),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AssetLibrary {
     // Map ID -> File Path on Disk
@@ -211,9 +180,15 @@ impl Default for AssetLibrary {
 
 #[derive(Default, Clone)]
 pub struct SessionState {
-    // What is the user clicking on right now?
+    // Track-locked multi-selection
     pub selected_track_id: Option<TrackId>,
-    pub selected_clip_id: Option<ClipId>,
+    pub selected_clip_ids: Vec<ClipId>,
+
+    // For piano roll navigation - most recently interacted clip
+    pub focus_clip_id: Option<ClipId>,
+
+    // Optional override for piano roll preview generator
+    pub preview_generator_id: Option<GeneratorId>,
 }
 
 #[derive(Clone)]

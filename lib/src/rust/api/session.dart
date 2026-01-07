@@ -5,21 +5,58 @@
 
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'pattern.dart';
+import 'project.dart';
+import 'track.dart';
+part 'session.freezed.dart';
 
-Future<void> updateSelectedClip({required int trackId, required int clipId}) =>
-    RustLib.instance.api.crateApiSessionUpdateSelectedClip(
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `from`
+
+/// Select a single clip (replaces any existing selection).
+/// Sets the focus clip to the selected clip.
+Future<void> selectClip({required int trackId, required int clipId}) => RustLib
+    .instance
+    .api
+    .crateApiSessionSelectClip(trackId: trackId, clipId: clipId);
+
+/// Add a clip to the current selection (for Ctrl+Click or range select).
+/// Only works if the clip is on the same track as existing selection.
+/// Sets the focus clip to the newly added clip.
+Future<void> addClipToSelection({required int trackId, required int clipId}) =>
+    RustLib.instance.api.crateApiSessionAddClipToSelection(
       trackId: trackId,
       clipId: clipId,
     );
 
-Future<void> deselectClip() =>
-    RustLib.instance.api.crateApiSessionDeselectClip();
+/// Remove a clip from the current selection (for Ctrl+Click toggle).
+Future<void> removeClipFromSelection({required int clipId}) =>
+    RustLib.instance.api.crateApiSessionRemoveClipFromSelection(clipId: clipId);
 
+/// Select multiple clips at once (for range select).
+/// All clips must be on the same track.
+Future<void> selectClips({required int trackId, required List<int> clipIds}) =>
+    RustLib.instance.api.crateApiSessionSelectClips(
+      trackId: trackId,
+      clipIds: clipIds,
+    );
+
+/// Clear all clip selection.
+Future<void> deselectAllClips() =>
+    RustLib.instance.api.crateApiSessionDeselectAllClips();
+
+/// Set the preview generator ID for piano roll.
+Future<void> setPreviewGenerator({int? generatorId}) => RustLib.instance.api
+    .crateApiSessionSetPreviewGenerator(generatorId: generatorId);
+
+/// Undo the last action.
 Future<void> undo() => RustLib.instance.api.crateApiSessionUndo();
 
+/// Redo the last undone action.
 Future<void> redo() => RustLib.instance.api.crateApiSessionRedo();
 
-Future<void> copyPatternNotes({
+/// Copy selected pattern notes to the clipboard.
+Future<UiClipboardContent> copyPatternNotes({
   required int patternId,
   required List<int> noteIds,
 }) => RustLib.instance.api.crateApiSessionCopyPatternNotes(
@@ -27,6 +64,7 @@ Future<void> copyPatternNotes({
   noteIds: noteIds,
 );
 
+/// Cut pattern notes: copies them to clipboard then deletes with history.
 Future<void> cutPatternNotes({
   required int patternId,
   required List<int> noteIds,
@@ -43,3 +81,90 @@ Future<void> pastePatternNotes({
   targetPatternId: targetPatternId,
   playheadTick: playheadTick,
 );
+
+/// Delete notes in group. useful for range and group deletion
+Future<void> deletePatternNotes({
+  required int patternId,
+  required List<int> noteIds,
+}) => RustLib.instance.api.crateApiSessionDeletePatternNotes(
+  patternId: patternId,
+  noteIds: noteIds,
+);
+
+/// Copy selected clips to the clipboard.
+/// Each (track_id, clip_id) pair identifies a clip to copy.
+Future<UiClipboardContent> copyClips({
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiSessionCopyClips(
+  trackId: trackId,
+  clipIds: clipIds,
+);
+
+/// Cut selected clips: copies them to clipboard then deletes with history.
+Future<void> cutClips({required int trackId, required List<int> clipIds}) =>
+    RustLib.instance.api.crateApiSessionCutClips(
+      trackId: trackId,
+      clipIds: clipIds,
+    );
+
+/// Paste clips from clipboard to a target track at a specified start time.
+/// Clips are offset relative to the earliest clip's start time.
+Future<void> pasteClips({
+  required int targetTrackId,
+  required int pasteStartTime,
+}) => RustLib.instance.api.crateApiSessionPasteClips(
+  targetTrackId: targetTrackId,
+  pasteStartTime: pasteStartTime,
+);
+
+/// Delete specified clips from a track with history support.
+Future<void> deleteClips({required int trackId, required List<int> clipIds}) =>
+    RustLib.instance.api.crateApiSessionDeleteClips(
+      trackId: trackId,
+      clipIds: clipIds,
+    );
+
+/// Move a clip from one track to another (or within the same track) with a new start time.
+Future<void> moveClip({
+  required int oldTrackId,
+  required int newTrackId,
+  required int clipId,
+  required int newStartTime,
+}) => RustLib.instance.api.crateApiSessionMoveClip(
+  oldTrackId: oldTrackId,
+  newTrackId: newTrackId,
+  clipId: clipId,
+  newStartTime: newStartTime,
+);
+
+/// Resize a clip by updating its start_time, offset_start, and/or loop_length.
+/// Supports both left (slip edit) and right edge resizing with history support.
+Future<void> resizeClip({
+  required int trackId,
+  required int clipId,
+  required ResizeEdge edge,
+  required int newTimeVal,
+}) => RustLib.instance.api.crateApiSessionResizeClip(
+  trackId: trackId,
+  clipId: clipId,
+  edge: edge,
+  newTimeVal: newTimeVal,
+);
+
+Future<UiClipboardContent> getClipboardContents() =>
+    RustLib.instance.api.crateApiSessionGetClipboardContents();
+
+@freezed
+sealed class UiClipboardContent with _$UiClipboardContent {
+  const UiClipboardContent._();
+
+  const factory UiClipboardContent.empty() = UiClipboardContent_Empty;
+  const factory UiClipboardContent.notes(List<UiNote> field0) =
+      UiClipboardContent_Notes;
+  const factory UiClipboardContent.clips(List<UiClip> field0) =
+      UiClipboardContent_Clips;
+
+  static Future<UiClipboardContent> default_() =>
+      RustLib.instance.api.crateApiSessionUiClipboardContentDefault();
+}

@@ -4,23 +4,28 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../core/project.dart';
+import '../core/project/track.dart';
+import '../core/project/transport.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'project.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
 
 Future<UiProjectState?> getUiState() =>
     RustLib.instance.api.crateApiProjectGetUiState();
 
+/// Get the current project metadata state from the backend
 Future<ProjectMetadata> getProjectMetadata() =>
     RustLib.instance.api.crateApiProjectGetProjectMetadata();
 
+/// Get the transport state from the backend
 Future<TransportState> getTransportState() =>
     RustLib.instance.api.crateApiProjectGetTransportState();
 
+/// Get all audio waveform source list from the backend
 Future<Map<int, AudioWaveformUiForAudioProperties>?> getAudioSourceList() =>
     RustLib.instance.api.crateApiProjectGetAudioSourceList();
 
@@ -28,6 +33,10 @@ Future<Map<int, AudioWaveformUiForAudioProperties>?> getAudioSourceList() =>
 Future<Map<int, UiGeneratorInstance>> getGeneratorList() =>
     RustLib.instance.api.crateApiProjectGetGeneratorList();
 
+/// Add a new audio source to the project
+///
+/// ## Parameters:
+/// - file_path: Path to the audio file to be added
 Future<void> addAudioSource({required String filePath}) =>
     RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
 
@@ -41,9 +50,11 @@ Future<void> addNewTrack({required TrackType trackType}) =>
 Future<Map<int, UiTrack>> getTracks() =>
     RustLib.instance.api.crateApiProjectGetTracks();
 
+/// Get the newest max sample index of the project
 Future<int> getMaxSampleIndex() =>
     RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
 
+/// Get the session state of from the project
 Future<UiSessionState> getSessionState() =>
     RustLib.instance.api.crateApiProjectGetSessionState();
 
@@ -211,12 +222,23 @@ class UiProjectState {
 
 class UiSessionState {
   final int? selectedTrackId;
-  final int? selectedClipId;
+  final Uint32List selectedClipIds;
+  final int? focusClipId;
+  final int? previewGeneratorId;
 
-  const UiSessionState({this.selectedTrackId, this.selectedClipId});
+  const UiSessionState({
+    this.selectedTrackId,
+    required this.selectedClipIds,
+    this.focusClipId,
+    this.previewGeneratorId,
+  });
 
   @override
-  int get hashCode => selectedTrackId.hashCode ^ selectedClipId.hashCode;
+  int get hashCode =>
+      selectedTrackId.hashCode ^
+      selectedClipIds.hashCode ^
+      focusClipId.hashCode ^
+      previewGeneratorId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -224,7 +246,9 @@ class UiSessionState {
       other is UiSessionState &&
           runtimeType == other.runtimeType &&
           selectedTrackId == other.selectedTrackId &&
-          selectedClipId == other.selectedClipId;
+          selectedClipIds == other.selectedClipIds &&
+          focusClipId == other.focusClipId &&
+          previewGeneratorId == other.previewGeneratorId;
 }
 
 class UiTrack {

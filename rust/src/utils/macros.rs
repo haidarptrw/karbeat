@@ -1,16 +1,18 @@
-use serde::{Deserialize, Serialize};
-
 #[macro_export]
 macro_rules! define_id {
     ($name:ident) => {
         #[derive(
-            Serialize, Deserialize, 
-            Clone, Copy, 
-            Debug, 
-            PartialEq, Eq, 
-            PartialOrd, Ord, 
-            Hash, 
-            Default
+            Serialize,
+            Deserialize,
+            Clone,
+            Copy,
+            Debug,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            Default,
         )]
         #[serde(transparent)]
         pub struct $name(pub u32);
@@ -26,7 +28,7 @@ macro_rules! define_id {
                 self.0
             }
         }
-        
+
         // Allow comparing ID with i32 directly
         impl PartialEq<u32> for $name {
             fn eq(&self, other: &u32) -> bool {

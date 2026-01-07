@@ -16,6 +16,8 @@ import 'api/track.dart';
 import 'api/transport.dart';
 import 'audio/event.dart';
 import 'core/project.dart';
+import 'core/project/track.dart';
+import 'core/project/transport.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -152,6 +154,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
+  List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
+
+  @protected
   List<UiTrack> dco_decode_list_ui_track(dynamic raw);
 
   @protected
@@ -239,13 +244,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiClipSource dco_decode_ui_clip_source(dynamic raw);
 
   @protected
+  UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw);
+
+  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
   UiNote dco_decode_ui_note(dynamic raw);
 
   @protected
+  UiParameterType dco_decode_ui_parameter_type(dynamic raw);
+
+  @protected
   UiPattern dco_decode_ui_pattern(dynamic raw);
+
+  @protected
+  UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
 
   @protected
   UiProjectState dco_decode_ui_project_state(dynamic raw);
@@ -410,6 +424,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
+  List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
 
   @protected
@@ -503,6 +522,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer);
 
   @protected
+  UiClipboardContent sse_decode_ui_clipboard_content(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
     SseDeserializer deserializer,
   );
@@ -511,7 +535,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiNote sse_decode_ui_note(SseDeserializer deserializer);
 
   @protected
+  UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
+
+  @protected
   UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
+
+  @protected
+  UiPluginParameter sse_decode_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiProjectState sse_decode_ui_project_state(SseDeserializer deserializer);
@@ -703,6 +735,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_ui_plugin_parameter(
+    List<UiPluginParameter> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
 
   @protected
@@ -814,6 +852,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_clipboard_content(
+    UiClipboardContent self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_generator_instance(
     UiGeneratorInstance self,
     SseSerializer serializer,
@@ -823,7 +867,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_note(UiNote self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_parameter_type(
+    UiParameterType self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_plugin_parameter(
+    UiPluginParameter self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_project_state(

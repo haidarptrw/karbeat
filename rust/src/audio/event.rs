@@ -1,6 +1,6 @@
 #[derive(Clone, Copy, Debug)]
 pub struct PlaybackPosition {
-    pub samples: u64,
+    pub samples: u32,
     pub beat: usize,
     pub bar: usize,
     pub tempo: f32, // Useful for Flutter to interpolate movement

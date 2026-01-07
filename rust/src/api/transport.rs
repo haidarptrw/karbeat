@@ -1,7 +1,7 @@
 // src/api/transport.rs
 // collections of transport API
 
-use crate::{APP_STATE, COMMAND_SENDER, broadcast_state_change, commands::AudioCommand, sync_transport, utils::lock::get_app_write};
+use crate::{broadcast_state_change, commands::AudioCommand, ctx, utils::lock::get_app_write};
 
 pub fn set_playing(val: bool) -> Result<(), String> {
     {
@@ -15,7 +15,7 @@ pub fn set_playing(val: bool) -> Result<(), String> {
 
 pub fn set_playhead(val: u32) -> Result<(), String> {
     {
-        if let Ok(mut guard) = COMMAND_SENDER.lock() {
+        if let Ok(mut guard) = ctx().command_sender.lock() {
             if let Some(cmd_producer) = guard.as_mut() {
                 let _ = cmd_producer.push(AudioCommand::SetPlayhead(val));
             }

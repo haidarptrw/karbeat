@@ -7,7 +7,7 @@ use crate::{
             KarbeatTrack,
         },
         transport::TransportState,
-        ApplicationState, AssetLibrary, MixerChannel, MixerState,
+        ApplicationState, AssetLibrary, mixer::{MixerState},
     },
     utils::math::is_power_of_two,
 };
@@ -19,7 +19,7 @@ pub struct AudioGraphState {
     pub patterns: HashMap<PatternId, Arc<Pattern>>,
     pub mixer_state: MixerState,
     pub asset_library: Arc<AssetLibrary>,
-    pub max_sample_index: u64,
+    pub max_sample_index: u32,
     pub sample_rate: u32,
     pub buffer_size: usize,
 }

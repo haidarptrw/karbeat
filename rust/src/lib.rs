@@ -1,13 +1,12 @@
+pub mod context;
 pub mod plugin;
 pub mod test;
 pub mod utils;
 // src/lib.rs
 
-use std::sync::{Arc, Mutex, Once, RwLock};
+use std::sync::Arc;
 
-use once_cell::sync::Lazy;
-use rtrb::{Producer, RingBuffer};
-use triple_buffer::Input;
+use rtrb::RingBuffer;
 
 use crate::{
     audio::{
@@ -15,10 +14,7 @@ use crate::{
         render_state::{AudioGraphState, AudioRenderState},
     },
     commands::AudioCommand,
-    core::{
-        history::HistoryManager,
-        project::{ApplicationState, AudioWaveform},
-    },
+    core::project::AudioWaveform,
 };
 
 pub mod api;
@@ -27,32 +23,8 @@ pub mod commands;
 pub mod core;
 mod frb_generated;
 
-// ==================================================================
-// ================== Global States variables =======================
-// ==================================================================
-
-pub static COMMAND_SENDER: Lazy<Mutex<Option<Producer<AudioCommand>>>> =
-    Lazy::new(|| Mutex::new(None));
-
-// SOURCE OF TRUTH For UI/Editing
-pub static APP_STATE: Lazy<Arc<RwLock<ApplicationState>>> =
-    Lazy::new(|| Arc::new(RwLock::new(ApplicationState::default())));
-
-// HISTORY STORE
-pub static HISTORY: Lazy<Mutex<HistoryManager>> = Lazy::new(|| Mutex::new(HistoryManager::new()));
-
-// Audio Bridge
-// This input sits behind a Mutex, waiting for us to push updates
-pub static RENDER_STATE_PRODUCER: Lazy<Mutex<Option<Input<AudioRenderState>>>> =
-    Lazy::new(|| Mutex::new(None));
-
-// SHADOW STATE
-// This holds the last version of the state sent to the audio thread.
-// It allows us to update the Transport without re-generating the AudioGraph, and vice versa.
-static CURRENT_RENDER_STATE: Lazy<Mutex<AudioRenderState>> =
-    Lazy::new(|| Mutex::new(AudioRenderState::default()));
-
-pub static INIT_LOGGER: Once = Once::new();
+// Re-export context utilities for convenience
+pub use context::{ctx, INIT_LOGGER};
 
 // ==================================================================
 // ================== Functions =====================================
@@ -62,7 +34,7 @@ pub static INIT_LOGGER: Once = Once::new();
 /// is used by the Audio Thread)
 pub fn broadcast_state_change() {
     // if read failed, we do nothing
-    let Ok(app) = APP_STATE.read() else {
+    let Ok(app) = ctx().app_state.read() else {
         return;
     };
     let render_state = AudioRenderState::from(&*app); // This is kinda cheap because all large properties inside Graph State are actually Arc's (Arc of vector)
@@ -70,7 +42,7 @@ pub fn broadcast_state_change() {
     drop(app); // Drop the read lock immediately so we don't hold it while waiting for the producer
 
     // Publish to Audio Thread
-    if let Ok(mut guard) = RENDER_STATE_PRODUCER.lock() {
+    if let Ok(mut guard) = ctx().render_state_producer.lock() {
         if let Some(producer) = guard.as_mut() {
             {
                 let mut input = producer.input_buffer_publisher();
@@ -86,13 +58,15 @@ pub fn broadcast_state_change() {
 /// Broadcast Structural Changes (Tracks, Plugins, Samples).
 /// This is "Heavy". Call this only when tracks/plugins are added/removed.
 pub fn sync_audio_graph() {
-    let Ok(app) = APP_STATE.read() else { return };
+    let Ok(app) = ctx().app_state.read() else {
+        return;
+    };
 
     // Expensive operation: Rebuilds the graph structure from AppState
     let new_graph = AudioGraphState::from(&*app);
     drop(app); // Drop lock early
 
-    let mut shadow = CURRENT_RENDER_STATE.lock().unwrap();
+    let mut shadow = ctx().current_render_state.lock().unwrap();
     shadow.graph = new_graph; // Update only the graph part
 
     // Push the composite state to the audio thread
@@ -102,12 +76,14 @@ pub fn sync_audio_graph() {
 /// Broadcast Transport Changes (Play/Stop, BPM).
 /// This is "Light". Call this frequently.
 pub fn sync_transport() {
-    let Ok(app) = APP_STATE.read() else { return };
+    let Ok(app) = ctx().app_state.read() else {
+        return;
+    };
 
     let new_transport = app.transport.clone();
     drop(app);
 
-    let mut shadow = CURRENT_RENDER_STATE.lock().unwrap();
+    let mut shadow = ctx().current_render_state.lock().unwrap();
 
     // Don't write if nothing changed
     if shadow.transport == new_transport {
@@ -121,7 +97,7 @@ pub fn sync_transport() {
 
 /// Helper to push state to TripleBuffer
 fn publish_to_audio_thread(state: &AudioRenderState) {
-    if let Ok(mut guard) = RENDER_STATE_PRODUCER.lock() {
+    if let Ok(mut guard) = ctx().render_state_producer.lock() {
         if let Some(producer) = guard.as_mut() {
             // Write to the back buffer (TripleBuffer handles the swap)
             {
@@ -159,14 +135,14 @@ fn generate_startup_beep() -> AudioWaveform {
         sample_rate,
         channels: 2,
         duration: duration_secs as f64,
-        trim_end: total_frames as u64,
+        trim_end: total_frames as u32,
         ..Default::default()
     }
 }
 
 pub fn init_engine() {
     let initial_state = {
-        let app = APP_STATE.read().unwrap();
+        let app = ctx().app_state.read().unwrap();
         AudioRenderState::from(&*app)
     };
 
@@ -177,16 +153,16 @@ pub fn init_engine() {
     let (state_in, state_out) = triple_buffer::TripleBuffer::new(&initial_state).split();
 
     {
-        let mut render_state_guard = RENDER_STATE_PRODUCER.lock().unwrap();
+        let mut render_state_guard = ctx().render_state_producer.lock().unwrap();
         *render_state_guard = Some(state_in);
     }
     // Capacity 128 is plenty for manual clicks
     let (cmd_prod, cmd_cons) = RingBuffer::new(128);
 
-    // Store Producer globally
+    // Store Producer in context
     let mut guard;
     {
-        guard = COMMAND_SENDER.lock().unwrap();
+        guard = ctx().command_sender.lock().unwrap();
         *guard = Some(cmd_prod);
     }
 

@@ -3,6 +3,8 @@ pub mod instance;
 
 use std::{any::Any, collections::HashMap, fmt::Debug};
 
+use crate::plugin::wrapper::PluginParameter;
+
 /// Trait that indicates an Effect plugin
 /// Requires Send + Sync so it can be moved between UI and Audio threads
 pub trait KarbeatEffect: Send + Sync {
@@ -16,9 +18,9 @@ pub trait KarbeatEffect: Send + Sync {
     /// Called when playback stops or seeks.
     fn reset(&mut self);
 
-    /// Process a block of audio. 
+    /// Process a block of audio.
     /// Typically modifies the buffer in-place.
-    /// 
+    ///
     /// * `buffer` - Interleaved stereo buffer [L, R, L, R...]
     fn process(&mut self, buffer: &mut [f32]);
 
@@ -30,6 +32,9 @@ pub trait KarbeatEffect: Send + Sync {
 
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> HashMap<u32, f32>;
+
+    /// Get parameter specifications for UI generation
+    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
 
     // Helper for downcasting if you need concrete access later
     fn as_any(&self) -> &dyn Any;
@@ -44,7 +49,7 @@ pub trait KarbeatGenerator: Send + Sync {
 
     /// Process a block of audio.
     /// Unlike effects, this generates audio into an empty (or zeroed) buffer.
-    /// 
+    ///
     /// * `output_buffer` - Interleaved stereo buffer to write to.
     /// * `midi_events` - List of events (Note On/Off) for this specific buffer block.
     fn process(&mut self, output_buffer: &mut [f32], midi_events: &[MidiEvent]);
@@ -54,7 +59,10 @@ pub trait KarbeatGenerator: Send + Sync {
 
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> HashMap<u32, f32>;
-    
+
+    /// Get parameter specifications for UI generation
+    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -75,7 +83,7 @@ pub enum KarbeatPlugin {
     /// Effect plugin (DSP of audio properties)
     Effect(Box<dyn KarbeatEffect + Send + Sync>),
     /// Generator plugin (Wave generator or synth)
-    Generator(Box<dyn KarbeatGenerator + Send + Sync>)
+    Generator(Box<dyn KarbeatGenerator + Send + Sync>),
 }
 
 impl KarbeatPlugin {
@@ -85,7 +93,7 @@ impl KarbeatPlugin {
             KarbeatPlugin::Effect(e) => {
                 // Effects ignore MIDI usually, just process audio
                 e.process(buffer);
-            },
+            }
             KarbeatPlugin::Generator(g) => {
                 // Generators overwrite the buffer with new sound
                 // (Or add to it if you implement mixing logic inside)
@@ -98,6 +106,30 @@ impl KarbeatPlugin {
         match self {
             KarbeatPlugin::Effect(e) => e.default_parameters(),
             KarbeatPlugin::Generator(g) => g.default_parameters(),
+        }
+    }
+
+    /// Set a parameter on the plugin (works for both Effects and Generators)
+    pub fn set_parameter(&mut self, id: u32, value: f32) {
+        match self {
+            KarbeatPlugin::Effect(e) => e.set_parameter(id, value),
+            KarbeatPlugin::Generator(g) => g.set_parameter(id, value),
+        }
+    }
+
+    /// Get a parameter from the plugin
+    pub fn get_parameter(&self, id: u32) -> f32 {
+        match self {
+            KarbeatPlugin::Effect(e) => e.get_parameter(id),
+            KarbeatPlugin::Generator(g) => g.get_parameter(id),
+        }
+    }
+
+    /// Get parameter specifications for UI generation
+    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        match self {
+            KarbeatPlugin::Effect(e) => e.get_parameter_specs(),
+            KarbeatPlugin::Generator(g) => g.get_parameter_specs(),
         }
     }
 }

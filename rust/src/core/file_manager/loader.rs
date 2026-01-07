@@ -34,8 +34,8 @@ pub fn load_audio_file(path_string: String, name: Option<String>) -> Result<Audi
     let sample_rate = decoder.sample_rate();
     let channels = decoder.channels();
     let all_samples: Vec<f32> = decoder.collect();
-    let total_samples = all_samples.len() as u64;
-    let total_frames = if channels > 0 { total_samples / channels as u64 } else { 0 };
+    let total_samples = all_samples.len() as u32;
+    let total_frames = if channels > 0 { total_samples / channels as u32 } else { 0 };
     
     let duration_seconds = if sample_rate > 0 {
         total_frames as f64 / sample_rate as f64
