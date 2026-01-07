@@ -112,3 +112,37 @@ pub fn play_preview_note(
 
     Ok(())
 }
+
+/// Play preview sound directly on a generator (without requiring a track).
+/// Used in plugin editor screens to test synth sounds.
+pub fn play_preview_note_generator(
+    generator_id: u32,
+    note_key: i32,
+    velocity: i32,
+    is_on: bool,
+) -> Result<(), String> {
+    // validate input
+    if note_key < 0 || note_key > 127 {
+        return Err("Note key must be between 0 and 127".to_string());
+    }
+
+    if velocity < 0 || velocity > 127 {
+        return Err("Note velocity must be between 0 and 127".to_string());
+    }
+
+    let note_key: u8 = note_key as u8;
+    let velocity: u8 = velocity as u8;
+
+    if let Ok(mut command_guard) = ctx().command_sender.lock() {
+        if let Some(sender) = command_guard.as_mut() {
+            let _ = sender.push(AudioCommand::PlayPreviewNote {
+                note_key,
+                generator_id: generator_id.into(),
+                velocity,
+                is_note_on: is_on,
+            });
+        }
+    }
+
+    Ok(())
+}

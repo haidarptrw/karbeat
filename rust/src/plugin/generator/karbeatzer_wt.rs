@@ -1,7 +1,9 @@
-use crate::{core::project::plugin::KarbeatGenerator, plugin::wrapper::{RawSynthEngine, SynthWrapper}};
+use crate::{
+    core::project::plugin::KarbeatGenerator,
+    plugin::wrapper::{RawSynthEngine, SynthWrapper},
+};
 
 #[allow(dead_code)]
-
 #[derive(Clone, Copy)]
 struct Oscillator {
     waveform: Waveform,
@@ -30,7 +32,6 @@ impl From<f32> for Waveform {
         }
     }
 }
-
 
 /// Wavetable Synthesizer with modern algorithm that reduce the
 /// anti-aliasing effect
@@ -67,7 +68,12 @@ impl Default for KarbeatzerWTEngine {
 }
 
 impl RawSynthEngine for KarbeatzerWTEngine {
-    fn process(&mut self, base: &mut crate::plugin::synth_base::SynthBase, output: &mut [f32], midi: &[crate::core::project::plugin::MidiEvent]) {
+    fn process(
+        &mut self,
+        base: &mut crate::plugin::synth_base::SynthBase,
+        output: &mut [f32],
+        midi: &[crate::core::project::plugin::MidiEvent],
+    ) {
         todo!()
     }
 
@@ -81,13 +87,19 @@ impl RawSynthEngine for KarbeatzerWTEngine {
 
     fn custom_default_parameters() -> std::collections::HashMap<u32, f32>
     where
-        Self: Sized {
+        Self: Sized,
+    {
         todo!()
     }
 
     fn name() -> &'static str
     where
-        Self: Sized {
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn get_parameter_specs(&self) -> Vec<crate::plugin::wrapper::PluginParameter> {
         todo!()
     }
 }
@@ -95,5 +107,8 @@ impl RawSynthEngine for KarbeatzerWTEngine {
 pub type KarbeatzerWaveTable = SynthWrapper<KarbeatzerWTEngine>;
 
 pub fn create_karbeatzer_wt(sample_rate: Option<f32>) -> KarbeatzerWaveTable {
-    SynthWrapper::new(KarbeatzerWTEngine::default(), sample_rate.unwrap_or(48000.0))
+    SynthWrapper::new(
+        KarbeatzerWTEngine::default(),
+        sample_rate.unwrap_or(48000.0),
+    )
 }

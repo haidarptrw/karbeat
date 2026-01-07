@@ -91,7 +91,7 @@ class KarbeatState extends ChangeNotifier {
   // STRATEGY: Internal Event Bus for State Synchronization
   final StreamController<ProjectEvent> _stateEventController =
       StreamController.broadcast();
-  
+
   // ignore:unused_field
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
@@ -432,9 +432,9 @@ class KarbeatState extends ChangeNotifier {
       _transportState = _transportState.copyWith(bpm: value);
       notifyListeners();
 
-      await transport_api.setBpm(val:value);
+      await transport_api.setBpm(val: value);
       notifyBackendChange(ProjectEvent.transportChanged);
-    } catch(e) {
+    } catch (e) {
       KarbeatLogger.error("Failed to set bpm: $e");
     }
   }
@@ -591,7 +591,7 @@ class KarbeatState extends ChangeNotifier {
     required int trackId,
     required int noteKey,
     required bool isOn,
-    int velocity = 100,
+    int velocity = 0,
   }) async {
     try {
       await playPreviewNote(

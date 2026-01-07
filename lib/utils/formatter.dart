@@ -15,7 +15,20 @@ String formatTimeFromSamples(int playheadSamples, int sampleRate) {
 }
 
 String numToMidiKey(int key) {
-  final labels = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  final octave = key ~/ 12;
+  final labels = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B",
+  ];
+  final octave = key ~/ 12 - 1;
   return "${labels[key % 12]}$octave";
 }

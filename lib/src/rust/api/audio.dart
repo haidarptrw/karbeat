@@ -39,3 +39,17 @@ Future<void> playPreviewNote({
   velocity: velocity,
   isOn: isOn,
 );
+
+/// Play preview sound directly on a generator (without requiring a track).
+/// Used in plugin editor screens to test synth sounds.
+Future<void> playPreviewNoteGenerator({
+  required int generatorId,
+  required int noteKey,
+  required int velocity,
+  required bool isOn,
+}) => RustLib.instance.api.crateApiAudioPlayPreviewNoteGenerator(
+  generatorId: generatorId,
+  noteKey: noteKey,
+  velocity: velocity,
+  isOn: isOn,
+);

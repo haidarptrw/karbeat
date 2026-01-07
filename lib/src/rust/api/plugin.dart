@@ -6,8 +6,18 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `eq`, `fmt`, `fmt`, `from`
+
 Future<List<String>> getAvailableGenerators() =>
     RustLib.instance.api.crateApiPluginGetAvailableGenerators();
+
+/// Get parameter specifications for a generator plugin.
+/// Returns a list of all parameters with their metadata for UI generation.
+Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(
+  generatorId: generatorId,
+);
 
 /// Set a parameter on a generator plugin.
 ///
@@ -33,3 +43,62 @@ Future<double> getGeneratorParameter({
   generatorId: generatorId,
   paramId: paramId,
 );
+
+/// Parameter type enum for FRB
+enum UiParameterType { float, int, bool, choice }
+
+/// Plugin parameter description for UI generation
+class UiPluginParameter {
+  final int id;
+  final String name;
+  final String group;
+  final double value;
+  final double min;
+  final double max;
+  final double defaultValue;
+  final double step;
+  final UiParameterType paramType;
+  final List<String> choices;
+
+  const UiPluginParameter({
+    required this.id,
+    required this.name,
+    required this.group,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.defaultValue,
+    required this.step,
+    required this.paramType,
+    required this.choices,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      group.hashCode ^
+      value.hashCode ^
+      min.hashCode ^
+      max.hashCode ^
+      defaultValue.hashCode ^
+      step.hashCode ^
+      paramType.hashCode ^
+      choices.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiPluginParameter &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          group == other.group &&
+          value == other.value &&
+          min == other.min &&
+          max == other.max &&
+          defaultValue == other.defaultValue &&
+          step == other.step &&
+          paramType == other.paramType &&
+          choices == other.choices;
+}

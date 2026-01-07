@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:karbeat/features/components/virtual_keyboard.dart';
+import 'package:karbeat/features/components/scrollable_virtual_keyboard.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
@@ -216,7 +216,9 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                 SizedBox(
                   width: _keyWidth,
                   child: ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                    behavior: ScrollConfiguration.of(
+                      context,
+                    ).copyWith(scrollbars: false),
                     child: ListView.builder(
                       controller: _keysController,
                       itemCount: 128,
@@ -264,14 +266,23 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                           behavior: HitTestBehavior.translucent,
                           onTapDown: (details) {
                             if (isDrawing) {
-                              _addNoteAtOffset(details.localPosition, pattern.id);
+                              _addNoteAtOffset(
+                                details.localPosition,
+                                pattern.id,
+                              );
                             }
                           },
                           onPanStart: isDrawing
-                              ? (details) => _addNoteAtOffset(details.localPosition, pattern.id)
+                              ? (details) => _addNoteAtOffset(
+                                  details.localPosition,
+                                  pattern.id,
+                                )
                               : null,
-                          onPanUpdate:isDrawing
-                              ? (details) => _addNoteAtOffset(details.localPosition, pattern.id)
+                          onPanUpdate: isDrawing
+                              ? (details) => _addNoteAtOffset(
+                                  details.localPosition,
+                                  pattern.id,
+                                )
                               : null,
                           onPanEnd: isDrawing
                               ? (details) => _resetPaintState()
@@ -329,20 +340,13 @@ class PianoRollScreenState extends State<PianoRollScreen> {
             ),
           ),
 
-          // ========= VIRTUAL KEYBOARD ===========
-          SizedBox(
+          // ========= SCROLLABLE VIRTUAL KEYBOARD ===========
+          ScrollableVirtualKeyboard(
             height: 120,
-            child: Container(
-              color: Colors.black,
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: VirtualKeyboard(
-                startOctave: 4,
-                octaveCount: 2,
-                onNoteOn: _handleNoteOn,
-                onNoteOff: _handleNoteOff,
-                activeNotes: _activeKeyboardNotes,
-              ),
-            ),
+            onNoteOn: _handleNoteOn,
+            onNoteOff: _handleNoteOff,
+            activeNotes: _activeKeyboardNotes,
+            initialCenterNote: 60,
           ),
         ],
       ),

@@ -3,6 +3,8 @@ pub mod instance;
 
 use std::{any::Any, collections::HashMap, fmt::Debug};
 
+use crate::plugin::wrapper::PluginParameter;
+
 /// Trait that indicates an Effect plugin
 /// Requires Send + Sync so it can be moved between UI and Audio threads
 pub trait KarbeatEffect: Send + Sync {
@@ -31,6 +33,9 @@ pub trait KarbeatEffect: Send + Sync {
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> HashMap<u32, f32>;
 
+    /// Get parameter specifications for UI generation
+    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+
     // Helper for downcasting if you need concrete access later
     fn as_any(&self) -> &dyn Any;
 }
@@ -54,6 +59,9 @@ pub trait KarbeatGenerator: Send + Sync {
 
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> HashMap<u32, f32>;
+
+    /// Get parameter specifications for UI generation
+    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
 
     fn as_any(&self) -> &dyn Any;
 }
@@ -114,6 +122,14 @@ impl KarbeatPlugin {
         match self {
             KarbeatPlugin::Effect(e) => e.get_parameter(id),
             KarbeatPlugin::Generator(g) => g.get_parameter(id),
+        }
+    }
+
+    /// Get parameter specifications for UI generation
+    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        match self {
+            KarbeatPlugin::Effect(e) => e.get_parameter_specs(),
+            KarbeatPlugin::Generator(g) => g.get_parameter_specs(),
         }
     }
 }

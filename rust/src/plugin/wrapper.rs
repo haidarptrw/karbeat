@@ -30,19 +30,27 @@ pub enum ParameterValueType {
 pub struct PluginParameter {
     pub id: u32,
     pub name: String,
-    pub group: String,     // e.g., "Oscillator 1", "Master"
-    pub value: f32,        // Current value
+    pub group: String, // e.g., "Oscillator 1", "Master"
+    pub value: f32,    // Current value
     pub min: f32,
     pub max: f32,
     pub default_value: f32,
-    pub step: f32,         // 0.0 for continuous
+    pub step: f32, // 0.0 for continuous
     pub value_type: ParameterValueType,
     pub choices: Vec<String>, // Labels for Choice type (index = value)
 }
 
 impl PluginParameter {
     /// Create a new float parameter
-    pub fn new_float(id: u32, name: &str, group: &str, val: f32, min: f32, max: f32, default: f32) -> Self {
+    pub fn new_float(
+        id: u32,
+        name: &str,
+        group: &str,
+        val: f32,
+        min: f32,
+        max: f32,
+        default: f32,
+    ) -> Self {
         Self {
             id,
             name: name.to_string(),
@@ -74,7 +82,14 @@ impl PluginParameter {
     }
 
     /// Create a new choice parameter
-    pub fn new_choice(id: u32, name: &str, group: &str, val: u32, choices: Vec<String>, default: u32) -> Self {
+    pub fn new_choice(
+        id: u32,
+        name: &str,
+        group: &str,
+        val: u32,
+        choices: Vec<String>,
+        default: u32,
+    ) -> Self {
         Self {
             id,
             name: name.to_string(),
@@ -159,8 +174,8 @@ pub trait RawEffectEngine: Send + Sync {
     /// Get default values for custom parameters
     fn custom_default_parameters() -> HashMap<u32, f32>
     where
-    Self: Sized;
-    
+        Self: Sized;
+
     /// Get definition of all custom parameters
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
 
@@ -168,7 +183,6 @@ pub trait RawEffectEngine: Send + Sync {
     fn name() -> &'static str
     where
         Self: Sized;
-
 }
 
 // ============================================================================
@@ -253,6 +267,10 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for SynthWrapper<T> {
         let mut params = SynthBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
+    }
+
+    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        self.get_all_parameters()
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -362,6 +380,10 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for EffectWrapper<T> {
         let mut params = EffectBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
+    }
+
+    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        self.get_all_parameters()
     }
 
     fn as_any(&self) -> &dyn Any {

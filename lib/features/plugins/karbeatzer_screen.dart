@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
-import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:provider/provider.dart';
 
