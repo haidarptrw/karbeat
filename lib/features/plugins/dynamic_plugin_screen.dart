@@ -145,7 +145,7 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
       await audio_api.playPreviewNoteGenerator(
         generatorId: widget.generatorId,
         noteKey: note,
-        velocity: 0,
+        velocity: 100,
         isOn: false,
       );
     } catch (e) {

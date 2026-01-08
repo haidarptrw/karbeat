@@ -17,23 +17,20 @@ use crate::{
     utils::lock::{get_app_read, get_app_write},
 };
 
-pub struct UiProjectState {
-    // REUSE: FRB sees this type and generates a Dart class for it
-    pub metadata: ProjectMetadata,
-
-    // TRANSFORM: Only the Tracks need specific UI handling (Vec vs HashMap)
-    pub tracks: Vec<UiTrack>,
-}
-
 pub struct UiTrack {
     pub id: u32,
     pub name: String,
     pub track_type: TrackType,
     pub clips: Vec<UiClip>,
+    pub generator_id: Option<u32>,
 }
 
 impl From<&KarbeatTrack> for UiTrack {
     fn from(value: &KarbeatTrack) -> Self {
+        let generator_id = match &value.generator {
+            Some(gen_instance) => Some(gen_instance.id.to_u32()),
+            None => None,
+        };
         Self {
             id: value.id.to_u32(),
             name: value.name.clone(),
@@ -43,6 +40,7 @@ impl From<&KarbeatTrack> for UiTrack {
                 .iter()
                 .map(|c| UiClip::from(c.deref()))
                 .collect(),
+            generator_id,
         }
     }
 }
@@ -242,28 +240,6 @@ impl Into<UiSessionState> for SessionState {
     }
 }
 // ============================ APIs ==================================
-pub fn get_ui_state() -> Option<UiProjectState> {
-    let app = get_app_read();
-
-    let project_state = UiProjectState {
-        // Cloning shared structs is cheap and clean
-        metadata: app.metadata.clone(),
-
-        // Only write custom logic for the parts that actually change structure
-        tracks: app
-            .tracks
-            .values()
-            .map(|t| UiTrack {
-                clips: t.clips.iter().map(|e| UiClip::from(e.deref())).collect(),
-                id: t.id.to_u32(),
-                name: t.name.clone(),
-                track_type: t.track_type().clone(),
-            })
-            .collect(),
-    };
-
-    Some(project_state)
-}
 
 /// Get the current project metadata state from the backend
 pub fn get_project_metadata() -> Result<ProjectMetadata, String> {

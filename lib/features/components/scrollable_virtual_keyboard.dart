@@ -91,7 +91,7 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
     int noteIndex = note % 12;
     // Only show C notes with octave number
     if (noteIndex == 0) {
-      int octave = (note ~/ 12) - 1;
+      int octave = note ~/ 12;
       return 'C$octave';
     }
     return '';

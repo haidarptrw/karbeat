@@ -37,7 +37,7 @@ class MainContent extends StatelessWidget {
                   case WorkspaceView.pianoRoll:
                     return Selector<KarbeatState, (int?, int?)>(
                       selector: (_, state) {
-                        // 1. Try to get pattern from focused clip (most recently selected)
+                        // Try to get pattern from focused clip (most recently selected)
                         final clipId = state.sessionState?.focusClipId;
                         final trackId = state.sessionState?.selectedTrackId;
 
@@ -49,14 +49,14 @@ class MainContent extends StatelessWidget {
                                 if (clip.source case UiClipSource_Midi(
                                   :final patternId,
                                 )) {
-                                  return (patternId, trackId);
+                                  return (patternId, track.generatorId);
                                 }
                               }
                             }
                           }
                         }
 
-                        // 2. Fallback: Use editingPatternId (from source list)
+                        // Fallback: Use editingPatternId (from source list)
                         final editingPatternId = state.editingPatternId;
                         if (editingPatternId != null) {
                           return (editingPatternId, null);
@@ -66,15 +66,15 @@ class MainContent extends StatelessWidget {
                       },
                       builder: (context, selectionData, _) {
                         final patternId = selectionData.$1;
-                        final trackId = selectionData.$2;
+                        final generatorId = selectionData.$2;
 
                         KarbeatLogger.info(
-                          "Opening piano roll for pattern: $patternId on track: $trackId",
+                          "Opening piano roll for pattern: $patternId on track: $generatorId",
                         );
 
                         return PianoRollScreen(
                           patternId: patternId,
-                          parentTrackId: trackId,
+                          generatorId: generatorId,
                         );
                       },
                     );

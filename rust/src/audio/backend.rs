@@ -73,18 +73,16 @@ macro_rules! run_stream {
     }};
 }
 
-/// Set host to use the optimized host. For now, it handles driver on Windows to use ASIO that is more optimized
-///
-/// **TODO: Handle drive on other OS**
+/// Set host to use the optimized host for each platform.
+/// - Windows: WASAPI (low latency)
+/// - Android: AAudio (low latency, requires API 26+)
+/// - Other platforms: default host
 fn set_host() -> cpal::Host {
     #[allow(unused_assignments)]
     let mut host = cpal::default_host();
+
     #[cfg(target_os = "windows")]
     {
-        // host = match cpal::host_from_id(cpal::HostId::Asio) {
-        //     Ok(asio) => asio,
-        //     Err(_) => cpal::host_from_id(cpal::HostId::Wasapi),
-        // }
         let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) else {
             host = cpal::default_host();
             return host;
@@ -92,6 +90,21 @@ fn set_host() -> cpal::Host {
         host = wasapi_host;
         log::info!("Connected to WASAPI Host");
     }
+
+    #[cfg(target_os = "android")]
+    {
+        match cpal::host_from_id(cpal::HostId::AAudio) {
+            Ok(aaudio_host) => {
+                host = aaudio_host;
+                log::info!("Connected to AAudio Host");
+            }
+            Err(e) => {
+                log::warn!("AAudio not available, falling back to default host: {}", e);
+                host = cpal::default_host();
+            }
+        }
+    }
+
     host
 }
 
@@ -103,7 +116,7 @@ pub fn start_audio_stream(
     {
         let mut guard = ctx().stream_guard.lock().unwrap();
         if guard.is_some() {
-            log::info!("🛑 Stopping previous audio stream...");
+            log::info!("Stopping previous audio stream...");
             *guard = None; // This drops the stream, stopping the audio thread
         }
     }
@@ -143,9 +156,9 @@ pub fn start_audio_stream(
             state.audio_config.sample_rate = sample_rate as u32;
             state.audio_config.selected_output_device =
                 device.name().unwrap_or("Unknown".to_string());
-            log::info!("✅ Global Audio Config updated: {} Hz", sample_rate);
+            log::info!("Global Audio Config updated: {} Hz", sample_rate);
         } else {
-            log::error!("❌ Failed to lock app_state to update audio config");
+            log::error!("Failed to lock app_state to update audio config");
             panic!();
         }
     }

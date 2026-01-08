@@ -93,9 +93,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
-  UiProjectState dco_decode_box_autoadd_ui_project_state(dynamic raw);
-
-  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -157,9 +154,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
 
   @protected
-  List<UiTrack> dco_decode_list_ui_track(dynamic raw);
-
-  @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
 
   @protected
@@ -185,9 +179,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
-
-  @protected
-  UiProjectState? dco_decode_opt_box_autoadd_ui_project_state(dynamic raw);
 
   @protected
   PlaybackPosition dco_decode_playback_position(dynamic raw);
@@ -260,9 +251,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
-
-  @protected
-  UiProjectState dco_decode_ui_project_state(dynamic raw);
 
   @protected
   UiSessionState dco_decode_ui_session_state(dynamic raw);
@@ -353,11 +341,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
-  UiProjectState sse_decode_box_autoadd_ui_project_state(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -429,9 +412,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
-
-  @protected
   int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer);
 
   @protected
@@ -457,11 +437,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
-
-  @protected
-  UiProjectState? sse_decode_opt_box_autoadd_ui_project_state(
-    SseDeserializer deserializer,
-  );
 
   @protected
   PlaybackPosition sse_decode_playback_position(SseDeserializer deserializer);
@@ -544,9 +519,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiPluginParameter sse_decode_ui_plugin_parameter(
     SseDeserializer deserializer,
   );
-
-  @protected
-  UiProjectState sse_decode_ui_project_state(SseDeserializer deserializer);
 
   @protected
   UiSessionState sse_decode_ui_session_state(SseDeserializer deserializer);
@@ -648,12 +620,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_ui_project_state(
-    UiProjectState self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -741,9 +707,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_CastedPrimitive_i_64(int? self, SseSerializer serializer);
 
   @protected
@@ -769,12 +732,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_ui_project_state(
-    UiProjectState? self,
-    SseSerializer serializer,
-  );
 
   @protected
   void sse_encode_playback_position(
@@ -878,12 +835,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_plugin_parameter(
     UiPluginParameter self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_project_state(
-    UiProjectState self,
     SseSerializer serializer,
   );
 

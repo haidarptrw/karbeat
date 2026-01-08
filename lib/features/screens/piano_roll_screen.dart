@@ -5,18 +5,20 @@ import 'package:flutter/services.dart';
 import 'package:karbeat/features/components/scrollable_virtual_keyboard.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/piano_key.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
+import 'package:karbeat/utils/logger.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:provider/provider.dart';
 
 class PianoRollScreen extends StatefulWidget {
   final int? patternId;
-  // We need the Track ID to know which Generator to preview sound with
-  final int? parentTrackId;
+  // We need the Generator ID to know which Generator to preview sound with
+  final int? generatorId;
 
-  const PianoRollScreen({super.key, this.patternId, this.parentTrackId});
+  const PianoRollScreen({super.key, this.patternId, this.generatorId});
 
   @override
   State<StatefulWidget> createState() {
@@ -63,22 +65,37 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   }
 
   void _handleNoteOn(int note) {
-    if (widget.parentTrackId != null) {
-      context.read<KarbeatState>().previewNote(
-        trackId: widget.parentTrackId!,
-        noteKey: note,
-        isOn: true,
-      );
+    if (widget.generatorId != null) {
+      // context.read<KarbeatState>().previewNote(
+      //   generatorId: widget.generatorId!,
+      //   noteKey: note,
+      //   isOn: true,
+      // );
+      try {
+        playPreviewNoteGenerator(
+          generatorId: widget.generatorId!,
+          noteKey: note,
+          velocity: 100,
+          isOn: true,
+        );
+      } catch (e) {
+        KarbeatLogger.error("Failed to play preview note: $e");
+      }
     }
   }
 
   void _handleNoteOff(int note) {
-    if (widget.parentTrackId != null) {
-      context.read<KarbeatState>().previewNote(
-        trackId: widget.parentTrackId!,
-        noteKey: note,
-        isOn: false,
-      );
+    if (widget.generatorId != null) {
+      try {
+        playPreviewNoteGenerator(
+          generatorId: widget.generatorId!,
+          noteKey: note,
+          velocity: 100,
+          isOn: false,
+        );
+      } catch (e) {
+        KarbeatLogger.error("Failed to play preview note: $e");
+      }
     }
   }
 
@@ -231,12 +248,17 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                           midiKey: midiKey,
                           height: _keyHeight,
                           onPlayNote: (isOn) {
-                            if (widget.parentTrackId != null) {
-                              context.read<KarbeatState>().previewNote(
-                                trackId: widget.parentTrackId!,
-                                noteKey: midiKey,
-                                isOn: isOn,
-                              );
+                            if (widget.generatorId != null) {
+                              try {
+                                playPreviewNoteGenerator(
+                                  generatorId: widget.generatorId!,
+                                  noteKey: midiKey,
+                                  velocity: 100,
+                                  isOn: isOn,
+                                );
+                              } catch (e) {
+                                KarbeatLogger.error(e.toString());
+                              }
                             }
                           },
                         );
@@ -320,7 +342,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                                       noteId:
                                           note.id, // Pass ID instead of Index
                                       patternId: pattern.id,
-                                      trackId: widget.parentTrackId,
+                                      generatorId: widget.generatorId,
                                       zoomX: _zoomX,
                                       keyHeight: _keyHeight,
                                       selectedTool: selectedTool,
@@ -358,6 +380,7 @@ class _PianoRollToolbar extends StatelessWidget {
   final String name;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
+  final ValueChanged<int>? onSelectGenerator;
   final int gridDenom;
   final ValueChanged<int?> onGridDenomChanged;
 
@@ -367,6 +390,7 @@ class _PianoRollToolbar extends StatelessWidget {
     required this.onZoomOut,
     required this.gridDenom,
     required this.onGridDenomChanged,
+    this.onSelectGenerator,
   });
 
   @override
@@ -410,6 +434,12 @@ class _PianoRollToolbar extends StatelessWidget {
             ],
             onChanged: onGridDenomChanged,
           ),
+
+          const SizedBox(width: 20),
+          // TODO: Add Generator selection to choose which instrument we want to play
+          // onSelectGenerator != null
+          //     ? DropdownButton<int>(items: items, onChanged: onSelectGenerator!)
+          //     : null,
         ],
       ),
     );
@@ -497,7 +527,7 @@ class _InteractiveNote extends StatefulWidget {
   final UiNote note;
   final int noteId;
   final int patternId;
-  final int? trackId; // Optional: To preview note while dragging
+  final int? generatorId; // Optional: To preview note while dragging
   final double zoomX;
   final double keyHeight;
   final ToolSelection selectedTool;
@@ -508,7 +538,7 @@ class _InteractiveNote extends StatefulWidget {
     required this.note,
     required this.noteId,
     required this.patternId,
-    this.trackId,
+    this.generatorId,
     required this.zoomX,
     required this.keyHeight,
     required this.selectedTool,
@@ -553,12 +583,17 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
   }
 
   void _playNote(int key, bool on) {
-    if (widget.trackId != null) {
-      context.read<KarbeatState>().previewNote(
-        trackId: widget.trackId!,
-        noteKey: key,
-        isOn: on,
-      );
+    if (widget.generatorId != null) {
+      try {
+        playPreviewNoteGenerator(
+          generatorId: widget.generatorId!,
+          noteKey: key,
+          velocity: 100,
+          isOn: on,
+        );
+      } catch (e) {
+        KarbeatLogger.error(e.toString());
+      }
     }
   }
 
@@ -647,12 +682,17 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
 
             final state = context.read<KarbeatState>();
 
-            if (widget.trackId != null) {
-              state.previewNote(
-                trackId: widget.trackId!,
-                noteKey: widget.note.key,
-                isOn: false,
-              );
+            if (widget.generatorId != null) {
+              try {
+                playPreviewNoteGenerator(
+                  generatorId: widget.generatorId!,
+                  noteKey: widget.note.key,
+                  velocity: 100,
+                  isOn: false,
+                );
+              } catch (e) {
+                KarbeatLogger.error(e.toString());
+              }
             }
 
             int snap = widget.snapTicks;

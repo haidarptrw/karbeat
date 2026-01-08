@@ -75,10 +75,20 @@ impl SynthFilter {
             return;
         }
 
-        // Frequency coefficient (clamped to prevent instability at high frequencies)
-        let f = (2.0 * (std::f32::consts::PI * self.cutoff / sample_rate).sin()).min(0.99);
-        let q = self.resonance.clamp(0.0, 0.99);
-        let damping = 2.0 * (1.0 - q);
+        // Constrain cutoff to slightly below Nyquist to prevent tan() explosion
+        let nyquist = sample_rate * 0.499;
+        let clamped_cutoff = self.cutoff.clamp(20.0, nyquist);
+
+        // g = tan(PI * cutoff / sample_rate) maps the frequency domain correctly
+        let g = (std::f32::consts::PI * clamped_cutoff / sample_rate).tan();
+
+        // Map resonance (0.0 -> 0.95) to damping (k)
+        // res 0.0 => k = 2.0 (Butterworth/No resonance)
+        // res 0.95 => k = 0.1 (High resonance)
+        let k = 2.0 - (2.0 * self.resonance.clamp(0.0, 0.95));
+
+        // Pre-calculate inverse denominator for the loop
+        let denom_inv = 1.0 / (1.0 + g * (g + k));
 
         let frames = buffer.len() / 2;
 
@@ -89,20 +99,26 @@ impl SynthFilter {
             let in_l = buffer[l_idx];
             let in_r = buffer[r_idx];
 
-            // Left channel - Chamberlin SVF (correct order: HP -> BP -> LP)
-            let hp_l = in_l - self.s2_l - damping * self.s1_l;
-            let bp_l = hp_l * f + self.s1_l;
-            let lp_l = bp_l * f + self.s2_l;
-            self.s1_l = bp_l;
-            self.s2_l = lp_l;
+            // --- Left Channel (TPT SVF) ---
+            // Calculate outputs based on current state
+            let hp_l = (in_l - (g + k) * self.s1_l - self.s2_l) * denom_inv;
+            let bp_l = g * hp_l + self.s1_l;
+            let lp_l = g * bp_l + self.s2_l;
 
-            // Right channel
-            let hp_r = in_r - self.s2_r - damping * self.s1_r;
-            let bp_r = hp_r * f + self.s1_r;
-            let lp_r = bp_r * f + self.s2_r;
-            self.s1_r = bp_r;
-            self.s2_r = lp_r;
+            // Update state for next sample
+            // Note: TPT state update is 2*sample - old_state, or simply:
+            self.s1_l = g * hp_l + bp_l;
+            self.s2_l = g * bp_l + lp_l;
 
+            // --- Right Channel (TPT SVF) ---
+            let hp_r = (in_r - (g + k) * self.s1_r - self.s2_r) * denom_inv;
+            let bp_r = g * hp_r + self.s1_r;
+            let lp_r = g * bp_r + self.s2_r;
+
+            self.s1_r = g * hp_r + bp_r;
+            self.s2_r = g * bp_r + lp_r;
+
+            // Apply output to buffer
             match self.mode {
                 FilterMode::LowPass => {
                     buffer[l_idx] = lp_l;
