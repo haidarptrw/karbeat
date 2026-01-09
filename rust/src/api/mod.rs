@@ -1,8 +1,9 @@
-pub mod session;
-pub mod plugin;
-pub mod pattern;
-pub mod simple;
-pub mod project;
-pub mod transport;
 pub mod audio;
+pub mod mixer;
+pub mod pattern;
+pub mod plugin;
+pub mod project;
+pub mod session;
+pub mod simple;
 pub mod track;
+pub mod transport;

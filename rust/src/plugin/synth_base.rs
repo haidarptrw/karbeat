@@ -99,7 +99,7 @@ impl SynthFilter {
             let in_l = buffer[l_idx];
             let in_r = buffer[r_idx];
 
-            // --- Left Channel (TPT SVF) ---
+            // Left Channel (TPT SVF)
             // Calculate outputs based on current state
             let hp_l = (in_l - (g + k) * self.s1_l - self.s2_l) * denom_inv;
             let bp_l = g * hp_l + self.s1_l;
@@ -110,7 +110,7 @@ impl SynthFilter {
             self.s1_l = g * hp_l + bp_l;
             self.s2_l = g * bp_l + lp_l;
 
-            // --- Right Channel (TPT SVF) ---
+            // Right Channel (TPT SVF)
             let hp_r = (in_r - (g + k) * self.s1_r - self.s2_r) * denom_inv;
             let bp_r = g * hp_r + self.s1_r;
             let lp_r = g * bp_r + self.s2_r;

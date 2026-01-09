@@ -77,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1899770824;
+  int get rustContentHash => 855982779;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -268,6 +268,12 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiAudioPlaySourcePreview({required int id});
 
+  Future<List<UiParameterSnapshot>> crateApiPluginPollParameterFeedback();
+
+  Future<void> crateApiPluginQueryGeneratorParameters({
+    required int generatorId,
+  });
+
   Future<void> crateApiSessionRedo();
 
   Future<void> crateApiSessionRemoveClipFromSelection({required int clipId});
@@ -319,6 +325,10 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiSessionSetPreviewGenerator({int? generatorId});
 
   Future<void> crateApiAudioStopAllPreviews();
+
+  Future<void> crateApiPluginSyncParametersFromAudio({
+    required List<UiParameterSnapshot> snapshots,
+  });
 
   Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault();
 
@@ -1790,7 +1800,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "play_source_preview", argNames: ["id"]);
 
   @override
-  Future<void> crateApiSessionRedo() {
+  Future<List<UiParameterSnapshot>> crateApiPluginPollParameterFeedback() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1799,6 +1809,66 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 46,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_ui_parameter_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginPollParameterFeedbackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPluginPollParameterFeedbackConstMeta =>
+      const TaskConstMeta(debugName: "poll_parameter_feedback", argNames: []);
+
+  @override
+  Future<void> crateApiPluginQueryGeneratorParameters({
+    required int generatorId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(generatorId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 47,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiPluginQueryGeneratorParametersConstMeta,
+        argValues: [generatorId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPluginQueryGeneratorParametersConstMeta =>
+      const TaskConstMeta(
+        debugName: "query_generator_parameters",
+        argNames: ["generatorId"],
+      );
+
+  @override
+  Future<void> crateApiSessionRedo() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 48,
             port: port_,
           );
         },
@@ -1826,7 +1896,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 49,
             port: port_,
           );
         },
@@ -1865,7 +1935,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 50,
             port: port_,
           );
         },
@@ -1903,7 +1973,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 51,
             port: port_,
           );
         },
@@ -1939,7 +2009,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 52,
             port: port_,
           );
         },
@@ -1973,7 +2043,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 51,
+            funcId: 53,
             port: port_,
           );
         },
@@ -2007,7 +2077,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 54,
             port: port_,
           );
         },
@@ -2037,7 +2107,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 53,
+            funcId: 55,
             port: port_,
           );
         },
@@ -2071,7 +2141,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 56,
             port: port_,
           );
         },
@@ -2102,7 +2172,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 55,
+            funcId: 57,
             port: port_,
           );
         },
@@ -2130,7 +2200,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 58,
             port: port_,
           );
         },
@@ -2158,7 +2228,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 57,
+            funcId: 59,
             port: port_,
           );
         },
@@ -2186,7 +2256,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 58,
+            funcId: 60,
             port: port_,
           );
         },
@@ -2216,7 +2286,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 59,
+            funcId: 61,
             port: port_,
           );
         },
@@ -2235,6 +2305,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "stop_all_previews", argNames: []);
 
   @override
+  Future<void> crateApiPluginSyncParametersFromAudio({
+    required List<UiParameterSnapshot> snapshots,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_ui_parameter_snapshot(snapshots, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 62,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginSyncParametersFromAudioConstMeta,
+        argValues: [snapshots],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPluginSyncParametersFromAudioConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_parameters_from_audio",
+        argNames: ["snapshots"],
+      );
+
+  @override
   Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault() {
     return handler.executeNormal(
       NormalTask(
@@ -2243,7 +2346,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 60,
+            funcId: 63,
             port: port_,
           );
         },
@@ -2273,7 +2376,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 61,
+            funcId: 64,
             port: port_,
           );
         },
@@ -2575,6 +2678,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<UiParameterSnapshot> dco_decode_list_ui_parameter_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_parameter_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ui_parameter_value).toList();
+  }
+
+  @protected
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_ui_plugin_parameter).toList();
@@ -2863,9 +2980,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiParameterSnapshot dco_decode_ui_parameter_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiParameterSnapshot(
+      generatorId: dco_decode_u_32(arr[0]),
+      parameters: dco_decode_list_ui_parameter_value(arr[1]),
+    );
+  }
+
+  @protected
   UiParameterType dco_decode_ui_parameter_type(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return UiParameterType.values[raw as int];
+  }
+
+  @protected
+  UiParameterValue dco_decode_ui_parameter_value(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiParameterValue(
+      paramId: dco_decode_u_32(arr[0]),
+      value: dco_decode_f_32(arr[1]),
+    );
   }
 
   @protected
@@ -3304,6 +3445,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<UiParameterSnapshot> sse_decode_list_ui_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiParameterSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_parameter_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiParameterValue> sse_decode_list_ui_parameter_value(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiParameterValue>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_parameter_value(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
     SseDeserializer deserializer,
   ) {
@@ -3662,10 +3831,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiParameterSnapshot sse_decode_ui_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_generatorId = sse_decode_u_32(deserializer);
+    var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
+    return UiParameterSnapshot(
+      generatorId: var_generatorId,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
   UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return UiParameterType.values[inner];
+  }
+
+  @protected
+  UiParameterValue sse_decode_ui_parameter_value(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_paramId = sse_decode_u_32(deserializer);
+    var var_value = sse_decode_f_32(deserializer);
+    return UiParameterValue(paramId: var_paramId, value: var_value);
   }
 
   @protected
@@ -4108,6 +4298,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_ui_parameter_snapshot(
+    List<UiParameterSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_parameter_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_parameter_value(
+    List<UiParameterValue> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_parameter_value(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_ui_plugin_parameter(
     List<UiPluginParameter> self,
     SseSerializer serializer,
@@ -4414,12 +4628,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_ui_parameter_snapshot(
+    UiParameterSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.generatorId, serializer);
+    sse_encode_list_ui_parameter_value(self.parameters, serializer);
+  }
+
+  @protected
   void sse_encode_ui_parameter_type(
     UiParameterType self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_parameter_value(
+    UiParameterValue self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.paramId, serializer);
+    sse_encode_f_32(self.value, serializer);
   }
 
   @protected

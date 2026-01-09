@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::project::{ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect};
+use crate::core::project::{ApplicationState, PluginInstance, TrackId};
 
 /// Custom Error type for better error clarity
 #[derive(Clone, Debug)]
@@ -12,6 +12,20 @@ pub struct MixerSetParamError {
 }
 
 impl MixerSetParamError {
+    pub fn new(track_id: TrackId, message: &str) -> Self {
+        Self {
+            track_id,
+            message: message.to_string(),
+        }
+    }
+}
+
+pub struct MixerNotFoundError {
+    pub message: String,
+    pub track_id: TrackId,
+}
+
+impl MixerNotFoundError {
     pub fn new(track_id: TrackId, message: &str) -> Self {
         Self {
             track_id,
@@ -86,8 +100,27 @@ impl MixerState {
         Ok(mixer_channel_arc.clone())
     }
 
-    pub fn add_effect(&mut self, track_id: &TrackId, effect: Box<dyn KarbeatEffect + Send + Sync>) {
+    /// Add an effect descriptor to a mixer channel's metadata.
+    ///
+    /// Note: The actual effect instance should be sent to the audio thread via
+    /// `AudioCommand::AddTrackEffect`. This function only updates the metadata.
+    pub fn add_effect_descriptor(
+        &mut self,
+        track_id: &TrackId,
+        effect_name: &str,
+        internal_type: &str,
+    ) -> Result<(), MixerNotFoundError> {
+        let mixer_channel_arc = self.channels.get_mut(track_id).ok_or_else(|| {
+            MixerNotFoundError::new(track_id.clone(), "Cannot find the mixer channel")
+        })?;
 
+        // Clone and modify the channel
+        let channel = Arc::make_mut(mixer_channel_arc);
+        let mut effects_vec = channel.effects.to_vec();
+        effects_vec.push(PluginInstance::new(effect_name, internal_type));
+        channel.effects = Arc::from(effects_vec);
+
+        Ok(())
     }
 }
 

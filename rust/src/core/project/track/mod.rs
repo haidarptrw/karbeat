@@ -3,16 +3,17 @@ pub mod audio_waveform;
 pub mod midi;
 
 use std::{
-    collections::{BTreeSet, HashMap},
-    sync::{Arc, Mutex, RwLock},
+    collections::BTreeSet,
+    sync::{Arc, RwLock},
 };
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    commands::AudioCommand,
     core::project::{
-        clip::ClipId, generator::GeneratorId, plugin::KarbeatPlugin, ApplicationState, Clip,
-        GeneratorInstance, GeneratorInstanceType, KarbeatSource, PluginInstance,
+        clip::ClipId, generator::GeneratorId, ApplicationState, Clip, GeneratorInstance,
+        GeneratorInstanceType, KarbeatSource, PluginInstance,
     },
     ctx, define_id,
 };
@@ -198,15 +199,15 @@ impl ApplicationState {
         let gen_id = GeneratorId::next(&mut self.generator_counter);
         let track_id = TrackId::next(&mut self.track_counter);
 
-        let plugin_runtime = {
+        // Create the plugin via registry
+        let generator_plugin = {
             let registry = ctx()
                 .plugin_registry
                 .read()
                 .expect("Failed to lock registry");
 
             if let Some(generator_box) = registry.create_generator(&generator_name) {
-                // Wrap the Box<dyn Generator> into our Runtime Enum and Mutex
-                Arc::new(Mutex::new(KarbeatPlugin::Generator(generator_box)))
+                generator_box
             } else {
                 let message = format!("Generator '{}' not found in registry", generator_name);
                 log::error!("{}", message);
@@ -217,19 +218,17 @@ impl ApplicationState {
             }
         };
 
-        let default_params = if let Ok(guard) = plugin_runtime.lock() {
-            guard.default_parameters()
-        } else {
-            HashMap::new()
-        };
+        // Send the plugin to the audio thread (lock-free)
+        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+            let _ = sender.push(AudioCommand::AddGenerator {
+                generator_id: gen_id,
+                track_id,
+                plugin: generator_plugin,
+            });
+        }
 
-        let plugin_instance = PluginInstance {
-            name: generator_name.to_string(),
-            internal_type: generator_name.to_string(),
-            bypass: false,
-            parameters: default_params,
-            instance: Some(plugin_runtime),
-        };
+        // Create lightweight plugin instance descriptor (no Arc<Mutex>)
+        let plugin_instance = PluginInstance::new(generator_name, generator_name);
 
         let generator = GeneratorInstance {
             id: gen_id,

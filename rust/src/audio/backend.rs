@@ -108,9 +108,11 @@ fn set_host() -> cpal::Host {
     host
 }
 
+/// Start the audio strem by initializing the Command Queue and Audio Engine
+/// and then building the audio stream
 pub fn start_audio_stream(
-    mut state_consumer: Output<AudioRenderState>, // 1. Structural State
-    command_consumer: Consumer<AudioCommand>,     // 3. Command Queue
+    mut state_consumer: Output<AudioRenderState>,
+    command_consumer: Consumer<AudioCommand>,
     initial_state: AudioRenderState,
 ) -> Result<()> {
     {
@@ -178,10 +180,16 @@ pub fn start_audio_stream(
     // 2. Store Consumer in context
     *ctx().position_consumer.lock().unwrap() = Some(pos_consumer);
 
+    // Create feedback ring buffer (Audio → UI for parameter updates)
+    let (feedback_producer, feedback_consumer) =
+        RingBuffer::<crate::commands::AudioFeedback>::new(256);
+    *ctx().feedback_consumer.lock().unwrap() = Some(feedback_consumer);
+
     let engine = AudioEngine::new(
         state_consumer,
         command_consumer,
         pos_producer,
+        feedback_producer,
         sample_rate,
         initial_state,
     );
@@ -200,15 +208,9 @@ pub fn start_audio_stream(
     };
 
     let stream = match sample_format {
-        cpal::SampleFormat::F32 => run_stream!(
-            device,
-            config,
-            audio_ctx,
-            consumer,
-            f32,
-            |s| s, // Identity
-            err_fn
-        ),
+        cpal::SampleFormat::F32 => {
+            run_stream!(device, config, audio_ctx, consumer, f32, |s| s, err_fn)
+        }
 
         cpal::SampleFormat::I16 => run_stream!(
             device,

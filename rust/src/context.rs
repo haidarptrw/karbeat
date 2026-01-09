@@ -11,7 +11,7 @@ use triple_buffer::Input;
 
 use crate::{
     audio::{event::PlaybackPosition, render_state::AudioRenderState},
-    commands::AudioCommand,
+    commands::{AudioCommand, AudioFeedback},
     core::{history::HistoryManager, project::ApplicationState},
     plugin::registry::PluginRegistry,
 };
@@ -26,8 +26,11 @@ pub struct KarbeatContext {
     /// Undo/redo history manager
     pub history: Mutex<HistoryManager>,
 
-    /// Audio command queue producer
+    /// Audio command queue producer (UI → Audio)
     pub command_sender: Mutex<Option<Producer<AudioCommand>>>,
+
+    /// Parameter feedback consumer (Audio → UI)
+    pub feedback_consumer: Mutex<Option<rtrb::Consumer<AudioFeedback>>>,
 
     /// Triple buffer input for audio render state
     pub render_state_producer: Mutex<Option<Input<AudioRenderState>>>,
@@ -51,6 +54,7 @@ impl KarbeatContext {
             app_state: Arc::new(RwLock::new(ApplicationState::default())),
             history: Mutex::new(HistoryManager::new()),
             command_sender: Mutex::new(None),
+            feedback_consumer: Mutex::new(None),
             render_state_producer: Mutex::new(None),
             current_render_state: Mutex::new(AudioRenderState::default()),
             stream_guard: Mutex::new(None),

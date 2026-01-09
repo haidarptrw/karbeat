@@ -459,8 +459,7 @@ impl RawSynthEngine for KarbeatzerEngine {
 // TYPE ALIAS FOR WRAPPED SYNTH
 // ============================================================================
 
-/// The full Karbeatzer synth with automation support.
-/// This is what you instantiate and use.
+/// The full Karbeatzer V2 synth (Subtractive Synthesizer).
 pub type KarbeatzerV2 = SynthWrapper<KarbeatzerEngine>;
 
 /// Helper to create a new Karbeatzer instance

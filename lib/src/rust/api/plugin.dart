@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `eq`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 /// Get all available generators in Plugin Registry
 Future<List<String>> getAvailableGenerators() =>
@@ -18,7 +18,10 @@ Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
     RustLib.instance.api.crateApiPluginGetGenerator(generatorId: generatorId);
 
 /// Get parameter specifications for a generator plugin.
-/// Returns a list of all parameters with their metadata for UI generation.
+///
+/// Note: With the lock-free architecture, plugin parameter specs are static
+/// and can be retrieved from the registry factory.
+/// TODO: Implement proper parameter spec retrieval from registry
 Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
   required int generatorId,
 }) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(
@@ -26,6 +29,9 @@ Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
 );
 
 /// Set a parameter on a generator plugin.
+///
+/// This sends a command to the audio thread to update the parameter.
+/// The parameter value is also stored in PluginInstance for persistence.
 ///
 /// # Arguments
 /// * `generator_id` - The ID of the generator
@@ -42,6 +48,10 @@ Future<void> setGeneratorParameter({
 );
 
 /// Get a parameter value from a generator plugin.
+///
+/// Returns the stored parameter value for the given parameter ID.
+/// With lock-free architecture, we read from the stored parameters,
+/// not the live plugin on the audio thread.
 Future<double> getGeneratorParameter({
   required int generatorId,
   required int paramId,
@@ -50,8 +60,77 @@ Future<double> getGeneratorParameter({
   paramId: paramId,
 );
 
+/// Request a parameter snapshot from the audio thread.
+///
+/// This sends a query to the audio thread, which will respond with the
+/// current parameter values via the feedback channel. Use `poll_parameter_feedback`
+/// to receive the response.
+Future<void> queryGeneratorParameters({required int generatorId}) => RustLib
+    .instance
+    .api
+    .crateApiPluginQueryGeneratorParameters(generatorId: generatorId);
+
+/// Poll for parameter feedback from the audio thread.
+///
+/// This should be called periodically (e.g., in a timer or on parameter screen)
+/// to receive parameter updates from the audio thread. Returns all pending
+/// parameter snapshots.
+Future<List<UiParameterSnapshot>> pollParameterFeedback() =>
+    RustLib.instance.api.crateApiPluginPollParameterFeedback();
+
+/// Sync parameter values from audio thread to stored parameters.
+///
+/// Call this after `poll_parameter_feedback` to update the stored parameters
+/// with the latest values from the audio thread.
+Future<void> syncParametersFromAudio({
+  required List<UiParameterSnapshot> snapshots,
+}) => RustLib.instance.api.crateApiPluginSyncParametersFromAudio(
+  snapshots: snapshots,
+);
+
+/// Parameter snapshot from the audio thread
+class UiParameterSnapshot {
+  final int generatorId;
+  final List<UiParameterValue> parameters;
+
+  const UiParameterSnapshot({
+    required this.generatorId,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode => generatorId.hashCode ^ parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiParameterSnapshot &&
+          runtimeType == other.runtimeType &&
+          generatorId == other.generatorId &&
+          parameters == other.parameters;
+}
+
 /// Parameter type enum for FRB
 enum UiParameterType { float, int, bool, choice }
+
+/// Single parameter value from the audio thread
+class UiParameterValue {
+  final int paramId;
+  final double value;
+
+  const UiParameterValue({required this.paramId, required this.value});
+
+  @override
+  int get hashCode => paramId.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiParameterValue &&
+          runtimeType == other.runtimeType &&
+          paramId == other.paramId &&
+          value == other.value;
+}
 
 /// Plugin parameter description for UI generation
 class UiPluginParameter {

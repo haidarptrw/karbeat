@@ -149,6 +149,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
+  List<UiParameterSnapshot> dco_decode_list_ui_parameter_snapshot(dynamic raw);
+
+  @protected
+  List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw);
+
+  @protected
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
 
   @protected
@@ -242,7 +248,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiNote dco_decode_ui_note(dynamic raw);
 
   @protected
+  UiParameterSnapshot dco_decode_ui_parameter_snapshot(dynamic raw);
+
+  @protected
   UiParameterType dco_decode_ui_parameter_type(dynamic raw);
+
+  @protected
+  UiParameterValue dco_decode_ui_parameter_value(dynamic raw);
 
   @protected
   UiPattern dco_decode_ui_pattern(dynamic raw);
@@ -405,6 +417,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
+  List<UiParameterSnapshot> sse_decode_list_ui_parameter_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiParameterValue> sse_decode_list_ui_parameter_value(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
     SseDeserializer deserializer,
   );
@@ -508,7 +530,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiNote sse_decode_ui_note(SseDeserializer deserializer);
 
   @protected
+  UiParameterSnapshot sse_decode_ui_parameter_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
+
+  @protected
+  UiParameterValue sse_decode_ui_parameter_value(SseDeserializer deserializer);
 
   @protected
   UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
@@ -699,6 +729,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_ui_parameter_snapshot(
+    List<UiParameterSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_parameter_value(
+    List<UiParameterValue> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_plugin_parameter(
     List<UiPluginParameter> self,
     SseSerializer serializer,
@@ -822,8 +864,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_note(UiNote self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_parameter_snapshot(
+    UiParameterSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_parameter_type(
     UiParameterType self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_parameter_value(
+    UiParameterValue self,
     SseSerializer serializer,
   );
 
