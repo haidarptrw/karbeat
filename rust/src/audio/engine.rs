@@ -1,6 +1,6 @@
 // src/audio/engine.rs
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use rtrb::{Consumer, Producer};
 use triple_buffer::Output;
@@ -171,12 +171,19 @@ impl AudioEngine {
                 ),
             }
         } else {
+            // When transport is stopped, still render any active voices
+            // (e.g., preview notes with sustain, ADSR tails)
             self.render_voices_to_buffer(output_buffer, channels);
 
             // Clean up audio voices (oneshots), keep generator voices active if they have pending audio tail
             self.cleanup_finished_voices();
 
             self.emit_static_position();
+            // NOTE: We intentionally do NOT call stop_all_active_generators() here every frame.
+            // That would cut off preview notes. The proper stopping is handled when:
+            // 1. Transport transitions from playing to stopped (in state_consumer.update check)
+            // 2. User sends note-off events
+            // 3. Pattern loop boundary (in process_pattern_mode)
         }
 
         // 5. Always Render Previews (Metronome, Browser Preview)
@@ -241,7 +248,6 @@ impl AudioEngine {
             self.playhead_samples = 0;
             Self::stop_all_active_generators_impl(
                 &mut self.active_generators,
-                &mut self.preview_voices,
                 &mut self.plugin_state,
             ); // Kill notes at loop boundary to prevent hangs
         }
@@ -285,16 +291,11 @@ impl AudioEngine {
     }
 
     fn stop_all_active_generators(&mut self) {
-        Self::stop_all_active_generators_impl(
-            &mut self.active_generators,
-            &mut self.preview_voices,
-            &mut self.plugin_state,
-        );
+        Self::stop_all_active_generators_impl(&mut self.active_generators, &mut self.plugin_state);
     }
 
     fn stop_all_active_generators_impl(
         active_generators: &mut Vec<GeneratorVoice>,
-        preview_voices: &mut Vec<PreviewVoice>,
         plugin_state: &mut AudioPluginState,
     ) {
         for voice in active_generators.iter_mut() {
@@ -305,7 +306,9 @@ impl AudioEngine {
             // Clear any pending MIDI events that might have been queued
             voice.events.clear();
         }
-        preview_voices.clear();
+        // NOTE: Do NOT clear preview_voices here - previews should continue playing
+        // even when transport is stopped. preview_voices are only cleared via
+        // StopAllPreviews command or when they finish naturally.
     }
 
     fn process_command(&mut self, cmd: AudioCommand) {
@@ -557,7 +560,7 @@ impl AudioEngine {
     }
 
     fn trigger_live_note(&mut self, generator_id: GeneratorId, key: u8, velocity: u8, is_on: bool) {
-        // Find the track that has this generator
+        // Try to find the track that has this generator from current_state
         let target_info = self.current_state.graph.tracks.iter().find_map(|t| {
             if let Some(gen) = &t.generator {
                 if gen.id == generator_id {
@@ -567,16 +570,14 @@ impl AudioEngine {
             None
         });
 
+        // If we found the track info, use it
         if let Some((track_id, gen_instance)) = target_info {
-            // Ensure the voice is active (even if Transport is stopped)
-            // This creates the voice if it doesn't exist.
             if let Some(voice_idx) = Self::ensure_generator_voice(
                 &mut self.active_generators,
                 &self.plugin_state,
                 track_id,
                 &gen_instance,
             ) {
-                // Inject MIDI event
                 let gen_voice = &mut self.active_generators[voice_idx];
                 let message = if is_on {
                     MidiMessage::NoteOn { key, velocity }
@@ -588,15 +589,49 @@ impl AudioEngine {
                     sample_offset: 0,
                     data: message,
                 });
-
-                // Keep voice alive for processing even if track is empty
                 gen_voice.active = true;
-            } else {
-                log::warn!(
-                    "PlayPreviewNote: Generator ID {:?} not found in active graph",
-                    generator_id
-                );
+                return;
             }
+        }
+
+        // Fallback: If triple buffer hasn't synced yet, check plugin_state directly
+        // This handles the case where AudioCommand::AddGenerator was received but
+        // the UI hasn't updated current_state via triple buffer yet
+        if let Some(gen_instance) = self.plugin_state.generators.get(&generator_id) {
+            let track_id = gen_instance.track_id;
+
+            // Find or create voice
+            let voice_idx = self
+                .active_generators
+                .iter()
+                .position(|g| g.id == generator_id)
+                .unwrap_or_else(|| {
+                    self.active_generators.push(GeneratorVoice {
+                        id: generator_id,
+                        track_id,
+                        events: Vec::new(),
+                        active: true,
+                    });
+                    self.active_generators.len() - 1
+                });
+
+            let gen_voice = &mut self.active_generators[voice_idx];
+            let message = if is_on {
+                MidiMessage::NoteOn { key, velocity }
+            } else {
+                MidiMessage::NoteOff { key }
+            };
+
+            gen_voice.events.push(MidiEvent {
+                sample_offset: 0,
+                data: message,
+            });
+            gen_voice.active = true;
+        } else {
+            log::warn!(
+                "PlayPreviewNote: Generator ID {:?} not found in plugin_state or graph",
+                generator_id
+            );
         }
     }
 
@@ -1036,6 +1071,9 @@ impl AudioEngine {
             return;
         }
 
+        // Calculate the clip's actual end boundary on the timeline
+        let clip_end = clip.start_time + clip.loop_length;
+
         let start_iter = 0;
         let end_iter = 0;
 
@@ -1049,10 +1087,17 @@ impl AudioEngine {
                 let abs_start = clip.start_time + pattern_offset + note_start - clip.offset_start;
                 let abs_end = abs_start + note_dur;
 
+                // Skip notes that start before the clip's offset
                 if abs_start < clip.offset_start {
                     continue;
                 }
 
+                // Skip notes that start at or after the clip end (outside trimmed region)
+                if abs_start >= clip_end {
+                    continue;
+                }
+
+                // Schedule NoteOn if it falls within the buffer
                 if abs_start >= buffer_start && abs_start < buffer_end {
                     events.push(MidiEvent {
                         sample_offset: (abs_start - buffer_start) as usize,
@@ -1062,9 +1107,15 @@ impl AudioEngine {
                         },
                     });
                 }
-                if abs_end >= buffer_start && abs_end < buffer_end {
+
+                // Clamp note-off to clip boundary if it would extend past the clip end
+                // This prevents hanging notes when clips are trimmed
+                let effective_end = abs_end.min(clip_end);
+
+                // Schedule NoteOff if it falls within the buffer
+                if effective_end >= buffer_start && effective_end < buffer_end {
                     events.push(MidiEvent {
-                        sample_offset: (abs_end - buffer_start) as usize,
+                        sample_offset: (effective_end - buffer_start) as usize,
                         data: MidiMessage::NoteOff { key: note.key },
                     });
                 }

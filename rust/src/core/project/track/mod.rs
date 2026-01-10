@@ -200,14 +200,16 @@ impl ApplicationState {
         let track_id = TrackId::next(&mut self.track_counter);
 
         // Create the plugin via registry
-        let generator_plugin = {
+        let (generator_plugin, default_params) = {
             let registry = ctx()
                 .plugin_registry
                 .read()
                 .expect("Failed to lock registry");
 
             if let Some(generator_box) = registry.create_generator(&generator_name) {
-                generator_box
+                // Get default parameters BEFORE sending to audio thread
+                let params = generator_box.default_parameters();
+                (generator_box, params)
             } else {
                 let message = format!("Generator '{}' not found in registry", generator_name);
                 log::error!("{}", message);
@@ -227,8 +229,13 @@ impl ApplicationState {
             });
         }
 
-        // Create lightweight plugin instance descriptor (no Arc<Mutex>)
-        let plugin_instance = PluginInstance::new(generator_name, generator_name);
+        // Create plugin instance descriptor with default parameters
+        let plugin_instance = PluginInstance {
+            name: generator_name.to_string(),
+            internal_type: generator_name.to_string(),
+            bypass: false,
+            parameters: default_params,
+        };
 
         let generator = GeneratorInstance {
             id: gen_id,

@@ -82,6 +82,12 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
 
   bool _isCtrlPressed = false;
 
+  // Range selection state
+  bool _isRangeSelecting = false;
+  Offset? _rangeSelectStart; // Position in absolute pixels (including scroll)
+  Offset? _rangeSelectEnd;
+  int? _rangeSelectTrackId; // Track ID where the range selection started
+
   @override
   void initState() {
     super.initState();
@@ -198,6 +204,116 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
   }
 
+  /// Starts a range selection when select tool is active
+  void _startRangeSelect(Offset localPosition) {
+    // Calculate absolute position (including scroll)
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    final absoluteX = localPosition.dx + scrollX;
+    final absoluteY = localPosition.dy + scrollY;
+
+    // Determine which track the selection starts on
+    int trackIndex = (absoluteY / widget.itemHeight).floor();
+    trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
+
+    setState(() {
+      _isRangeSelecting = true;
+      _rangeSelectStart = Offset(absoluteX, absoluteY);
+      _rangeSelectEnd = Offset(absoluteX, absoluteY);
+      _rangeSelectTrackId = widget.tracks[trackIndex].id;
+    });
+  }
+
+  /// Updates the range selection rectangle during drag
+  void _updateRangeSelect(Offset localPosition) {
+    if (!_isRangeSelecting || _rangeSelectStart == null) return;
+
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    final absoluteX = localPosition.dx + scrollX;
+    final absoluteY = localPosition.dy + scrollY;
+
+    setState(() {
+      _rangeSelectEnd = Offset(absoluteX, absoluteY);
+    });
+  }
+
+  /// Confirms the range selection and selects all clips within the time range
+  void _confirmRangeSelect(KarbeatState state) {
+    if (!_isRangeSelecting ||
+        _rangeSelectStart == null ||
+        _rangeSelectEnd == null ||
+        _rangeSelectTrackId == null) {
+      _cancelRangeSelect();
+      return;
+    }
+
+    final zoomLevel = state.horizontalZoomLevel;
+
+    // Get time range in samples
+    final startX = _rangeSelectStart!.dx;
+    final endX = _rangeSelectEnd!.dx;
+    final minX = startX < endX ? startX : endX;
+    final maxX = startX > endX ? startX : endX;
+
+    final startTimeSamples = (minX * zoomLevel).toInt();
+    final endTimeSamples = (maxX * zoomLevel).toInt();
+
+    // Find clips in the target track that overlap with the selection range
+    final track = state.tracks[_rangeSelectTrackId!];
+    if (track == null) {
+      _cancelRangeSelect();
+      return;
+    }
+
+    final selectedClipIds = <int>[];
+    for (final clip in track.clips) {
+      final clipStart = clip.startTime.toInt();
+      final clipEnd = clipStart + clip.loopLength.toInt();
+
+      // Check if clip overlaps with selection range
+      if (clipEnd > startTimeSamples && clipStart < endTimeSamples) {
+        selectedClipIds.add(clip.id);
+      }
+    }
+
+    // Select the clips
+    if (selectedClipIds.isNotEmpty) {
+      state.selectClips(
+        trackId: _rangeSelectTrackId!,
+        clipIds: selectedClipIds,
+      );
+    } else {
+      state.deselectAllClips();
+    }
+
+    _cancelRangeSelect();
+  }
+
+  /// Cancels/resets the range selection state
+  void _cancelRangeSelect() {
+    setState(() {
+      _isRangeSelecting = false;
+      _rangeSelectStart = null;
+      _rangeSelectEnd = null;
+      _rangeSelectTrackId = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Calculate total height to ensure both lists have exactly same extent
@@ -271,7 +387,18 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                     details.localPosition,
                     isDrag: false,
                   ),
+                  onPanStart: (details) {
+                    // Start range selection when select tool is active
+                    if (selectedTool == ToolSelection.select) {
+                      _startRangeSelect(details.localPosition);
+                    }
+                  },
                   onPanUpdate: (details) {
+                    // Handle range selection updates
+                    if (selectedTool == ToolSelection.select) {
+                      _updateRangeSelect(details.localPosition);
+                      return;
+                    }
                     if (selectedTool == ToolSelection.zoom) {
                       final currentZoom = state.horizontalZoomLevel;
                       double multiplier = 1.0 - (details.delta.dy * 0.01);
@@ -289,6 +416,13 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                     if (selectedTool == ToolSelection.draw || isPlacing) {
                       setState(() => _mousePos = details.localPosition);
                       _updatePlacementTarget(state);
+                    }
+                  },
+                  onPanEnd: (details) {
+                    // Confirm range selection when select tool is active
+                    if (selectedTool == ToolSelection.select &&
+                        _isRangeSelecting) {
+                      _confirmRangeSelect(state);
                     }
                   },
                   child: Column(
@@ -321,8 +455,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                 ? const NeverScrollableScrollPhysics()
                                 : const ClampingScrollPhysics(),
                             child: SizedBox(
-                              width:
-                                  currentTimelineWidth,
+                              width: currentTimelineWidth,
                               height: 30,
                               child: _TimelineRuler(
                                 scrollController: _rulerController,
@@ -336,6 +469,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                         child: MouseRegion(
                           cursor: isPlacing
                               ? SystemMouseCursors.move
+                              : selectedTool == ToolSelection.select
+                              ? SystemMouseCursors.precise
                               : SystemMouseCursors.basic,
                           onHover: null,
                           child: GestureDetector(
@@ -399,6 +534,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
           ],
         ),
         if (isPlacing && _mousePos != null) _buildGhostClip(context),
+        if (_isRangeSelecting) _buildRangeSelectRect(context),
         Positioned.fill(
           child: IgnorePointer(
             ignoring: false,
@@ -538,6 +674,61 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds the visual rectangle overlay for range selection
+  Widget _buildRangeSelectRect(BuildContext context) {
+    if (_rangeSelectStart == null ||
+        _rangeSelectEnd == null ||
+        _rangeSelectTrackId == null) {
+      return const SizedBox();
+    }
+
+    // Get scroll offsets
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    // Find the track index for the starting track
+    final trackIndex = widget.tracks.indexWhere(
+      (t) => t.id == _rangeSelectTrackId,
+    );
+    if (trackIndex < 0) return const SizedBox();
+
+    // Calculate the rectangle bounds (only horizontal matters, vertical is fixed to the track)
+    final startX = _rangeSelectStart!.dx;
+    final endX = _rangeSelectEnd!.dx;
+    final minX = startX < endX ? startX : endX;
+    final maxX = startX > endX ? startX : endX;
+
+    // Convert from absolute coordinates to screen coordinates
+    final screenLeft = minX - scrollX + widget.headerWidth;
+    final screenWidth = maxX - minX;
+
+    // Track row position (fixed to the starting track)
+    final screenTop =
+        (trackIndex * widget.itemHeight) - scrollY + 30; // +30 for ruler height
+
+    return Positioned(
+      left: screenLeft,
+      top: screenTop,
+      width: screenWidth < 2 ? 2 : screenWidth,
+      height: widget.itemHeight - 4,
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.blueAccent.withAlpha(50),
+            border: Border.all(color: Colors.blueAccent, width: 2),
+            borderRadius: BorderRadius.circular(4),
           ),
         ),
       ),
