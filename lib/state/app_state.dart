@@ -598,6 +598,88 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  // ===================== BATCH CLIP OPERATIONS ==========================
+
+  /// Move multiple clips by a delta amount (in samples)
+  Future<void> moveClipBatch(
+    int trackId,
+    List<int> clipIds,
+    int deltaSamples, {
+    int? newTrackId,
+  }) async {
+    try {
+      await track_api.moveClipBatch(
+        sourceTrackId: trackId,
+        clipIds: clipIds,
+        deltaSamples: deltaSamples,
+        newTrackId: newTrackId,
+      );
+      await syncTrack(trackId);
+      if (newTrackId != null && newTrackId != trackId) {
+        await syncTrack(newTrackId);
+      }
+    } catch (e) {
+      KarbeatLogger.error("Error moving clips in batch: $e");
+    }
+  }
+
+  /// Resize multiple clips by a delta amount (in samples)
+  Future<void> resizeClipBatch(
+    int trackId,
+    List<int> clipIds,
+    ResizeEdge edge,
+    int deltaSamples,
+  ) async {
+    try {
+      await track_api.resizeClipBatch(
+        trackId: trackId,
+        clipIds: clipIds,
+        edge: edge,
+        deltaSamples: deltaSamples,
+      );
+      await syncTrack(trackId);
+    } catch (e) {
+      KarbeatLogger.error("Error resizing clips in batch: $e");
+    }
+  }
+
+  /// Delete multiple clips at once
+  Future<void> deleteClipBatch(int trackId, List<int> clipIds) async {
+    // Optimistic update
+    if (_tracks.containsKey(trackId)) {
+      final track = _tracks[trackId]!;
+      final clipIdSet = clipIds.toSet();
+      final updatedClips = track.clips
+          .where((c) => !clipIdSet.contains(c.id))
+          .toList();
+
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+      notifyListeners();
+    }
+
+    try {
+      await track_api.deleteClipBatch(trackId: trackId, clipIds: clipIds);
+      await syncTrack(trackId);
+    } catch (e) {
+      KarbeatLogger.error("Error deleting clips in batch: $e");
+    }
+  }
+
+  /// Convenience method to delete all currently selected clips
+  Future<void> deleteSelectedClips() async {
+    final session = _sessionState;
+    if (session == null) return;
+
+    final trackId = session.selectedTrackId;
+    final clipIds = session.selectedClipIds;
+
+    if (trackId == null || clipIds.isEmpty) return;
+
+    await deleteClipBatch(trackId, clipIds);
+    await deselectAllClips();
+  }
+
   // ===================== NOTE CHANGE API'S ==========================
   Future<void> previewNote({
     required int trackId,

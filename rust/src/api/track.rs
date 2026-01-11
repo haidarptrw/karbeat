@@ -157,7 +157,7 @@ pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
 
         history_manager.push(ProjectAction::DeleteClip {
             track_id,
-            clip:deleted_clip,
+            clip: deleted_clip,
         });
     }
     broadcast_state_change();
@@ -354,4 +354,183 @@ pub fn get_track(track_id: u32) -> Result<UiTrack, String> {
         .ok_or(format!("Track {:?} not found", track_id))?;
 
     Ok(UiTrack::from(track.as_ref()))
+}
+
+// =====================================
+// API for multiple actions at once
+// =====================================
+
+/// move clips in batch
+pub fn move_clip_batch(
+    source_track_id: u32,
+    clip_ids: Vec<u32>,
+    delta_samples: i64,
+    new_track_id: Option<u32>,
+) -> Result<(), String> {
+    let source_track_id = TrackId::from(source_track_id);
+    let new_track_id_opt = new_track_id.map(TrackId::from);
+
+    {
+        let mut app = get_app_write();
+        let target_track_id = new_track_id_opt.unwrap_or(source_track_id);
+
+        // Validate target track exists and get its type
+        let target_type = if let Some(target) = app.tracks.get(&target_track_id) {
+            target.track_type.clone()
+        } else {
+            return Err("Target track not found".to_string());
+        };
+
+        let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+
+        if source_track_id == target_track_id {
+            // Same track: just update start times
+            let track_arc = app
+                .tracks
+                .get_mut(&source_track_id)
+                .ok_or("Source track not found")?;
+            let track = Arc::make_mut(track_arc);
+
+            for clip_id in &clip_ids {
+                if let Some(clip) = track.clips.iter().find(|c| c.id == *clip_id).cloned() {
+                    track.clips.remove(&clip);
+                    let mut modified_clip = (*clip).clone();
+                    // Apply delta with clamping to 0
+                    let new_start = (modified_clip.start_time as i64 + delta_samples).max(0) as u32;
+                    modified_clip.start_time = new_start;
+                    track.clips.insert(Arc::new(modified_clip));
+                }
+            }
+            track.update_max_sample_index();
+        } else {
+            // Cross-track move
+            let source_track = Arc::make_mut(
+                app.tracks
+                    .get_mut(&source_track_id)
+                    .ok_or("Source track not found")?,
+            );
+
+            let mut clips_to_move = Vec::new();
+            for clip_id in &clip_ids {
+                if let Some(clip) = source_track
+                    .clips
+                    .iter()
+                    .find(|c| c.id == *clip_id)
+                    .cloned()
+                {
+                    // Check compatibility
+                    let is_compatible = match (&target_type, &clip.source) {
+                        (TrackType::Audio, KarbeatSource::Audio(_)) => true,
+                        (TrackType::Midi, KarbeatSource::Midi(_)) => true,
+                        _ => false,
+                    };
+                    if !is_compatible {
+                        continue; // Skip incompatible clips
+                    }
+                    source_track.clips.remove(&clip);
+                    clips_to_move.push(clip);
+                }
+            }
+            source_track.update_max_sample_index();
+
+            // Add to target track
+            let target_track = Arc::make_mut(
+                app.tracks
+                    .get_mut(&target_track_id)
+                    .ok_or("Target track not found")?,
+            );
+            for clip in clips_to_move {
+                let mut modified_clip = (*clip).clone();
+                let new_start = (modified_clip.start_time as i64 + delta_samples).max(0) as u32;
+                modified_clip.start_time = new_start;
+                let _ = target_track.add_clip(modified_clip);
+            }
+        }
+        app.update_max_sample_index();
+    }
+
+    broadcast_state_change();
+    Ok(())
+}
+
+/// Resize clips in batch by a delta amount
+pub fn resize_clip_batch(
+    track_id: u32,
+    clip_ids: Vec<u32>,
+    edge: ResizeEdge,
+    delta_samples: i64,
+) -> Result<(), String> {
+    let track_id = TrackId::from(track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+
+    {
+        let mut app = get_app_write();
+        let track_arc = app.tracks.get_mut(&track_id).ok_or("Track not found")?;
+        let track = Arc::make_mut(track_arc);
+
+        for clip_id in &clip_ids {
+            if let Some(clip) = track.clips.iter().find(|c| c.id == *clip_id).cloned() {
+                track.clips.remove(&clip);
+                let mut modified_clip = (*clip).clone();
+
+                match edge {
+                    ResizeEdge::Right => {
+                        // Extend/shrink the right edge by delta
+                        let current_end = modified_clip.start_time + modified_clip.loop_length;
+                        let new_end = (current_end as i64 + delta_samples)
+                            .max(modified_clip.start_time as i64 + 100)
+                            as u32;
+                        modified_clip.loop_length = new_end - modified_clip.start_time;
+                    }
+                    ResizeEdge::Left => {
+                        // Slip edit: move start time and adjust offset
+                        let old_start = modified_clip.start_time;
+                        let old_end = old_start + modified_clip.loop_length;
+                        let new_start = (old_start as i64 + delta_samples)
+                            .clamp(0, old_end as i64 - 100)
+                            as u32;
+
+                        let delta = new_start as i64 - old_start as i64;
+                        let current_offset = modified_clip.offset_start as i64;
+                        let new_offset = (current_offset + delta).max(0) as u32;
+
+                        modified_clip.start_time = new_start;
+                        modified_clip.loop_length = old_end - new_start;
+                        modified_clip.offset_start = new_offset;
+                    }
+                }
+
+                track.clips.insert(Arc::new(modified_clip));
+            }
+        }
+        track.update_max_sample_index();
+        app.update_max_sample_index();
+    }
+
+    broadcast_state_change();
+    Ok(())
+}
+
+/// Delete clips in batch
+pub fn delete_clip_batch(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
+    let track_id = TrackId::from(track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+
+    {
+        let mut app = get_app_write();
+        let mut history_manager = get_history_lock();
+
+        for clip_id in clip_ids {
+            if let Ok(deleted_clip_arc) = app.delete_clip_from_track(track_id, clip_id) {
+                let deleted_clip = deleted_clip_arc.as_ref().to_owned();
+                history_manager.push(ProjectAction::DeleteClip {
+                    track_id,
+                    clip: deleted_clip,
+                });
+            }
+        }
+    }
+
+    broadcast_state_change();
+    Ok(())
 }

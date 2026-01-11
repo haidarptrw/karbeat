@@ -19,9 +19,13 @@ Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
 
 /// Get parameter specifications for a generator plugin.
 ///
-/// Note: With the lock-free architecture, plugin parameter specs are static
-/// and can be retrieved from the registry factory.
-/// TODO: Implement proper parameter spec retrieval from registry
+/// With the lock-free architecture, the live plugin instance runs on the audio thread
+/// and cannot be accessed directly. Instead, we use the registry factory to create
+/// a temporary plugin instance for querying its static parameter specifications.
+/// This is safe because parameter specs are static metadata that don't depend on state.
+///
+/// The returned specs include the current stored parameter values (from generator pool)
+/// which may differ from defaults if the user has modified them.
 Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
   required int generatorId,
 }) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -88,6 +89,11 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   Offset? _rangeSelectEnd;
   int? _rangeSelectTrackId; // Track ID where the range selection started
 
+  // ==========================================================================
+  // BATCH CLIP DRAG STATE (centralized for cross-track coordination)
+  // ==========================================================================
+  final ClipDragController _clipDragController = ClipDragController();
+
   @override
   void initState() {
     super.initState();
@@ -115,16 +121,28 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
         });
       }
     });
+
+    // Listen to batch drag controller for overlay updates
+    _clipDragController.addListener(_onBatchDragUpdate);
   }
 
   @override
   void dispose() {
+    _clipDragController.removeListener(_onBatchDragUpdate);
+    _clipDragController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
     _headerController.dispose();
     _timelineController.dispose();
     _rulerController.dispose();
     _trackContentController.dispose();
     super.dispose();
+  }
+
+  /// Called when batch drag controller updates - triggers overlay repaint
+  void _onBatchDragUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   bool _handleKeyEvents(KeyEvent event) {
@@ -516,6 +534,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                           horizontalScrollController:
                                               _trackContentController,
                                           sampleRate: _activeSampleRate,
+                                          clipDragController:
+                                              _clipDragController,
                                         ),
                                       );
                                     },
@@ -535,6 +555,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
         ),
         if (isPlacing && _mousePos != null) _buildGhostClip(context),
         if (_isRangeSelecting) _buildRangeSelectRect(context),
+        // Batch drag overlays for all selected clips during move
+        ..._buildBatchDragOverlays(context),
         Positioned.fill(
           child: IgnorePointer(
             ignoring: false,
@@ -733,6 +755,105 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
         ),
       ),
     );
+  }
+
+  /// Builds overlay widgets for all selected clips during a batch move operation
+  List<Widget> _buildBatchDragOverlays(BuildContext context) {
+    // Only show during batch move
+    if (_clipDragController.action != BatchDragAction.move) {
+      return [];
+    }
+
+    final state = context.read<KarbeatState>();
+    final session = state.sessionState;
+    if (session == null) return [];
+
+    final selectedClipIds = session.selectedClipIds;
+    final selectedTrackId = session.selectedTrackId;
+    if (selectedTrackId == null || selectedClipIds.isEmpty) return [];
+
+    // Get the track and its clips
+    final track = state.tracks[selectedTrackId];
+    if (track == null) return [];
+
+    // Calculate scroll offsets
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    // Find source track index
+    final sortedTracks = widget.tracks.toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    final trackIndex = sortedTracks.indexWhere((t) => t.id == selectedTrackId);
+    if (trackIndex < 0) return [];
+
+    // Calculate target track based on vertical delta
+    final rowOffset = _clipDragController.deltaRows.round();
+    final targetTrackIndex = (trackIndex + rowOffset).clamp(
+      0,
+      sortedTracks.length - 1,
+    );
+
+    final zoomLevel = state.horizontalZoomLevel;
+    final deltaSamples = _clipDragController.deltaSamples;
+
+    final List<Widget> overlays = [];
+
+    for (final clipId in selectedClipIds) {
+      final clip = track.clips.where((c) => c.id == clipId).firstOrNull;
+      if (clip == null) continue;
+
+      // Calculate new position with delta applied
+      final newStartTime = (clip.startTime + deltaSamples).clamp(
+        0,
+        double.maxFinite.toInt(),
+      );
+      final screenLeft =
+          (newStartTime / zoomLevel) - scrollX + widget.headerWidth;
+      final screenTop =
+          (targetTrackIndex * widget.itemHeight) - scrollY + 30 + 2;
+      final clipWidth = clip.loopLength / zoomLevel;
+
+      overlays.add(
+        Positioned(
+          left: screenLeft,
+          top: screenTop,
+          width: clipWidth < 1 ? 1 : clipWidth,
+          height: widget.itemHeight - 4,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: 0.7,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.cyanAccent.withAlpha(100),
+                  border: Border.all(color: Colors.cyanAccent, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: Text(
+                    clip.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return overlays;
   }
 
   Widget _buildAddButton() {

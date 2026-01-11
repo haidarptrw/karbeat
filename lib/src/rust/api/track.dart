@@ -62,6 +62,41 @@ Future<UiClip> getClip({required int trackId, required int clipId}) =>
 Future<UiTrack> getTrack({required int trackId}) =>
     RustLib.instance.api.crateApiTrackGetTrack(trackId: trackId);
 
+/// move clips in batch
+Future<void> moveClipBatch({
+  required int sourceTrackId,
+  required List<int> clipIds,
+  required int deltaSamples,
+  int? newTrackId,
+}) => RustLib.instance.api.crateApiTrackMoveClipBatch(
+  sourceTrackId: sourceTrackId,
+  clipIds: clipIds,
+  deltaSamples: deltaSamples,
+  newTrackId: newTrackId,
+);
+
+/// Resize clips in batch by a delta amount
+Future<void> resizeClipBatch({
+  required int trackId,
+  required List<int> clipIds,
+  required ResizeEdge edge,
+  required int deltaSamples,
+}) => RustLib.instance.api.crateApiTrackResizeClipBatch(
+  trackId: trackId,
+  clipIds: clipIds,
+  edge: edge,
+  deltaSamples: deltaSamples,
+);
+
+/// Delete clips in batch
+Future<void> deleteClipBatch({
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiTrackDeleteClipBatch(
+  trackId: trackId,
+  clipIds: clipIds,
+);
+
 enum ResizeEdge { left, right }
 
 enum UiSourceType { audio, midi }
