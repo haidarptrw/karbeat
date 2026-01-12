@@ -1,6 +1,6 @@
 // src/audio/engine.rs
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use rtrb::{Consumer, Producer};
 use triple_buffer::Output;
@@ -397,6 +397,8 @@ impl AudioEngine {
                 // 1. Silence everything to prevent hanging notes from the previous mode
                 self.stop_all_active_generators();
 
+                self.playback_mode = playback_mode;
+
                 // 2. Reset the specific playhead for the new mode
                 match self.playback_mode {
                     PlaybackMode::Song => {
@@ -729,7 +731,8 @@ impl AudioEngine {
                 mute: false,
                 solo: false,
                 inverted_phase: false,
-                effects: Arc::from([]),
+                effects: HashMap::new(),
+                ..Default::default()
             });
 
             let channel = self
@@ -1239,8 +1242,6 @@ fn sample_waveform_inline(waveform: &AudioWaveform, pos: f64, channels: usize) -
     let alpha = (pos - idx as f64) as f32;
     let base = idx * channels;
 
-    // Unchecked access is faster, but requires ensuring bounds previously.
-    // Using safe access for now.
     if base + channels >= waveform.buffer.len() {
         return (0.0, 0.0);
     }

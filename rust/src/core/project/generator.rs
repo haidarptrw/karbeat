@@ -1,9 +1,12 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    core::project::{plugin::instance::PluginInstance, ApplicationState},
+    core::project::{mixer::EffectId, plugin::instance::PluginInstance, ApplicationState},
     define_id,
 };
 
@@ -12,7 +15,7 @@ define_id!(GeneratorId);
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GeneratorInstance {
     pub id: GeneratorId,
-    pub effects: Arc<Vec<PluginInstance>>,
+    pub effects: HashMap<EffectId, Arc<PluginInstance>>,
     pub instance_type: GeneratorInstanceType,
 }
 
@@ -36,7 +39,7 @@ impl ApplicationState {
         let instance = GeneratorInstance {
             id,
             instance_type,
-            effects: Arc::new(Default::default()),
+            effects: HashMap::new(),
         };
 
         self.generator_pool

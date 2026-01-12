@@ -268,7 +268,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                   ),
                 ),
 
-                // GRID & NOTES
+                // ========= GRID & NOTES & PLAYHEAD ===========
                 Expanded(
                   child: Stack(
                     children: [

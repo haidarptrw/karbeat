@@ -2,9 +2,16 @@ use std::{collections::HashMap, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::project::{ApplicationState, PluginInstance, TrackId};
+use crate::{
+    core::project::{ApplicationState, PluginInstance, TrackId},
+    define_id,
+};
+
+define_id!(EffectId);
 
 /// Custom Error type for better error clarity
+///
+/// This represents an error that occur due to param setting operation
 #[derive(Clone, Debug)]
 pub struct MixerSetParamError {
     pub message: String,
@@ -57,8 +64,10 @@ pub struct MixerChannel {
     pub solo: bool,
     pub inverted_phase: bool,
 
+    pub effect_counter: u32,
+
     // The effects chain (EQ, Compressor) comes AFTER the generator
-    pub effects: Arc<[PluginInstance]>,
+    pub effects: HashMap<EffectId, Arc<PluginInstance>>,
 }
 
 impl Default for MixerChannel {
@@ -68,8 +77,9 @@ impl Default for MixerChannel {
             pan: 0.0,
             mute: Default::default(),
             solo: Default::default(),
+            effect_counter: 0,
             inverted_phase: Default::default(),
-            effects: Arc::from(Vec::new()),
+            effects: HashMap::new(),
         }
     }
 }
@@ -116,9 +126,9 @@ impl MixerState {
 
         // Clone and modify the channel
         let channel = Arc::make_mut(mixer_channel_arc);
-        let mut effects_vec = channel.effects.to_vec();
-        effects_vec.push(PluginInstance::new(effect_name, internal_type));
-        channel.effects = Arc::from(effects_vec);
+        let effect_id = EffectId::next(&mut channel.effect_counter);
+        let effect_instance = PluginInstance::new(effect_name, internal_type);
+        channel.effects.insert(effect_id, Arc::new(effect_instance));
 
         Ok(())
     }

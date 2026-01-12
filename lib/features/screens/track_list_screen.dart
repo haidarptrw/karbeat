@@ -182,9 +182,6 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   void _updateZoom(double newZoom) {
     // Define min/max zoom limits to prevent bugs
     final clamped = newZoom.clamp(0.01, 5000.0);
-
-    // Assuming you have a setter in KarbeatState.
-    // If not, add: void setHorizontalZoom(double val) { horizontalZoomLevel = val; notifyListeners(); }
     context.read<KarbeatState>().setHorizontalZoom(clamped);
   }
 
@@ -343,7 +340,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     final selectedTool = context.select<KarbeatState, ToolSelection>(
       (s) => s.selectedTool,
     );
-    final horizontalZoom = context.select<KarbeatState, double>((s) => s.horizontalZoomLevel);
+    final horizontalZoom = context.select<KarbeatState, double>(
+      (s) => s.horizontalZoomLevel,
+    );
     final currentTimelineWidth = _timelineWidth;
 
     return Stack(
@@ -505,42 +504,55 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                   }
                                 : null,
                             child: ScrollConfiguration(
-                              behavior: DragScrollBehavior(),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
+                              // Only allow Mouse Drag scrolling when using Pointer or Move tool
+                              behavior:
+                                  (selectedTool == ToolSelection.pointer ||
+                                      selectedTool == ToolSelection.move)
+                                  ? DragScrollBehavior()
+                                  : ScrollConfiguration.of(context).copyWith(
+                                      dragDevices: {
+                                        PointerDeviceKind.touch,
+                                        PointerDeviceKind.trackpad,
+                                      },
+                                    ),
+                              child: Scrollbar(
                                 controller: _trackContentController,
-                                // Physics to match desktop feel
-                                physics: _isCtrlPressed
-                                    ? const NeverScrollableScrollPhysics()
-                                    : const ClampingScrollPhysics(),
-                                child: SizedBox(
-                                  width: currentTimelineWidth,
-                                  child: ListView.builder(
-                                    controller:
-                                        _timelineController, // Controller 2 (Synced Vertically)
-                                    physics: _isCtrlPressed
-                                        ? const NeverScrollableScrollPhysics()
-                                        : const ClampingScrollPhysics(),
-                                    padding: EdgeInsets.zero,
-                                    itemCount: itemCount,
-                                    itemBuilder: (context, index) {
-                                      if (index == widget.tracks.length) {
-                                        // Empty space matching Add Button height
-                                        return SizedBox(height: 60);
-                                      }
-                                      return IgnorePointer(
-                                        ignoring: isPlacing,
-                                        child: KarbeatTrackSlot(
-                                          trackId: widget.tracks[index].id,
-                                          height: widget.itemHeight,
-                                          horizontalScrollController:
-                                              _trackContentController,
-                                          sampleRate: _activeSampleRate,
-                                          clipDragController:
-                                              _clipDragController,
-                                        ),
-                                      );
-                                    },
+                                thumbVisibility: true,
+                                trackVisibility: true,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  controller: _trackContentController,
+                                  physics: _isCtrlPressed
+                                      ? const NeverScrollableScrollPhysics()
+                                      : const ClampingScrollPhysics(),
+                                  child: SizedBox(
+                                    width: currentTimelineWidth,
+                                    child: ListView.builder(
+                                      controller:
+                                          _timelineController, // Controller 2 (Synced Vertically)
+                                      physics: _isCtrlPressed
+                                          ? const NeverScrollableScrollPhysics()
+                                          : const ClampingScrollPhysics(),
+                                      padding: EdgeInsets.zero,
+                                      itemCount: itemCount,
+                                      itemBuilder: (context, index) {
+                                        if (index == widget.tracks.length) {
+                                          return SizedBox(height: 60);
+                                        }
+                                        return IgnorePointer(
+                                          ignoring: isPlacing,
+                                          child: KarbeatTrackSlot(
+                                            trackId: widget.tracks[index].id,
+                                            height: widget.itemHeight,
+                                            horizontalScrollController:
+                                                _trackContentController,
+                                            sampleRate: _activeSampleRate,
+                                            clipDragController:
+                                                _clipDragController,
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),

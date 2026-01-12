@@ -3,7 +3,7 @@ pub mod audio_waveform;
 pub mod midi;
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     sync::{Arc, RwLock},
 };
 
@@ -239,7 +239,7 @@ impl ApplicationState {
 
         let generator = GeneratorInstance {
             id: gen_id,
-            effects: Arc::new(Vec::new()),
+            effects: HashMap::new(),
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
         };
         self.generator_pool
