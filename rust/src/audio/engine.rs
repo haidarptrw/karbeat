@@ -24,7 +24,7 @@ pub enum PlaybackMode {
     Song,
     Pattern {
         pattern_id: PatternId,
-        track_id: TrackId,
+        generator_id: GeneratorId,
     },
 }
 
@@ -35,11 +35,16 @@ pub struct AudioEngine {
     feedback_producer: Producer<AudioFeedback>,
     current_state: AudioRenderState,
 
-    // Timeline
+    // Timeline (Song mode)
     sample_rate: u32,
     playhead_samples: u32,
     current_beat: usize,
     current_bar: usize,
+
+    // Timeline (Pattern mode - independent from song)
+    pattern_playhead_samples: u32,
+    pattern_beat: usize,
+    pattern_bar: usize,
 
     // Active Voices (lightweight references to plugins in plugin_state)
     active_generators: Vec<GeneratorVoice>,
@@ -126,6 +131,9 @@ impl AudioEngine {
             plugin_state: AudioPluginState::default(),
             current_beat: 1,
             current_bar: 1,
+            pattern_playhead_samples: 0,
+            pattern_beat: 1,
+            pattern_bar: 1,
             last_emitted_samples: 0,
             mix_buffer,
             playback_mode: PlaybackMode::Song,
@@ -161,10 +169,10 @@ impl AudioEngine {
                 PlaybackMode::Song => self.process_song_mode(frame_count, output_buffer, channels),
                 PlaybackMode::Pattern {
                     pattern_id,
-                    track_id,
+                    generator_id,
                 } => self.process_pattern_mode(
                     pattern_id,
-                    track_id,
+                    generator_id,
                     frame_count,
                     output_buffer,
                     channels,
@@ -197,6 +205,30 @@ impl AudioEngine {
         self.cleanup_finished_voices();
     }
 
+    fn advance_pattern_playhead(&mut self, frame_count: usize) {
+        self.pattern_playhead_samples += frame_count as u32;
+        self.recalculate_pattern_beat_bar();
+        self.emit_playback_position();
+        self.cleanup_finished_voices();
+    }
+
+    /// Recalculates pattern beat/bar based on pattern_playhead_samples
+    fn recalculate_pattern_beat_bar(&mut self) {
+        let tempo = self.current_state.transport.bpm;
+        if tempo <= 0.0 {
+            return;
+        }
+
+        let samples_per_beat = (60.0 / tempo * self.sample_rate as f32) as usize;
+        if samples_per_beat == 0 {
+            return;
+        }
+
+        // Pattern beat/bar are 1-indexed within the pattern
+        self.pattern_beat = (self.pattern_playhead_samples as usize / samples_per_beat) + 1;
+        self.pattern_bar = (self.pattern_beat - 1) / 4 + 1;
+    }
+
     fn process_song_mode(
         &mut self,
         frame_count: usize,
@@ -220,10 +252,10 @@ impl AudioEngine {
     fn process_pattern_mode(
         &mut self,
         pattern_id: PatternId,
-        track_id: TrackId,
+        generator_id: GeneratorId,
         frame_count: usize,
-        _output_buffer: &mut [f32],
-        _channels: usize,
+        output_buffer: &mut [f32],
+        channels: usize,
     ) {
         let pattern = match self.current_state.graph.patterns.get(&pattern_id) {
             Some(p) => p,
@@ -233,6 +265,13 @@ impl AudioEngine {
                 return;
             }
         };
+
+        // Verify the generator exists in plugin_state
+        if !self.plugin_state.generators.contains_key(&generator_id) {
+            log::warn!("Pattern preview: Generator {:?} not found", generator_id);
+            self.stop_playback();
+            return;
+        }
 
         let tempo = self.current_state.transport.bpm;
         let sample_rate = self.sample_rate as f32;
@@ -244,46 +283,58 @@ impl AudioEngine {
             return;
         }
 
-        if self.playhead_samples >= loop_len_samples {
-            self.playhead_samples = 0;
+        // Use PATTERN playhead (independent from song)
+        if self.pattern_playhead_samples >= loop_len_samples {
+            self.pattern_playhead_samples = 0;
             Self::stop_all_active_generators_impl(
                 &mut self.active_generators,
                 &mut self.plugin_state,
             ); // Kill notes at loop boundary to prevent hangs
         }
 
-        let start_time = self.playhead_samples;
+        let start_time = self.pattern_playhead_samples;
         let end_time = start_time + frame_count as u32;
 
-        let track = self
-            .current_state
-            .graph
-            .tracks
+        // Find or create voice for this generator
+        let voice_idx = self
+            .active_generators
             .iter()
-            .find(|t| t.id == track_id);
+            .position(|g| g.id == generator_id)
+            .unwrap_or_else(|| {
+                // Get the track_id from plugin_state if available
+                let track_id = self
+                    .plugin_state
+                    .generators
+                    .get(&generator_id)
+                    .map(|g| g.track_id)
+                    .unwrap_or(TrackId::from(0));
 
-        if let Some(track) = track {
-            if let Some(gen) = &track.generator {
-                if let Some(voice_idx) = Self::ensure_generator_voice(
-                    &mut self.active_generators,
-                    &self.plugin_state,
+                self.active_generators.push(GeneratorVoice {
+                    id: generator_id,
                     track_id,
-                    gen,
-                ) {
-                    let gen_voice = &mut self.active_generators[voice_idx];
-                    Self::schedule_pattern_notes_raw(
-                        &mut gen_voice.events,
-                        &pattern.notes,
-                        self.sample_rate,
-                        tempo,
-                        start_time,
-                        end_time,
-                    );
-                }
-            }
-        }
+                    events: Vec::new(),
+                    active: true,
+                });
+                self.active_generators.len() - 1
+            });
 
-        self.advance_playhead(frame_count);
+        let gen_voice = &mut self.active_generators[voice_idx];
+        gen_voice.active = true;
+
+        Self::schedule_pattern_notes_raw(
+            &mut gen_voice.events,
+            &pattern.notes,
+            self.sample_rate,
+            tempo,
+            start_time,
+            end_time,
+        );
+
+        // Render voices to buffer
+        self.render_voices_to_buffer(output_buffer, channels);
+
+        // Advance PATTERN playhead (not song playhead)
+        self.advance_pattern_playhead(frame_count);
     }
 
     fn stop_playback(&mut self) {
@@ -343,10 +394,25 @@ impl AudioEngine {
                 self.emit_current_playback_position();
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
-                self.playback_mode = playback_mode;
-                // Reset playhead when switching modes to avoid jumping into emptiness
-                self.playhead_samples = 0;
+                // 1. Silence everything to prevent hanging notes from the previous mode
                 self.stop_all_active_generators();
+
+                // 2. Reset the specific playhead for the new mode
+                match self.playback_mode {
+                    PlaybackMode::Song => {
+                        self.playhead_samples = 0;
+                        self.recalculate_beat_bar();
+                        self.last_emitted_samples = 0;
+                    }
+                    PlaybackMode::Pattern { .. } => {
+                        self.pattern_playhead_samples = 0;
+                        self.recalculate_pattern_beat_bar();
+                        // In pattern mode, we treat 0 as the start of the loop
+                    }
+                }
+
+                // 3. Snap UI to the beginning immediately
+                self.emit_current_playback_position();
             }
 
             // =================================================================
@@ -521,13 +587,21 @@ impl AudioEngine {
 
     fn build_position_struct(&self, is_playing: Option<bool>) -> PlaybackPosition {
         let is_playing = is_playing.unwrap_or(self.current_state.transport.is_playing);
+        let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
+
         PlaybackPosition {
+            // Song position
             samples: self.playhead_samples,
             beat: self.current_beat,
             bar: self.current_bar,
             tempo: self.current_state.transport.bpm,
             sample_rate: self.current_state.graph.sample_rate,
             is_playing,
+            // Pattern position (independent)
+            is_pattern_mode,
+            pattern_samples: self.pattern_playhead_samples,
+            pattern_beat: self.pattern_beat,
+            pattern_bar: self.pattern_bar,
         }
     }
 

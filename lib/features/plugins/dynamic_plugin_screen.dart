@@ -61,7 +61,7 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
   }
 
   /// Poll for parameter feedback from the audio thread and update UI.
-  void _pollParameterFeedback() async{
+  void _pollParameterFeedback() async {
     if (!mounted) return;
 
     try {

@@ -1,12 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    broadcast_state_change, core::{
+    broadcast_state_change,
+    core::{
         history::ProjectAction,
         project::{
-            Note, NoteId, track::midi::{Pattern, PatternId}
+            track::midi::{Pattern, PatternId},
+            Note, NoteId,
         },
-    }, utils::lock::{get_app_read, get_app_write, get_history_lock}
+    },
+    utils::lock::{get_app_read, get_app_write, get_history_lock},
 };
 
 #[derive(Clone)]
@@ -301,4 +304,67 @@ pub fn change_note_params(
     Ok(note_ui)
 }
 
-// TODO: add more APIs for piano roll feature
+// ========================= PATTERN PREVIEW TRANSPORT ============================
+
+/// Play a pattern in isolation with a specific generator (looping automatically).
+/// This temporarily switches the engine to Pattern playback mode.
+pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), String> {
+    use crate::audio::engine::PlaybackMode;
+    use crate::commands::AudioCommand;
+    use crate::core::project::GeneratorId;
+    use crate::ctx;
+
+    let pattern_id = PatternId::from(pattern_id);
+    let generator_id = GeneratorId::from(generator_id);
+
+    // Verify pattern exists
+    {
+        let app = get_app_read();
+        if !app.pattern_pool.contains_key(&pattern_id) {
+            return Err(format!("Pattern {:?} not found", pattern_id));
+        }
+    }
+
+    // Send command to switch to Pattern mode
+    if let Ok(mut guard) = ctx().command_sender.lock() {
+        if let Some(cmd_producer) = guard.as_mut() {
+            let _ = cmd_producer.push(AudioCommand::SetPlaybackMode(PlaybackMode::Pattern {
+                pattern_id,
+                generator_id,
+            }));
+        }
+    }
+
+    // Start playing
+    {
+        let mut app = get_app_write();
+        app.transport.is_playing = true;
+    }
+
+    broadcast_state_change();
+    Ok(())
+}
+
+/// Stop pattern preview and return to Song mode.
+pub fn stop_pattern_preview() -> Result<(), String> {
+    use crate::audio::engine::PlaybackMode;
+    use crate::commands::AudioCommand;
+    use crate::ctx;
+
+    // Stop playback
+    {
+        let mut app = get_app_write();
+        app.transport.is_playing = false;
+    }
+
+    // Switch back to Song mode
+    if let Ok(mut guard) = ctx().command_sender.lock() {
+        if let Some(cmd_producer) = guard.as_mut() {
+            let _ = cmd_producer.push(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
+            let _ = cmd_producer.push(AudioCommand::ResetPlayhead);
+        }
+    }
+
+    broadcast_state_change();
+    Ok(())
+}

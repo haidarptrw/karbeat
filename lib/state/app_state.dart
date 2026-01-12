@@ -3,6 +3,7 @@ import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/grid.dart';
+import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
@@ -20,6 +21,9 @@ import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
 enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom, select }
+
+/// Piano roll specific tool selection (independent from main toolbar)
+enum PianoRollToolSelection { pointer, draw, delete, select, slice }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
@@ -101,6 +105,14 @@ class KarbeatState extends ChangeNotifier {
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
   int _piannoRollGridDenom = 4;
   int? _editingPatternId;
+
+  // =========== PIANO ROLL STATE ====================
+  PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.pointer;
+  Set<int> _selectedNoteIds = {};
+  int? _previewGeneratorId;
+
+  /// Currently active interaction target for the interaction panel
+  InteractionTarget? _interactionTarget;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
@@ -205,6 +217,13 @@ class KarbeatState extends ChangeNotifier {
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
+  InteractionTarget? get interactionTarget => _interactionTarget;
+
+  // Piano roll getters
+  PianoRollToolSelection get pianoRollTool => _pianoRollTool;
+  Set<int> get selectedNoteIds => _selectedNoteIds;
+  int? get previewGeneratorId =>
+      _sessionState?.previewGeneratorId ?? _previewGeneratorId;
 
   // ================ SETTERS ===================
   set pianoRollGridDenom(GridValue val) {
@@ -459,6 +478,36 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  // =============== PIANO ROLL ACTIONS ===============
+
+  /// Change the selected piano roll tool
+  void selectPianoRollTool(PianoRollToolSelection tool) {
+    if (_pianoRollTool != tool) {
+      _pianoRollTool = tool;
+      notifyListeners();
+    }
+  }
+
+  /// Select notes in the piano roll
+  void selectNotes(Set<int> noteIds) {
+    _selectedNoteIds = noteIds;
+    notifyListeners();
+  }
+
+  /// Add notes to the current selection
+  void addNotesToSelection(Set<int> noteIds) {
+    _selectedNoteIds = {..._selectedNoteIds, ...noteIds};
+    notifyListeners();
+  }
+
+  /// Clear note selection
+  void clearNoteSelection() {
+    if (_selectedNoteIds.isNotEmpty) {
+      _selectedNoteIds = {};
+      notifyListeners();
+    }
+  }
+
   void toggleToolbarContext(ToolbarMenuContextGroup group) {
     if (group == _currentToolbarContext) {
       // Toggle off
@@ -472,6 +521,20 @@ class KarbeatState extends ChangeNotifier {
   void closeContextPanel() {
     _currentToolbarContext = ToolbarMenuContextGroup.none;
     notifyListeners();
+  }
+
+  /// Shows the interaction panel for a given target (clip, multi-clip, or track)
+  void showInteractionPanel(InteractionTarget target) {
+    _interactionTarget = target;
+    notifyListeners();
+  }
+
+  /// Hides the interaction panel
+  void hideInteractionPanel() {
+    if (_interactionTarget != null) {
+      _interactionTarget = null;
+      notifyListeners();
+    }
   }
 
   void navigateTo(WorkspaceView view) {
@@ -981,6 +1044,7 @@ class KarbeatState extends ChangeNotifier {
 
   /// Set the preview generator for piano roll
   Future<void> setPreviewGenerator({int? generatorId}) async {
+    _previewGeneratorId = generatorId;
     try {
       await session_api.setPreviewGenerator(generatorId: generatorId);
       notifyBackendChange(ProjectEvent.sessionChanged);

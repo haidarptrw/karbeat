@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
+import 'package:karbeat/features/components/interaction_panel.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -342,6 +343,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     final selectedTool = context.select<KarbeatState, ToolSelection>(
       (s) => s.selectedTool,
     );
+    final horizontalZoom = context.select<KarbeatState, double>((s) => s.horizontalZoomLevel);
     final currentTimelineWidth = _timelineWidth;
 
     return Stack(
@@ -560,9 +562,11 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
         Positioned.fill(
           child: IgnorePointer(
             ignoring: false,
-            child: TimelinePlayheadSeeker(
-              headerWidth: widget.headerWidth,
+            child: PlayheadOverlay(
+              offsetAdjustment: widget.headerWidth,
               scrollController: _trackContentController,
+              zoomLevel: horizontalZoom,
+              sampleSelector: (pos) => pos.samples,
               onSeek: (int newSamples) {
                 final safeSamples = newSamples < 0 ? 0 : newSamples;
                 context.read<KarbeatState>().seekTo(safeSamples);
@@ -596,6 +600,29 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               ],
             ),
           ),
+        // Interaction Panel Overlay
+        if (state.interactionTarget != null) ...[
+          // Backdrop to dismiss panel
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => state.hideInteractionPanel(),
+              child: Container(color: Colors.black.withAlpha(80)),
+            ),
+          ),
+          // Panel positioned at center-bottom (bottom sheet style)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: Center(
+              child: InteractionPanel(
+                target: state.interactionTarget!,
+                onClose: () => state.hideInteractionPanel(),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

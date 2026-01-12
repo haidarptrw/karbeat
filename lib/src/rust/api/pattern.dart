@@ -70,6 +70,20 @@ Future<UiNote> changeNoteParams({
   mute: mute,
 );
 
+/// Play a pattern in isolation with a specific generator (looping automatically).
+/// This temporarily switches the engine to Pattern playback mode.
+Future<void> playPatternPreview({
+  required int patternId,
+  required int generatorId,
+}) => RustLib.instance.api.crateApiPatternPlayPatternPreview(
+  patternId: patternId,
+  generatorId: generatorId,
+);
+
+/// Stop pattern preview and return to Song mode.
+Future<void> stopPatternPreview() =>
+    RustLib.instance.api.crateApiPatternStopPatternPreview();
+
 class UiNote {
   final int id;
   final int startTick;

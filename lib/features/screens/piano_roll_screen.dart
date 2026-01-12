@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/features/components/scrollable_virtual_keyboard.dart';
+import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -65,15 +66,12 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   }
 
   void _handleNoteOn(int note) {
-    if (widget.generatorId != null) {
-      // context.read<KarbeatState>().previewNote(
-      //   generatorId: widget.generatorId!,
-      //   noteKey: note,
-      //   isOn: true,
-      // );
+    final generatorId =
+        context.read<KarbeatState>().previewGeneratorId ?? widget.generatorId;
+    if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
-          generatorId: widget.generatorId!,
+          generatorId: generatorId,
           noteKey: note,
           velocity: 100,
           isOn: true,
@@ -85,10 +83,12 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   }
 
   void _handleNoteOff(int note) {
-    if (widget.generatorId != null) {
+    final generatorId =
+        context.read<KarbeatState>().previewGeneratorId ?? widget.generatorId;
+    if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
-          generatorId: widget.generatorId!,
+          generatorId: generatorId,
           noteKey: note,
           velocity: 100,
           isOn: false,
@@ -171,8 +171,8 @@ class PianoRollScreenState extends State<PianoRollScreen> {
     );
 
     // Also listen to selected tool for cursor updates on the grid
-    final selectedTool = context.select<KarbeatState, ToolSelection>(
-      (s) => s.selectedTool,
+    final selectedTool = context.select<KarbeatState, PianoRollToolSelection>(
+      (s) => s.pianoRollTool,
     );
 
     final gridDenom = context.select<KarbeatState, int>(
@@ -185,7 +185,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
       );
     }
 
-    final isDrawing = selectedTool == ToolSelection.draw;
+    final isDrawing = selectedTool == PianoRollToolSelection.draw;
 
     return Focus(
       autofocus: true,
@@ -211,6 +211,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
         children: [
           // ==== TOOLBAR ===
           _PianoRollToolbar(
+            patternId: pattern.id,
             name: pattern.name,
             onZoomIn: () => _handleZoom(1.2),
             onZoomOut: () => _handleZoom(1 / 1.2),
@@ -269,93 +270,120 @@ class PianoRollScreenState extends State<PianoRollScreen> {
 
                 // GRID & NOTES
                 Expanded(
-                  child: ScrollConfiguration(
-                    behavior: ScrollConfiguration.of(context).copyWith(
-                      scrollbars: true,
-                      dragDevices: {
-                        PointerDeviceKind.touch,
-                        PointerDeviceKind.mouse,
-                      },
-                    ),
-                    child: SingleChildScrollView(
-                      controller: _gridHorizontalController,
-                      scrollDirection: Axis.horizontal,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      child: SingleChildScrollView(
-                        controller: _gridVerticalController,
-                        scrollDirection: Axis.vertical,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onTapDown: (details) {
-                            if (isDrawing) {
-                              _addNoteAtOffset(
-                                details.localPosition,
-                                pattern.id,
-                              );
-                            }
+                  child: Stack(
+                    children: [
+                      ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          scrollbars: true,
+                          dragDevices: {
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
                           },
-                          onPanStart: isDrawing
-                              ? (details) => _addNoteAtOffset(
-                                  details.localPosition,
-                                  pattern.id,
-                                )
-                              : null,
-                          onPanUpdate: isDrawing
-                              ? (details) => _addNoteAtOffset(
-                                  details.localPosition,
-                                  pattern.id,
-                                )
-                              : null,
-                          onPanEnd: isDrawing
-                              ? (details) => _resetPaintState()
-                              : null,
-                          child: MouseRegion(
-                            cursor: isDrawing
-                                ? SystemMouseCursors.copy
-                                : SystemMouseCursors.basic,
-                            child: SizedBox(
-                              height: 128 * _keyHeight,
-                              width:
-                                  pattern.lengthTicks * _zoomX +
-                                  1000, // Approx width
-                              child: Stack(
-                                children: [
-                                  // Grid background
-                                  Positioned.fill(
-                                    child: RepaintBoundary(
-                                      child: CustomPaint(
-                                        painter: _PianoGridPainter(
-                                          zoomX: _zoomX,
-                                          keyHeight: _keyHeight,
-                                          gridDenom: gridDenom,
+                        ),
+                        child: SingleChildScrollView(
+                          controller: _gridHorizontalController,
+                          scrollDirection: Axis.horizontal,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SingleChildScrollView(
+                            controller: _gridVerticalController,
+                            scrollDirection: Axis.vertical,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTapDown: (details) {
+                                if (isDrawing) {
+                                  _addNoteAtOffset(
+                                    details.localPosition,
+                                    pattern.id,
+                                  );
+                                }
+                              },
+                              onPanStart: isDrawing
+                                  ? (details) => _addNoteAtOffset(
+                                      details.localPosition,
+                                      pattern.id,
+                                    )
+                                  : null,
+                              onPanUpdate: isDrawing
+                                  ? (details) => _addNoteAtOffset(
+                                      details.localPosition,
+                                      pattern.id,
+                                    )
+                                  : null,
+                              onPanEnd: isDrawing
+                                  ? (details) => _resetPaintState()
+                                  : null,
+                              child: MouseRegion(
+                                cursor: isDrawing
+                                    ? SystemMouseCursors.copy
+                                    : SystemMouseCursors.basic,
+                                child: SizedBox(
+                                  height: 128 * _keyHeight,
+                                  width:
+                                      pattern.lengthTicks * _zoomX +
+                                      1000, // Approx width
+                                  child: Stack(
+                                    children: [
+                                      // Grid background
+                                      Positioned.fill(
+                                        child: RepaintBoundary(
+                                          child: CustomPaint(
+                                            painter: _PianoGridPainter(
+                                              zoomX: _zoomX,
+                                              keyHeight: _keyHeight,
+                                              gridDenom: gridDenom,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ),
 
-                                  // LAYER B: Interactive Notes
-                                  ...pattern.notes.map((note) {
-                                    return _InteractiveNote(
-                                      // Use note ID as the Flutter Key for efficient diffing
-                                      key: ValueKey(note.id),
-                                      note: note,
-                                      noteId:
-                                          note.id, // Pass ID instead of Index
-                                      patternId: pattern.id,
-                                      generatorId: widget.generatorId,
-                                      zoomX: _zoomX,
-                                      keyHeight: _keyHeight,
-                                      selectedTool: selectedTool,
-                                      snapTicks: _getSnapTicks(gridDenom),
-                                    );
-                                  }),
-                                ],
+                                      // LAYER B: Interactive Notes
+                                      ...pattern.notes.map((note) {
+                                        return _InteractiveNote(
+                                          // Use note ID as the Flutter Key for efficient diffing
+                                          key: ValueKey(note.id),
+                                          note: note,
+                                          noteId: note
+                                              .id, // Pass ID instead of Index
+                                          patternId: pattern.id,
+                                          generatorId: widget.generatorId,
+                                          zoomX: _zoomX,
+                                          keyHeight: _keyHeight,
+                                          selectedTool: selectedTool,
+                                          snapTicks: _getSnapTicks(gridDenom),
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          ignoring: false,
+                          child: PlayheadOverlay(
+                            offsetAdjustment: 0,
+                            scrollController: _gridHorizontalController,
+                            onSeek: (int newSamples) {
+                              // final safeSamples = newSamples < 0 ? 0 : newSamples;
+                              // context.read<KarbeatState>().seekTo(safeSamples);
+
+                              // We currently don't support seeking inside pattern playback.
+                              // TODO: Add pattern playback seek implementation
+                            },
+                            zoomLevel: _zoomX,
+                            sampleSelector: (pos) {
+                              if (pos.isPatternMode) {
+                                return pos.patternSamples;
+                              }
+                              return 0;
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -377,70 +405,228 @@ class PianoRollScreenState extends State<PianoRollScreen> {
 }
 
 class _PianoRollToolbar extends StatelessWidget {
+  final int patternId;
   final String name;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
-  final ValueChanged<int>? onSelectGenerator;
   final int gridDenom;
   final ValueChanged<int?> onGridDenomChanged;
 
   const _PianoRollToolbar({
+    required this.patternId,
     required this.name,
     required this.onZoomIn,
     required this.onZoomOut,
     required this.gridDenom,
     required this.onGridDenomChanged,
-    this.onSelectGenerator,
   });
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<KarbeatState>();
+    final selectedTool = state.pianoRollTool;
+    final generators = state.generators;
+    final previewGeneratorId = state.previewGeneratorId;
+    final isPlaying = state.isPlaying;
+
     return Container(
-      height: 40,
+      height: 50,
       color: Colors.grey.shade800,
       padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Row(
-        children: [
-          Text(
-            name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            // Pattern transport
+            IconButton(
+              icon: Icon(
+                isPlaying ? Icons.stop : Icons.play_arrow,
+                color: isPlaying ? Colors.orange : Colors.white70,
+              ),
+              onPressed: previewGeneratorId != null
+                  ? () => _togglePatternPlayback(
+                      context,
+                      isPlaying,
+                      previewGeneratorId,
+                    )
+                  : null,
+              tooltip: isPlaying ? 'Stop' : 'Play Pattern',
+              iconSize: 24,
             ),
-          ),
-          const SizedBox(width: 20),
-          IconButton(
-            icon: const Icon(Icons.zoom_in, color: Colors.white70),
-            onPressed: onZoomIn,
-          ),
-          IconButton(
-            icon: const Icon(Icons.zoom_out, color: Colors.white70),
-            onPressed: onZoomOut,
-          ),
-          const SizedBox(width: 20),
-          DropdownButton<int>(
-            value: gridDenom,
-            dropdownColor: Colors.grey.shade800,
-            style: const TextStyle(color: Colors.white),
-            items: const [
-              DropdownMenuItem(value: 1, child: Text("1/1 Note")),
-              DropdownMenuItem(value: 2, child: Text("1/2 Note")),
-              DropdownMenuItem(value: 3, child: Text("1/3 Note")),
-              DropdownMenuItem(value: 4, child: Text("1/4 Note")),
-              DropdownMenuItem(value: 6, child: Text("1/6 Note")),
-              DropdownMenuItem(value: 8, child: Text("1/8 Note")),
-              DropdownMenuItem(value: 16, child: Text("1/16 Note")),
-              DropdownMenuItem(value: 32, child: Text("1/32 Note")),
-            ],
-            onChanged: onGridDenomChanged,
-          ),
+            const SizedBox(width: 4),
+            _buildDivider(),
+            const SizedBox(width: 8),
 
-          const SizedBox(width: 20),
-          // TODO: Add Generator selection to choose which instrument we want to play
-          // onSelectGenerator != null
-          //     ? DropdownButton<int>(items: items, onChanged: onSelectGenerator!)
-          //     : null,
-        ],
+            // Pattern name
+            Text(
+              name,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 16),
+            _buildDivider(),
+            const SizedBox(width: 8),
+
+            // Tool buttons
+            _ToolButton(
+              icon: Icons.near_me,
+              label: 'Pointer',
+              isActive: selectedTool == PianoRollToolSelection.pointer,
+              onTap: () =>
+                  state.selectPianoRollTool(PianoRollToolSelection.pointer),
+            ),
+            _ToolButton(
+              icon: Icons.edit,
+              label: 'Draw',
+              isActive: selectedTool == PianoRollToolSelection.draw,
+              onTap: () =>
+                  state.selectPianoRollTool(PianoRollToolSelection.draw),
+            ),
+            _ToolButton(
+              icon: Icons.delete,
+              label: 'Delete',
+              isActive: selectedTool == PianoRollToolSelection.delete,
+              onTap: () =>
+                  state.selectPianoRollTool(PianoRollToolSelection.delete),
+            ),
+            _ToolButton(
+              icon: Icons.crop_free,
+              label: 'Select',
+              isActive: selectedTool == PianoRollToolSelection.select,
+              onTap: () =>
+                  state.selectPianoRollTool(PianoRollToolSelection.select),
+            ),
+            const SizedBox(width: 8),
+            _buildDivider(),
+            const SizedBox(width: 8),
+
+            // Zoom controls
+            IconButton(
+              icon: const Icon(Icons.zoom_in, color: Colors.white70),
+              onPressed: onZoomIn,
+              tooltip: 'Zoom In',
+              iconSize: 20,
+            ),
+            IconButton(
+              icon: const Icon(Icons.zoom_out, color: Colors.white70),
+              onPressed: onZoomOut,
+              tooltip: 'Zoom Out',
+              iconSize: 20,
+            ),
+            const SizedBox(width: 8),
+
+            // Grid dropdown
+            DropdownButton<int>(
+              value: gridDenom,
+              dropdownColor: Colors.grey.shade800,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              underline: const SizedBox(),
+              items: const [
+                DropdownMenuItem(value: 1, child: Text("1/1")),
+                DropdownMenuItem(value: 2, child: Text("1/2")),
+                DropdownMenuItem(value: 4, child: Text("1/4")),
+                DropdownMenuItem(value: 8, child: Text("1/8")),
+                DropdownMenuItem(value: 16, child: Text("1/16")),
+                DropdownMenuItem(value: 32, child: Text("1/32")),
+              ],
+              onChanged: onGridDenomChanged,
+            ),
+            const SizedBox(width: 8),
+            _buildDivider(),
+            const SizedBox(width: 8),
+
+            // Generator dropdown
+            const Text(
+              'Generator: ',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            DropdownButton<int?>(
+              value: previewGeneratorId,
+              hint: const Text(
+                'Select',
+                style: TextStyle(color: Colors.white54),
+              ),
+              dropdownColor: Colors.grey.shade800,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              underline: const SizedBox(),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('None')),
+                ...generators.entries.map(
+                  (entry) => DropdownMenuItem<int?>(
+                    value: entry.key,
+                    child: Text(entry.value.name),
+                  ),
+                ),
+              ],
+              onChanged: (value) =>
+                  state.setPreviewGenerator(generatorId: value),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Container(width: 1, height: 30, color: Colors.grey.shade600);
+  }
+
+  void _togglePatternPlayback(
+    BuildContext context,
+    bool isPlaying,
+    int generatorId,
+  ) async {
+    try {
+      if (isPlaying) {
+        await stopPatternPreview();
+      } else {
+        await playPatternPreview(
+          patternId: patternId,
+          generatorId: generatorId,
+        );
+      }
+    } catch (e) {
+      debugPrint('Pattern playback error: $e');
+    }
+  }
+}
+
+class _ToolButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _ToolButton({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: isActive
+              ? BoxDecoration(
+                  color: Colors.blueAccent.withAlpha(50),
+                  borderRadius: BorderRadius.circular(4),
+                )
+              : null,
+          child: Icon(
+            icon,
+            color: isActive ? Colors.blueAccent : Colors.white70,
+            size: 20,
+          ),
+        ),
       ),
     );
   }
@@ -530,7 +716,7 @@ class _InteractiveNote extends StatefulWidget {
   final int? generatorId; // Optional: To preview note while dragging
   final double zoomX;
   final double keyHeight;
-  final ToolSelection selectedTool;
+  final PianoRollToolSelection selectedTool;
   final int snapTicks;
 
   const _InteractiveNote({
@@ -601,7 +787,7 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
   Widget build(BuildContext context) {
     // Determine cursor based on tool
     MouseCursor cursor = SystemMouseCursors.click;
-    if (widget.selectedTool == ToolSelection.delete) {
+    if (widget.selectedTool == PianoRollToolSelection.delete) {
       cursor = SystemMouseCursors.basic;
     } else if (_mode != _NoteDragMode.none) {
       cursor = SystemMouseCursors.grabbing;
@@ -619,7 +805,7 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () {
-            if (widget.selectedTool == ToolSelection.delete) {
+            if (widget.selectedTool == PianoRollToolSelection.delete) {
               context.read<KarbeatState>().deletePatternNote(
                 patternId: widget.patternId,
                 noteId: widget.noteId,
@@ -627,7 +813,7 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
             }
           },
           onPanStart: (details) {
-            if (widget.selectedTool == ToolSelection.delete) return;
+            if (widget.selectedTool == PianoRollToolSelection.delete) return;
 
             final renderBox = context.findRenderObject() as RenderBox;
             final localPos = renderBox.globalToLocal(details.globalPosition);

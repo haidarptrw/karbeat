@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:karbeat/features/components/midi_drawer.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/features/playlist/clip_drag_controller.dart';
+import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
@@ -420,6 +421,39 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   state.deleteSelectedClips();
                 } else {
                   state.deleteClip(widget.trackId, widget.clip.id);
+                }
+              } else if (widget.selectedTool == ToolSelection.select) {
+                final state = context.read<KarbeatState>();
+                // Get tap position for panel positioning
+                final renderBox = context.findRenderObject() as RenderBox?;
+                final tapPosition =
+                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+                // If not already selected, select it first
+                if (!widget.isSelected) {
+                  state.selectClip(
+                    trackId: widget.trackId,
+                    clipId: widget.clip.id,
+                  );
+                }
+
+                // Show interaction panel
+                if (widget.isSelected && widget.selectedClipIds.length > 1) {
+                  state.showInteractionPanel(
+                    MultiClipInteraction(
+                      trackId: widget.trackId,
+                      clipIds: widget.selectedClipIds,
+                      tapPosition: tapPosition,
+                    ),
+                  );
+                } else {
+                  state.showInteractionPanel(
+                    ClipInteraction(
+                      trackId: widget.trackId,
+                      clipId: widget.clip.id,
+                      tapPosition: tapPosition,
+                    ),
+                  );
                 }
               } else if (widget.selectedTool == ToolSelection.pointer) {
                 context.read<KarbeatState>().selectClip(
