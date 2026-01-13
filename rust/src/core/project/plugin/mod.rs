@@ -41,10 +41,13 @@ pub trait KarbeatEffect: Send + Sync {
 }
 
 pub trait KarbeatGenerator: Send + Sync {
+    /// Get the name of the generator
     fn name(&self) -> &str;
 
+    /// Prepare the plugin so that it can properly used for audio processing
     fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
 
+    /// Reset the parameters of the plugin
     fn reset(&mut self);
 
     /// Process a block of audio.

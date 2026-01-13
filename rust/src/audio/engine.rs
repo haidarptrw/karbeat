@@ -8,7 +8,9 @@ use triple_buffer::Output;
 use crate::{
     audio::{
         event::PlaybackPosition,
-        render_state::{AudioGeneratorInstance, AudioPluginState, AudioRenderState},
+        render_state::{
+            AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
+        },
     },
     commands::{AudioCommand, AudioFeedback, GeneratorParameterSnapshot},
     core::project::{
@@ -489,7 +491,10 @@ impl AudioEngine {
                     .track_effects
                     .entry(track_id)
                     .or_default()
-                    .push(effect);
+                    .push(AudioEffectInstance {
+                        id: effect_id,
+                        plugin: effect,
+                    });
                 log::info!("[AudioEngine] Added effect to track {:?}", track_id);
             }
             AudioCommand::RemoveTrackEffect {
@@ -510,7 +515,7 @@ impl AudioEngine {
             } => {
                 if let Some(effects) = self.plugin_state.track_effects.get_mut(&track_id) {
                     if let Some(effect) = effects.get_mut(effect_idx) {
-                        effect.set_parameter(param_id, value);
+                        effect.plugin.set_parameter(param_id, value);
                     }
                 }
             }
@@ -861,7 +866,7 @@ impl AudioEngine {
     /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
     fn apply_mixer_channel_with_effects(
         mixer_channel: &MixerChannel,
-        track_effects: &mut std::collections::HashMap<TrackId, Vec<Box<dyn KarbeatEffect + Send>>>,
+        track_effects: &mut std::collections::HashMap<TrackId, Vec<AudioEffectInstance>>,
         track_id: TrackId,
         buffer: &mut [f32],
         channels: usize,
@@ -878,7 +883,7 @@ impl AudioEngine {
         // Effects chain from plugin_state (owned, no lock!)
         if let Some(effects) = track_effects.get_mut(&track_id) {
             for effect in effects.iter_mut() {
-                effect.process(buffer);
+                effect.plugin.process(buffer);
             }
         }
 

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     core::project::{
-        mixer::MixerState,
+        mixer::{EffectId, MixerState},
         plugin::{KarbeatEffect, KarbeatGenerator},
         track::{
             midi::{Pattern, PatternId},
@@ -25,6 +25,11 @@ pub struct AudioGeneratorInstance {
     pub plugin: Box<dyn KarbeatGenerator + Send>,
 }
 
+pub struct AudioEffectInstance {
+    pub id: EffectId,
+    pub plugin: Box<dyn KarbeatEffect + Send>,
+}
+
 /// Audio thread's owned plugin instances - NO locks required for access
 /// This is managed via AudioCommand, NOT cloned from ApplicationState
 #[derive(Default)]
@@ -32,7 +37,7 @@ pub struct AudioPluginState {
     /// Generator plugins keyed by GeneratorId
     pub generators: HashMap<GeneratorId, AudioGeneratorInstance>,
     /// Effect chain per track (owned by audio thread)
-    pub track_effects: HashMap<TrackId, Vec<Box<dyn KarbeatEffect + Send>>>,
+    pub track_effects: HashMap<TrackId, Vec<AudioEffectInstance>>,
 }
 
 // =============================================================================

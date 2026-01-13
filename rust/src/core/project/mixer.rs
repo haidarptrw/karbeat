@@ -167,6 +167,7 @@ impl MixerState {
         &mut self,
         track_id: &TrackId,
         effect_name: &str,
+        internal_type: &str,
     ) -> anyhow::Result<()> {
         let mixer_channel_arc = self
             .channels
@@ -198,15 +199,19 @@ impl MixerState {
         if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
             let _ = sender.push(AudioCommand::AddTrackEffect {
                 track_id: track_id.clone(),
+                effect_id,
                 effect: effect_plugin,
             });
         }
-
-        let effect_instance = PluginInstance::new(effect_name, internal_type);
-        channel.effects.push(EffectInstance {
+        
+        let plugin_instance = PluginInstance::new(effect_name, internal_type);
+        
+        let effect_instance = EffectInstance {
             id: effect_id,
-            instance: Arc::new(effect_instance),
-        });
+            instance: Arc::new(plugin_instance),
+        };  
+        
+        channel.effects.push(effect_instance);
 
         Ok(())
     }
