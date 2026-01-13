@@ -478,6 +478,7 @@ impl AudioEngine {
             // =================================================================
             AudioCommand::AddTrackEffect {
                 track_id,
+                effect_id,
                 mut effect,
             } => {
                 // Prepare the effect
@@ -731,7 +732,7 @@ impl AudioEngine {
                 mute: false,
                 solo: false,
                 inverted_phase: false,
-                effects: HashMap::new(),
+                effects: Vec::new(),
                 ..Default::default()
             });
 

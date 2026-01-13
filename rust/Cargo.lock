@@ -1139,6 +1139,7 @@ dependencies = [
  "rustfft",
  "serde",
  "symphonia",
+ "thiserror 2.0.17",
  "triple_buffer",
 ]
 

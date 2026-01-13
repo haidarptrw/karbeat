@@ -1,6 +1,7 @@
 use crate::{
     audio::engine::PlaybackMode,
     core::project::{
+        mixer::EffectId,
         plugin::{KarbeatEffect, KarbeatGenerator},
         track::audio_waveform::AudioWaveform,
         GeneratorId, TrackId,
@@ -57,6 +58,7 @@ pub enum AudioCommand {
     /// Add an effect to a track's effect chain
     AddTrackEffect {
         track_id: TrackId,
+        effect_id: EffectId,
         effect: Box<dyn KarbeatEffect + Send>,
     },
     /// Remove an effect from a track's effect chain

@@ -1,9 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    core::project::mixer::{MixerChannel, MixerState},
-    utils::lock::get_app_read,
+    core::project::mixer::{EffectInstance, MixerChannel, MixerChannelParams, MixerState},
+    utils::lock::{get_app_read, get_app_write},
 };
+
+/// ======================================
+/// Type Definitions
+/// ======================================
 
 /// UI representation of a mixer channel.
 pub struct UiMixerChannel {
@@ -16,28 +20,19 @@ pub struct UiMixerChannel {
     pub effects: Vec<u32>,
 }
 
-impl From<MixerChannel> for UiMixerChannel {
-    fn from(value: MixerChannel) -> Self {
+impl From<&MixerChannel> for UiMixerChannel {
+    fn from(value: &MixerChannel) -> Self {
         Self {
             volume: value.volume,
             pan: value.pan,
             mute: value.mute,
             solo: value.solo,
             inverted_phase: value.inverted_phase,
-            effects: value.effects.iter().map(|(id, _)| id.to_u32()).collect(),
-        }
-    }
-}
-
-impl Into<UiMixerChannel> for &MixerChannel {
-    fn into(self) -> UiMixerChannel {
-        UiMixerChannel {
-            volume: self.volume,
-            pan: self.pan,
-            mute: self.mute,
-            solo: self.solo,
-            inverted_phase: self.inverted_phase,
-            effects: self.effects.iter().map(|(id, _)| id.to_u32()).collect(),
+            effects: value
+                .effects
+                .iter()
+                .map(|instance| instance.id.to_u32())
+                .collect(),
         }
     }
 }
@@ -48,8 +43,8 @@ pub struct UiMixerState {
     pub master_bus: UiMixerChannel,
 }
 
-impl From<MixerState> for UiMixerState {
-    fn from(value: MixerState) -> Self {
+impl From<&MixerState> for UiMixerState {
+    fn from(value: &MixerState) -> Self {
         Self {
             channels: value
                 .channels
@@ -61,18 +56,56 @@ impl From<MixerState> for UiMixerState {
     }
 }
 
-impl Into<UiMixerState> for &MixerState {
-    fn into(self) -> UiMixerState {
-        UiMixerState {
-            channels: self
-                .channels
-                .iter()
-                .map(|(id, channel)| (id.to_u32(), channel.as_ref().into()))
-                .collect(),
-            master_bus: self.master_bus.as_ref().into(),
+pub struct UiEffectInstance {
+    pub id: u32,
+    pub name: String,
+    pub internal_type: String,
+    pub parameters: HashMap<u32, f32>,
+}
+
+impl From<&EffectInstance> for UiEffectInstance {
+    fn from(value: &EffectInstance) -> Self {
+        Self {
+            id: value.id.to_u32(),
+            name: value.instance.name.clone(),
+            internal_type: value.instance.internal_type.clone(),
+            parameters: value.instance.parameters.clone(),
         }
     }
 }
+
+pub enum UiMixerChannelParams {
+    Volume(f32),
+    Pan(f32),
+    Mute(bool),
+    InvertedPhase(bool),
+}
+
+impl Into<UiMixerChannelParams> for &MixerChannelParams {
+    fn into(self) -> UiMixerChannelParams {
+        match self {
+            MixerChannelParams::Volume(value) => UiMixerChannelParams::Volume(*value),
+            MixerChannelParams::Pan(value) => UiMixerChannelParams::Pan(*value),
+            MixerChannelParams::Mute(value) => UiMixerChannelParams::Mute(*value),
+            MixerChannelParams::InvertedPhase(value) => UiMixerChannelParams::InvertedPhase(*value),
+        }
+    }
+}
+
+impl Into<MixerChannelParams> for &UiMixerChannelParams {
+    fn into(self) -> MixerChannelParams {
+        match self {
+            UiMixerChannelParams::Volume(value) => MixerChannelParams::Volume(*value),
+            UiMixerChannelParams::Pan(value) => MixerChannelParams::Pan(*value),
+            UiMixerChannelParams::Mute(value) => MixerChannelParams::Mute(*value),
+            UiMixerChannelParams::InvertedPhase(value) => MixerChannelParams::InvertedPhase(*value),
+        }
+    }
+}
+
+/// ======================================
+/// GETTERS
+/// ======================================
 
 /// **GETTER: Fetch the mixer state**
 ///
@@ -106,6 +139,28 @@ pub fn get_master_bus() -> UiMixerChannel {
 }
 
 // ======================================
-// Mixer actions
+// MIXER ACTIONS AND APIs
 // ======================================
 
+pub fn set_master_bus_params(params: Vec<UiMixerChannelParams>) -> Result<(), String> {
+    let mut app = get_app_write();
+    let mixer_state = &mut app.mixer;
+    let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
+    mixer_state
+        .set_params_master_bus(&params_legit)
+        .map_err(|e| e.message)?;
+    Ok(())
+}
+
+pub fn set_mixer_channel_params(
+    track_id: u32,
+    params: Vec<UiMixerChannelParams>,
+) -> Result<(), String> {
+    let mut app = get_app_write();
+    let mixer_state = &mut app.mixer;
+    let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
+    mixer_state
+        .set_params_mixer_channel(&track_id.into(), &params_legit)
+        .map_err(|e| e.message)?;
+    Ok(())
+}

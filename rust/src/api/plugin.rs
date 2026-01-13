@@ -1,5 +1,5 @@
 use crate::{
-    api::project::UiGeneratorInstance,
+    api::{mixer::UiEffectInstance, project::UiGeneratorInstance},
     broadcast_state_change,
     commands::AudioCommand,
     core::project::generator::{GeneratorId, GeneratorInstanceType},
@@ -57,6 +57,12 @@ pub fn get_available_generators() -> Result<Vec<String>, String> {
     Ok(registry.list_generators())
 }
 
+/// Get all available effects in Plugin Registry
+pub fn get_available_effects() -> Result<Vec<String>, String> {
+    let registry = ctx().plugin_registry.read().unwrap();
+    Ok(registry.list_effects())
+}
+
 /// Get a single generator state from the Generator Pool
 pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
     let app = get_app_read();
@@ -74,6 +80,12 @@ pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
     let ui_generator = UiGeneratorInstance::from(&*generator);
     Ok(ui_generator)
 }
+
+// pub fn get_effect(effect_id: u32) -> Result<UiEffectInstance, String> {
+    
+// }
+
+
 
 /// Get parameter specifications for a generator plugin.
 ///

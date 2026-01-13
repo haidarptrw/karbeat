@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use crate::core::project::plugin::{KarbeatEffect, KarbeatGenerator};
+use crate::plugin::effect::parametric_eq::create_parametric_eq;
 use crate::plugin::generator::karbeatzer_v2::create_karbeatzer;
 
 /// A function pointer type that creates a new Generator instance
@@ -33,6 +34,11 @@ impl PluginRegistry {
             // We pass None for sample_rate here because 'prepare()' will be called
             // by the engine later with the correct rate.
             Box::new(create_karbeatzer(None))
+        });
+
+        // Parametric EQ
+        registry.register_effect("Parametric EQ", || {
+            Box::new(create_parametric_eq(None))
         });
 
         registry
