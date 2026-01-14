@@ -1,5 +1,5 @@
 use crate::{
-    api::{mixer::UiEffectInstance, project::UiGeneratorInstance},
+    api::project::UiGeneratorInstance,
     broadcast_state_change,
     commands::AudioCommand,
     core::project::generator::{GeneratorId, GeneratorInstanceType},
@@ -351,7 +351,7 @@ pub fn poll_parameter_feedback() -> Vec<UiParameterSnapshot> {
 /// Call this after `poll_parameter_feedback` to update the stored parameters
 /// with the latest values from the audio thread.
 pub fn sync_parameters_from_audio(snapshots: &[UiParameterSnapshot]) {
-    let mut app = get_app_write();
+    let app = get_app_write();
 
     for snapshot in snapshots {
         let gen_id = GeneratorId::from(snapshot.generator_id);

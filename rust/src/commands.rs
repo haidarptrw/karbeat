@@ -73,6 +73,25 @@ pub enum AudioCommand {
         param_id: u32,
         value: f32,
     },
+
+    // ======================================================
+    // Master Effect Command
+    // ======================================================
+    /// Add an effect to the master bus
+    AddMasterEffect {
+        effect_id: EffectId,
+        effect: Box<dyn KarbeatEffect + Send>,
+    },
+    /// Remove an effect from the master bus
+    RemoveMasterEffect {
+        effect_idx: usize,
+    },
+    /// Set a parameter on a master effect
+    SetMasterEffectParameter {
+        effect_idx: usize,
+        param_id: u32,
+        value: f32,
+    },
 }
 
 // ============================================================================

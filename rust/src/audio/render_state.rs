@@ -38,6 +38,8 @@ pub struct AudioPluginState {
     pub generators: HashMap<GeneratorId, AudioGeneratorInstance>,
     /// Effect chain per track (owned by audio thread)
     pub track_effects: HashMap<TrackId, Vec<AudioEffectInstance>>,
+    /// Master effect chain (owned by audio thread)
+    pub master_effects: Vec<AudioEffectInstance>,
 }
 
 // =============================================================================

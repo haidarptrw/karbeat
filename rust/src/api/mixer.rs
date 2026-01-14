@@ -181,9 +181,22 @@ pub fn add_effect_to_mixer_channel(track_id: u32, effect_name: String) -> Result
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
+        #[allow(deprecated)]
         mixer_state
             .add_effect_descriptor(&track_id.into(), &effect_name, "")
             .map_err(|e| format!("{}", e))?;
+    }
+    crate::broadcast_state_change();
+    Ok(())
+}
+
+pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        let mixer_state = &mut app.mixer;
+        // mixer_state
+        //     .add_effect_descriptor_by_id(&track_id.into(), registry_id)
+        //     .map_err(|e| format!("{}", e))?;
     }
     crate::broadcast_state_change();
     Ok(())

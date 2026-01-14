@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::{
     commands::AudioCommand,
-    core::project::{ApplicationState, PluginInstance, TrackId},
+    core::project::{plugin::KarbeatEffect, ApplicationState, PluginInstance, TrackId},
     ctx, define_id,
 };
 
@@ -113,6 +113,41 @@ impl Default for MixerChannel {
     }
 }
 
+impl MixerChannel {
+    pub fn add_effect(
+        &mut self,
+        effect_registry_id: u32,
+    ) -> anyhow::Result<(Box<dyn KarbeatEffect + Send + Sync>, String, EffectId)> {
+        let effect_id = EffectId::next(&mut self.effect_counter);
+
+        let (effect_plugin, effect_name, default_params) = {
+            let registry = ctx().plugin_registry.read().unwrap();
+            if let Some((effect_box, name)) = registry.create_effect_by_id(effect_registry_id) {
+                let default_params = effect_box.default_parameters();
+                (effect_box, name, default_params)
+            } else {
+                let message = format!(
+                    "Effect with ID {} not found in registry",
+                    effect_registry_id
+                );
+                log::error!("{}", message);
+                // Decrement counters if failed to prevent gaps/orphans
+                self.effect_counter -= 1;
+
+                return Err(anyhow::anyhow!(message));
+            }
+        };
+
+        let plugin_instance =
+            PluginInstance::new_with_params(effect_registry_id, &effect_name, default_params);
+
+        let effect_instance = EffectInstance::new(effect_id, plugin_instance);
+        self.effects.push(effect_instance);
+
+        Ok((effect_plugin, effect_name, effect_id))
+    }
+}
+
 impl MixerState {
     /// Set params of mixer channel besides the effect
     pub fn set_params_mixer_channel(
@@ -139,6 +174,7 @@ impl MixerState {
         Ok(mixer_channel_arc.clone())
     }
 
+    // set the master bus params
     pub fn set_params_master_bus(
         &mut self,
         params: &[MixerChannelParams],
@@ -159,10 +195,7 @@ impl MixerState {
         Ok(master_bus_channel)
     }
 
-    /// Add an effect descriptor to a mixer channel by its registry ID (preferred method).
-    ///
-    /// Note: The actual effect instance should be sent to the audio thread via
-    /// `AudioCommand::AddTrackEffect`. This function only updates the metadata.
+    /// Add an effect descriptor to a mixer channel by its registry ID.
     pub fn add_effect_descriptor_by_id(
         &mut self,
         track_id: &TrackId,
@@ -178,23 +211,10 @@ impl MixerState {
 
         // Clone and modify the channel
         let channel = Arc::make_mut(mixer_channel_arc);
-        let effect_id = EffectId::next(&mut channel.effect_counter);
 
-        let (effect_plugin, effect_name, default_params) = {
-            let registry = ctx().plugin_registry.read().unwrap();
-            if let Some((effect_box, name)) = registry.create_effect_by_id(registry_id) {
-                let default_params = effect_box.default_parameters();
-                (effect_box, name, default_params)
-            } else {
-                let message = format!("Effect with ID {} not found in registry", registry_id);
-                log::error!("{}", message);
-                // Decrement counters if failed to prevent gaps/orphans
-                channel.effect_counter -= 1;
-                return Err(anyhow::anyhow!(EffectCreationError { message }));
-            }
-        };
+        let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
-        // Push to the audio thread
+        // // Push to the audio thread
         if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
             let _ = sender.push(AudioCommand::AddTrackEffect {
                 track_id: track_id.clone(),
@@ -202,16 +222,6 @@ impl MixerState {
                 effect: effect_plugin,
             });
         }
-
-        let plugin_instance =
-            PluginInstance::new_with_params(registry_id, &effect_name, default_params);
-
-        let effect_instance = EffectInstance {
-            id: effect_id,
-            instance: Arc::new(plugin_instance),
-        };
-
-        channel.effects.push(effect_instance);
 
         log::info!(
             "Effect {} (registry_id={}) added to track {:?}",
@@ -227,6 +237,7 @@ impl MixerState {
     /// Internally looks up the registry ID and delegates to the ID-based method.
     ///
     /// Note: The `internal_type` parameter is deprecated and ignored.
+    #[deprecated(note = "Use add_effect_descriptor_by_id instead")]
     pub fn add_effect_descriptor(
         &mut self,
         track_id: &TrackId,
@@ -245,6 +256,7 @@ impl MixerState {
         self.add_effect_descriptor_by_id(track_id, registry_id)
     }
 
+    /// Get all effect instances from a mixer channel
     pub fn get_effects(
         &self,
         track_id: &TrackId,
@@ -260,6 +272,26 @@ impl MixerState {
         // Clone and modify the channel
         let channel = Arc::make_mut(&mut mixer_channel_arc);
         Ok(channel.effects.clone())
+    }
+
+    pub fn add_effect_to_master_bus(&mut self, registry_id: u32) -> anyhow::Result<()> {
+        let mut master_bus_arc = self.master_bus.clone();
+        let channel = Arc::make_mut(&mut master_bus_arc);
+        let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
+
+        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+            let _ = sender.push(AudioCommand::AddMasterEffect {
+                effect_id,
+                effect: effect_plugin,
+            });
+        }
+
+        log::info!(
+            "Effect {} (registry_id={}) added to master bus",
+            effect_name,
+            registry_id
+        );
+        Ok(())
     }
 }
 

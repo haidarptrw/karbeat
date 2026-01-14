@@ -1,6 +1,6 @@
 // src/audio/engine.rs
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use rtrb::{Consumer, Producer};
 use triple_buffer::Output;
@@ -189,11 +189,6 @@ impl AudioEngine {
             self.cleanup_finished_voices();
 
             self.emit_static_position();
-            // NOTE: We intentionally do NOT call stop_all_active_generators() here every frame.
-            // That would cut off preview notes. The proper stopping is handled when:
-            // 1. Transport transitions from playing to stopped (in state_consumer.update check)
-            // 2. User sends note-off events
-            // 3. Pattern loop boundary (in process_pattern_mode)
         }
 
         // 5. Always Render Previews (Metronome, Browser Preview)
@@ -359,9 +354,6 @@ impl AudioEngine {
             // Clear any pending MIDI events that might have been queued
             voice.events.clear();
         }
-        // NOTE: Do NOT clear preview_voices here - previews should continue playing
-        // even when transport is stopped. preview_voices are only cleared via
-        // StopAllPreviews command or when they finish naturally.
     }
 
     fn process_command(&mut self, cmd: AudioCommand) {
@@ -418,10 +410,6 @@ impl AudioEngine {
                 // 3. Snap UI to the beginning immediately
                 self.emit_current_playback_position();
             }
-
-            // =================================================================
-            // Generator Plugin Commands
-            // =================================================================
             AudioCommand::AddGenerator {
                 generator_id,
                 track_id,
@@ -474,10 +462,6 @@ impl AudioEngine {
                     }
                 }
             }
-
-            // =================================================================
-            // Effect Plugin Commands
-            // =================================================================
             AudioCommand::AddTrackEffect {
                 track_id,
                 effect_id,
@@ -519,10 +503,6 @@ impl AudioEngine {
                     }
                 }
             }
-
-            // =================================================================
-            // Parameter Feedback Commands
-            // =================================================================
             AudioCommand::QueryGeneratorParameters { generator_id } => {
                 // Get all parameter values from the generator and send back
                 if let Some(gen_instance) = self.plugin_state.generators.get(&generator_id) {
@@ -542,6 +522,22 @@ impl AudioEngine {
                         .feedback_producer
                         .push(AudioFeedback::ParameterSnapshot(snapshot));
                 }
+            }
+            #[allow(unused_variables)]
+            AudioCommand::AddMasterEffect { effect_id, effect } => {
+                // Temporarily do nothing. It will be implemented later
+            }
+            #[allow(unused_variables)]
+            AudioCommand::RemoveMasterEffect { effect_idx } => {
+                // Temporarily do nothing. It will be implemented later
+            }
+            #[allow(unused_variables)]
+            AudioCommand::SetMasterEffectParameter {
+                effect_idx,
+                param_id,
+                value,
+            } => {
+                // Temporarily do nothing. It will be implemented later
             }
         }
     }
@@ -982,6 +978,7 @@ impl AudioEngine {
         }
     }
 
+    /// Ensure that the generator voice is active
     fn ensure_generator_voice(
         active_generators: &mut Vec<GeneratorVoice>,
         plugin_state: &AudioPluginState,
@@ -1011,6 +1008,7 @@ impl AudioEngine {
         None
     }
 
+    /// Render preview voices to the output buffer
     fn render_previews_to_buffer(&mut self, output: &mut [f32], channels: usize) {
         let buffer_frames = output.len() / channels;
 
@@ -1242,6 +1240,14 @@ impl AudioEngine {
     }
 }
 
+/// Sample a waveform at a specific position
+/// 
+/// ### What it does
+/// 
+/// - Interpolates between two samples
+/// - Handles edge cases where the position is out of bounds
+/// - Returns a tuple of left and right channel values
+/// 
 #[inline(always)]
 fn sample_waveform_inline(waveform: &AudioWaveform, pos: f64, channels: usize) -> (f32, f32) {
     let idx = pos as usize;
@@ -1260,12 +1266,12 @@ fn sample_waveform_inline(waveform: &AudioWaveform, pos: f64, channels: usize) -
 
     let curr_l = waveform.buffer[base];
     let next_l = waveform.buffer[next_base];
-    let val_l = curr_l + (next_l - curr_l) * alpha; // lerp
+    let val_l = lerp(curr_l, next_l, alpha);
 
     let val_r = if channels > 1 {
         let curr_r = waveform.buffer[base + 1];
         let next_r = waveform.buffer[next_base + 1];
-        curr_r + (next_r - curr_r) * alpha
+        lerp(curr_r, next_r, alpha)
     } else {
         val_l
     };
