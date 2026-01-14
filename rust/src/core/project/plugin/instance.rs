@@ -1,32 +1,61 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::project::plugin::KarbeatPlugin;
-
-/// Define a plugin instance
+/// Define a plugin instance descriptor.
+///
+/// This is a lightweight struct for serialization and UI purposes.
+/// The actual plugin processing instance is owned by the audio thread's `AudioPluginState`.
+///
 /// # Example:
 /// ```rust
 /// let instance = PluginInstance {
+///     registry_id: 0,
 ///     name: "Basic Reverb".to_string(),
-///     internal_type: "REVERB".to_string(),
 ///     bypass: false,
 ///     parameters: HashMap::new(),
-///     instance: Some(Arc::new(Mutex::new(EffectWrapper::new(BasicReverb::default(), 48_000.0)))),
 /// };
 /// ```
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct PluginInstance {
-    /// Name of the plugin
+    /// Registry ID for plugin lookup (stable identifier)
+    pub registry_id: u32,
+    /// Name of the plugin (for display purposes)
     pub name: String,
-    /// Internal Type name
-    pub internal_type: String, // e.g., "EQ_3BAND", "COMPRESSOR"
     /// Whether this plugin is bypassed
     pub bypass: bool,
-    /// Plugin parameters
-    pub parameters: HashMap<u32, f32>, // Param ID -> Value
+    /// Plugin parameters for persistence (Param ID -> Value)
+    pub parameters: HashMap<u32, f32>,
+}
 
-    /// Concrete Plugin Instance
-    #[serde(skip)]
-    pub instance: Option<Arc<Mutex<KarbeatPlugin>>>,
+impl PluginInstance {
+    /// Create a new plugin instance with name only (backwards compatible)
+    pub fn new(name: &str) -> Self {
+        Self {
+            registry_id: 0,
+            name: name.to_string(),
+            bypass: false,
+            parameters: HashMap::new(),
+        }
+    }
+
+    /// Create a new plugin instance with registry ID and name
+    pub fn new_with_id(registry_id: u32, name: &str) -> Self {
+        Self {
+            registry_id,
+            name: name.to_string(),
+            bypass: false,
+            parameters: HashMap::new(),
+        }
+    }
+
+    /// Create a new plugin instance with registry ID, name, and default parameters
+    pub fn new_with_params(registry_id: u32, name: &str, parameters: HashMap<u32, f32>) -> Self {
+        Self {
+            registry_id,
+            name: name.to_string(),
+            bypass: false,
+            parameters,
+        }
+    }
 }

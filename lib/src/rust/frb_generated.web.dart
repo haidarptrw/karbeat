@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/audio.dart';
+import 'api/mixer.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
 import 'api/project.dart';
@@ -56,6 +57,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Map<int, UiMixerChannel> dco_decode_Map_u_32_ui_mixer_channel_None(
+    dynamic raw,
+  );
+
+  @protected
   Map<int, UiPattern> dco_decode_Map_u_32_ui_pattern_None(dynamic raw);
 
   @protected
@@ -91,9 +97,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
-
-  @protected
-  UiProjectState dco_decode_box_autoadd_ui_project_state(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -142,6 +145,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_record_u_32_ui_generator_instance(dynamic raw);
 
   @protected
+  List<(int, UiMixerChannel)> dco_decode_list_record_u_32_ui_mixer_channel(
+    dynamic raw,
+  );
+
+  @protected
   List<(int, UiPattern)> dco_decode_list_record_u_32_ui_pattern(dynamic raw);
 
   @protected
@@ -151,13 +159,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
 
   @protected
+  List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(
+    dynamic raw,
+  );
+
+  @protected
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
-  List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
+  List<UiParameterSnapshot> dco_decode_list_ui_parameter_snapshot(dynamic raw);
 
   @protected
-  List<UiTrack> dco_decode_list_ui_track(dynamic raw);
+  List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw);
+
+  @protected
+  List<UiPluginInfo> dco_decode_list_ui_plugin_info(dynamic raw);
+
+  @protected
+  List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
 
   @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
@@ -187,9 +206,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
-  UiProjectState? dco_decode_opt_box_autoadd_ui_project_state(dynamic raw);
-
-  @protected
   PlaybackPosition dco_decode_playback_position(dynamic raw);
 
   @protected
@@ -206,6 +222,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, UiGeneratorInstance) dco_decode_record_u_32_ui_generator_instance(
     dynamic raw,
   );
+
+  @protected
+  (int, UiMixerChannel) dco_decode_record_u_32_ui_mixer_channel(dynamic raw);
 
   @protected
   (int, UiPattern) dco_decode_record_u_32_ui_pattern(dynamic raw);
@@ -250,19 +269,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
+  UiMixerChannel dco_decode_ui_mixer_channel(dynamic raw);
+
+  @protected
+  UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw);
+
+  @protected
+  UiMixerState dco_decode_ui_mixer_state(dynamic raw);
+
+  @protected
   UiNote dco_decode_ui_note(dynamic raw);
+
+  @protected
+  UiParameterSnapshot dco_decode_ui_parameter_snapshot(dynamic raw);
 
   @protected
   UiParameterType dco_decode_ui_parameter_type(dynamic raw);
 
   @protected
+  UiParameterValue dco_decode_ui_parameter_value(dynamic raw);
+
+  @protected
   UiPattern dco_decode_ui_pattern(dynamic raw);
 
   @protected
-  UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
+  UiPluginInfo dco_decode_ui_plugin_info(dynamic raw);
 
   @protected
-  UiProjectState dco_decode_ui_project_state(dynamic raw);
+  UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
 
   @protected
   UiSessionState dco_decode_ui_session_state(dynamic raw);
@@ -302,6 +336,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, UiGeneratorInstance> sse_decode_Map_u_32_ui_generator_instance_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Map<int, UiMixerChannel> sse_decode_Map_u_32_ui_mixer_channel_None(
     SseDeserializer deserializer,
   );
 
@@ -351,11 +390,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
-
-  @protected
-  UiProjectState sse_decode_box_autoadd_ui_project_state(
-    SseDeserializer deserializer,
-  );
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -408,6 +442,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, UiMixerChannel)> sse_decode_list_record_u_32_ui_mixer_channel(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(int, UiPattern)> sse_decode_list_record_u_32_ui_pattern(
     SseDeserializer deserializer,
   );
@@ -421,15 +460,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
 
   @protected
+  List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
+
+  @protected
+  List<UiParameterSnapshot> sse_decode_list_ui_parameter_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiParameterValue> sse_decode_list_ui_parameter_value(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiPluginInfo> sse_decode_list_ui_plugin_info(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
     SseDeserializer deserializer,
   );
-
-  @protected
-  List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer);
@@ -459,11 +515,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
-  UiProjectState? sse_decode_opt_box_autoadd_ui_project_state(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   PlaybackPosition sse_decode_playback_position(SseDeserializer deserializer);
 
   @protected
@@ -480,6 +531,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, UiMixerChannel) sse_decode_record_u_32_ui_mixer_channel(
     SseDeserializer deserializer,
   );
 
@@ -532,21 +588,40 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiMixerChannel sse_decode_ui_mixer_channel(SseDeserializer deserializer);
+
+  @protected
+  UiMixerChannelParams sse_decode_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerState sse_decode_ui_mixer_state(SseDeserializer deserializer);
+
+  @protected
   UiNote sse_decode_ui_note(SseDeserializer deserializer);
+
+  @protected
+  UiParameterSnapshot sse_decode_ui_parameter_snapshot(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
 
   @protected
+  UiParameterValue sse_decode_ui_parameter_value(SseDeserializer deserializer);
+
+  @protected
   UiPattern sse_decode_ui_pattern(SseDeserializer deserializer);
+
+  @protected
+  UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer);
 
   @protected
   UiPluginParameter sse_decode_ui_plugin_parameter(
     SseDeserializer deserializer,
   );
-
-  @protected
-  UiProjectState sse_decode_ui_project_state(SseDeserializer deserializer);
 
   @protected
   UiSessionState sse_decode_ui_session_state(SseDeserializer deserializer);
@@ -593,6 +668,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_u_32_ui_generator_instance_None(
     Map<int, UiGeneratorInstance> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_u_32_ui_mixer_channel_None(
+    Map<int, UiMixerChannel> self,
     SseSerializer serializer,
   );
 
@@ -646,12 +727,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_ui_project_state(
-    UiProjectState self,
-    SseSerializer serializer,
-  );
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
@@ -717,6 +792,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_ui_mixer_channel(
+    List<(int, UiMixerChannel)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_ui_pattern(
     List<(int, UiPattern)> self,
     SseSerializer serializer,
@@ -732,16 +813,37 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_ui_mixer_channel_params(
+    List<UiMixerChannelParams> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_ui_parameter_snapshot(
+    List<UiParameterSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_parameter_value(
+    List<UiParameterValue> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_plugin_info(
+    List<UiPluginInfo> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_ui_plugin_parameter(
     List<UiPluginParameter> self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_CastedPrimitive_i_64(int? self, SseSerializer serializer);
@@ -771,12 +873,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_ui_project_state(
-    UiProjectState? self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_playback_position(
     PlaybackPosition self,
     SseSerializer serializer,
@@ -803,6 +899,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_ui_generator_instance(
     (int, UiGeneratorInstance) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_ui_mixer_channel(
+    (int, UiMixerChannel) self,
     SseSerializer serializer,
   );
 
@@ -864,7 +966,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_mixer_channel(
+    UiMixerChannel self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_mixer_channel_params(
+    UiMixerChannelParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_mixer_state(UiMixerState self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_note(UiNote self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_parameter_snapshot(
+    UiParameterSnapshot self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_parameter_type(
@@ -873,17 +996,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_plugin_parameter(
-    UiPluginParameter self,
+  void sse_encode_ui_parameter_value(
+    UiParameterValue self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_ui_project_state(
-    UiProjectState self,
+  void sse_encode_ui_pattern(UiPattern self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_plugin_parameter(
+    UiPluginParameter self,
     SseSerializer serializer,
   );
 

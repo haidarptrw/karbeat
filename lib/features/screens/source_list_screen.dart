@@ -86,7 +86,7 @@ class SourceListScreen extends StatelessWidget {
               final gen = generators.values.elementAt(index);
               return _SourceTile(
                 title: gen.name,
-                subtitle: "ID: $id | ${gen.internalType}",
+                subtitle: "ID: $id",
                 icon: Icons.piano,
                 color: Colors.orangeAccent,
                 onTap: () {

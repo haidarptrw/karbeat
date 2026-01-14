@@ -2,15 +2,49 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     core::project::{
+        mixer::{EffectId, MixerState},
+        plugin::{KarbeatEffect, KarbeatGenerator},
         track::{
             midi::{Pattern, PatternId},
             KarbeatTrack,
         },
         transport::TransportState,
-        ApplicationState, AssetLibrary, mixer::{MixerState},
+        ApplicationState, AssetLibrary, GeneratorId, TrackId,
     },
     utils::math::is_power_of_two,
 };
+
+// =============================================================================
+// Audio Thread Owned Plugin State
+// =============================================================================
+
+/// A generator plugin instance owned by the audio thread
+pub struct AudioGeneratorInstance {
+    pub id: GeneratorId,
+    pub track_id: TrackId,
+    pub plugin: Box<dyn KarbeatGenerator + Send>,
+}
+
+pub struct AudioEffectInstance {
+    pub id: EffectId,
+    pub plugin: Box<dyn KarbeatEffect + Send>,
+}
+
+/// Audio thread's owned plugin instances - NO locks required for access
+/// This is managed via AudioCommand, NOT cloned from ApplicationState
+#[derive(Default)]
+pub struct AudioPluginState {
+    /// Generator plugins keyed by GeneratorId
+    pub generators: HashMap<GeneratorId, AudioGeneratorInstance>,
+    /// Effect chain per track (owned by audio thread)
+    pub track_effects: HashMap<TrackId, Vec<AudioEffectInstance>>,
+    /// Master effect chain (owned by audio thread)
+    pub master_effects: Vec<AudioEffectInstance>,
+}
+
+// =============================================================================
+// Cloneable Graph State (metadata only, no plugin instances)
+// =============================================================================
 
 /// Structural State: Tracks, Patterns, Mixer, Assets (Heavy, changes rarely)
 #[derive(Default, Clone)]

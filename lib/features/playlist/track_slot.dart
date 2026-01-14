@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/features/components/midi_drawer.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
+import 'package:karbeat/features/playlist/clip_drag_controller.dart';
+import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:provider/provider.dart';
 
-class KarbeatTrackSlot extends StatelessWidget {
+class KarbeatTrackSlot extends StatefulWidget {
   final int trackId;
   final double height;
   final ScrollController horizontalScrollController;
   final int sampleRate;
+  final ClipDragController clipDragController;
 
   const KarbeatTrackSlot({
     super.key,
@@ -19,8 +22,14 @@ class KarbeatTrackSlot extends StatelessWidget {
     required this.height,
     required this.horizontalScrollController,
     required this.sampleRate,
+    required this.clipDragController,
   });
 
+  @override
+  State<KarbeatTrackSlot> createState() => _KarbeatTrackSlotState();
+}
+
+class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
   void _handleEmptySpaceClick({
     required BuildContext context,
     required double localDx,
@@ -29,7 +38,7 @@ class KarbeatTrackSlot extends StatelessWidget {
     final int startTime = (localDx * zoomLevel).round();
 
     context.read<KarbeatState>().createEmptyPatternClip(
-      trackId: trackId,
+      trackId: widget.trackId,
       startTime: startTime,
     );
   }
@@ -48,10 +57,10 @@ class KarbeatTrackSlot extends StatelessWidget {
 
     // Listen to Track Data
     final track = context.select<KarbeatState, UiTrack?>(
-      (state) => state.tracks[trackId],
+      (state) => state.tracks[widget.trackId],
     );
 
-    final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
+    final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
     final selectedTool = context.select<KarbeatState, ToolSelection>(
       (s) => s.selectedTool,
@@ -67,7 +76,7 @@ class KarbeatTrackSlot extends StatelessWidget {
     if (track == null) return const SizedBox();
 
     return Container(
-      height: height,
+      height: widget.height,
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Colors.white.withAlpha(16), width: 1),
@@ -103,7 +112,7 @@ class KarbeatTrackSlot extends StatelessWidget {
                       gridSize: gridSize,
                       tempo: tempo,
                       sampleRate: safeSampleRate,
-                      scrollController: horizontalScrollController,
+                      scrollController: widget.horizontalScrollController,
                     ),
                   ),
                 ),
@@ -113,7 +122,7 @@ class KarbeatTrackSlot extends StatelessWidget {
           ...track.clips.map((clip) {
             final isSelected =
                 (selectedTrackId != null) &&
-                (trackId == selectedTrackId &&
+                (widget.trackId == selectedTrackId &&
                     selectedClipIds.contains(clip.id));
             return _InteractiveClip(
               key: ValueKey(
@@ -121,12 +130,14 @@ class KarbeatTrackSlot extends StatelessWidget {
                 clip.id,
               ),
               clip: clip,
-              trackId: trackId,
+              trackId: widget.trackId,
               trackType: track.trackType,
               zoomLevel: zoomLevel,
-              height: height,
+              height: widget.height,
               selectedTool: selectedTool,
               isSelected: isSelected,
+              selectedClipIds: selectedClipIds,
+              clipDragController: widget.clipDragController,
             );
           }),
         ],
@@ -147,6 +158,8 @@ class _InteractiveClip extends StatefulWidget {
   final double height;
   final ToolSelection selectedTool;
   final bool isSelected;
+  final List<int> selectedClipIds;
+  final ClipDragController clipDragController;
 
   const _InteractiveClip({
     super.key,
@@ -157,6 +170,8 @@ class _InteractiveClip extends StatefulWidget {
     required this.height,
     required this.selectedTool,
     required this.isSelected,
+    required this.selectedClipIds,
+    required this.clipDragController,
   });
 
   @override
@@ -183,19 +198,88 @@ class _InteractiveClipState extends State<_InteractiveClip> {
   OverlayEntry? _overlayEntry;
   final ValueNotifier<Offset> _overlayPosition = ValueNotifier(Offset.zero);
 
+  // Track base values for follower sync
+  int _baseStartTime = 0;
+  int _baseLoopLength = 0;
+  int _baseOffset = 0;
+
   @override
   void initState() {
     super.initState();
     _syncModel();
+    // Listen to batch drag updates for follower visual sync
+    widget.clipDragController.addListener(_onBatchDragUpdate);
+  }
+
+  @override
+  void dispose() {
+    widget.clipDragController.removeListener(_onBatchDragUpdate);
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant _InteractiveClip oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Re-attach listener if controller changed
+    if (oldWidget.clipDragController != widget.clipDragController) {
+      oldWidget.clipDragController.removeListener(_onBatchDragUpdate);
+      widget.clipDragController.addListener(_onBatchDragUpdate);
+    }
     // Only overwrite local state from backend if we are NOT currently dragging
-    if (_currentAction == _DragAction.none) {
+    // and not in a batch drag as a follower
+    if (_currentAction == _DragAction.none && !_isFollower) {
       _syncModel();
     }
+  }
+
+  /// Check if this clip is a follower in a batch drag (selected but not leader)
+  bool get _isFollower {
+    final controller = widget.clipDragController;
+    return controller.isActive &&
+        widget.isSelected &&
+        controller.leaderClipId != widget.clip.id;
+  }
+
+  /// Handle batch drag updates for follower clips
+  void _onBatchDragUpdate() {
+    if (!_isFollower) return;
+
+    final controller = widget.clipDragController;
+
+    setState(() {
+      switch (controller.action) {
+        case BatchDragAction.move:
+          _visualStartTime = (_baseStartTime + controller.deltaSamples).clamp(
+            0,
+            double.maxFinite.toInt(),
+          );
+          break;
+        case BatchDragAction.resizeRight:
+          _visualLoopLength = (_baseLoopLength + controller.deltaSamples).clamp(
+            100,
+            double.maxFinite.toInt(),
+          );
+          break;
+        case BatchDragAction.resizeLeft:
+          final oldEnd = _baseStartTime + _baseLoopLength;
+          final newStart = (_baseStartTime + controller.deltaSamples).clamp(
+            0,
+            oldEnd - 100,
+          );
+          final moveAmount = newStart - _baseStartTime;
+          _visualStartTime = newStart;
+          _visualLoopLength = oldEnd - newStart;
+          _visualOffset = (_baseOffset + moveAmount).clamp(
+            0,
+            double.maxFinite.toInt(),
+          );
+          break;
+        case BatchDragAction.none:
+          // Reset to base when drag ends
+          _syncModel();
+          break;
+      }
+    });
   }
 
   void _syncModel() {
@@ -203,6 +287,10 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     _visualLoopLength = widget.clip.loopLength.toInt();
     _visualOffset = widget.clip.offsetStart.toInt();
     _verticalDragDy = 0.0;
+    // Store base values for follower calculations
+    _baseStartTime = _visualStartTime;
+    _baseLoopLength = _visualLoopLength;
+    _baseOffset = _visualOffset;
   }
 
   void _createOverlay(BuildContext context) {
@@ -281,13 +369,18 @@ class _InteractiveClipState extends State<_InteractiveClip> {
       cursor = _cursorOverride!;
     }
 
+    // Check if this is a follower in a batch move (should be semi-transparent)
+    final isFollowerInBatchMove =
+        _isFollower && widget.clipDragController.action == BatchDragAction.move;
+
     return Positioned(
       left: left,
       top: 2,
       height: widget.height - 4,
       width: safeWidth,
       child: Opacity(
-        opacity: isMoving ? 0.0 : 1.0,
+        // Leader becomes invisible (has overlay), followers become semi-transparent
+        opacity: isMoving ? 0.0 : (isFollowerInBatchMove ? 0.4 : 1.0),
         child: MouseRegion(
           cursor: cursor,
           // Detect Hover for Resize Cursors (only if not in Delete mode)
@@ -322,10 +415,46 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
             onTap: () {
               if (widget.selectedTool == ToolSelection.delete) {
-                context.read<KarbeatState>().deleteClip(
-                  widget.trackId,
-                  widget.clip.id,
-                );
+                final state = context.read<KarbeatState>();
+                // If this clip is selected and there are multiple selections, batch delete
+                if (widget.isSelected && widget.selectedClipIds.length > 1) {
+                  state.deleteSelectedClips();
+                } else {
+                  state.deleteClip(widget.trackId, widget.clip.id);
+                }
+              } else if (widget.selectedTool == ToolSelection.select) {
+                final state = context.read<KarbeatState>();
+                // Get tap position for panel positioning
+                final renderBox = context.findRenderObject() as RenderBox?;
+                final tapPosition =
+                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+                // If not already selected, select it first
+                if (!widget.isSelected) {
+                  state.selectClip(
+                    trackId: widget.trackId,
+                    clipId: widget.clip.id,
+                  );
+                }
+
+                // Show interaction panel
+                if (widget.isSelected && widget.selectedClipIds.length > 1) {
+                  state.showInteractionPanel(
+                    MultiClipInteraction(
+                      trackId: widget.trackId,
+                      clipIds: widget.selectedClipIds,
+                      tapPosition: tapPosition,
+                    ),
+                  );
+                } else {
+                  state.showInteractionPanel(
+                    ClipInteraction(
+                      trackId: widget.trackId,
+                      clipId: widget.clip.id,
+                      tapPosition: tapPosition,
+                    ),
+                  );
+                }
               } else if (widget.selectedTool == ToolSelection.pointer) {
                 context.read<KarbeatState>().selectClip(
                   trackId: widget.trackId,
@@ -347,12 +476,35 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                 setState(() => _currentAction = _DragAction.move);
                 _createOverlay(context);
               }
+
+              // Start batch drag if this clip is selected and has siblings
+              if (widget.isSelected && widget.selectedClipIds.length > 1) {
+                final batchAction = _currentAction == _DragAction.move
+                    ? BatchDragAction.move
+                    : _currentAction == _DragAction.resizeLeft
+                    ? BatchDragAction.resizeLeft
+                    : _currentAction == _DragAction.resizeRight
+                    ? BatchDragAction.resizeRight
+                    : BatchDragAction.none;
+                widget.clipDragController.startBatchDrag(
+                  widget.clip.id,
+                  batchAction,
+                );
+              }
             },
 
             onPanUpdate: (details) {
               if (_currentAction == _DragAction.none) return;
               final deltaSamples = (details.delta.dx * widget.zoomLevel)
                   .round();
+
+              // Update batch controller delta for followers
+              if (widget.isSelected && widget.selectedClipIds.length > 1) {
+                widget.clipDragController.updateDelta(
+                  deltaSamples,
+                  details.delta.dy / widget.height,
+                );
+              }
 
               if (_currentAction == _DragAction.move) {
                 _updateOverlay(details.delta);
@@ -389,6 +541,9 @@ class _InteractiveClipState extends State<_InteractiveClip> {
               if (_currentAction == _DragAction.none) return;
 
               final state = context.read<KarbeatState>();
+              final isBatchOperation =
+                  widget.isSelected && widget.selectedClipIds.length > 1;
+              final controller = widget.clipDragController;
 
               if (_currentAction == _DragAction.move) {
                 _removeOverlay();
@@ -399,7 +554,6 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
                 if (rowOffset != 0) {
                   // Find target track ID from state list
-                  // We need the ordered list of tracks to know who is above/below
                   final sortedTracks = state.tracks.values.toList()
                     ..sort((a, b) => a.id.compareTo(b.id));
 
@@ -414,28 +568,60 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   }
                 }
 
-                state.moveClip(
-                  widget.trackId,
-                  widget.clip.id,
-                  _visualStartTime,
-                  newTrackId:
-                      newTrackId, // Pass the new track (or null if same)
-                );
+                if (isBatchOperation) {
+                  // Batch move using delta
+                  state.moveClipBatch(
+                    widget.trackId,
+                    widget.selectedClipIds,
+                    controller.deltaSamples,
+                    newTrackId: newTrackId,
+                  );
+                } else {
+                  state.moveClip(
+                    widget.trackId,
+                    widget.clip.id,
+                    _visualStartTime,
+                    newTrackId: newTrackId,
+                  );
+                }
               } else if (_currentAction == _DragAction.resizeRight) {
-                final newEndTime = _visualStartTime + _visualLoopLength;
-                state.resizeClip(
-                  widget.trackId,
-                  widget.clip.id,
-                  ResizeEdge.right,
-                  newEndTime,
-                );
+                if (isBatchOperation) {
+                  state.resizeClipBatch(
+                    widget.trackId,
+                    widget.selectedClipIds,
+                    ResizeEdge.right,
+                    controller.deltaSamples,
+                  );
+                } else {
+                  final newEndTime = _visualStartTime + _visualLoopLength;
+                  state.resizeClip(
+                    widget.trackId,
+                    widget.clip.id,
+                    ResizeEdge.right,
+                    newEndTime,
+                  );
+                }
               } else if (_currentAction == _DragAction.resizeLeft) {
-                state.resizeClip(
-                  widget.trackId,
-                  widget.clip.id,
-                  ResizeEdge.left,
-                  _visualStartTime,
-                );
+                if (isBatchOperation) {
+                  state.resizeClipBatch(
+                    widget.trackId,
+                    widget.selectedClipIds,
+                    ResizeEdge.left,
+                    controller.deltaSamples,
+                  );
+                } else {
+                  state.resizeClip(
+                    widget.trackId,
+                    widget.clip.id,
+                    ResizeEdge.left,
+                    _visualStartTime,
+                  );
+                }
+              }
+
+              // Reset batch controller
+              if (isBatchOperation) {
+                controller.reset();
               }
 
               // Reset

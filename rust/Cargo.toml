@@ -9,8 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 anyhow = "1.0.100"
-cpal = { version = "0.16.0", features = ["asio"] }
-crossbeam-channel = "0.5.15"
+cpal = { version = "0.16.0" }
 env_logger = "0.11.8"
 fastrand = "2.3.0"
 flutter_rust_bridge = "=2.11.1"
@@ -30,6 +29,7 @@ symphonia = { version = "0.5.5", default-features = false, features = [
 triple_buffer = "8.1.1"
 karbeat_macros = { path = "../karbeat_macros" }
 rustfft = "6.4.1"
+thiserror = "2.0.17"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

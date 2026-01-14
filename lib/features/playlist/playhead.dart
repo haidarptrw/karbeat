@@ -3,23 +3,53 @@ import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:provider/provider.dart';
 
-class TimelinePlayheadSeeker extends StatefulWidget {
-  final double headerWidth;
+class _PlayheadHandlePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.yellowAccent
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, 0); // Top Left
+    path.lineTo(size.width, 0); // Top Right
+    path.lineTo(size.width / 2, size.height); // Bottom Center
+    path.close();
+
+    canvas.drawPath(path, paint);
+    canvas.drawShadow(path, Colors.black, 2.0, false);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class PlayheadOverlay extends StatefulWidget {
+  /// Amount of pixels to offset the draw start (e.g. for Headers)
+  final double offsetAdjustment;
   final ScrollController scrollController;
   final Function(int samples) onSeek;
 
-  const TimelinePlayheadSeeker({
+  /// The current zoom level (pixels per sample)
+  final double zoomLevel;
+
+  /// Logic to determine which sample count to display (Song vs Pattern)
+  final int Function(PlaybackPosition) sampleSelector;
+
+  const PlayheadOverlay({
     super.key,
-    required this.headerWidth,
+    required this.offsetAdjustment,
     required this.scrollController,
     required this.onSeek,
+    required this.zoomLevel,
+    required this.sampleSelector,
   });
 
   @override
-  State<TimelinePlayheadSeeker> createState() => _TimelinePlayheadSeekerState();
+  State<PlayheadOverlay> createState() => _PlayheadOverlayState();
 }
 
-class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
+class _PlayheadOverlayState extends State<PlayheadOverlay> {
   late Stream<PlaybackPosition> _positionStream;
 
   @override
@@ -29,16 +59,7 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
   }
 
   @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final zoomLevel = context.select<KarbeatState, double>(
-      (s) => s.horizontalZoomLevel,
-    );
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportWidth = constraints.maxWidth;
@@ -49,11 +70,13 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
             StreamBuilder<PlaybackPosition>(
               stream: _positionStream,
               builder: (context, snapshot) {
-                final currentSamples = snapshot.data?.samples ?? 0;
+                if (!snapshot.hasData) return const SizedBox();
+
+                final currentSamples = widget.sampleSelector(snapshot.data!);
 
                 double playheadAbsoluteX = 0;
-                if (zoomLevel > 0) {
-                  playheadAbsoluteX = currentSamples / zoomLevel;
+                if (widget.zoomLevel > 0) {
+                  playheadAbsoluteX = currentSamples / widget.zoomLevel;
                 }
 
                 return AnimatedBuilder(
@@ -66,13 +89,15 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
 
                     // Calculate Screen X
                     final double left =
-                        widget.headerWidth + playheadAbsoluteX - scrollOffset;
+                        widget.offsetAdjustment +
+                        playheadAbsoluteX -
+                        scrollOffset;
 
                     // Optimization: Don't render if completely off-screen
                     if (left > viewportWidth + 50) return const SizedBox();
 
-                    // Hide if it goes behind the header (scrolled too far left)
-                    if (left < widget.headerWidth) return const SizedBox();
+                    // Hide if it goes behind the header/offset (scrolled too far left)
+                    if (left < widget.offsetAdjustment) return const SizedBox();
 
                     return Positioned(
                       left: left - 10, // Center the 20px wide handle
@@ -85,7 +110,8 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
                             behavior: HitTestBehavior.opaque,
                             onHorizontalDragUpdate: (details) {
                               final deltaPixels = details.delta.dx;
-                              final deltaSamples = deltaPixels * zoomLevel;
+                              final deltaSamples =
+                                  deltaPixels * widget.zoomLevel;
                               final newSamples = currentSamples + deltaSamples;
                               widget.onSeek(newSamples.toInt());
                             },
@@ -117,25 +143,4 @@ class _TimelinePlayheadSeekerState extends State<TimelinePlayheadSeeker> {
       },
     );
   }
-}
-
-class _PlayheadHandlePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.yellowAccent
-      ..style = PaintingStyle.fill;
-
-    final path = Path();
-    path.moveTo(0, 0); // Top Left
-    path.lineTo(size.width, 0); // Top Right
-    path.lineTo(size.width / 2, size.height); // Bottom Center
-    path.close();
-
-    canvas.drawPath(path, paint);
-    canvas.drawShadow(path, Colors.black, 2.0, false);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

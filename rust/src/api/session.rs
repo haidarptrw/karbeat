@@ -135,6 +135,7 @@ pub fn set_preview_generator(generator_id: Option<u32>) -> Result<(), String> {
         let mut app = get_app_write();
         app.session.preview_generator_id = generator_id.map(|id| id.into());
     }
+    broadcast_state_change();
     Ok(())
 }
 

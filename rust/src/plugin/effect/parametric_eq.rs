@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::plugin::wrapper::{EffectWrapper, RawEffectEngine};
+use crate::{
+    core::project::PluginInstance,
+    plugin::wrapper::{EffectWrapper, RawEffectEngine},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FilterType {
@@ -445,4 +448,15 @@ pub fn create_parametric_eq(sample_rate: Option<f32>) -> EffectWrapper<KarbeatPa
         KarbeatParametricEQEngine::new(),
         sample_rate.unwrap_or(48000.0),
     )
+}
+
+impl From<KarbeatParametricEQ> for PluginInstance {
+    fn from(_wrapper: KarbeatParametricEQ) -> Self {
+        PluginInstance {
+            registry_id: 0, // Will be set properly when used
+            name: "Parametric EQ".to_string(),
+            bypass: false,
+            parameters: HashMap::new(),
+        }
+    }
 }

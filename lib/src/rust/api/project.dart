@@ -14,9 +14,6 @@ part 'project.freezed.dart';
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
 
-Future<UiProjectState?> getUiState() =>
-    RustLib.instance.api.crateApiProjectGetUiState();
-
 /// Get the current project metadata state from the backend
 Future<ProjectMetadata> getProjectMetadata() =>
     RustLib.instance.api.crateApiProjectGetProjectMetadata();
@@ -177,19 +174,16 @@ sealed class UiClipSource with _$UiClipSource {
 class UiGeneratorInstance {
   final int id;
   final String name;
-  final String internalType;
   final Map<int, double> parameters;
 
   const UiGeneratorInstance({
     required this.id,
     required this.name,
-    required this.internalType,
     required this.parameters,
   });
 
   @override
-  int get hashCode =>
-      id.hashCode ^ name.hashCode ^ internalType.hashCode ^ parameters.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -198,26 +192,7 @@ class UiGeneratorInstance {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
-          internalType == other.internalType &&
           parameters == other.parameters;
-}
-
-class UiProjectState {
-  final ProjectMetadata metadata;
-  final List<UiTrack> tracks;
-
-  const UiProjectState({required this.metadata, required this.tracks});
-
-  @override
-  int get hashCode => metadata.hashCode ^ tracks.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiProjectState &&
-          runtimeType == other.runtimeType &&
-          metadata == other.metadata &&
-          tracks == other.tracks;
 }
 
 class UiSessionState {
@@ -256,17 +231,23 @@ class UiTrack {
   final String name;
   final TrackType trackType;
   final List<UiClip> clips;
+  final int? generatorId;
 
   const UiTrack({
     required this.id,
     required this.name,
     required this.trackType,
     required this.clips,
+    this.generatorId,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ name.hashCode ^ trackType.hashCode ^ clips.hashCode;
+      id.hashCode ^
+      name.hashCode ^
+      trackType.hashCode ^
+      clips.hashCode ^
+      generatorId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -276,5 +257,6 @@ class UiTrack {
           id == other.id &&
           name == other.name &&
           trackType == other.trackType &&
-          clips == other.clips;
+          clips == other.clips &&
+          generatorId == other.generatorId;
 }

@@ -1,9 +1,12 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    core::project::{plugin::instance::PluginInstance, ApplicationState},
+    core::project::{mixer::EffectId, plugin::instance::PluginInstance, ApplicationState},
     define_id,
 };
 
@@ -12,7 +15,7 @@ define_id!(GeneratorId);
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GeneratorInstance {
     pub id: GeneratorId,
-    pub effects: Arc<Vec<PluginInstance>>,
+    pub effects: HashMap<EffectId, Arc<PluginInstance>>,
     pub instance_type: GeneratorInstanceType,
 }
 
@@ -25,7 +28,9 @@ pub enum GeneratorInstanceType {
     Sampler { asset_id: u32, root_note: u8 },
 
     // Audio Input (Microphone / Line In)
-    AudioInput { device_channel_index: u32 },
+    // This might be unavailable due to limitation of the CPAL to
+    // do duplex streaming
+    AudioInput { device_channel_index: u32 }, 
 }
 
 impl ApplicationState {
@@ -36,7 +41,7 @@ impl ApplicationState {
         let instance = GeneratorInstance {
             id,
             instance_type,
-            effects: Arc::new(Default::default()),
+            effects: HashMap::new(),
         };
 
         self.generator_pool

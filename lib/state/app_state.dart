@@ -3,6 +3,7 @@ import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/grid.dart';
+import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
@@ -20,6 +21,9 @@ import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
 enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom, select }
+
+/// Piano roll specific tool selection (independent from main toolbar)
+enum PianoRollToolSelection { pointer, draw, delete, select, slice }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }
 
@@ -75,8 +79,8 @@ class KarbeatState extends ChangeNotifier {
   Map<int, UiGeneratorInstance> _generators = {};
   Map<int, UiPattern> _patterns = {};
   UiSessionState? _sessionState;
-  List<String> _availableGenerators = [];
-  List<String> get availableGenerators => _availableGenerators;
+  List<UiPluginInfo> _availableGenerators = [];
+  List<UiPluginInfo> get availableGenerators => _availableGenerators;
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
     KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -101,6 +105,14 @@ class KarbeatState extends ChangeNotifier {
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
   int _piannoRollGridDenom = 4;
   int? _editingPatternId;
+
+  // =========== PIANO ROLL STATE ====================
+  PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.pointer;
+  Set<int> _selectedNoteIds = {};
+  int? _previewGeneratorId;
+
+  /// Currently active interaction target for the interaction panel
+  InteractionTarget? _interactionTarget;
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
@@ -147,7 +159,8 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> fetchAvailableGenerators() async {
     try {
-      final list = await getAvailableGenerators();
+      // Use the ID-based API that returns UiPluginInfo with id and name
+      final list = await getAvailableGeneratorsWithIds();
       _availableGenerators = list;
       notifyListeners();
     } catch (e) {
@@ -205,6 +218,13 @@ class KarbeatState extends ChangeNotifier {
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
+  InteractionTarget? get interactionTarget => _interactionTarget;
+
+  // Piano roll getters
+  PianoRollToolSelection get pianoRollTool => _pianoRollTool;
+  Set<int> get selectedNoteIds => _selectedNoteIds;
+  int? get previewGeneratorId =>
+      _sessionState?.previewGeneratorId ?? _previewGeneratorId;
 
   // ================ SETTERS ===================
   set pianoRollGridDenom(GridValue val) {
@@ -389,6 +409,18 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Add a MIDI track with a generator by its registry ID (preferred method).
+  Future<void> addMidiTrackWithGeneratorId(int registryId) async {
+    try {
+      await track_api.addMidiTrackWithGeneratorId(registryId: registryId);
+      notifyBackendChange(ProjectEvent.tracksChanged);
+      notifyBackendChange(ProjectEvent.generatorListChanged);
+    } catch (e) {
+      KarbeatLogger.error("Failed to add midi track: $e");
+    }
+  }
+
+  /// Add a MIDI track with a generator by name (backwards compatible).
   Future<void> addMidiTrackWithGenerator(String generatorName) async {
     try {
       await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
@@ -459,6 +491,36 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  // =============== PIANO ROLL ACTIONS ===============
+
+  /// Change the selected piano roll tool
+  void selectPianoRollTool(PianoRollToolSelection tool) {
+    if (_pianoRollTool != tool) {
+      _pianoRollTool = tool;
+      notifyListeners();
+    }
+  }
+
+  /// Select notes in the piano roll
+  void selectNotes(Set<int> noteIds) {
+    _selectedNoteIds = noteIds;
+    notifyListeners();
+  }
+
+  /// Add notes to the current selection
+  void addNotesToSelection(Set<int> noteIds) {
+    _selectedNoteIds = {..._selectedNoteIds, ...noteIds};
+    notifyListeners();
+  }
+
+  /// Clear note selection
+  void clearNoteSelection() {
+    if (_selectedNoteIds.isNotEmpty) {
+      _selectedNoteIds = {};
+      notifyListeners();
+    }
+  }
+
   void toggleToolbarContext(ToolbarMenuContextGroup group) {
     if (group == _currentToolbarContext) {
       // Toggle off
@@ -472,6 +534,20 @@ class KarbeatState extends ChangeNotifier {
   void closeContextPanel() {
     _currentToolbarContext = ToolbarMenuContextGroup.none;
     notifyListeners();
+  }
+
+  /// Shows the interaction panel for a given target (clip, multi-clip, or track)
+  void showInteractionPanel(InteractionTarget target) {
+    _interactionTarget = target;
+    notifyListeners();
+  }
+
+  /// Hides the interaction panel
+  void hideInteractionPanel() {
+    if (_interactionTarget != null) {
+      _interactionTarget = null;
+      notifyListeners();
+    }
   }
 
   void navigateTo(WorkspaceView view) {
@@ -596,6 +672,88 @@ class KarbeatState extends ChangeNotifier {
     } catch (e) {
       KarbeatLogger.error("Error when creating new empty pattern clip: $e");
     }
+  }
+
+  // ===================== BATCH CLIP OPERATIONS ==========================
+
+  /// Move multiple clips by a delta amount (in samples)
+  Future<void> moveClipBatch(
+    int trackId,
+    List<int> clipIds,
+    int deltaSamples, {
+    int? newTrackId,
+  }) async {
+    try {
+      await track_api.moveClipBatch(
+        sourceTrackId: trackId,
+        clipIds: clipIds,
+        deltaSamples: deltaSamples,
+        newTrackId: newTrackId,
+      );
+      await syncTrack(trackId);
+      if (newTrackId != null && newTrackId != trackId) {
+        await syncTrack(newTrackId);
+      }
+    } catch (e) {
+      KarbeatLogger.error("Error moving clips in batch: $e");
+    }
+  }
+
+  /// Resize multiple clips by a delta amount (in samples)
+  Future<void> resizeClipBatch(
+    int trackId,
+    List<int> clipIds,
+    ResizeEdge edge,
+    int deltaSamples,
+  ) async {
+    try {
+      await track_api.resizeClipBatch(
+        trackId: trackId,
+        clipIds: clipIds,
+        edge: edge,
+        deltaSamples: deltaSamples,
+      );
+      await syncTrack(trackId);
+    } catch (e) {
+      KarbeatLogger.error("Error resizing clips in batch: $e");
+    }
+  }
+
+  /// Delete multiple clips at once
+  Future<void> deleteClipBatch(int trackId, List<int> clipIds) async {
+    // Optimistic update
+    if (_tracks.containsKey(trackId)) {
+      final track = _tracks[trackId]!;
+      final clipIdSet = clipIds.toSet();
+      final updatedClips = track.clips
+          .where((c) => !clipIdSet.contains(c.id))
+          .toList();
+
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+      notifyListeners();
+    }
+
+    try {
+      await track_api.deleteClipBatch(trackId: trackId, clipIds: clipIds);
+      await syncTrack(trackId);
+    } catch (e) {
+      KarbeatLogger.error("Error deleting clips in batch: $e");
+    }
+  }
+
+  /// Convenience method to delete all currently selected clips
+  Future<void> deleteSelectedClips() async {
+    final session = _sessionState;
+    if (session == null) return;
+
+    final trackId = session.selectedTrackId;
+    final clipIds = session.selectedClipIds;
+
+    if (trackId == null || clipIds.isEmpty) return;
+
+    await deleteClipBatch(trackId, clipIds);
+    await deselectAllClips();
   }
 
   // ===================== NOTE CHANGE API'S ==========================
@@ -899,6 +1057,7 @@ class KarbeatState extends ChangeNotifier {
 
   /// Set the preview generator for piano roll
   Future<void> setPreviewGenerator({int? generatorId}) async {
+    _previewGeneratorId = generatorId;
     try {
       await session_api.setPreviewGenerator(generatorId: generatorId);
       notifyBackendChange(ProjectEvent.sessionChanged);

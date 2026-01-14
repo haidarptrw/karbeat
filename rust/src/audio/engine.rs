@@ -1,18 +1,23 @@
 // src/audio/engine.rs
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use rtrb::{Consumer, Producer};
 use triple_buffer::Output;
 
 use crate::{
-    audio::{event::PlaybackPosition, render_state::AudioRenderState},
-    commands::AudioCommand,
+    audio::{
+        event::PlaybackPosition,
+        render_state::{
+            AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
+        },
+    },
+    commands::{AudioCommand, AudioFeedback, GeneratorParameterSnapshot},
     core::project::{
         mixer::MixerChannel,
-        plugin::{MidiEvent, MidiMessage},
-        AudioWaveform, Clip, GeneratorId, GeneratorInstance, GeneratorInstanceType, KarbeatPlugin,
-        KarbeatSource, KarbeatTrack, Pattern, PatternId, TrackId,
+        plugin::{KarbeatEffect, MidiEvent, MidiMessage},
+        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
+        PatternId, TrackId,
     },
 };
 
@@ -21,7 +26,7 @@ pub enum PlaybackMode {
     Song,
     Pattern {
         pattern_id: PatternId,
-        track_id: TrackId,
+        generator_id: GeneratorId,
     },
 }
 
@@ -29,20 +34,29 @@ pub struct AudioEngine {
     // Comms
     state_consumer: Output<AudioRenderState>,
     position_producer: Producer<PlaybackPosition>,
+    feedback_producer: Producer<AudioFeedback>,
     current_state: AudioRenderState,
 
-    // Timeline
+    // Timeline (Song mode)
     sample_rate: u32,
     playhead_samples: u32,
     current_beat: usize,
     current_bar: usize,
 
-    // Active Voices
+    // Timeline (Pattern mode - independent from song)
+    pattern_playhead_samples: u32,
+    pattern_beat: usize,
+    pattern_bar: usize,
+
+    // Active Voices (lightweight references to plugins in plugin_state)
     active_generators: Vec<GeneratorVoice>,
     active_oneshots: Vec<AudioVoice>,
     preview_voices: Vec<PreviewVoice>,
 
-    // Real-time Command Queue
+    // Audio thread's owned plugins - NO locks required
+    plugin_state: AudioPluginState,
+
+    // Real-time Command Queue (UI → Audio)
     command_consumer: Consumer<AudioCommand>,
 
     // Update emit scheduler
@@ -54,11 +68,10 @@ pub struct AudioEngine {
     playback_mode: PlaybackMode,
 }
 
+/// Lightweight voice reference - the actual plugin lives in AudioPluginState
 pub struct GeneratorVoice {
     pub id: GeneratorId,
     pub track_id: TrackId,
-    // The shared plugin instance (Thread-safe)
-    pub generator: Arc<Mutex<KarbeatPlugin>>,
     // Events queued for the CURRENT buffer block only
     pub events: Vec<MidiEvent>,
     // Track if this generator is persistent or temporary
@@ -101,6 +114,7 @@ impl AudioEngine {
         state_consumer: Output<AudioRenderState>,
         command_consumer: Consumer<AudioCommand>,
         position_producer: Producer<PlaybackPosition>,
+        feedback_producer: Producer<AudioFeedback>,
         sample_rate: u32,
         initial_state: AudioRenderState,
     ) -> Self {
@@ -109,14 +123,19 @@ impl AudioEngine {
             state_consumer,
             command_consumer,
             position_producer,
+            feedback_producer,
             current_state: initial_state,
             sample_rate,
             playhead_samples: 0,
             active_generators: Vec::with_capacity(32),
             active_oneshots: Vec::with_capacity(32),
             preview_voices: Vec::with_capacity(4),
+            plugin_state: AudioPluginState::default(),
             current_beat: 1,
             current_bar: 1,
+            pattern_playhead_samples: 0,
+            pattern_beat: 1,
+            pattern_bar: 1,
             last_emitted_samples: 0,
             mix_buffer,
             playback_mode: PlaybackMode::Song,
@@ -152,16 +171,18 @@ impl AudioEngine {
                 PlaybackMode::Song => self.process_song_mode(frame_count, output_buffer, channels),
                 PlaybackMode::Pattern {
                     pattern_id,
-                    track_id,
+                    generator_id,
                 } => self.process_pattern_mode(
                     pattern_id,
-                    track_id,
+                    generator_id,
                     frame_count,
                     output_buffer,
                     channels,
                 ),
             }
         } else {
+            // When transport is stopped, still render any active voices
+            // (e.g., preview notes with sustain, ADSR tails)
             self.render_voices_to_buffer(output_buffer, channels);
 
             // Clean up audio voices (oneshots), keep generator voices active if they have pending audio tail
@@ -179,6 +200,30 @@ impl AudioEngine {
         self.recalculate_beat_bar();
         self.emit_playback_position();
         self.cleanup_finished_voices();
+    }
+
+    fn advance_pattern_playhead(&mut self, frame_count: usize) {
+        self.pattern_playhead_samples += frame_count as u32;
+        self.recalculate_pattern_beat_bar();
+        self.emit_playback_position();
+        self.cleanup_finished_voices();
+    }
+
+    /// Recalculates pattern beat/bar based on pattern_playhead_samples
+    fn recalculate_pattern_beat_bar(&mut self) {
+        let tempo = self.current_state.transport.bpm;
+        if tempo <= 0.0 {
+            return;
+        }
+
+        let samples_per_beat = (60.0 / tempo * self.sample_rate as f32) as usize;
+        if samples_per_beat == 0 {
+            return;
+        }
+
+        // Pattern beat/bar are 1-indexed within the pattern
+        self.pattern_beat = (self.pattern_playhead_samples as usize / samples_per_beat) + 1;
+        self.pattern_bar = (self.pattern_beat - 1) / 4 + 1;
     }
 
     fn process_song_mode(
@@ -204,10 +249,10 @@ impl AudioEngine {
     fn process_pattern_mode(
         &mut self,
         pattern_id: PatternId,
-        track_id: TrackId,
+        generator_id: GeneratorId,
         frame_count: usize,
-        _output_buffer: &mut [f32],
-        _channels: usize,
+        output_buffer: &mut [f32],
+        channels: usize,
     ) {
         let pattern = match self.current_state.graph.patterns.get(&pattern_id) {
             Some(p) => p,
@@ -217,6 +262,13 @@ impl AudioEngine {
                 return;
             }
         };
+
+        // Verify the generator exists in plugin_state
+        if !self.plugin_state.generators.contains_key(&generator_id) {
+            log::warn!("Pattern preview: Generator {:?} not found", generator_id);
+            self.stop_playback();
+            return;
+        }
 
         let tempo = self.current_state.transport.bpm;
         let sample_rate = self.sample_rate as f32;
@@ -228,47 +280,58 @@ impl AudioEngine {
             return;
         }
 
-        if self.playhead_samples >= loop_len_samples {
-            self.playhead_samples = 0;
-            Self::stop_all_active_generators_without_mutable_ref(
+        // Use PATTERN playhead (independent from song)
+        if self.pattern_playhead_samples >= loop_len_samples {
+            self.pattern_playhead_samples = 0;
+            Self::stop_all_active_generators_impl(
                 &mut self.active_generators,
-                &mut self.preview_voices,
+                &mut self.plugin_state,
             ); // Kill notes at loop boundary to prevent hangs
         }
 
-        let start_time = self.playhead_samples;
+        let start_time = self.pattern_playhead_samples;
         let end_time = start_time + frame_count as u32;
 
-        let track = self
-            .current_state
-            .graph
-            .tracks
+        // Find or create voice for this generator
+        let voice_idx = self
+            .active_generators
             .iter()
-            .find(|t| t.id == track_id);
+            .position(|g| g.id == generator_id)
+            .unwrap_or_else(|| {
+                // Get the track_id from plugin_state if available
+                let track_id = self
+                    .plugin_state
+                    .generators
+                    .get(&generator_id)
+                    .map(|g| g.track_id)
+                    .unwrap_or(TrackId::from(0));
 
-        if let Some(track) = track {
-            if let Some(gen) = &track.generator {
-                if let Some(voice_idx) = Self::ensure_generator_voice(
-                    &mut self.active_generators,
-                    self.current_state.graph.buffer_size,
-                    self.sample_rate,
+                self.active_generators.push(GeneratorVoice {
+                    id: generator_id,
                     track_id,
-                    gen,
-                ) {
-                    let gen_voice = &mut self.active_generators[voice_idx];
-                    Self::schedule_pattern_notes_raw(
-                        &mut gen_voice.events,
-                        &pattern.notes,
-                        self.sample_rate,
-                        tempo,
-                        start_time,
-                        end_time,
-                    );
-                }
-            }
-        }
+                    events: Vec::new(),
+                    active: true,
+                });
+                self.active_generators.len() - 1
+            });
 
-        self.advance_playhead(frame_count);
+        let gen_voice = &mut self.active_generators[voice_idx];
+        gen_voice.active = true;
+
+        Self::schedule_pattern_notes_raw(
+            &mut gen_voice.events,
+            &pattern.notes,
+            self.sample_rate,
+            tempo,
+            start_time,
+            end_time,
+        );
+
+        // Render voices to buffer
+        self.render_voices_to_buffer(output_buffer, channels);
+
+        // Advance PATTERN playhead (not song playhead)
+        self.advance_pattern_playhead(frame_count);
     }
 
     fn stop_playback(&mut self) {
@@ -276,27 +339,21 @@ impl AudioEngine {
     }
 
     fn stop_all_active_generators(&mut self) {
-        Self::stop_all_active_generators_without_mutable_ref(
-            &mut self.active_generators,
-            &mut self.preview_voices,
-        );
+        Self::stop_all_active_generators_impl(&mut self.active_generators, &mut self.plugin_state);
     }
 
-    fn stop_all_active_generators_without_mutable_ref(
+    fn stop_all_active_generators_impl(
         active_generators: &mut Vec<GeneratorVoice>,
-        preview_voices: &mut Vec<PreviewVoice>,
+        plugin_state: &mut AudioPluginState,
     ) {
         for voice in active_generators.iter_mut() {
-            if let Ok(mut guard) = voice.generator.lock() {
-                if let KarbeatPlugin::Generator(gen) = &mut *guard {
-                    // Reset the plugin to kill all internal voices/envelopes
-                    gen.reset();
-                }
+            // Reset the plugin via plugin_state (no lock needed)
+            if let Some(gen_instance) = plugin_state.generators.get_mut(&voice.id) {
+                gen_instance.plugin.reset();
             }
             // Clear any pending MIDI events that might have been queued
             voice.events.clear();
         }
-        preview_voices.clear();
     }
 
     fn process_command(&mut self, cmd: AudioCommand) {
@@ -331,10 +388,156 @@ impl AudioEngine {
                 self.emit_current_playback_position();
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
-                self.playback_mode = playback_mode;
-                // Reset playhead when switching modes to avoid jumping into emptiness
-                self.playhead_samples = 0;
+                // 1. Silence everything to prevent hanging notes from the previous mode
                 self.stop_all_active_generators();
+
+                self.playback_mode = playback_mode;
+
+                // 2. Reset the specific playhead for the new mode
+                match self.playback_mode {
+                    PlaybackMode::Song => {
+                        self.playhead_samples = 0;
+                        self.recalculate_beat_bar();
+                        self.last_emitted_samples = 0;
+                    }
+                    PlaybackMode::Pattern { .. } => {
+                        self.pattern_playhead_samples = 0;
+                        self.recalculate_pattern_beat_bar();
+                        // In pattern mode, we treat 0 as the start of the loop
+                    }
+                }
+
+                // 3. Snap UI to the beginning immediately
+                self.emit_current_playback_position();
+            }
+            AudioCommand::AddGenerator {
+                generator_id,
+                track_id,
+                mut plugin,
+            } => {
+                // Prepare the plugin with current sample rate and buffer size
+                let buf_size = self.current_state.graph.buffer_size.max(512);
+                plugin.prepare(self.sample_rate as f32, buf_size);
+
+                self.plugin_state.generators.insert(
+                    generator_id,
+                    AudioGeneratorInstance {
+                        id: generator_id,
+                        track_id,
+                        plugin,
+                    },
+                );
+                log::info!(
+                    "[AudioEngine] Added generator {:?} for track {:?}",
+                    generator_id,
+                    track_id
+                );
+            }
+            AudioCommand::RemoveGenerator { generator_id } => {
+                self.plugin_state.generators.remove(&generator_id);
+                // Also remove any active voice referencing it
+                self.active_generators.retain(|v| v.id != generator_id);
+                log::info!("[AudioEngine] Removed generator {:?}", generator_id);
+            }
+            AudioCommand::SetGeneratorParameter {
+                generator_id,
+                param_id,
+                value,
+            } => {
+                if let Some(gen_instance) = self.plugin_state.generators.get_mut(&generator_id) {
+                    gen_instance.plugin.set_parameter(param_id, value);
+                }
+            }
+            AudioCommand::UpdateGeneratorTrack {
+                generator_id,
+                track_id,
+            } => {
+                if let Some(gen_instance) = self.plugin_state.generators.get_mut(&generator_id) {
+                    gen_instance.track_id = track_id;
+                }
+                // Update active voice track association
+                for voice in &mut self.active_generators {
+                    if voice.id == generator_id {
+                        voice.track_id = track_id;
+                    }
+                }
+            }
+            AudioCommand::AddTrackEffect {
+                track_id,
+                effect_id,
+                mut effect,
+            } => {
+                // Prepare the effect
+                let buf_size = self.current_state.graph.buffer_size.max(512);
+                effect.prepare(self.sample_rate as f32, buf_size);
+
+                self.plugin_state
+                    .track_effects
+                    .entry(track_id)
+                    .or_default()
+                    .push(AudioEffectInstance {
+                        id: effect_id,
+                        plugin: effect,
+                    });
+                log::info!("[AudioEngine] Added effect to track {:?}", track_id);
+            }
+            AudioCommand::RemoveTrackEffect {
+                track_id,
+                effect_idx,
+            } => {
+                if let Some(effects) = self.plugin_state.track_effects.get_mut(&track_id) {
+                    if effect_idx < effects.len() {
+                        effects.remove(effect_idx);
+                    }
+                }
+            }
+            AudioCommand::SetTrackEffectParameter {
+                track_id,
+                effect_idx,
+                param_id,
+                value,
+            } => {
+                if let Some(effects) = self.plugin_state.track_effects.get_mut(&track_id) {
+                    if let Some(effect) = effects.get_mut(effect_idx) {
+                        effect.plugin.set_parameter(param_id, value);
+                    }
+                }
+            }
+            AudioCommand::QueryGeneratorParameters { generator_id } => {
+                // Get all parameter values from the generator and send back
+                if let Some(gen_instance) = self.plugin_state.generators.get(&generator_id) {
+                    let specs = gen_instance.plugin.get_parameter_specs();
+                    let parameters: Vec<(u32, f32)> = specs
+                        .iter()
+                        .map(|spec| (spec.id, gen_instance.plugin.get_parameter(spec.id)))
+                        .collect();
+
+                    let snapshot = GeneratorParameterSnapshot {
+                        generator_id,
+                        parameters,
+                    };
+
+                    // Best-effort push (don't block audio thread)
+                    let _ = self
+                        .feedback_producer
+                        .push(AudioFeedback::ParameterSnapshot(snapshot));
+                }
+            }
+            #[allow(unused_variables)]
+            AudioCommand::AddMasterEffect { effect_id, effect } => {
+                // Temporarily do nothing. It will be implemented later
+            }
+            #[allow(unused_variables)]
+            AudioCommand::RemoveMasterEffect { effect_idx } => {
+                // Temporarily do nothing. It will be implemented later
+            }
+            #[allow(unused_variables)]
+            AudioCommand::SetMasterEffectParameter {
+                effect_idx,
+                param_id,
+                value,
+            } => {
+                // Temporarily do nothing. It will be implemented later
             }
         }
     }
@@ -388,13 +591,21 @@ impl AudioEngine {
 
     fn build_position_struct(&self, is_playing: Option<bool>) -> PlaybackPosition {
         let is_playing = is_playing.unwrap_or(self.current_state.transport.is_playing);
+        let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
+
         PlaybackPosition {
+            // Song position
             samples: self.playhead_samples,
             beat: self.current_beat,
             bar: self.current_bar,
             tempo: self.current_state.transport.bpm,
             sample_rate: self.current_state.graph.sample_rate,
             is_playing,
+            // Pattern position (independent)
+            is_pattern_mode,
+            pattern_samples: self.pattern_playhead_samples,
+            pattern_beat: self.pattern_beat,
+            pattern_bar: self.pattern_bar,
         }
     }
 
@@ -427,7 +638,7 @@ impl AudioEngine {
     }
 
     fn trigger_live_note(&mut self, generator_id: GeneratorId, key: u8, velocity: u8, is_on: bool) {
-        // Find the track that has this generator
+        // Try to find the track that has this generator from current_state
         let target_info = self.current_state.graph.tracks.iter().find_map(|t| {
             if let Some(gen) = &t.generator {
                 if gen.id == generator_id {
@@ -437,17 +648,14 @@ impl AudioEngine {
             None
         });
 
+        // If we found the track info, use it
         if let Some((track_id, gen_instance)) = target_info {
-            // Ensure the voice is active (even if Transport is stopped)
-            // This creates the voice if it doesn't exist.
             if let Some(voice_idx) = Self::ensure_generator_voice(
                 &mut self.active_generators,
-                self.current_state.graph.buffer_size,
-                self.sample_rate,
+                &self.plugin_state,
                 track_id,
                 &gen_instance,
             ) {
-                // Inject MIDI event
                 let gen_voice = &mut self.active_generators[voice_idx];
                 let message = if is_on {
                     MidiMessage::NoteOn { key, velocity }
@@ -459,15 +667,49 @@ impl AudioEngine {
                     sample_offset: 0,
                     data: message,
                 });
-
-                // Keep voice alive for processing even if track is empty
                 gen_voice.active = true;
-            } else {
-                log::warn!(
-                    "PlayPreviewNote: Generator ID {:?} not found in active graph",
-                    generator_id
-                );
+                return;
             }
+        }
+
+        // Fallback: If triple buffer hasn't synced yet, check plugin_state directly
+        // This handles the case where AudioCommand::AddGenerator was received but
+        // the UI hasn't updated current_state via triple buffer yet
+        if let Some(gen_instance) = self.plugin_state.generators.get(&generator_id) {
+            let track_id = gen_instance.track_id;
+
+            // Find or create voice
+            let voice_idx = self
+                .active_generators
+                .iter()
+                .position(|g| g.id == generator_id)
+                .unwrap_or_else(|| {
+                    self.active_generators.push(GeneratorVoice {
+                        id: generator_id,
+                        track_id,
+                        events: Vec::new(),
+                        active: true,
+                    });
+                    self.active_generators.len() - 1
+                });
+
+            let gen_voice = &mut self.active_generators[voice_idx];
+            let message = if is_on {
+                MidiMessage::NoteOn { key, velocity }
+            } else {
+                MidiMessage::NoteOff { key }
+            };
+
+            gen_voice.events.push(MidiEvent {
+                sample_offset: 0,
+                data: message,
+            });
+            gen_voice.active = true;
+        } else {
+            log::warn!(
+                "PlayPreviewNote: Generator ID {:?} not found in plugin_state or graph",
+                generator_id
+            );
         }
     }
 
@@ -491,7 +733,8 @@ impl AudioEngine {
                 mute: false,
                 solo: false,
                 inverted_phase: false,
-                effects: Arc::from([]),
+                effects: Vec::new(),
+                ..Default::default()
             });
 
             let channel = self
@@ -515,17 +758,19 @@ impl AudioEngine {
 
             let mut has_signal = false;
 
-            // Generator Voice
+            // Generator Voice - use plugin_state directly (no lock!)
             if let Some(gen_voice) = self
                 .active_generators
-                .iter_mut()
+                .iter()
                 .find(|g| g.track_id == track_id && g.active)
             {
-                if let Ok(mut guard) = gen_voice.generator.try_lock() {
-                    if let KarbeatPlugin::Generator(generator) = &mut *guard {
-                        generator.process(&mut self.mix_buffer, &gen_voice.events);
-                        has_signal = true;
-                    }
+                let gen_id = gen_voice.id;
+                let events = &gen_voice.events;
+
+                // Access the generator from plugin_state (owned, no lock)
+                if let Some(gen_instance) = self.plugin_state.generators.get_mut(&gen_id) {
+                    gen_instance.plugin.process(&mut self.mix_buffer, events);
+                    has_signal = true;
                 }
             }
 
@@ -544,7 +789,14 @@ impl AudioEngine {
                 continue;
             }
 
-            Self::apply_mixer_channel(channel, &mut self.mix_buffer, channels);
+            // Apply mixer channel (volume/pan/phase) and effects from plugin_state
+            Self::apply_mixer_channel_with_effects(
+                channel,
+                &mut self.plugin_state.track_effects,
+                track_id,
+                &mut self.mix_buffer,
+                channels,
+            );
 
             for i in 0..buf_len {
                 output[i] += self.mix_buffer[i];
@@ -607,7 +859,14 @@ impl AudioEngine {
         did_render
     }
 
-    fn apply_mixer_channel(mixer_channel: &MixerChannel, buffer: &mut [f32], channels: usize) {
+    /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
+    fn apply_mixer_channel_with_effects(
+        mixer_channel: &MixerChannel,
+        track_effects: &mut std::collections::HashMap<TrackId, Vec<AudioEffectInstance>>,
+        track_id: TrackId,
+        buffer: &mut [f32],
+        channels: usize,
+    ) {
         let frame_count = buffer.len() / channels;
 
         // Invert Phase
@@ -617,14 +876,10 @@ impl AudioEngine {
             }
         }
 
-        // Effects chain
-        for effect in mixer_channel.effects.iter() {
-            if let Some(instance_arc) = &effect.instance {
-                if let Ok(mut guard) = instance_arc.lock() {
-                    if let KarbeatPlugin::Effect(fx) = &mut *guard {
-                        fx.process(buffer);
-                    }
-                }
+        // Effects chain from plugin_state (owned, no lock!)
+        if let Some(effects) = track_effects.get_mut(&track_id) {
+            for effect in effects.iter_mut() {
+                effect.plugin.process(buffer);
             }
         }
 
@@ -669,8 +924,7 @@ impl AudioEngine {
         if let Some(gen_instance) = &track.generator {
             gen_voice_idx = Self::ensure_generator_voice(
                 &mut self.active_generators,
-                self.current_state.graph.buffer_size,
-                self.sample_rate,
+                &self.plugin_state,
                 track_id,
                 gen_instance,
             );
@@ -724,10 +978,10 @@ impl AudioEngine {
         }
     }
 
+    /// Ensure that the generator voice is active
     fn ensure_generator_voice(
         active_generators: &mut Vec<GeneratorVoice>,
-        buffer_size: usize,
-        sample_rate: u32,
+        plugin_state: &AudioPluginState,
         track_id: TrackId,
         gen_instance: &GeneratorInstance,
     ) -> Option<usize> {
@@ -739,31 +993,22 @@ impl AudioEngine {
             return Some(idx);
         }
 
-        // Create new generator voice
-        if let GeneratorInstanceType::Plugin(p) = &gen_instance.instance_type {
-            if let Some(plugin_arc) = &p.instance {
-                if let Ok(mut guard) = plugin_arc.lock() {
-                    if let KarbeatPlugin::Generator(gen) = &mut *guard {
-                        // Use buffer size from current state, fallback to 512 if not set
-                        let buf_size = if buffer_size > 0 { buffer_size } else { 512 };
-
-                        gen.prepare(sample_rate as f32, buf_size);
-                    }
-                }
-
-                active_generators.push(GeneratorVoice {
-                    id: gen_instance.id,
-                    track_id,
-                    generator: plugin_arc.clone(),
-                    events: Vec::new(),
-                    active: true,
-                });
-                return Some(active_generators.len() - 1);
-            }
+        // Check if the plugin exists in our owned state
+        if plugin_state.generators.contains_key(&gen_instance.id) {
+            // Create lightweight voice reference (actual plugin is in plugin_state)
+            active_generators.push(GeneratorVoice {
+                id: gen_instance.id,
+                track_id,
+                events: Vec::new(),
+                active: true,
+            });
+            return Some(active_generators.len() - 1);
         }
+
         None
     }
 
+    /// Render preview voices to the output buffer
     fn render_previews_to_buffer(&mut self, output: &mut [f32], channels: usize) {
         let buffer_frames = output.len() / channels;
 
@@ -907,6 +1152,9 @@ impl AudioEngine {
             return;
         }
 
+        // Calculate the clip's actual end boundary on the timeline
+        let clip_end = clip.start_time + clip.loop_length;
+
         let start_iter = 0;
         let end_iter = 0;
 
@@ -920,10 +1168,17 @@ impl AudioEngine {
                 let abs_start = clip.start_time + pattern_offset + note_start - clip.offset_start;
                 let abs_end = abs_start + note_dur;
 
+                // Skip notes that start before the clip's offset
                 if abs_start < clip.offset_start {
                     continue;
                 }
 
+                // Skip notes that start at or after the clip end (outside trimmed region)
+                if abs_start >= clip_end {
+                    continue;
+                }
+
+                // Schedule NoteOn if it falls within the buffer
                 if abs_start >= buffer_start && abs_start < buffer_end {
                     events.push(MidiEvent {
                         sample_offset: (abs_start - buffer_start) as usize,
@@ -933,9 +1188,15 @@ impl AudioEngine {
                         },
                     });
                 }
-                if abs_end >= buffer_start && abs_end < buffer_end {
+
+                // Clamp note-off to clip boundary if it would extend past the clip end
+                // This prevents hanging notes when clips are trimmed
+                let effective_end = abs_end.min(clip_end);
+
+                // Schedule NoteOff if it falls within the buffer
+                if effective_end >= buffer_start && effective_end < buffer_end {
                     events.push(MidiEvent {
-                        sample_offset: (abs_end - buffer_start) as usize,
+                        sample_offset: (effective_end - buffer_start) as usize,
                         data: MidiMessage::NoteOff { key: note.key },
                     });
                 }
@@ -979,14 +1240,20 @@ impl AudioEngine {
     }
 }
 
+/// Sample a waveform at a specific position
+/// 
+/// ### What it does
+/// 
+/// - Interpolates between two samples
+/// - Handles edge cases where the position is out of bounds
+/// - Returns a tuple of left and right channel values
+/// 
 #[inline(always)]
 fn sample_waveform_inline(waveform: &AudioWaveform, pos: f64, channels: usize) -> (f32, f32) {
     let idx = pos as usize;
     let alpha = (pos - idx as f64) as f32;
     let base = idx * channels;
 
-    // Unchecked access is faster, but requires ensuring bounds previously.
-    // Using safe access for now.
     if base + channels >= waveform.buffer.len() {
         return (0.0, 0.0);
     }
@@ -999,12 +1266,12 @@ fn sample_waveform_inline(waveform: &AudioWaveform, pos: f64, channels: usize) -
 
     let curr_l = waveform.buffer[base];
     let next_l = waveform.buffer[next_base];
-    let val_l = curr_l + (next_l - curr_l) * alpha; // lerp
+    let val_l = lerp(curr_l, next_l, alpha);
 
     let val_r = if channels > 1 {
         let curr_r = waveform.buffer[base + 1];
         let next_r = waveform.buffer[next_base + 1];
-        curr_r + (next_r - curr_r) * alpha
+        lerp(curr_r, next_r, alpha)
     } else {
         val_l
     };

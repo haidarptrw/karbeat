@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:karbeat/features/components/scrollable_virtual_keyboard.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
@@ -29,10 +31,79 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
   // Track active notes for keyboard visualization
   final Set<int> _activeNotes = {};
 
+  // Timer for polling parameter feedback from audio thread
+  Timer? _parameterPollTimer;
+
   @override
   void initState() {
     super.initState();
     _loadParameterSpecs();
+    _startParameterPolling();
+  }
+
+  @override
+  void dispose() {
+    _parameterPollTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Start polling for parameter feedback from the audio thread.
+  /// This enables live UI updates when parameters change via automation.
+  void _startParameterPolling() async {
+    // Request initial parameter snapshot from audio thread
+    await plugin_api.queryGeneratorParameters(generatorId: widget.generatorId);
+
+    // Poll every 50ms for smooth UI updates during automation
+    _parameterPollTimer = Timer.periodic(
+      const Duration(milliseconds: 50),
+      (_) => _pollParameterFeedback(),
+    );
+  }
+
+  /// Poll for parameter feedback from the audio thread and update UI.
+  void _pollParameterFeedback() async {
+    if (!mounted) return;
+
+    try {
+      // 1. Poll for pending feedback from audio thread
+      final snapshots = await plugin_api.pollParameterFeedback();
+
+      if (snapshots.isEmpty) return;
+
+      // 2. Sync to stored parameters (for persistence)
+      await plugin_api.syncParametersFromAudio(snapshots: snapshots);
+
+      // 3. Update local UI state
+      setState(() {
+        for (final snapshot in snapshots) {
+          // Only process snapshots for this generator
+          if (snapshot.generatorId != widget.generatorId) continue;
+
+          for (final paramValue in snapshot.parameters) {
+            final index = _parameters.indexWhere(
+              (p) => p.id == paramValue.paramId,
+            );
+            if (index != -1) {
+              // Update the parameter value in local state
+              _parameters[index] = plugin_api.UiPluginParameter(
+                id: _parameters[index].id,
+                name: _parameters[index].name,
+                group: _parameters[index].group,
+                value: paramValue.value, // Updated value from audio
+                min: _parameters[index].min,
+                max: _parameters[index].max,
+                defaultValue: _parameters[index].defaultValue,
+                step: _parameters[index].step,
+                paramType: _parameters[index].paramType,
+                choices: _parameters[index].choices,
+              );
+            }
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Error polling parameter feedback: $e');
+    }
   }
 
   Future<void> _loadParameterSpecs() async {
@@ -145,7 +216,7 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
       await audio_api.playPreviewNoteGenerator(
         generatorId: widget.generatorId,
         noteKey: note,
-        velocity: 0,
+        velocity: 100,
         isOn: false,
       );
     } catch (e) {

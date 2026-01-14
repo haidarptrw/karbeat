@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
+import 'package:karbeat/features/components/interaction_panel.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -82,6 +84,17 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
 
   bool _isCtrlPressed = false;
 
+  // Range selection state
+  bool _isRangeSelecting = false;
+  Offset? _rangeSelectStart; // Position in absolute pixels (including scroll)
+  Offset? _rangeSelectEnd;
+  int? _rangeSelectTrackId; // Track ID where the range selection started
+
+  // ==========================================================================
+  // BATCH CLIP DRAG STATE (centralized for cross-track coordination)
+  // ==========================================================================
+  final ClipDragController _clipDragController = ClipDragController();
+
   @override
   void initState() {
     super.initState();
@@ -109,16 +122,28 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
         });
       }
     });
+
+    // Listen to batch drag controller for overlay updates
+    _clipDragController.addListener(_onBatchDragUpdate);
   }
 
   @override
   void dispose() {
+    _clipDragController.removeListener(_onBatchDragUpdate);
+    _clipDragController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
     _headerController.dispose();
     _timelineController.dispose();
     _rulerController.dispose();
     _trackContentController.dispose();
     super.dispose();
+  }
+
+  /// Called when batch drag controller updates - triggers overlay repaint
+  void _onBatchDragUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   bool _handleKeyEvents(KeyEvent event) {
@@ -157,9 +182,6 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   void _updateZoom(double newZoom) {
     // Define min/max zoom limits to prevent bugs
     final clamped = newZoom.clamp(0.01, 5000.0);
-
-    // Assuming you have a setter in KarbeatState.
-    // If not, add: void setHorizontalZoom(double val) { horizontalZoomLevel = val; notifyListeners(); }
     context.read<KarbeatState>().setHorizontalZoom(clamped);
   }
 
@@ -198,6 +220,116 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
   }
 
+  /// Starts a range selection when select tool is active
+  void _startRangeSelect(Offset localPosition) {
+    // Calculate absolute position (including scroll)
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    final absoluteX = localPosition.dx + scrollX;
+    final absoluteY = localPosition.dy + scrollY;
+
+    // Determine which track the selection starts on
+    int trackIndex = (absoluteY / widget.itemHeight).floor();
+    trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
+
+    setState(() {
+      _isRangeSelecting = true;
+      _rangeSelectStart = Offset(absoluteX, absoluteY);
+      _rangeSelectEnd = Offset(absoluteX, absoluteY);
+      _rangeSelectTrackId = widget.tracks[trackIndex].id;
+    });
+  }
+
+  /// Updates the range selection rectangle during drag
+  void _updateRangeSelect(Offset localPosition) {
+    if (!_isRangeSelecting || _rangeSelectStart == null) return;
+
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    final absoluteX = localPosition.dx + scrollX;
+    final absoluteY = localPosition.dy + scrollY;
+
+    setState(() {
+      _rangeSelectEnd = Offset(absoluteX, absoluteY);
+    });
+  }
+
+  /// Confirms the range selection and selects all clips within the time range
+  void _confirmRangeSelect(KarbeatState state) {
+    if (!_isRangeSelecting ||
+        _rangeSelectStart == null ||
+        _rangeSelectEnd == null ||
+        _rangeSelectTrackId == null) {
+      _cancelRangeSelect();
+      return;
+    }
+
+    final zoomLevel = state.horizontalZoomLevel;
+
+    // Get time range in samples
+    final startX = _rangeSelectStart!.dx;
+    final endX = _rangeSelectEnd!.dx;
+    final minX = startX < endX ? startX : endX;
+    final maxX = startX > endX ? startX : endX;
+
+    final startTimeSamples = (minX * zoomLevel).toInt();
+    final endTimeSamples = (maxX * zoomLevel).toInt();
+
+    // Find clips in the target track that overlap with the selection range
+    final track = state.tracks[_rangeSelectTrackId!];
+    if (track == null) {
+      _cancelRangeSelect();
+      return;
+    }
+
+    final selectedClipIds = <int>[];
+    for (final clip in track.clips) {
+      final clipStart = clip.startTime.toInt();
+      final clipEnd = clipStart + clip.loopLength.toInt();
+
+      // Check if clip overlaps with selection range
+      if (clipEnd > startTimeSamples && clipStart < endTimeSamples) {
+        selectedClipIds.add(clip.id);
+      }
+    }
+
+    // Select the clips
+    if (selectedClipIds.isNotEmpty) {
+      state.selectClips(
+        trackId: _rangeSelectTrackId!,
+        clipIds: selectedClipIds,
+      );
+    } else {
+      state.deselectAllClips();
+    }
+
+    _cancelRangeSelect();
+  }
+
+  /// Cancels/resets the range selection state
+  void _cancelRangeSelect() {
+    setState(() {
+      _isRangeSelecting = false;
+      _rangeSelectStart = null;
+      _rangeSelectEnd = null;
+      _rangeSelectTrackId = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Calculate total height to ensure both lists have exactly same extent
@@ -207,6 +339,9 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     final isPlacing = context.select<KarbeatState, bool>((s) => s.isPlacing);
     final selectedTool = context.select<KarbeatState, ToolSelection>(
       (s) => s.selectedTool,
+    );
+    final horizontalZoom = context.select<KarbeatState, double>(
+      (s) => s.horizontalZoomLevel,
     );
     final currentTimelineWidth = _timelineWidth;
 
@@ -271,7 +406,18 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                     details.localPosition,
                     isDrag: false,
                   ),
+                  onPanStart: (details) {
+                    // Start range selection when select tool is active
+                    if (selectedTool == ToolSelection.select) {
+                      _startRangeSelect(details.localPosition);
+                    }
+                  },
                   onPanUpdate: (details) {
+                    // Handle range selection updates
+                    if (selectedTool == ToolSelection.select) {
+                      _updateRangeSelect(details.localPosition);
+                      return;
+                    }
                     if (selectedTool == ToolSelection.zoom) {
                       final currentZoom = state.horizontalZoomLevel;
                       double multiplier = 1.0 - (details.delta.dy * 0.01);
@@ -289,6 +435,13 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                     if (selectedTool == ToolSelection.draw || isPlacing) {
                       setState(() => _mousePos = details.localPosition);
                       _updatePlacementTarget(state);
+                    }
+                  },
+                  onPanEnd: (details) {
+                    // Confirm range selection when select tool is active
+                    if (selectedTool == ToolSelection.select &&
+                        _isRangeSelecting) {
+                      _confirmRangeSelect(state);
                     }
                   },
                   child: Column(
@@ -321,8 +474,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                 ? const NeverScrollableScrollPhysics()
                                 : const ClampingScrollPhysics(),
                             child: SizedBox(
-                              width:
-                                  currentTimelineWidth,
+                              width: currentTimelineWidth,
                               height: 30,
                               child: _TimelineRuler(
                                 scrollController: _rulerController,
@@ -336,6 +488,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                         child: MouseRegion(
                           cursor: isPlacing
                               ? SystemMouseCursors.move
+                              : selectedTool == ToolSelection.select
+                              ? SystemMouseCursors.precise
                               : SystemMouseCursors.basic,
                           onHover: null,
                           child: GestureDetector(
@@ -350,40 +504,55 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                                   }
                                 : null,
                             child: ScrollConfiguration(
-                              behavior: DragScrollBehavior(),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
+                              // Only allow Mouse Drag scrolling when using Pointer or Move tool
+                              behavior:
+                                  (selectedTool == ToolSelection.pointer ||
+                                      selectedTool == ToolSelection.move)
+                                  ? DragScrollBehavior()
+                                  : ScrollConfiguration.of(context).copyWith(
+                                      dragDevices: {
+                                        PointerDeviceKind.touch,
+                                        PointerDeviceKind.trackpad,
+                                      },
+                                    ),
+                              child: Scrollbar(
                                 controller: _trackContentController,
-                                // Physics to match desktop feel
-                                physics: _isCtrlPressed
-                                    ? const NeverScrollableScrollPhysics()
-                                    : const ClampingScrollPhysics(),
-                                child: SizedBox(
-                                  width: currentTimelineWidth,
-                                  child: ListView.builder(
-                                    controller:
-                                        _timelineController, // Controller 2 (Synced Vertically)
-                                    physics: _isCtrlPressed
-                                        ? const NeverScrollableScrollPhysics()
-                                        : const ClampingScrollPhysics(),
-                                    padding: EdgeInsets.zero,
-                                    itemCount: itemCount,
-                                    itemBuilder: (context, index) {
-                                      if (index == widget.tracks.length) {
-                                        // Empty space matching Add Button height
-                                        return SizedBox(height: 60);
-                                      }
-                                      return IgnorePointer(
-                                        ignoring: isPlacing,
-                                        child: KarbeatTrackSlot(
-                                          trackId: widget.tracks[index].id,
-                                          height: widget.itemHeight,
-                                          horizontalScrollController:
-                                              _trackContentController,
-                                          sampleRate: _activeSampleRate,
-                                        ),
-                                      );
-                                    },
+                                thumbVisibility: true,
+                                trackVisibility: true,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  controller: _trackContentController,
+                                  physics: _isCtrlPressed
+                                      ? const NeverScrollableScrollPhysics()
+                                      : const ClampingScrollPhysics(),
+                                  child: SizedBox(
+                                    width: currentTimelineWidth,
+                                    child: ListView.builder(
+                                      controller:
+                                          _timelineController, // Controller 2 (Synced Vertically)
+                                      physics: _isCtrlPressed
+                                          ? const NeverScrollableScrollPhysics()
+                                          : const ClampingScrollPhysics(),
+                                      padding: EdgeInsets.zero,
+                                      itemCount: itemCount,
+                                      itemBuilder: (context, index) {
+                                        if (index == widget.tracks.length) {
+                                          return SizedBox(height: 60);
+                                        }
+                                        return IgnorePointer(
+                                          ignoring: isPlacing,
+                                          child: KarbeatTrackSlot(
+                                            trackId: widget.tracks[index].id,
+                                            height: widget.itemHeight,
+                                            horizontalScrollController:
+                                                _trackContentController,
+                                            sampleRate: _activeSampleRate,
+                                            clipDragController:
+                                                _clipDragController,
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),
@@ -399,12 +568,17 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
           ],
         ),
         if (isPlacing && _mousePos != null) _buildGhostClip(context),
+        if (_isRangeSelecting) _buildRangeSelectRect(context),
+        // Batch drag overlays for all selected clips during move
+        ..._buildBatchDragOverlays(context),
         Positioned.fill(
           child: IgnorePointer(
             ignoring: false,
-            child: TimelinePlayheadSeeker(
-              headerWidth: widget.headerWidth,
+            child: PlayheadOverlay(
+              offsetAdjustment: widget.headerWidth,
               scrollController: _trackContentController,
+              zoomLevel: horizontalZoom,
+              sampleSelector: (pos) => pos.samples,
               onSeek: (int newSamples) {
                 final safeSamples = newSamples < 0 ? 0 : newSamples;
                 context.read<KarbeatState>().seekTo(safeSamples);
@@ -438,6 +612,29 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               ],
             ),
           ),
+        // Interaction Panel Overlay
+        if (state.interactionTarget != null) ...[
+          // Backdrop to dismiss panel
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => state.hideInteractionPanel(),
+              child: Container(color: Colors.black.withAlpha(80)),
+            ),
+          ),
+          // Panel positioned at center-bottom (bottom sheet style)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: Center(
+              child: InteractionPanel(
+                target: state.interactionTarget!,
+                onClose: () => state.hideInteractionPanel(),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -544,6 +741,160 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     );
   }
 
+  /// Builds the visual rectangle overlay for range selection
+  Widget _buildRangeSelectRect(BuildContext context) {
+    if (_rangeSelectStart == null ||
+        _rangeSelectEnd == null ||
+        _rangeSelectTrackId == null) {
+      return const SizedBox();
+    }
+
+    // Get scroll offsets
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    // Find the track index for the starting track
+    final trackIndex = widget.tracks.indexWhere(
+      (t) => t.id == _rangeSelectTrackId,
+    );
+    if (trackIndex < 0) return const SizedBox();
+
+    // Calculate the rectangle bounds (only horizontal matters, vertical is fixed to the track)
+    final startX = _rangeSelectStart!.dx;
+    final endX = _rangeSelectEnd!.dx;
+    final minX = startX < endX ? startX : endX;
+    final maxX = startX > endX ? startX : endX;
+
+    // Convert from absolute coordinates to screen coordinates
+    final screenLeft = minX - scrollX + widget.headerWidth;
+    final screenWidth = maxX - minX;
+
+    // Track row position (fixed to the starting track)
+    final screenTop =
+        (trackIndex * widget.itemHeight) - scrollY + 30; // +30 for ruler height
+
+    return Positioned(
+      left: screenLeft,
+      top: screenTop,
+      width: screenWidth < 2 ? 2 : screenWidth,
+      height: widget.itemHeight - 4,
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.blueAccent.withAlpha(50),
+            border: Border.all(color: Colors.blueAccent, width: 2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds overlay widgets for all selected clips during a batch move operation
+  List<Widget> _buildBatchDragOverlays(BuildContext context) {
+    // Only show during batch move
+    if (_clipDragController.action != BatchDragAction.move) {
+      return [];
+    }
+
+    final state = context.read<KarbeatState>();
+    final session = state.sessionState;
+    if (session == null) return [];
+
+    final selectedClipIds = session.selectedClipIds;
+    final selectedTrackId = session.selectedTrackId;
+    if (selectedTrackId == null || selectedClipIds.isEmpty) return [];
+
+    // Get the track and its clips
+    final track = state.tracks[selectedTrackId];
+    if (track == null) return [];
+
+    // Calculate scroll offsets
+    double scrollX = 0;
+    double scrollY = 0;
+    if (_trackContentController.hasClients) {
+      scrollX = _trackContentController.offset;
+    }
+    if (_timelineController.hasClients) {
+      scrollY = _timelineController.offset;
+    }
+
+    // Find source track index
+    final sortedTracks = widget.tracks.toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    final trackIndex = sortedTracks.indexWhere((t) => t.id == selectedTrackId);
+    if (trackIndex < 0) return [];
+
+    // Calculate target track based on vertical delta
+    final rowOffset = _clipDragController.deltaRows.round();
+    final targetTrackIndex = (trackIndex + rowOffset).clamp(
+      0,
+      sortedTracks.length - 1,
+    );
+
+    final zoomLevel = state.horizontalZoomLevel;
+    final deltaSamples = _clipDragController.deltaSamples;
+
+    final List<Widget> overlays = [];
+
+    for (final clipId in selectedClipIds) {
+      final clip = track.clips.where((c) => c.id == clipId).firstOrNull;
+      if (clip == null) continue;
+
+      // Calculate new position with delta applied
+      final newStartTime = (clip.startTime + deltaSamples).clamp(
+        0,
+        double.maxFinite.toInt(),
+      );
+      final screenLeft =
+          (newStartTime / zoomLevel) - scrollX + widget.headerWidth;
+      final screenTop =
+          (targetTrackIndex * widget.itemHeight) - scrollY + 30 + 2;
+      final clipWidth = clip.loopLength / zoomLevel;
+
+      overlays.add(
+        Positioned(
+          left: screenLeft,
+          top: screenTop,
+          width: clipWidth < 1 ? 1 : clipWidth,
+          height: widget.itemHeight - 4,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: 0.7,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.cyanAccent.withAlpha(100),
+                  border: Border.all(color: Colors.cyanAccent, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: Text(
+                    clip.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      shadows: [Shadow(color: Colors.black, blurRadius: 2)],
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return overlays;
+  }
+
   Widget _buildAddButton() {
     return SizedBox(
       height: 60,
@@ -638,7 +989,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   void _showAddTrackDialog(BuildContext context) {
-    // Access the list from state
+    // Access the list from state - now returns UiPluginInfo with id and name
     final availablePlugins = context.read<KarbeatState>().availableGenerators;
 
     showDialog(
@@ -668,7 +1019,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
             ),
           ),
 
-          // DYNAMICALLY GENERATE OPTIONS
+          // DYNAMICALLY GENERATE OPTIONS using ID-based API
           if (availablePlugins.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
@@ -679,18 +1030,29 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
             )
           else
             ...availablePlugins.map(
-              (name) => _buildGeneratorOption(ctx, name, Icons.piano),
+              (plugin) => _buildGeneratorOption(
+                ctx,
+                plugin.id,
+                plugin.name,
+                Icons.piano,
+              ),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildGeneratorOption(BuildContext ctx, String name, IconData icon) {
+  Widget _buildGeneratorOption(
+    BuildContext ctx,
+    int registryId,
+    String name,
+    IconData icon,
+  ) {
     return SimpleDialogOption(
       onPressed: () {
         Navigator.pop(ctx);
-        context.read<KarbeatState>().addMidiTrackWithGenerator(name);
+        // Use ID-based method
+        context.read<KarbeatState>().addMidiTrackWithGeneratorId(registryId);
       },
       child: Row(
         children: [
