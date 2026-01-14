@@ -192,26 +192,24 @@ impl ApplicationState {
         self.tracks.insert(new_track_id, Arc::new(new_track));
     }
 
-    pub fn add_new_midi_track_with_generator(
-        &mut self,
-        generator_name: &str,
-    ) -> anyhow::Result<()> {
+    /// Add a new MIDI track with a generator by its registry ID (preferred method).
+    pub fn add_new_midi_track_with_generator_id(&mut self, registry_id: u32) -> anyhow::Result<()> {
         let gen_id = GeneratorId::next(&mut self.generator_counter);
         let track_id = TrackId::next(&mut self.track_counter);
 
-        // Create the plugin via registry
-        let (generator_plugin, default_params) = {
+        // Create the plugin via registry using ID
+        let (generator_plugin, generator_name, default_params) = {
             let registry = ctx()
                 .plugin_registry
                 .read()
                 .expect("Failed to lock registry");
 
-            if let Some(generator_box) = registry.create_generator(&generator_name) {
+            if let Some((generator_box, name)) = registry.create_generator_by_id(registry_id) {
                 // Get default parameters BEFORE sending to audio thread
                 let params = generator_box.default_parameters();
-                (generator_box, params)
+                (generator_box, name, params)
             } else {
-                let message = format!("Generator '{}' not found in registry", generator_name);
+                let message = format!("Generator with ID {} not found in registry", registry_id);
                 log::error!("{}", message);
                 // Decrement counters if failed to prevent gaps/orphans
                 self.generator_counter -= 1;
@@ -229,13 +227,9 @@ impl ApplicationState {
             });
         }
 
-        // Create plugin instance descriptor with default parameters
-        let plugin_instance = PluginInstance {
-            name: generator_name.to_string(),
-            internal_type: generator_name.to_string(),
-            bypass: false,
-            parameters: default_params,
-        };
+        // Create plugin instance descriptor with registry ID and default parameters
+        let plugin_instance =
+            PluginInstance::new_with_params(registry_id, &generator_name, default_params);
 
         let generator = GeneratorInstance {
             id: gen_id,
@@ -248,7 +242,7 @@ impl ApplicationState {
         let new_track = KarbeatTrack {
             track_type: TrackType::Midi,
             id: track_id,
-            name: format!("{}", generator_name),
+            name: generator_name.clone(),
             color: "#FF8A65".to_string(),
             generator: Some(generator),
             ..Default::default()
@@ -257,9 +251,34 @@ impl ApplicationState {
         self.tracks.insert(track_id, Arc::new(new_track));
 
         log::info!(
-            "New MIDI track with generator {} is successfully created",
-            generator_name
+            "New MIDI track with generator {} (registry_id={}) is successfully created",
+            generator_name,
+            registry_id
         );
         Ok(())
+    }
+
+    /// Add a new MIDI track with a generator by name (backwards compatible).
+    /// Internally looks up the registry ID and delegates to the ID-based method.
+    pub fn add_new_midi_track_with_generator(
+        &mut self,
+        generator_name: &str,
+    ) -> anyhow::Result<()> {
+        // Look up the registry ID by name
+        let registry_id = {
+            let registry = ctx()
+                .plugin_registry
+                .read()
+                .expect("Failed to lock registry");
+
+            registry
+                .get_generator_id_by_name(generator_name)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Generator '{}' not found in registry", generator_name)
+                })?
+        };
+
+        // Delegate to ID-based method
+        self.add_new_midi_track_with_generator_id(registry_id)
     }
 }

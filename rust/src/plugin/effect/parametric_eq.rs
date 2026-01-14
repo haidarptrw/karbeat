@@ -453,8 +453,8 @@ pub fn create_parametric_eq(sample_rate: Option<f32>) -> EffectWrapper<KarbeatPa
 impl From<KarbeatParametricEQ> for PluginInstance {
     fn from(_wrapper: KarbeatParametricEQ) -> Self {
         PluginInstance {
+            registry_id: 0, // Will be set properly when used
             name: "Parametric EQ".to_string(),
-            internal_type: "PARAM_EQ".to_string(),
             bypass: false,
             parameters: HashMap::new(),
         }

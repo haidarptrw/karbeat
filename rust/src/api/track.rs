@@ -314,6 +314,18 @@ pub fn move_clip(
     Ok(())
 }
 
+/// Add a MIDI track with a generator by its registry ID (preferred method).
+pub fn add_midi_track_with_generator_id(registry_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.add_new_midi_track_with_generator_id(registry_id)
+            .map_err(|e| format!("{}", e))?;
+    }
+    broadcast_state_change();
+    Ok(())
+}
+
+/// Add a MIDI track with a generator by name (backwards compatible).
 pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), String> {
     {
         let mut app = get_app_write();

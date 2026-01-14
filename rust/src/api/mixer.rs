@@ -59,7 +59,6 @@ impl From<&MixerState> for UiMixerState {
 pub struct UiEffectInstance {
     pub id: u32,
     pub name: String,
-    pub internal_type: String,
     pub parameters: HashMap<u32, f32>,
 }
 
@@ -68,7 +67,6 @@ impl From<&EffectInstance> for UiEffectInstance {
         Self {
             id: value.id.to_u32(),
             name: value.instance.name.clone(),
-            internal_type: value.instance.internal_type.clone(),
             parameters: value.instance.parameters.clone(),
         }
     }
@@ -162,5 +160,31 @@ pub fn set_mixer_channel_params(
     mixer_state
         .set_params_mixer_channel(&track_id.into(), &params_legit)
         .map_err(|e| e.message)?;
+    Ok(())
+}
+
+/// Add an effect to a mixer channel by its registry ID (preferred method).
+pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        let mixer_state = &mut app.mixer;
+        mixer_state
+            .add_effect_descriptor_by_id(&track_id.into(), registry_id)
+            .map_err(|e| format!("{}", e))?;
+    }
+    crate::broadcast_state_change();
+    Ok(())
+}
+
+/// Add an effect to a mixer channel by name (backwards compatible).
+pub fn add_effect_to_mixer_channel(track_id: u32, effect_name: String) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        let mixer_state = &mut app.mixer;
+        mixer_state
+            .add_effect_descriptor(&track_id.into(), &effect_name, "")
+            .map_err(|e| format!("{}", e))?;
+    }
+    crate::broadcast_state_change();
     Ok(())
 }

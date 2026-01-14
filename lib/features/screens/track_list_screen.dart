@@ -989,7 +989,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   void _showAddTrackDialog(BuildContext context) {
-    // Access the list from state
+    // Access the list from state - now returns UiPluginInfo with id and name
     final availablePlugins = context.read<KarbeatState>().availableGenerators;
 
     showDialog(
@@ -1019,7 +1019,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
             ),
           ),
 
-          // DYNAMICALLY GENERATE OPTIONS
+          // DYNAMICALLY GENERATE OPTIONS using ID-based API
           if (availablePlugins.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
@@ -1030,18 +1030,29 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
             )
           else
             ...availablePlugins.map(
-              (name) => _buildGeneratorOption(ctx, name, Icons.piano),
+              (plugin) => _buildGeneratorOption(
+                ctx,
+                plugin.id,
+                plugin.name,
+                Icons.piano,
+              ),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildGeneratorOption(BuildContext ctx, String name, IconData icon) {
+  Widget _buildGeneratorOption(
+    BuildContext ctx,
+    int registryId,
+    String name,
+    IconData icon,
+  ) {
     return SimpleDialogOption(
       onPressed: () {
         Navigator.pop(ctx);
-        context.read<KarbeatState>().addMidiTrackWithGenerator(name);
+        // Use ID-based method
+        context.read<KarbeatState>().addMidiTrackWithGeneratorId(registryId);
       },
       child: Row(
         children: [

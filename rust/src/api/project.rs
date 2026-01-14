@@ -163,7 +163,6 @@ impl From<&AudioWaveform> for AudioWaveformUiForClip {
 pub struct UiGeneratorInstance {
     pub id: u32,
     pub name: String,
-    pub internal_type: String,
     pub parameters: HashMap<u32, f32>,
 }
 
@@ -173,21 +172,18 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
             GeneratorInstanceType::Plugin(plugin_instance) => Self {
                 id: generator_instance.id.to_u32(),
                 name: plugin_instance.name.clone(),
-                internal_type: plugin_instance.internal_type.clone(),
                 parameters: plugin_instance.parameters.clone(),
             },
             GeneratorInstanceType::Sampler { .. } => {
                 Self {
                     id: generator_instance.id.to_u32(),
                     name: "Sampler".to_string(),
-                    internal_type: "Sampler".to_string(),
                     parameters: HashMap::new(), // Add sampler params later if needed
                 }
             }
             GeneratorInstanceType::AudioInput { .. } => Self {
                 id: generator_instance.id.to_u32(),
                 name: "Audio Input".to_string(),
-                internal_type: "AudioInput".to_string(),
                 parameters: HashMap::new(),
             },
         }

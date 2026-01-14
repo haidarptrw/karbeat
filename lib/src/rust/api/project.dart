@@ -174,19 +174,16 @@ sealed class UiClipSource with _$UiClipSource {
 class UiGeneratorInstance {
   final int id;
   final String name;
-  final String internalType;
   final Map<int, double> parameters;
 
   const UiGeneratorInstance({
     required this.id,
     required this.name,
-    required this.internalType,
     required this.parameters,
   });
 
   @override
-  int get hashCode =>
-      id.hashCode ^ name.hashCode ^ internalType.hashCode ^ parameters.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -195,7 +192,6 @@ class UiGeneratorInstance {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
-          internalType == other.internalType &&
           parameters == other.parameters;
 }
 

@@ -10,18 +10,18 @@ use serde::{Deserialize, Serialize};
 /// # Example:
 /// ```rust
 /// let instance = PluginInstance {
+///     registry_id: 0,
 ///     name: "Basic Reverb".to_string(),
-///     internal_type: "REVERB".to_string(),
 ///     bypass: false,
 ///     parameters: HashMap::new(),
 /// };
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct PluginInstance {
-    /// Name of the plugin
+    /// Registry ID for plugin lookup (stable identifier)
+    pub registry_id: u32,
+    /// Name of the plugin (for display purposes)
     pub name: String,
-    /// Internal Type name (e.g., "EQ_3BAND", "COMPRESSOR")
-    pub internal_type: String,
     /// Whether this plugin is bypassed
     pub bypass: bool,
     /// Plugin parameters for persistence (Param ID -> Value)
@@ -29,12 +29,33 @@ pub struct PluginInstance {
 }
 
 impl PluginInstance {
-    pub fn new(name: &str, internal_type: &str) -> Self {
+    /// Create a new plugin instance with name only (backwards compatible)
+    pub fn new(name: &str) -> Self {
         Self {
+            registry_id: 0,
             name: name.to_string(),
-            internal_type: internal_type.to_string(),
             bypass: false,
             parameters: HashMap::new(),
+        }
+    }
+
+    /// Create a new plugin instance with registry ID and name
+    pub fn new_with_id(registry_id: u32, name: &str) -> Self {
+        Self {
+            registry_id,
+            name: name.to_string(),
+            bypass: false,
+            parameters: HashMap::new(),
+        }
+    }
+
+    /// Create a new plugin instance with registry ID, name, and default parameters
+    pub fn new_with_params(registry_id: u32, name: &str, parameters: HashMap<u32, f32>) -> Self {
+        Self {
+            registry_id,
+            name: name.to_string(),
+            bypass: false,
+            parameters,
         }
     }
 }

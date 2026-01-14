@@ -159,15 +159,14 @@ impl MixerState {
         Ok(master_bus_channel)
     }
 
-    /// Add an effect descriptor to a mixer channel's metadata.
+    /// Add an effect descriptor to a mixer channel by its registry ID (preferred method).
     ///
     /// Note: The actual effect instance should be sent to the audio thread via
     /// `AudioCommand::AddTrackEffect`. This function only updates the metadata.
-    pub fn add_effect_descriptor(
+    pub fn add_effect_descriptor_by_id(
         &mut self,
         track_id: &TrackId,
-        effect_name: &str,
-        internal_type: &str,
+        registry_id: u32,
     ) -> anyhow::Result<()> {
         let mixer_channel_arc = self
             .channels
@@ -181,13 +180,13 @@ impl MixerState {
         let channel = Arc::make_mut(mixer_channel_arc);
         let effect_id = EffectId::next(&mut channel.effect_counter);
 
-        let (effect_plugin, default_params) = {
+        let (effect_plugin, effect_name, default_params) = {
             let registry = ctx().plugin_registry.read().unwrap();
-            if let Some(effect_box) = registry.create_effect(effect_name) {
+            if let Some((effect_box, name)) = registry.create_effect_by_id(registry_id) {
                 let default_params = effect_box.default_parameters();
-                (effect_box, default_params)
+                (effect_box, name, default_params)
             } else {
-                let message = format!("Generator '{}' not found in registry", effect_name);
+                let message = format!("Effect with ID {} not found in registry", registry_id);
                 log::error!("{}", message);
                 // Decrement counters if failed to prevent gaps/orphans
                 channel.effect_counter -= 1;
@@ -203,17 +202,47 @@ impl MixerState {
                 effect: effect_plugin,
             });
         }
-        
-        let plugin_instance = PluginInstance::new(effect_name, internal_type);
-        
+
+        let plugin_instance =
+            PluginInstance::new_with_params(registry_id, &effect_name, default_params);
+
         let effect_instance = EffectInstance {
             id: effect_id,
             instance: Arc::new(plugin_instance),
-        };  
-        
+        };
+
         channel.effects.push(effect_instance);
 
+        log::info!(
+            "Effect {} (registry_id={}) added to track {:?}",
+            effect_name,
+            registry_id,
+            track_id
+        );
+
         Ok(())
+    }
+
+    /// Add an effect descriptor to a mixer channel by name (backwards compatible).
+    /// Internally looks up the registry ID and delegates to the ID-based method.
+    ///
+    /// Note: The `internal_type` parameter is deprecated and ignored.
+    pub fn add_effect_descriptor(
+        &mut self,
+        track_id: &TrackId,
+        effect_name: &str,
+        _internal_type: &str,
+    ) -> anyhow::Result<()> {
+        // Look up the registry ID by name
+        let registry_id = {
+            let registry = ctx().plugin_registry.read().unwrap();
+            registry
+                .get_effect_id_by_name(effect_name)
+                .ok_or_else(|| anyhow::anyhow!("Effect '{}' not found in registry", effect_name))?
+        };
+
+        // Delegate to ID-based method
+        self.add_effect_descriptor_by_id(track_id, registry_id)
     }
 
     pub fn get_effects(

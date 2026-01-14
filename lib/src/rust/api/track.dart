@@ -51,6 +51,13 @@ Future<void> moveClip({
   newTrackId: newTrackId,
 );
 
+/// Add a MIDI track with a generator by its registry ID (preferred method).
+Future<void> addMidiTrackWithGeneratorId({required int registryId}) => RustLib
+    .instance
+    .api
+    .crateApiTrackAddMidiTrackWithGeneratorId(registryId: registryId);
+
+/// Add a MIDI track with a generator by name (backwards compatible).
 Future<void> addMidiTrackWithGenerator({required String generatorName}) =>
     RustLib.instance.api.crateApiTrackAddMidiTrackWithGenerator(
       generatorName: generatorName,

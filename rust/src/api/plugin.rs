@@ -51,16 +51,49 @@ pub struct UiPluginParameter {
 // PLUGIN API FUNCTIONS
 // ============================================================================
 
-/// Get all available generators in Plugin Registry
+/// Plugin info with ID for UI display
+#[derive(Clone, Debug)]
+pub struct UiPluginInfo {
+    pub id: u32,
+    pub name: String,
+}
+
+/// Get all available generators in Plugin Registry (names only, backwards compatible)
 pub fn get_available_generators() -> Result<Vec<String>, String> {
     let registry = ctx().plugin_registry.read().unwrap();
     Ok(registry.list_generators())
 }
 
-/// Get all available effects in Plugin Registry
+/// Get all available effects in Plugin Registry (names only, backwards compatible)
 pub fn get_available_effects() -> Result<Vec<String>, String> {
     let registry = ctx().plugin_registry.read().unwrap();
     Ok(registry.list_effects())
+}
+
+/// Get all available generators with their registry IDs (preferred for UI)
+pub fn get_available_generators_with_ids() -> Result<Vec<UiPluginInfo>, String> {
+    let registry = ctx().plugin_registry.read().unwrap();
+    Ok(registry
+        .list_generators_with_ids()
+        .into_iter()
+        .map(|p| UiPluginInfo {
+            id: p.id,
+            name: p.name,
+        })
+        .collect())
+}
+
+/// Get all available effects with their registry IDs (preferred for UI)
+pub fn get_available_effects_with_ids() -> Result<Vec<UiPluginInfo>, String> {
+    let registry = ctx().plugin_registry.read().unwrap();
+    Ok(registry
+        .list_effects_with_ids()
+        .into_iter()
+        .map(|p| UiPluginInfo {
+            id: p.id,
+            name: p.name,
+        })
+        .collect())
 }
 
 /// Get a single generator state from the Generator Pool
@@ -82,10 +115,8 @@ pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
 }
 
 // pub fn get_effect(effect_id: u32) -> Result<UiEffectInstance, String> {
-    
+
 // }
-
-
 
 /// Get parameter specifications for a generator plugin.
 ///
@@ -111,11 +142,19 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
 
     if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
         // Create a temporary plugin instance to get static parameter specs.
-        // This is the correct approach since the registry only stores factory functions,
-        // not parameter metadata. The temp plugin is lightweight and never used for audio.
+        // Use registry_id if available (preferred), otherwise fall back to name lookup.
         let registry = ctx().plugin_registry.read().unwrap();
 
-        if let Some(temp_plugin) = registry.create_generator(&plugin_instance.name) {
+        // Try ID-based lookup first (preferred), then fall back to name
+        let temp_plugin = if plugin_instance.registry_id > 0 {
+            registry
+                .create_generator_by_id(plugin_instance.registry_id)
+                .map(|(plugin, _)| plugin)
+        } else {
+            registry.create_generator(&plugin_instance.name)
+        };
+
+        if let Some(temp_plugin) = temp_plugin {
             let specs = temp_plugin.get_parameter_specs();
             let ui_specs: Vec<UiPluginParameter> = specs
                 .into_iter()
@@ -145,8 +184,8 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
             Ok(ui_specs)
         } else {
             Err(format!(
-                "Generator type '{}' not found in registry",
-                plugin_instance.name
+                "Generator '{}' (registry_id={}) not found in registry",
+                plugin_instance.name, plugin_instance.registry_id
             ))
         }
     } else {

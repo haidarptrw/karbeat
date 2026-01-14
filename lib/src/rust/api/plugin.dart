@@ -7,11 +7,23 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
-/// Get all available generators in Plugin Registry
+/// Get all available generators in Plugin Registry (names only, backwards compatible)
 Future<List<String>> getAvailableGenerators() =>
     RustLib.instance.api.crateApiPluginGetAvailableGenerators();
+
+/// Get all available effects in Plugin Registry (names only, backwards compatible)
+Future<List<String>> getAvailableEffects() =>
+    RustLib.instance.api.crateApiPluginGetAvailableEffects();
+
+/// Get all available generators with their registry IDs (preferred for UI)
+Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds() =>
+    RustLib.instance.api.crateApiPluginGetAvailableGeneratorsWithIds();
+
+/// Get all available effects with their registry IDs (preferred for UI)
+Future<List<UiPluginInfo>> getAvailableEffectsWithIds() =>
+    RustLib.instance.api.crateApiPluginGetAvailableEffectsWithIds();
 
 /// Get a single generator state from the Generator Pool
 Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
@@ -134,6 +146,25 @@ class UiParameterValue {
           runtimeType == other.runtimeType &&
           paramId == other.paramId &&
           value == other.value;
+}
+
+/// Plugin info with ID for UI display
+class UiPluginInfo {
+  final int id;
+  final String name;
+
+  const UiPluginInfo({required this.id, required this.name});
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiPluginInfo &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name;
 }
 
 /// Plugin parameter description for UI generation

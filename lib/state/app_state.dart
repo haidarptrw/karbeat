@@ -79,8 +79,8 @@ class KarbeatState extends ChangeNotifier {
   Map<int, UiGeneratorInstance> _generators = {};
   Map<int, UiPattern> _patterns = {};
   UiSessionState? _sessionState;
-  List<String> _availableGenerators = [];
-  List<String> get availableGenerators => _availableGenerators;
+  List<UiPluginInfo> _availableGenerators = [];
+  List<UiPluginInfo> get availableGenerators => _availableGenerators;
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
     KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -159,7 +159,8 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> fetchAvailableGenerators() async {
     try {
-      final list = await getAvailableGenerators();
+      // Use the ID-based API that returns UiPluginInfo with id and name
+      final list = await getAvailableGeneratorsWithIds();
       _availableGenerators = list;
       notifyListeners();
     } catch (e) {
@@ -408,6 +409,18 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Add a MIDI track with a generator by its registry ID (preferred method).
+  Future<void> addMidiTrackWithGeneratorId(int registryId) async {
+    try {
+      await track_api.addMidiTrackWithGeneratorId(registryId: registryId);
+      notifyBackendChange(ProjectEvent.tracksChanged);
+      notifyBackendChange(ProjectEvent.generatorListChanged);
+    } catch (e) {
+      KarbeatLogger.error("Failed to add midi track: $e");
+    }
+  }
+
+  /// Add a MIDI track with a generator by name (backwards compatible).
   Future<void> addMidiTrackWithGenerator(String generatorName) async {
     try {
       await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
