@@ -1,7 +1,7 @@
 use crate::{
     api::project::UiGeneratorInstance,
     broadcast_state_change,
-    commands::AudioCommand,
+    commands::{AudioCommand, AudioFeedback},
     core::project::generator::{GeneratorId, GeneratorInstanceType},
     ctx,
     plugin::wrapper::ParameterValueType,
@@ -308,8 +308,6 @@ pub fn query_generator_parameters(generator_id: u32) -> Result<(), String> {
 /// to receive parameter updates from the audio thread. Returns all pending
 /// parameter snapshots.
 pub fn poll_parameter_feedback() -> Vec<UiParameterSnapshot> {
-    use crate::commands::AudioFeedback;
-
     let mut snapshots = Vec::new();
 
     if let Some(consumer) = ctx().feedback_consumer.lock().unwrap().as_mut() {

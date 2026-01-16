@@ -1,6 +1,6 @@
 use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,84 @@ use crate::{
 };
 
 define_id!(EffectId);
+define_id!(BusId);
+
+// =============================================================================
+// Routing Matrix Types
+// =============================================================================
+
+/// A node in the routing graph
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum RoutingNode {
+    Track(TrackId),
+    Bus(BusId),
+    Master,
+}
+
+/// A routing connection in the matrix
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RoutingConnection {
+    pub source: RoutingNode,
+    pub destination: RoutingNode,
+    /// Send level (0.0 = no signal, 1.0 = full signal)
+    pub send_level: f32,
+    /// If true, this is a "send" (post-fader tap) not the main output
+    pub is_send: bool,
+}
+
+impl RoutingConnection {
+    pub fn new(source: RoutingNode, destination: RoutingNode) -> Self {
+        Self {
+            source,
+            destination,
+            send_level: 1.0,
+            is_send: false,
+        }
+    }
+
+    pub fn new_send(source: RoutingNode, destination: RoutingNode, send_level: f32) -> Self {
+        Self {
+            source,
+            destination,
+            send_level,
+            is_send: true,
+        }
+    }
+}
+
+/// A mixer bus with its own channel strip
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MixerBus {
+    pub id: BusId,
+    pub name: String,
+    pub channel: MixerChannel,
+}
+
+impl Default for MixerBus {
+    fn default() -> Self {
+        Self {
+            id: BusId::from(0),
+            name: String::new(),
+            channel: MixerChannel {
+                volume: 1.0,
+                ..Default::default()
+            },
+        }
+    }
+}
+
+impl MixerBus {
+    pub fn new(id: BusId, name: String) -> Self {
+        Self {
+            id,
+            name,
+            channel: MixerChannel {
+                volume: 1.0,
+                ..Default::default()
+            },
+        }
+    }
+}
 
 /// Custom Error type for better error clarity
 ///
@@ -80,9 +158,16 @@ impl EffectInstance {
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct MixerState {
-    // Map Track ID -> Mixer Channel
+    /// Per-track mixer channels (volume, pan, effects)
     pub channels: HashMap<TrackId, Arc<MixerChannel>>,
+    /// Master bus channel
     pub master_bus: Arc<MixerChannel>,
+    /// Named buses for grouping/submixing
+    pub buses: HashMap<BusId, Arc<MixerBus>>,
+    /// All routing connections in the matrix
+    pub routing: Vec<RoutingConnection>,
+    /// Counter for generating bus IDs
+    pub bus_counter: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -214,7 +299,7 @@ impl MixerState {
 
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
-        // // Push to the audio thread
+        // Push to the audio thread
         if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
             let _ = sender.push(AudioCommand::AddTrackEffect {
                 track_id: track_id.clone(),
@@ -293,6 +378,236 @@ impl MixerState {
         );
         Ok(())
     }
+
+    // =========================================================================
+    // Bus Management
+    // =========================================================================
+
+    /// Create a new mixer bus and return its ID
+    pub fn create_bus(&mut self, name: String) -> BusId {
+        let bus_id = BusId::next(&mut self.bus_counter);
+        let bus = MixerBus::new(bus_id, name);
+        self.buses.insert(bus_id, Arc::new(bus));
+
+        // By default, new buses route to master
+        self.routing.push(RoutingConnection::new(
+            RoutingNode::Bus(bus_id),
+            RoutingNode::Master,
+        ));
+
+        bus_id
+    }
+
+    /// Remove a bus and all routing connections to/from it
+    pub fn remove_bus(&mut self, bus_id: BusId) -> Result<(), String> {
+        if !self.buses.contains_key(&bus_id) {
+            return Err(format!("Bus {:?} not found", bus_id));
+        }
+
+        // Remove the bus
+        self.buses.remove(&bus_id);
+
+        // Remove all routing connections involving this bus
+        self.routing.retain(|conn| {
+            conn.source != RoutingNode::Bus(bus_id) && conn.destination != RoutingNode::Bus(bus_id)
+        });
+
+        Ok(())
+    }
+
+    /// Get a mutable reference to a bus
+    pub fn get_bus_mut(&mut self, bus_id: &BusId) -> Option<&mut Arc<MixerBus>> {
+        self.buses.get_mut(bus_id)
+    }
+
+    /// Set bus channel parameters
+    pub fn set_params_bus(
+        &mut self,
+        bus_id: &BusId,
+        params: &[MixerChannelParams],
+    ) -> Result<Arc<MixerBus>, String> {
+        let bus_arc = self
+            .buses
+            .get_mut(bus_id)
+            .ok_or_else(|| format!("Bus {:?} not found", bus_id))?;
+
+        let bus = Arc::make_mut(bus_arc);
+        for param in params.iter() {
+            match param {
+                MixerChannelParams::Volume(value) => bus.channel.volume = *value,
+                MixerChannelParams::Pan(value) => bus.channel.pan = *value,
+                MixerChannelParams::Mute(value) => bus.channel.mute = *value,
+                MixerChannelParams::InvertedPhase(value) => bus.channel.inverted_phase = *value,
+            }
+        }
+
+        Ok(bus_arc.clone())
+    }
+
+    // =========================================================================
+    // Routing Management
+    // =========================================================================
+
+    /// Add a routing connection. Returns error if it would create a cycle.
+    pub fn add_routing(&mut self, connection: RoutingConnection) -> Result<(), String> {
+        // Validate: source cannot be Master
+        if connection.source == RoutingNode::Master {
+            return Err("Master cannot be a routing source".to_string());
+        }
+
+        // Validate: destination cannot be a Track
+        if matches!(connection.destination, RoutingNode::Track(_)) {
+            return Err("Tracks cannot be routing destinations".to_string());
+        }
+
+        // Check for duplicate
+        let exists = self.routing.iter().any(|c| {
+            c.source == connection.source
+                && c.destination == connection.destination
+                && c.is_send == connection.is_send
+        });
+        if exists {
+            return Err("Routing connection already exists".to_string());
+        }
+
+        // Temporarily add and check for cycles
+        self.routing.push(connection.clone());
+        if self.has_routing_cycle() {
+            self.routing.pop();
+            return Err("Routing would create a cycle".to_string());
+        }
+
+        Ok(())
+    }
+
+    /// Remove a routing connection
+    pub fn remove_routing(
+        &mut self,
+        source: RoutingNode,
+        destination: RoutingNode,
+        is_send: bool,
+    ) -> Result<(), String> {
+        let original_len = self.routing.len();
+        self.routing.retain(|c| {
+            !(c.source == source && c.destination == destination && c.is_send == is_send)
+        });
+
+        if self.routing.len() == original_len {
+            return Err("Routing connection not found".to_string());
+        }
+        Ok(())
+    }
+
+    /// Check if the routing graph has a cycle using DFS
+    pub fn has_routing_cycle(&self) -> bool {
+        // Build adjacency list for buses only (tracks and master can't create cycles)
+        let mut adj: HashMap<BusId, Vec<BusId>> = HashMap::new();
+        for bus_id in self.buses.keys() {
+            adj.insert(*bus_id, Vec::new());
+        }
+
+        for conn in &self.routing {
+            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)
+            {
+                if let Some(neighbors) = adj.get_mut(&src) {
+                    neighbors.push(dst);
+                }
+            }
+        }
+
+        // DFS to detect cycles
+        let mut visited = HashSet::new();
+        let mut rec_stack = HashSet::new();
+
+        for bus_id in self.buses.keys() {
+            if !visited.contains(bus_id) && dfs(*bus_id, &adj, &mut visited, &mut rec_stack) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Get topologically sorted routing order for audio thread processing
+    /// Returns nodes in order: sources first, then intermediate buses, then master
+    pub fn get_routing_order(&self) -> Vec<RoutingNode> {
+        // All tracks come first (they are sources)
+        let mut order: Vec<RoutingNode> = self
+            .channels
+            .keys()
+            .map(|id| RoutingNode::Track(*id))
+            .collect();
+
+        // Topological sort of buses using Kahn's algorithm
+        let mut in_degree: HashMap<BusId, usize> = HashMap::new();
+        let mut adj: HashMap<BusId, Vec<BusId>> = HashMap::new();
+
+        for bus_id in self.buses.keys() {
+            in_degree.insert(*bus_id, 0);
+            adj.insert(*bus_id, Vec::new());
+        }
+
+        // Count incoming edges from other buses
+        for conn in &self.routing {
+            if let (RoutingNode::Bus(src), RoutingNode::Bus(dst)) = (conn.source, conn.destination)
+            {
+                if let Some(neighbors) = adj.get_mut(&src) {
+                    neighbors.push(dst);
+                }
+                if let Some(deg) = in_degree.get_mut(&dst) {
+                    *deg += 1;
+                }
+            }
+        }
+
+        // Start with buses that have no incoming bus edges
+        let mut queue: Vec<BusId> = in_degree
+            .iter()
+            .filter(|(_, &deg)| deg == 0)
+            .map(|(&id, _)| id)
+            .collect();
+
+        while let Some(bus_id) = queue.pop() {
+            order.push(RoutingNode::Bus(bus_id));
+
+            if let Some(neighbors) = adj.get(&bus_id) {
+                for &neighbor in neighbors {
+                    if let Some(deg) = in_degree.get_mut(&neighbor) {
+                        *deg -= 1;
+                        if *deg == 0 {
+                            queue.push(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Master comes last
+        order.push(RoutingNode::Master);
+        order
+    }
+
+    /// Auto-route a track to master (used when creating new tracks)
+    pub fn add_track_default_routing(&mut self, track_id: TrackId) {
+        // Check if track already has any routing
+        let has_routing = self
+            .routing
+            .iter()
+            .any(|c| c.source == RoutingNode::Track(track_id));
+
+        if !has_routing {
+            self.routing.push(RoutingConnection::new(
+                RoutingNode::Track(track_id),
+                RoutingNode::Master,
+            ));
+        }
+    }
+
+    /// Remove all routing for a track (used when deleting tracks)
+    pub fn remove_track_routing(&mut self, track_id: TrackId) {
+        self.routing
+            .retain(|c| c.source != RoutingNode::Track(track_id));
+    }
 }
 
 impl ApplicationState {
@@ -315,4 +630,29 @@ impl ApplicationState {
     pub fn get_mixer_state(&self) -> &MixerState {
         return &self.mixer;
     }
+}
+
+fn dfs(
+    node: BusId,
+    adj: &HashMap<BusId, Vec<BusId>>,
+    visited: &mut HashSet<BusId>,
+    rec_stack: &mut HashSet<BusId>,
+) -> bool {
+    visited.insert(node);
+    rec_stack.insert(node);
+
+    if let Some(neighbors) = adj.get(&node) {
+        for &neighbor in neighbors {
+            if !visited.contains(&neighbor) {
+                if dfs(neighbor, adj, visited, rec_stack) {
+                    return true;
+                }
+            } else if rec_stack.contains(&neighbor) {
+                return true;
+            }
+        }
+    }
+
+    rec_stack.remove(&node);
+    false
 }

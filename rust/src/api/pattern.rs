@@ -1,15 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    broadcast_state_change,
-    core::{
+    audio::engine::PlaybackMode, broadcast_state_change, commands::AudioCommand, core::{
         history::ProjectAction,
         project::{
-            track::midi::{Pattern, PatternId},
-            Note, NoteId,
+            GeneratorId, Note, NoteId, track::midi::{Pattern, PatternId}
         },
-    },
-    utils::lock::{get_app_read, get_app_write, get_history_lock},
+    }, ctx, utils::lock::{get_app_read, get_app_write, get_history_lock}
 };
 
 #[derive(Clone)]
@@ -309,10 +306,6 @@ pub fn change_note_params(
 /// Play a pattern in isolation with a specific generator (looping automatically).
 /// This temporarily switches the engine to Pattern playback mode.
 pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), String> {
-    use crate::audio::engine::PlaybackMode;
-    use crate::commands::AudioCommand;
-    use crate::core::project::GeneratorId;
-    use crate::ctx;
 
     let pattern_id = PatternId::from(pattern_id);
     let generator_id = GeneratorId::from(generator_id);
@@ -347,10 +340,6 @@ pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), St
 
 /// Stop pattern preview and return to Song mode.
 pub fn stop_pattern_preview() -> Result<(), String> {
-    use crate::audio::engine::PlaybackMode;
-    use crate::commands::AudioCommand;
-    use crate::ctx;
-
     // Stop playback
     {
         let mut app = get_app_write();

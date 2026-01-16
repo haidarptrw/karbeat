@@ -154,6 +154,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
 
   @protected
+  List<UiBus> dco_decode_list_ui_bus(dynamic raw);
+
+  @protected
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
 
   @protected
@@ -175,6 +178,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
+
+  @protected
+  List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
 
   @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
@@ -255,6 +261,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_u_8(dynamic raw);
 
   @protected
+  UiBus dco_decode_ui_bus(dynamic raw);
+
+  @protected
   UiClip dco_decode_ui_clip(dynamic raw);
 
   @protected
@@ -295,6 +304,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
+
+  @protected
+  UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
 
   @protected
   UiSessionState dco_decode_ui_session_state(dynamic raw);
@@ -455,6 +467,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiBus> sse_decode_list_ui_bus(SseDeserializer deserializer);
+
+  @protected
   List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
 
   @protected
@@ -482,6 +497,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginParameter> sse_decode_list_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
     SseDeserializer deserializer,
   );
 
@@ -570,6 +590,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_u_8(SseDeserializer deserializer);
 
   @protected
+  UiBus sse_decode_ui_bus(SseDeserializer deserializer);
+
+  @protected
   UiClip sse_decode_ui_clip(SseDeserializer deserializer);
 
   @protected
@@ -618,6 +641,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter sse_decode_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiRoutingConnection sse_decode_ui_routing_connection(
     SseDeserializer deserializer,
   );
 
@@ -808,6 +836,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_bus(List<UiBus> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
 
   @protected
@@ -840,6 +871,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_plugin_parameter(
     List<UiPluginParameter> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_routing_connection(
+    List<UiRoutingConnection> self,
     SseSerializer serializer,
   );
 
@@ -946,6 +983,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_u_8(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_bus(UiBus self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_clip(UiClip self, SseSerializer serializer);
 
   @protected
@@ -1008,6 +1048,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_plugin_parameter(
     UiPluginParameter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_routing_connection(
+    UiRoutingConnection self,
     SseSerializer serializer,
   );
 

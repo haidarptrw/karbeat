@@ -1,6 +1,6 @@
 // src/audio/engine.rs
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use rtrb::{Consumer, Producer};
 use triple_buffer::Output;
@@ -14,7 +14,7 @@ use crate::{
     },
     commands::{AudioCommand, AudioFeedback, GeneratorParameterSnapshot},
     core::project::{
-        mixer::MixerChannel,
+        mixer::{BusId, MixerChannel, RoutingNode},
         plugin::{KarbeatEffect, MidiEvent, MidiMessage},
         AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
         PatternId, TrackId,
@@ -63,6 +63,9 @@ pub struct AudioEngine {
     last_emitted_samples: u32,
 
     mix_buffer: Vec<f32>,
+
+    /// Intermediate buffers for each bus (for routing matrix)
+    bus_buffers: HashMap<BusId, Vec<f32>>,
 
     /// Song playback vs Pattern playback
     playback_mode: PlaybackMode,
@@ -138,6 +141,7 @@ impl AudioEngine {
             pattern_bar: 1,
             last_emitted_samples: 0,
             mix_buffer,
+            bus_buffers: HashMap::new(),
             playback_mode: PlaybackMode::Song,
         }
     }
@@ -191,7 +195,7 @@ impl AudioEngine {
             self.emit_static_position();
         }
 
-        // 5. Always Render Previews (Metronome, Browser Preview)
+        // Always Render Previews (Metronome, Browser Preview)
         self.render_previews_to_buffer(output_buffer, channels);
     }
 
@@ -483,23 +487,23 @@ impl AudioEngine {
             }
             AudioCommand::RemoveTrackEffect {
                 track_id,
-                effect_idx,
+                effect_id,
             } => {
                 if let Some(effects) = self.plugin_state.track_effects.get_mut(&track_id) {
-                    if effect_idx < effects.len() {
-                        effects.remove(effect_idx);
+                    if let Some(effect) = effects.iter().position(|e| e.id == effect_id) {
+                        effects.remove(effect);
                     }
                 }
             }
             AudioCommand::SetTrackEffectParameter {
                 track_id,
-                effect_idx,
+                effect_id,
                 param_id,
                 value,
             } => {
                 if let Some(effects) = self.plugin_state.track_effects.get_mut(&track_id) {
-                    if let Some(effect) = effects.get_mut(effect_idx) {
-                        effect.plugin.set_parameter(param_id, value);
+                    if let Some(effect) = effects.iter().position(|e| e.id == effect_id) {
+                        effects[effect].plugin.set_parameter(param_id, value);
                     }
                 }
             }
@@ -524,20 +528,125 @@ impl AudioEngine {
                 }
             }
             #[allow(unused_variables)]
-            AudioCommand::AddMasterEffect { effect_id, effect } => {
-                // Temporarily do nothing. It will be implemented later
+            AudioCommand::AddMasterEffect {
+                effect_id,
+                mut effect,
+            } => {
+                let buf_size = self.current_state.graph.buffer_size;
+                effect.prepare(self.sample_rate as f32, buf_size);
+                self.plugin_state.master_effects.push(AudioEffectInstance {
+                    id: effect_id,
+                    plugin: effect,
+                });
             }
             #[allow(unused_variables)]
-            AudioCommand::RemoveMasterEffect { effect_idx } => {
-                // Temporarily do nothing. It will be implemented later
+            AudioCommand::RemoveMasterEffect { effect_id } => {
+                if let Some(effects) = self
+                    .plugin_state
+                    .master_effects
+                    .iter()
+                    .position(|e| e.id == effect_id)
+                {
+                    self.plugin_state.master_effects.remove(effects);
+                }
             }
             #[allow(unused_variables)]
             AudioCommand::SetMasterEffectParameter {
-                effect_idx,
+                effect_id,
                 param_id,
                 value,
             } => {
-                // Temporarily do nothing. It will be implemented later
+                if let Some(effects) = self
+                    .plugin_state
+                    .master_effects
+                    .iter()
+                    .position(|e| e.id == effect_id)
+                {
+                    self.plugin_state.master_effects[effects]
+                        .plugin
+                        .set_parameter(param_id, value);
+                }
+            }
+
+            // =================================================================
+            // Bus Commands
+            // =================================================================
+            AudioCommand::AddBus { bus_id, name } => {
+                // Initialize bus buffer and effects chain
+                self.plugin_state.bus_effects.insert(bus_id, Vec::new());
+                self.bus_buffers.insert(bus_id, Vec::new());
+                log::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
+            }
+            AudioCommand::RemoveBus { bus_id } => {
+                self.plugin_state.bus_effects.remove(&bus_id);
+                self.bus_buffers.remove(&bus_id);
+                log::info!("[AudioEngine] Removed bus {:?}", bus_id);
+            }
+            AudioCommand::SetBusParams {
+                bus_id,
+                volume,
+                pan,
+                mute,
+            } => {
+                // Bus params are stored in current_state.graph.mixer_state
+                // They get synced via triple buffer, so we don't need to do
+                // anything special here. Log for debugging.
+                log::debug!(
+                    "[AudioEngine] SetBusParams for {:?}: vol={:?}, pan={:?}, mute={:?}",
+                    bus_id,
+                    volume,
+                    pan,
+                    mute
+                );
+            }
+            AudioCommand::AddBusEffect {
+                bus_id,
+                effect_id,
+                mut effect,
+            } => {
+                let buf_size = self.current_state.graph.buffer_size.max(512);
+                effect.prepare(self.sample_rate as f32, buf_size);
+
+                self.plugin_state
+                    .bus_effects
+                    .entry(bus_id)
+                    .or_default()
+                    .push(AudioEffectInstance {
+                        id: effect_id,
+                        plugin: effect,
+                    });
+                log::info!(
+                    "[AudioEngine] Added effect {:?} to bus {:?}",
+                    effect_id,
+                    bus_id
+                );
+            }
+            AudioCommand::RemoveBusEffect { bus_id, effect_id } => {
+                if let Some(effects) = self.plugin_state.bus_effects.get_mut(&bus_id) {
+                    if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
+                        effects.remove(pos);
+                    }
+                }
+            }
+            AudioCommand::SetBusEffectParameter {
+                bus_id,
+                effect_id,
+                param_id,
+                value,
+            } => {
+                if let Some(effects) = self.plugin_state.bus_effects.get_mut(&bus_id) {
+                    if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
+                        effect.plugin.set_parameter(param_id, value);
+                    }
+                }
+            }
+            AudioCommand::UpdateRouting { routing } => {
+                // Routing is stored in mixer_state and synced via triple buffer
+                // Log for debugging
+                log::info!(
+                    "[AudioEngine] Received routing update with {} connections",
+                    routing.len()
+                );
             }
         }
     }
@@ -606,15 +715,6 @@ impl AudioEngine {
             pattern_samples: self.pattern_playhead_samples,
             pattern_beat: self.pattern_beat,
             pattern_bar: self.pattern_bar,
-        }
-    }
-
-    #[allow(dead_code)]
-    fn emit_position_toggle_play(&mut self, is_playing: bool) {
-        if !self.position_producer.is_full() {
-            let _ = self
-                .position_producer
-                .push(self.build_position_struct(Some(is_playing)));
         }
     }
 
@@ -716,6 +816,15 @@ impl AudioEngine {
     fn render_voices_to_buffer(&mut self, output: &mut [f32], channels: usize) {
         let buf_len = output.len();
 
+        // Ensure bus buffers are properly sized
+        for (bus_id, buf) in self.bus_buffers.iter_mut() {
+            if buf.len() != buf_len {
+                buf.resize(buf_len, 0.0);
+            }
+            buf.fill(0.0);
+        }
+
+        // Check for solo state
         let is_any_solo = self
             .current_state
             .graph
@@ -724,6 +833,10 @@ impl AudioEngine {
             .values()
             .any(|ch| ch.solo);
 
+        // Get routing info
+        let routing = &self.current_state.graph.mixer_state.routing;
+
+        // ==== Phase 1: Render all tracks and route to destinations ====
         for track in self.current_state.graph.tracks.iter() {
             let track_id = track.id;
 
@@ -744,6 +857,8 @@ impl AudioEngine {
                 .channels
                 .get(&track_id)
                 .unwrap_or(&default_channel);
+
+            // Check mute/solo
             if channel.mute {
                 continue;
             }
@@ -751,6 +866,7 @@ impl AudioEngine {
                 continue;
             }
 
+            // Ensure mix_buffer is sized correctly
             if self.mix_buffer.len() != buf_len {
                 self.mix_buffer.resize(buf_len, 0.0);
             }
@@ -789,7 +905,7 @@ impl AudioEngine {
                 continue;
             }
 
-            // Apply mixer channel (volume/pan/phase) and effects from plugin_state
+            // Apply track mixer channel (volume/pan/phase) and effects
             Self::apply_mixer_channel_with_effects(
                 channel,
                 &mut self.plugin_state.track_effects,
@@ -798,10 +914,137 @@ impl AudioEngine {
                 channels,
             );
 
-            for i in 0..buf_len {
-                output[i] += self.mix_buffer[i];
+            // Route the track signal to destinations based on routing matrix
+            let track_routes: Vec<_> = routing
+                .iter()
+                .filter(|c| c.source == RoutingNode::Track(track_id))
+                .collect();
+
+            if track_routes.is_empty() {
+                // No explicit routing: go directly to master (backward compatibility)
+                for i in 0..buf_len {
+                    output[i] += self.mix_buffer[i];
+                }
+            } else {
+                // Route to each destination with appropriate send level
+                for conn in track_routes {
+                    match conn.destination {
+                        RoutingNode::Master => {
+                            for i in 0..buf_len {
+                                output[i] += self.mix_buffer[i] * conn.send_level;
+                            }
+                        }
+                        RoutingNode::Bus(bus_id) => {
+                            if let Some(bus_buf) = self.bus_buffers.get_mut(&bus_id) {
+                                for i in 0..buf_len {
+                                    bus_buf[i] += self.mix_buffer[i] * conn.send_level;
+                                }
+                            }
+                        }
+                        RoutingNode::Track(_) => {
+                            // Invalid: can't route to a track
+                        }
+                    }
+                }
             }
         }
+
+        // ==== Phase 2: Process buses in topological order ====
+        let routing_order = self.current_state.graph.mixer_state.get_routing_order();
+
+        for node in routing_order.iter() {
+            if let RoutingNode::Bus(bus_id) = node {
+                // Get the bus's audio from the buffer
+                let bus_audio = match self.bus_buffers.get(bus_id) {
+                    Some(buf) => buf.clone(),
+                    None => continue,
+                };
+
+                // Get bus channel settings
+                let bus_channel = self
+                    .current_state
+                    .graph
+                    .mixer_state
+                    .buses
+                    .get(bus_id)
+                    .map(|b| &b.channel);
+
+                let Some(bus_settings) = bus_channel else {
+                    continue;
+                };
+
+                // Skip if muted
+                if bus_settings.mute {
+                    continue;
+                }
+
+                // Copy bus audio to mix_buffer for processing
+                if self.mix_buffer.len() != buf_len {
+                    self.mix_buffer.resize(buf_len, 0.0);
+                }
+                self.mix_buffer.copy_from_slice(&bus_audio);
+
+                // Apply bus effects
+                if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id) {
+                    for effect in effects.iter_mut() {
+                        effect.plugin.process(&mut self.mix_buffer);
+                    }
+                }
+
+                // Apply volume and pan
+                let volume = bus_settings.volume;
+                let pan = bus_settings.pan.clamp(-1.0, 1.0);
+                let (left_gain, right_gain) = if channels == 2 {
+                    let p = (pan + 1.0) * 0.5;
+                    ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
+                } else {
+                    (volume, volume)
+                };
+
+                let frame_count = buf_len / channels;
+                for i in 0..frame_count {
+                    if channels > 0 {
+                        self.mix_buffer[i * channels] *= left_gain;
+                    }
+                    if channels > 1 {
+                        self.mix_buffer[i * channels + 1] *= right_gain;
+                    }
+                }
+
+                // Route bus output to destinations
+                let bus_routes: Vec<_> = routing
+                    .iter()
+                    .filter(|c| c.source == RoutingNode::Bus(*bus_id))
+                    .collect();
+
+                for conn in bus_routes {
+                    match conn.destination {
+                        RoutingNode::Master => {
+                            for i in 0..buf_len {
+                                output[i] += self.mix_buffer[i] * conn.send_level;
+                            }
+                        }
+                        RoutingNode::Bus(dest_bus_id) => {
+                            if let Some(dest_buf) = self.bus_buffers.get_mut(&dest_bus_id) {
+                                for i in 0..buf_len {
+                                    dest_buf[i] += self.mix_buffer[i] * conn.send_level;
+                                }
+                            }
+                        }
+                        RoutingNode::Track(_) => {}
+                    }
+                }
+            }
+        }
+
+        // ==== Phase 3: Apply master bus effects ====
+        let master_bus = self.current_state.graph.mixer_state.master_bus.clone();
+        Self::apply_master_bus_with_effects(
+            &master_bus,
+            &mut self.plugin_state.master_effects,
+            output,
+            channels,
+        );
     }
 
     fn render_oneshots(
@@ -886,6 +1129,55 @@ impl AudioEngine {
         // Volume and Pan using Linear Pan
         let pan = mixer_channel.pan.clamp(-1.0, 1.0);
         let volume = mixer_channel.volume;
+        let (left_gain, right_gain) = if channels == 2 {
+            let p = (pan + 1.0) * 0.5;
+            ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
+        } else {
+            (volume, volume)
+        };
+
+        // Apply gain
+        for i in 0..frame_count {
+            if channels > 0 {
+                buffer[i * channels] *= left_gain;
+            }
+            if channels > 1 {
+                buffer[i * channels + 1] *= right_gain;
+            }
+        }
+    }
+
+    /// Apply master bus settings (volume, pan, phase) and effects from plugin_state
+    ///
+    /// # Parameters
+    ///
+    /// * `master_bus` - The master bus settings
+    /// * `master_effects` - The master bus effects chain
+    /// * `buffer` - The buffer to apply the master bus settings to
+    /// * `channels` - The number of channels in the buffer
+    fn apply_master_bus_with_effects(
+        master_bus: &MixerChannel,
+        master_effects: &mut [AudioEffectInstance],
+        buffer: &mut [f32],
+        channels: usize,
+    ) {
+        let frame_count = buffer.len() / channels;
+
+        // Invert Phase
+        if master_bus.inverted_phase {
+            for sample in buffer.iter_mut() {
+                *sample = -*sample;
+            }
+        }
+
+        // Master effects chain (owned, no lock!)
+        for effect in master_effects.iter_mut() {
+            effect.plugin.process(buffer);
+        }
+
+        // Volume and Pan using Linear Pan
+        let pan = master_bus.pan.clamp(-1.0, 1.0);
+        let volume = master_bus.volume;
         let (left_gain, right_gain) = if channels == 2 {
             let p = (pan + 1.0) * 0.5;
             ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
@@ -1241,13 +1533,13 @@ impl AudioEngine {
 }
 
 /// Sample a waveform at a specific position
-/// 
+///
 /// ### What it does
-/// 
+///
 /// - Interpolates between two samples
 /// - Handles edge cases where the position is out of bounds
 /// - Returns a tuple of left and right channel values
-/// 
+///
 #[inline(always)]
 fn sample_waveform_inline(waveform: &AudioWaveform, pos: f64, channels: usize) -> (f32, f32) {
     let idx = pos as usize;

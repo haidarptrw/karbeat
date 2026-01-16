@@ -9,28 +9,29 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectInstance`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `into`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `into`, `into`
 
 /// ======================================
 /// GETTERS
 /// ======================================
 /// **GETTER: Fetch the mixer state**
-///
-/// Does not throw error. panic if the app state lock is poisoned
 Future<UiMixerState> getMixerState() =>
     RustLib.instance.api.crateApiMixerGetMixerState();
 
 /// **GETTER: Fetch a specific mixer channel**
-///
-/// Throws error if the channel is not found
 Future<UiMixerChannel> getMixerChannel({required int trackId}) =>
     RustLib.instance.api.crateApiMixerGetMixerChannel(trackId: trackId);
 
 /// **GETTER: Fetch the master bus**
-///
-/// Does not throw error. panic if the app state lock is poisoned
 Future<UiMixerChannel> getMasterBus() =>
     RustLib.instance.api.crateApiMixerGetMasterBus();
+
+/// **GETTER: Fetch all buses**
+Future<List<UiBus>> getBuses() => RustLib.instance.api.crateApiMixerGetBuses();
+
+/// **GETTER: Fetch the routing matrix**
+Future<List<UiRoutingConnection>> getRoutingMatrix() =>
+    RustLib.instance.api.crateApiMixerGetRoutingMatrix();
 
 Future<void> setMasterBusParams({required List<UiMixerChannelParams> params}) =>
     RustLib.instance.api.crateApiMixerSetMasterBusParams(params: params);
@@ -60,6 +61,83 @@ Future<void> addEffectToMixerChannel({
   trackId: trackId,
   effectName: effectName,
 );
+
+Future<void> addEffectToMasterBus({required int registryId}) => RustLib
+    .instance
+    .api
+    .crateApiMixerAddEffectToMasterBus(registryId: registryId);
+
+/// Create a new mixer bus and return its ID.
+Future<int> createBus({required String name}) =>
+    RustLib.instance.api.crateApiMixerCreateBus(name: name);
+
+/// Delete a mixer bus.
+Future<void> deleteBus({required int busId}) =>
+    RustLib.instance.api.crateApiMixerDeleteBus(busId: busId);
+
+/// Set bus channel parameters (volume, pan, mute).
+Future<void> setBusParams({
+  required int busId,
+  required List<UiMixerChannelParams> params,
+}) => RustLib.instance.api.crateApiMixerSetBusParams(
+  busId: busId,
+  params: params,
+);
+
+/// Set routing: source → destination with send level.
+/// source_type: 0=Track, 1=Bus
+/// dest_type: 1=Bus, 2=Master
+Future<void> setRouting({
+  required int sourceType,
+  required int sourceId,
+  required int destType,
+  required int destId,
+  required double sendLevel,
+  required bool isSend,
+}) => RustLib.instance.api.crateApiMixerSetRouting(
+  sourceType: sourceType,
+  sourceId: sourceId,
+  destType: destType,
+  destId: destId,
+  sendLevel: sendLevel,
+  isSend: isSend,
+);
+
+/// Remove a routing connection.
+Future<void> removeRouting({
+  required int sourceType,
+  required int sourceId,
+  required int destType,
+  required int destId,
+  required bool isSend,
+}) => RustLib.instance.api.crateApiMixerRemoveRouting(
+  sourceType: sourceType,
+  sourceId: sourceId,
+  destType: destType,
+  destId: destId,
+  isSend: isSend,
+);
+
+/// UI representation of a mixer bus.
+class UiBus {
+  final int id;
+  final String name;
+  final UiMixerChannel channel;
+
+  const UiBus({required this.id, required this.name, required this.channel});
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ channel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiBus &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          channel == other.channel;
+}
 
 /// ======================================
 /// Type Definitions
@@ -124,11 +202,22 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
 class UiMixerState {
   final Map<int, UiMixerChannel> channels;
   final UiMixerChannel masterBus;
+  final List<UiBus> buses;
+  final List<UiRoutingConnection> routing;
 
-  const UiMixerState({required this.channels, required this.masterBus});
+  const UiMixerState({
+    required this.channels,
+    required this.masterBus,
+    required this.buses,
+    required this.routing,
+  });
 
   @override
-  int get hashCode => channels.hashCode ^ masterBus.hashCode;
+  int get hashCode =>
+      channels.hashCode ^
+      masterBus.hashCode ^
+      buses.hashCode ^
+      routing.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -136,5 +225,50 @@ class UiMixerState {
       other is UiMixerState &&
           runtimeType == other.runtimeType &&
           channels == other.channels &&
-          masterBus == other.masterBus;
+          masterBus == other.masterBus &&
+          buses == other.buses &&
+          routing == other.routing;
+}
+
+/// UI representation of a routing connection.
+class UiRoutingConnection {
+  /// 0=Track, 1=Bus, 2=Master
+  final int sourceType;
+  final int sourceId;
+
+  /// 0=Track, 1=Bus, 2=Master
+  final int destType;
+  final int destId;
+  final double sendLevel;
+  final bool isSend;
+
+  const UiRoutingConnection({
+    required this.sourceType,
+    required this.sourceId,
+    required this.destType,
+    required this.destId,
+    required this.sendLevel,
+    required this.isSend,
+  });
+
+  @override
+  int get hashCode =>
+      sourceType.hashCode ^
+      sourceId.hashCode ^
+      destType.hashCode ^
+      destId.hashCode ^
+      sendLevel.hashCode ^
+      isSend.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiRoutingConnection &&
+          runtimeType == other.runtimeType &&
+          sourceType == other.sourceType &&
+          sourceId == other.sourceId &&
+          destType == other.destType &&
+          destId == other.destId &&
+          sendLevel == other.sendLevel &&
+          isSend == other.isSend;
 }

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     core::project::{
-        mixer::{EffectId, MixerState},
+        mixer::{BusId, EffectId, MixerState},
         plugin::{KarbeatEffect, KarbeatGenerator},
         track::{
             midi::{Pattern, PatternId},
@@ -40,6 +40,8 @@ pub struct AudioPluginState {
     pub track_effects: HashMap<TrackId, Vec<AudioEffectInstance>>,
     /// Master effect chain (owned by audio thread)
     pub master_effects: Vec<AudioEffectInstance>,
+    /// Bus effect chains (owned by audio thread)
+    pub bus_effects: HashMap<BusId, Vec<AudioEffectInstance>>,
 }
 
 // =============================================================================

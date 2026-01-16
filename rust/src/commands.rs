@@ -1,7 +1,7 @@
 use crate::{
     audio::engine::PlaybackMode,
     core::project::{
-        mixer::EffectId,
+        mixer::{BusId, EffectId, RoutingConnection},
         plugin::{KarbeatEffect, KarbeatGenerator},
         track::audio_waveform::AudioWaveform,
         GeneratorId, TrackId,
@@ -64,12 +64,12 @@ pub enum AudioCommand {
     /// Remove an effect from a track's effect chain
     RemoveTrackEffect {
         track_id: TrackId,
-        effect_idx: usize,
+        effect_id: EffectId,
     },
     /// Set a parameter on a track effect
     SetTrackEffectParameter {
         track_id: TrackId,
-        effect_idx: usize,
+        effect_id: EffectId,
         param_id: u32,
         value: f32,
     },
@@ -84,13 +84,55 @@ pub enum AudioCommand {
     },
     /// Remove an effect from the master bus
     RemoveMasterEffect {
-        effect_idx: usize,
+        effect_id: EffectId,
     },
     /// Set a parameter on a master effect
     SetMasterEffectParameter {
-        effect_idx: usize,
+        effect_id: EffectId,
         param_id: u32,
         value: f32,
+    },
+
+    // =========================================================================
+    // Bus Commands
+    // =========================================================================
+    /// Create a new mixer bus on the audio thread
+    AddBus {
+        bus_id: BusId,
+        name: String,
+    },
+    /// Remove a mixer bus from the audio thread
+    RemoveBus {
+        bus_id: BusId,
+    },
+    /// Set bus channel parameters (volume, pan, mute)
+    SetBusParams {
+        bus_id: BusId,
+        volume: Option<f32>,
+        pan: Option<f32>,
+        mute: Option<bool>,
+    },
+    /// Add effect to a bus
+    AddBusEffect {
+        bus_id: BusId,
+        effect_id: EffectId,
+        effect: Box<dyn KarbeatEffect + Send>,
+    },
+    /// Remove effect from a bus
+    RemoveBusEffect {
+        bus_id: BusId,
+        effect_id: EffectId,
+    },
+    /// Set a bus effect parameter
+    SetBusEffectParameter {
+        bus_id: BusId,
+        effect_id: EffectId,
+        param_id: u32,
+        value: f32,
+    },
+    /// Update the routing matrix (sync from main thread)
+    UpdateRouting {
+        routing: Vec<RoutingConnection>,
     },
 }
 
