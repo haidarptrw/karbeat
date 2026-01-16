@@ -15,10 +15,11 @@ use crate::{
     commands::{AudioCommand, AudioFeedback, GeneratorParameterSnapshot},
     core::project::{
         mixer::{BusId, MixerChannel, RoutingNode},
-        plugin::{KarbeatEffect, MidiEvent, MidiMessage},
+        plugin::{MidiEvent, MidiMessage},
         AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
         PatternId, TrackId,
     },
+    utils::audio::db_to_linear,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,6 +67,12 @@ pub struct AudioEngine {
 
     /// Intermediate buffers for each bus (for routing matrix)
     bus_buffers: HashMap<BusId, Vec<f32>>,
+
+    /// Temporary buffer for bus processing (avoids allocation in audio thread)
+    bus_temp_buffer: Vec<f32>,
+
+    /// Cached routing order (updated only when state changes, not every callback)
+    cached_routing_order: Vec<RoutingNode>,
 
     /// Song playback vs Pattern playback
     playback_mode: PlaybackMode,
@@ -142,6 +149,8 @@ impl AudioEngine {
             last_emitted_samples: 0,
             mix_buffer,
             bus_buffers: HashMap::new(),
+            bus_temp_buffer: Vec::with_capacity(2048),
+            cached_routing_order: Vec::new(),
             playback_mode: PlaybackMode::Song,
         }
     }
@@ -156,7 +165,10 @@ impl AudioEngine {
                 self.stop_all_active_generators();
             }
 
-            self.current_state = new_state.clone();
+            // Update cached routing order only when state changes (not every callback)
+            self.cached_routing_order = new_state.graph.mixer_state.get_routing_order();
+
+            self.current_state = new_state;
         }
 
         // Process Commands (Play, Stop, Seek)
@@ -950,15 +962,20 @@ impl AudioEngine {
         }
 
         // ==== Phase 2: Process buses in topological order ====
-        let routing_order = self.current_state.graph.mixer_state.get_routing_order();
-
-        for node in routing_order.iter() {
+        // Use cached routing order (computed only on state update, not every callback)
+        for node in self.cached_routing_order.clone().iter() {
             if let RoutingNode::Bus(bus_id) = node {
-                // Get the bus's audio from the buffer
-                let bus_audio = match self.bus_buffers.get(bus_id) {
-                    Some(buf) => buf.clone(),
+                // Copy bus audio to temp buffer (avoid clone allocation)
+                let bus_buf = match self.bus_buffers.get(bus_id) {
+                    Some(buf) => buf,
                     None => continue,
                 };
+
+                // Resize temp buffer if needed and copy
+                if self.bus_temp_buffer.len() != buf_len {
+                    self.bus_temp_buffer.resize(buf_len, 0.0);
+                }
+                self.bus_temp_buffer.copy_from_slice(bus_buf);
 
                 // Get bus channel settings
                 let bus_channel = self
@@ -978,11 +995,11 @@ impl AudioEngine {
                     continue;
                 }
 
-                // Copy bus audio to mix_buffer for processing
+                // Copy to mix_buffer for processing
                 if self.mix_buffer.len() != buf_len {
                     self.mix_buffer.resize(buf_len, 0.0);
                 }
-                self.mix_buffer.copy_from_slice(&bus_audio);
+                self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
 
                 // Apply bus effects
                 if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id) {
@@ -991,8 +1008,8 @@ impl AudioEngine {
                     }
                 }
 
-                // Apply volume and pan
-                let volume = bus_settings.volume;
+                // Apply volume and pan (volume is stored in dB)
+                let volume = db_to_linear(bus_settings.volume);
                 let pan = bus_settings.pan.clamp(-1.0, 1.0);
                 let (left_gain, right_gain) = if channels == 2 {
                     let p = (pan + 1.0) * 0.5;
@@ -1126,9 +1143,9 @@ impl AudioEngine {
             }
         }
 
-        // Volume and Pan using Linear Pan
+        // Volume and Pan (volume is stored in dB)
         let pan = mixer_channel.pan.clamp(-1.0, 1.0);
-        let volume = mixer_channel.volume;
+        let volume = db_to_linear(mixer_channel.volume);
         let (left_gain, right_gain) = if channels == 2 {
             let p = (pan + 1.0) * 0.5;
             ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
@@ -1175,9 +1192,9 @@ impl AudioEngine {
             effect.plugin.process(buffer);
         }
 
-        // Volume and Pan using Linear Pan
+        // Volume and Pan (volume is stored in dB)
         let pan = master_bus.pan.clamp(-1.0, 1.0);
-        let volume = master_bus.volume;
+        let volume = db_to_linear(master_bus.volume);
         let (left_gain, right_gain) = if channels == 2 {
             let p = (pan + 1.0) * 0.5;
             ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
@@ -1457,13 +1474,17 @@ impl AudioEngine {
                 let note_start = (note.start_tick as f64 / 960.0 * samples_per_beat as f64) as u32;
                 let note_dur = (note.duration as f64 / 960.0 * samples_per_beat as f64) as u32;
 
-                let abs_start = clip.start_time + pattern_offset + note_start - clip.offset_start;
-                let abs_end = abs_start + note_dur;
+                // Note position within the pattern (in samples from pattern start)
+                let note_pos_in_pattern = pattern_offset + note_start;
 
-                // Skip notes that start before the clip's offset
-                if abs_start < clip.offset_start {
+                // Skip notes that start before the clip's trim offset
+                if note_pos_in_pattern < clip.offset_start {
                     continue;
                 }
+
+                // Calculate absolute timeline position: clip start + (note position - trim offset)
+                let abs_start = clip.start_time + note_pos_in_pattern - clip.offset_start;
+                let abs_end = abs_start + note_dur;
 
                 // Skip notes that start at or after the clip end (outside trimmed region)
                 if abs_start >= clip_end {

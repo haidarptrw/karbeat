@@ -95,14 +95,14 @@ impl MixerBus {
 /// Custom Error type for better error clarity
 ///
 /// This represents an error that occur due to param setting operation
-#[derive(Error, Debug, Clone)] // Added Error
+#[derive(Error, Debug, Clone)]
 #[error("Mixer param error for track {track_id}: {message}")]
 pub struct MixerSetParamError {
     pub message: String,
     pub track_id: TrackId,
 }
 
-#[derive(Error, Debug, Clone)] // Added Error
+#[derive(Error, Debug, Clone)]
 #[error("Effect creation error: {message}")]
 pub struct EffectCreationError {
     pub message: String,
@@ -118,7 +118,7 @@ impl MixerSetParamError {
 }
 
 #[derive(Error, Debug)]
-#[error("Mixer not found for track {track_id}: {message}")] //
+#[error("Mixer not found for track {track_id}: {message}")]
 pub struct MixerNotFoundError {
     pub message: String,
     pub track_id: TrackId,
@@ -187,7 +187,7 @@ pub struct MixerChannel {
 impl Default for MixerChannel {
     fn default() -> Self {
         Self {
-            volume: 0.0,
+            volume: 0.0, // 0 dB = unity gain
             pan: 0.0,
             mute: Default::default(),
             solo: Default::default(),

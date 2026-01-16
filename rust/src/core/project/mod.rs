@@ -29,10 +29,7 @@ pub use track::{
 };
 pub use transport::TransportState;
 
-use crate::{
-    core::project::mixer::{EffectId, EffectInstance, MixerState},
-    define_id,
-};
+use crate::{core::project::mixer::MixerState, define_id};
 
 define_id!(SourceId);
 define_id!(NoteId);
