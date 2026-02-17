@@ -9,7 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 anyhow = "1.0.100"
-cpal = { version = "0.16.0" }
+cpal = { version = "0.16.0", features=["jack"] }
 env_logger = "0.11.8"
 fastrand = "2.3.0"
 flutter_rust_bridge = "=2.11.1"
