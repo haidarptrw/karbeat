@@ -180,7 +180,11 @@ class DefaultControlPanel extends StatelessWidget {
         name: "Mixer",
         icon: Icons.tune,
         color: Colors.cyanAccent,
-        onTap: () => KarbeatLogger.info("Nav to mixer"),
+        onTap: () =>
+            context.read<KarbeatState>().navigateTo(WorkspaceView.mixer),
+        isActive: context.select<KarbeatState, bool>(
+          (s) => s.currentView == WorkspaceView.mixer,
+        ),
       ),
     );
 
@@ -300,11 +304,11 @@ class DefaultControlPanel extends StatelessWidget {
               ),
               ControlPanelToolbarItem(
                 name: "Range Select",
-                icon: Icons.crop_free, 
+                icon: Icons.crop_free,
                 color: Colors.blueAccent,
                 isActive: selectedTool == ToolSelection.select,
                 onTap: () => context.read<KarbeatState>().selectTool(
-                  ToolSelection.select
+                  ToolSelection.select,
                 ),
               ),
             ],

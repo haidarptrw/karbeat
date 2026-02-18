@@ -404,12 +404,12 @@ impl AudioEngine {
                 self.emit_current_playback_position();
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
-                // 1. Silence everything to prevent hanging notes from the previous mode
+                // Silence everything to prevent hanging notes from the previous mode
                 self.stop_all_active_generators();
 
                 self.playback_mode = playback_mode;
 
-                // 2. Reset the specific playhead for the new mode
+                // Reset the specific playhead for the new mode
                 match self.playback_mode {
                     PlaybackMode::Song => {
                         self.playhead_samples = 0;
@@ -423,7 +423,7 @@ impl AudioEngine {
                     }
                 }
 
-                // 3. Snap UI to the beginning immediately
+                // Snap UI to the beginning immediately
                 self.emit_current_playback_position();
             }
             AudioCommand::AddGenerator {
@@ -1136,7 +1136,7 @@ impl AudioEngine {
             }
         }
 
-        // Effects chain from plugin_state (owned, no lock!)
+        // Effects chain from plugin_state
         if let Some(effects) = track_effects.get_mut(&track_id) {
             for effect in effects.iter_mut() {
                 effect.plugin.process(buffer);
@@ -1187,7 +1187,7 @@ impl AudioEngine {
             }
         }
 
-        // Master effects chain (owned, no lock!)
+        // Master effects chain
         for effect in master_effects.iter_mut() {
             effect.plugin.process(buffer);
         }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/features/header/control_panel.dart';
+import 'package:karbeat/features/screens/mixer_screen.dart';
 import 'package:karbeat/features/screens/piano_roll_screen.dart';
 import 'package:karbeat/features/screens/source_list_screen.dart';
 import 'package:karbeat/features/screens/track_list_screen.dart';
@@ -78,8 +79,8 @@ class MainContent extends StatelessWidget {
                         );
                       },
                     );
-                  default:
-                    return const TrackListScreen();
+                  case WorkspaceView.mixer:
+                    return const MixerScreen();
                 }
               },
             ),

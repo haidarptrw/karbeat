@@ -180,9 +180,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   void _updateZoom(double newZoom) {
-    // Define min/max zoom limits to prevent bugs
-    final clamped = newZoom.clamp(0.01, 5000.0);
-    context.read<KarbeatState>().setHorizontalZoom(clamped);
+    context.read<KarbeatState>().horizontalZoomLevel = newZoom;
   }
 
   void _handleTimelineGesture(

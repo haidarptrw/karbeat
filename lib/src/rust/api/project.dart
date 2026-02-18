@@ -56,7 +56,7 @@ Future<UiSessionState> getSessionState() =>
     RustLib.instance.api.crateApiProjectGetSessionState();
 
 class AudioWaveformUiForAudioProperties {
-  final Float32List previewBuffer;
+  final Int8List previewBuffer;
   final String filePath;
   final String name;
   final int sampleRate;

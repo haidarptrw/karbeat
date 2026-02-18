@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:developer';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -71,6 +73,19 @@ class KarbeatState extends ChangeNotifier {
     cpuLoad: 0,
   );
 
+  UiMixerState _mixerState = UiMixerState(
+    channels: {},
+    masterBus: UiMixerChannel(
+      volume: 1.0,
+      pan: 0.0,
+      mute: false,
+      solo: false,
+      invertedPhase: false,
+      effects: Uint32List(0),
+    ),
+    buses: [],
+    routing: [],
+  );
   // List<Clipboard>
 
   // =================== STORES ==========================
@@ -219,6 +234,7 @@ class KarbeatState extends ChangeNotifier {
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
+  UiMixerState get mixerState => _mixerState;
 
   // Piano roll getters
   PianoRollToolSelection get pianoRollTool => _pianoRollTool;
@@ -232,7 +248,21 @@ class KarbeatState extends ChangeNotifier {
   }
 
   // =============== GLOBAL UI STATE ==========================
-  double horizontalZoomLevel = 1000;
+  double _horizontalZoomLevel = 1000;
+  double get horizontalZoomLevel => _horizontalZoomLevel;
+
+  /// Min: 1 sample/px (each sample tick visible). Max: 100k samples/px.
+  static const double _minZoom = 1.0;
+  static const double _maxZoom = 100000.0;
+
+  set horizontalZoomLevel(double val) {
+    final clamped = val.clamp(_minZoom, _maxZoom);
+    if (_horizontalZoomLevel != clamped) {
+      _horizontalZoomLevel = clamped;
+      notifyListeners();
+    }
+  }
+
   Map<int, int> trackIdHeightMap = {};
 
   // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
@@ -389,6 +419,16 @@ class KarbeatState extends ChangeNotifier {
   void notifyBackendChange(ProjectEvent event) {
     if (!_stateEventController.isClosed) {
       _stateEventController.add(event);
+    }
+  }
+
+  Future<void> syncMixerState() async {
+    try {
+      final newState = await getMixerState();
+      _mixerState = newState;
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Failed to sync mixer state: $e");
     }
   }
 

@@ -3399,7 +3399,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 13)
       throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return AudioWaveformUiForAudioProperties(
-      previewBuffer: dco_decode_list_prim_f_32_strict(arr[0]),
+      previewBuffer: dco_decode_list_prim_i_8_strict(arr[0]),
       filePath: dco_decode_String(arr[1]),
       name: dco_decode_String(arr[2]),
       sampleRate: dco_decode_u_32(arr[3]),
@@ -3489,9 +3489,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Float32List dco_decode_list_prim_f_32_strict(dynamic raw) {
+  Int8List dco_decode_list_prim_i_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as Float32List;
+    return raw as Int8List;
   }
 
   @protected
@@ -4242,7 +4242,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_previewBuffer = sse_decode_list_prim_f_32_strict(deserializer);
+    var var_previewBuffer = sse_decode_list_prim_i_8_strict(deserializer);
     var var_filePath = sse_decode_String(deserializer);
     var var_name = sse_decode_String(deserializer);
     var var_sampleRate = sse_decode_u_32(deserializer);
@@ -4354,10 +4354,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer) {
+  Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getFloat32List(len_);
+    return deserializer.buffer.getInt8List(len_);
   }
 
   @protected
@@ -5311,7 +5311,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_prim_f_32_strict(self.previewBuffer, serializer);
+    sse_encode_list_prim_i_8_strict(self.previewBuffer, serializer);
     sse_encode_String(self.filePath, serializer);
     sse_encode_String(self.name, serializer);
     sse_encode_u_32(self.sampleRate, serializer);
@@ -5405,13 +5405,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_prim_f_32_strict(
-    Float32List self,
+  void sse_encode_list_prim_i_8_strict(
+    Int8List self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putFloat32List(self);
+    serializer.buffer.putInt8List(self);
   }
 
   @protected

@@ -3233,7 +3233,7 @@ impl SseDecode for crate::core::project::AudioHardwareConfig {
 impl SseDecode for crate::api::project::AudioWaveformUiForAudioProperties {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_previewBuffer = <Vec<f32>>::sse_decode(deserializer);
+        let mut var_previewBuffer = <Vec<i8>>::sse_decode(deserializer);
         let mut var_filePath = <String>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_sampleRate = <u32>::sse_decode(deserializer);
@@ -3325,13 +3325,13 @@ impl SseDecode for Vec<String> {
     }
 }
 
-impl SseDecode for Vec<f32> {
+impl SseDecode for Vec<i8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
-            ans_.push(<f32>::sse_decode(deserializer));
+            ans_.push(<i8>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5161,7 +5161,7 @@ impl SseEncode for crate::core::project::AudioHardwareConfig {
 impl SseEncode for crate::api::project::AudioWaveformUiForAudioProperties {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<f32>>::sse_encode(self.preview_buffer, serializer);
+        <Vec<i8>>::sse_encode(self.preview_buffer, serializer);
         <String>::sse_encode(self.file_path, serializer);
         <String>::sse_encode(self.name, serializer);
         <u32>::sse_encode(self.sample_rate, serializer);
@@ -5236,12 +5236,12 @@ impl SseEncode for Vec<String> {
     }
 }
 
-impl SseEncode for Vec<f32> {
+impl SseEncode for Vec<i8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <f32>::sse_encode(item, serializer);
+            <i8>::sse_encode(item, serializer);
         }
     }
 }

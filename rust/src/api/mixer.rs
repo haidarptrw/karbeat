@@ -1,13 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    commands::AudioCommand,
-    core::project::mixer::{
+    broadcast_state_change, commands::AudioCommand, core::project::mixer::{
         BusId, EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState,
         RoutingConnection, RoutingNode,
-    },
-    ctx,
-    utils::lock::{get_app_read, get_app_write},
+    }, ctx, utils::lock::{get_app_read, get_app_write}
 };
 
 /// ======================================
@@ -242,7 +239,7 @@ pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Res
             .add_effect_descriptor_by_id(&track_id.into(), registry_id)
             .map_err(|e| format!("{}", e))?;
     }
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(())
 }
 
@@ -256,7 +253,7 @@ pub fn add_effect_to_mixer_channel(track_id: u32, effect_name: String) -> Result
             .add_effect_descriptor(&track_id.into(), &effect_name, "")
             .map_err(|e| format!("{}", e))?;
     }
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(())
 }
 
@@ -267,7 +264,7 @@ pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
             .add_effect_to_master_bus(registry_id)
             .map_err(|e| format!("{}", e))?;
     }
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(())
 }
 
@@ -291,7 +288,7 @@ pub fn create_bus(name: String) -> Result<u32, String> {
 
         bus_id
     };
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(bus_id.to_u32())
 }
 
@@ -308,7 +305,7 @@ pub fn delete_bus(bus_id: u32) -> Result<(), String> {
             });
         }
     }
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(())
 }
 
@@ -319,7 +316,7 @@ pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<
         let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
         app.mixer.set_params_bus(&bus_id.into(), &params_legit)?;
     }
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(())
 }
 
@@ -369,7 +366,7 @@ pub fn set_routing(
             });
         }
     }
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(())
 }
 
@@ -405,6 +402,6 @@ pub fn remove_routing(
             });
         }
     }
-    crate::broadcast_state_change();
+    broadcast_state_change();
     Ok(())
 }

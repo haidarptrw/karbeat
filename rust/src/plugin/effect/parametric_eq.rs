@@ -12,6 +12,8 @@ pub enum FilterType {
     HighShelf = 2,
     LowPass = 3,
     HighPass = 4,
+    BandPass = 5,
+    Notch = 6,
 }
 
 impl From<f32> for FilterType {
@@ -154,6 +156,8 @@ impl KarbeatParametricEQFilterNode {
                 -2.0 * cos_w0,
                 1.0 - alpha,
             ),
+            FilterType::BandPass => todo!(),
+            FilterType::Notch => todo!(),
         };
 
         // Normalize by a0
@@ -367,6 +371,8 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
             "High Shelf".into(),
             "Low Pass".into(),
             "High Pass".into(),
+            "Band Pass".into(),
+            "Notch".into(),
         ];
 
         let default_freqs = [60.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0];
