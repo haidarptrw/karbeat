@@ -68,6 +68,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Map<int, UiTrack> dco_decode_Map_u_32_ui_track_None(dynamic raw);
 
   @protected
+  RustStreamSink<MixerParamEvent> dco_decode_StreamSink_mixer_param_event_Sse(
+    dynamic raw,
+  );
+
+  @protected
   RustStreamSink<PlaybackPosition> dco_decode_StreamSink_playback_position_Sse(
     dynamic raw,
   );
@@ -183,6 +188,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
+
+  @protected
+  MixerParamEvent dco_decode_mixer_param_event(dynamic raw);
 
   @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
@@ -367,6 +375,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<MixerParamEvent> sse_decode_StreamSink_mixer_param_event_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<PlaybackPosition> sse_decode_StreamSink_playback_position_Sse(
     SseDeserializer deserializer,
   );
@@ -506,6 +519,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
     SseDeserializer deserializer,
   );
+
+  @protected
+  MixerParamEvent sse_decode_mixer_param_event(SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_CastedPrimitive_i_64(SseDeserializer deserializer);
@@ -718,6 +734,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_mixer_param_event_Sse(
+    RustStreamSink<MixerParamEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_playback_position_Sse(
     RustStreamSink<PlaybackPosition> self,
     SseSerializer serializer,
@@ -876,6 +898,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_routing_connection(
     List<UiRoutingConnection> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_mixer_param_event(
+    MixerParamEvent self,
     SseSerializer serializer,
   );
 

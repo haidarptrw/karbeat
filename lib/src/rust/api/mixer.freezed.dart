@@ -55,14 +55,15 @@ extension UiMixerChannelParamsPatterns on UiMixerChannelParams {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiMixerChannelParams_Volume value)?  volume,TResult Function( UiMixerChannelParams_Pan value)?  pan,TResult Function( UiMixerChannelParams_Mute value)?  mute,TResult Function( UiMixerChannelParams_InvertedPhase value)?  invertedPhase,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiMixerChannelParams_Volume value)?  volume,TResult Function( UiMixerChannelParams_Pan value)?  pan,TResult Function( UiMixerChannelParams_Mute value)?  mute,TResult Function( UiMixerChannelParams_InvertedPhase value)?  invertedPhase,TResult Function( UiMixerChannelParams_Solo value)?  solo,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case UiMixerChannelParams_Volume() when volume != null:
 return volume(_that);case UiMixerChannelParams_Pan() when pan != null:
 return pan(_that);case UiMixerChannelParams_Mute() when mute != null:
 return mute(_that);case UiMixerChannelParams_InvertedPhase() when invertedPhase != null:
-return invertedPhase(_that);case _:
+return invertedPhase(_that);case UiMixerChannelParams_Solo() when solo != null:
+return solo(_that);case _:
   return orElse();
 
 }
@@ -80,14 +81,15 @@ return invertedPhase(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiMixerChannelParams_Volume value)  volume,required TResult Function( UiMixerChannelParams_Pan value)  pan,required TResult Function( UiMixerChannelParams_Mute value)  mute,required TResult Function( UiMixerChannelParams_InvertedPhase value)  invertedPhase,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiMixerChannelParams_Volume value)  volume,required TResult Function( UiMixerChannelParams_Pan value)  pan,required TResult Function( UiMixerChannelParams_Mute value)  mute,required TResult Function( UiMixerChannelParams_InvertedPhase value)  invertedPhase,required TResult Function( UiMixerChannelParams_Solo value)  solo,}){
 final _that = this;
 switch (_that) {
 case UiMixerChannelParams_Volume():
 return volume(_that);case UiMixerChannelParams_Pan():
 return pan(_that);case UiMixerChannelParams_Mute():
 return mute(_that);case UiMixerChannelParams_InvertedPhase():
-return invertedPhase(_that);}
+return invertedPhase(_that);case UiMixerChannelParams_Solo():
+return solo(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -101,14 +103,15 @@ return invertedPhase(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiMixerChannelParams_Volume value)?  volume,TResult? Function( UiMixerChannelParams_Pan value)?  pan,TResult? Function( UiMixerChannelParams_Mute value)?  mute,TResult? Function( UiMixerChannelParams_InvertedPhase value)?  invertedPhase,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiMixerChannelParams_Volume value)?  volume,TResult? Function( UiMixerChannelParams_Pan value)?  pan,TResult? Function( UiMixerChannelParams_Mute value)?  mute,TResult? Function( UiMixerChannelParams_InvertedPhase value)?  invertedPhase,TResult? Function( UiMixerChannelParams_Solo value)?  solo,}){
 final _that = this;
 switch (_that) {
 case UiMixerChannelParams_Volume() when volume != null:
 return volume(_that);case UiMixerChannelParams_Pan() when pan != null:
 return pan(_that);case UiMixerChannelParams_Mute() when mute != null:
 return mute(_that);case UiMixerChannelParams_InvertedPhase() when invertedPhase != null:
-return invertedPhase(_that);case _:
+return invertedPhase(_that);case UiMixerChannelParams_Solo() when solo != null:
+return solo(_that);case _:
   return null;
 
 }
@@ -125,13 +128,14 @@ return invertedPhase(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( double field0)?  volume,TResult Function( double field0)?  pan,TResult Function( bool field0)?  mute,TResult Function( bool field0)?  invertedPhase,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( double field0)?  volume,TResult Function( double field0)?  pan,TResult Function( bool field0)?  mute,TResult Function( bool field0)?  invertedPhase,TResult Function( bool field0)?  solo,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case UiMixerChannelParams_Volume() when volume != null:
 return volume(_that.field0);case UiMixerChannelParams_Pan() when pan != null:
 return pan(_that.field0);case UiMixerChannelParams_Mute() when mute != null:
 return mute(_that.field0);case UiMixerChannelParams_InvertedPhase() when invertedPhase != null:
-return invertedPhase(_that.field0);case _:
+return invertedPhase(_that.field0);case UiMixerChannelParams_Solo() when solo != null:
+return solo(_that.field0);case _:
   return orElse();
 
 }
@@ -149,13 +153,14 @@ return invertedPhase(_that.field0);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( double field0)  volume,required TResult Function( double field0)  pan,required TResult Function( bool field0)  mute,required TResult Function( bool field0)  invertedPhase,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( double field0)  volume,required TResult Function( double field0)  pan,required TResult Function( bool field0)  mute,required TResult Function( bool field0)  invertedPhase,required TResult Function( bool field0)  solo,}) {final _that = this;
 switch (_that) {
 case UiMixerChannelParams_Volume():
 return volume(_that.field0);case UiMixerChannelParams_Pan():
 return pan(_that.field0);case UiMixerChannelParams_Mute():
 return mute(_that.field0);case UiMixerChannelParams_InvertedPhase():
-return invertedPhase(_that.field0);}
+return invertedPhase(_that.field0);case UiMixerChannelParams_Solo():
+return solo(_that.field0);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -169,13 +174,14 @@ return invertedPhase(_that.field0);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( double field0)?  volume,TResult? Function( double field0)?  pan,TResult? Function( bool field0)?  mute,TResult? Function( bool field0)?  invertedPhase,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( double field0)?  volume,TResult? Function( double field0)?  pan,TResult? Function( bool field0)?  mute,TResult? Function( bool field0)?  invertedPhase,TResult? Function( bool field0)?  solo,}) {final _that = this;
 switch (_that) {
 case UiMixerChannelParams_Volume() when volume != null:
 return volume(_that.field0);case UiMixerChannelParams_Pan() when pan != null:
 return pan(_that.field0);case UiMixerChannelParams_Mute() when mute != null:
 return mute(_that.field0);case UiMixerChannelParams_InvertedPhase() when invertedPhase != null:
-return invertedPhase(_that.field0);case _:
+return invertedPhase(_that.field0);case UiMixerChannelParams_Solo() when solo != null:
+return solo(_that.field0);case _:
   return null;
 
 }
@@ -439,6 +445,72 @@ class _$UiMixerChannelParams_InvertedPhaseCopyWithImpl<$Res>
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
   return _then(UiMixerChannelParams_InvertedPhase(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiMixerChannelParams_Solo extends UiMixerChannelParams {
+  const UiMixerChannelParams_Solo(this.field0): super._();
+  
+
+@override final  bool field0;
+
+/// Create a copy of UiMixerChannelParams
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiMixerChannelParams_SoloCopyWith<UiMixerChannelParams_Solo> get copyWith => _$UiMixerChannelParams_SoloCopyWithImpl<UiMixerChannelParams_Solo>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelParams_Solo&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiMixerChannelParams.solo(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiMixerChannelParams_SoloCopyWith<$Res> implements $UiMixerChannelParamsCopyWith<$Res> {
+  factory $UiMixerChannelParams_SoloCopyWith(UiMixerChannelParams_Solo value, $Res Function(UiMixerChannelParams_Solo) _then) = _$UiMixerChannelParams_SoloCopyWithImpl;
+@useResult
+$Res call({
+ bool field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiMixerChannelParams_SoloCopyWithImpl<$Res>
+    implements $UiMixerChannelParams_SoloCopyWith<$Res> {
+  _$UiMixerChannelParams_SoloCopyWithImpl(this._self, this._then);
+
+  final UiMixerChannelParams_Solo _self;
+  final $Res Function(UiMixerChannelParams_Solo) _then;
+
+/// Create a copy of UiMixerChannelParams
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiMixerChannelParams_Solo(
 null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
 as bool,
   ));

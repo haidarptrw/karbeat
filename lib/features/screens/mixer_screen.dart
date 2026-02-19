@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -31,6 +29,8 @@ class _MixerScreenState extends State<MixerScreen> {
     final tracks = context.select<KarbeatState, Map<int, dynamic>>(
       (state) => state.tracks,
     );
+
+    final stateReadOnly = context.read<KarbeatState>();
 
     // Channel entries: pair each track ID with its mixer channel data
     final channelEntries = <_ChannelEntry>[];
@@ -75,30 +75,44 @@ class _MixerScreenState extends State<MixerScreen> {
                       return _ChannelStrip(
                         entry: entry,
                         onVolumeChanged: (value) {
-                          // TODO: Integrate with backend
-                          // setMixerChannelParams(
-                          //   trackId: entry.id,
-                          //   params: [UiMixerChannelParams.volume(value)],
-                          // );
-                          // context.read<KarbeatState>().syncMixerState();
+                          stateReadOnly.setMixerChannelParams(
+                            trackId: entry.id,
+                            params: [UiMixerChannelParams.volume(value)],
+                          );
+                        },
+                        onVolumeChangeStart: () {
+                          stateReadOnly.markParamTouched(entry.id, 'volume');
+                        },
+                        onVolumeChangeEnd: () {
+                          stateReadOnly.markParamReleased(entry.id, 'volume');
                         },
                         onPanChanged: (value) {
-                          // TODO: Integrate with backend
-                          // setMixerChannelParams(
-                          //   trackId: entry.id,
-                          //   params: [UiMixerChannelParams.pan(value)],
-                          // );
+                          stateReadOnly.setMixerChannelParams(
+                            trackId: entry.id,
+                            params: [UiMixerChannelParams.pan(value)],
+                          );
+                        },
+                        onPanChangeStart: () {
+                          stateReadOnly.markParamTouched(entry.id, 'pan');
+                        },
+                        onPanChangeEnd: () {
+                          stateReadOnly.markParamReleased(entry.id, 'pan');
                         },
                         onMuteToggled: () {
-                          // TODO: Integrate with backend
-                          // setMixerChannelParams(
-                          //   trackId: entry.id,
-                          //   params: [UiMixerChannelParams.mute(!entry.channel.mute)],
-                          // );
+                          stateReadOnly.setMixerChannelParams(
+                            trackId: entry.id,
+                            params: [
+                              UiMixerChannelParams.mute(!entry.channel.mute),
+                            ],
+                          );
                         },
                         onSoloToggled: () {
-                          // TODO: Integrate with backend – solo is not
-                          // yet exposed via UiMixerChannelParams.
+                          stateReadOnly.setMixerChannelParams(
+                            trackId: entry.id,
+                            params: [
+                              UiMixerChannelParams.solo(!entry.channel.solo),
+                            ],
+                          );
                         },
                       );
                     },
@@ -119,26 +133,41 @@ class _MixerScreenState extends State<MixerScreen> {
                 isMaster: true,
               ),
               onVolumeChanged: (value) {
-                // TODO: Integrate with backend
-                // setMasterBusParams(
-                //   params: [UiMixerChannelParams.volume(value)],
-                // );
-                // context.read<KarbeatState>().syncMixerState();
+                stateReadOnly.setMasterBusParams(
+                  params: [UiMixerChannelParams.volume(value)],
+                );
+              },
+              onVolumeChangeStart: () {
+                // u32::MAX for master bus
+                stateReadOnly.markParamTouched(4294967295, 'volume');
+              },
+              onVolumeChangeEnd: () {
+                stateReadOnly.markParamReleased(4294967295, 'volume');
               },
               onPanChanged: (value) {
-                // TODO: Integrate with backend
-                // setMasterBusParams(
-                //   params: [UiMixerChannelParams.pan(value)],
-                // );
+                stateReadOnly.setMasterBusParams(
+                  params: [UiMixerChannelParams.pan(value)],
+                );
+              },
+              onPanChangeStart: () {
+                stateReadOnly.markParamTouched(4294967295, 'pan');
+              },
+              onPanChangeEnd: () {
+                stateReadOnly.markParamReleased(4294967295, 'pan');
               },
               onMuteToggled: () {
-                // TODO: Integrate with backend
-                // setMasterBusParams(
-                //   params: [UiMixerChannelParams.mute(!mixerState.masterBus.mute)],
-                // );
+                stateReadOnly.setMasterBusParams(
+                  params: [
+                    UiMixerChannelParams.mute(!mixerState.masterBus.mute),
+                  ],
+                );
               },
               onSoloToggled: () {
-                // TODO: Integrate with backend
+                stateReadOnly.setMasterBusParams(
+                  params: [
+                    UiMixerChannelParams.solo(!mixerState.masterBus.solo),
+                  ],
+                );
               },
             ),
           ),
@@ -173,14 +202,22 @@ class _ChannelEntry {
 class _ChannelStrip extends StatelessWidget {
   final _ChannelEntry entry;
   final ValueChanged<double> onVolumeChanged;
+  final VoidCallback? onVolumeChangeStart;
+  final VoidCallback? onVolumeChangeEnd;
   final ValueChanged<double> onPanChanged;
+  final VoidCallback? onPanChangeStart;
+  final VoidCallback? onPanChangeEnd;
   final VoidCallback onMuteToggled;
   final VoidCallback onSoloToggled;
 
   const _ChannelStrip({
     required this.entry,
     required this.onVolumeChanged,
+    this.onVolumeChangeStart,
+    this.onVolumeChangeEnd,
     required this.onPanChanged,
+    this.onPanChangeStart,
+    this.onPanChangeEnd,
     required this.onMuteToggled,
     required this.onSoloToggled,
   });
@@ -237,6 +274,8 @@ class _ChannelStrip extends StatelessWidget {
             value: entry.channel.pan,
             accentColor: accentColor,
             onChanged: onPanChanged,
+            onChangeStart: onPanChangeStart,
+            onChangeEnd: onPanChangeEnd,
           ),
 
           const SizedBox(height: 4),
@@ -247,6 +286,8 @@ class _ChannelStrip extends StatelessWidget {
               value: entry.channel.volume,
               accentColor: accentColor,
               onChanged: onVolumeChanged,
+              onChangeStart: onVolumeChangeStart,
+              onChangeEnd: onVolumeChangeEnd,
             ),
           ),
 
@@ -290,10 +331,9 @@ class _ChannelStrip extends StatelessWidget {
     );
   }
 
-  String _volumeToDb(double volume) {
-    if (volume <= 0.0) return '-∞ dB';
-    final db = 20 * (math.log(volume) / math.ln10);
-    return '${db.toStringAsFixed(1)} dB';
+  String _volumeToDb(double volumeDb) {
+    if (volumeDb <= -60.0) return '-∞ dB';
+    return '${volumeDb.toStringAsFixed(1)} dB';
   }
 }
 
@@ -305,11 +345,15 @@ class _PanKnob extends StatelessWidget {
   final double value; // -1.0 (L) to 1.0 (R)
   final Color accentColor;
   final ValueChanged<double> onChanged;
+  final VoidCallback? onChangeStart;
+  final VoidCallback? onChangeEnd;
 
   const _PanKnob({
     required this.value,
     required this.accentColor,
     required this.onChanged,
+    this.onChangeStart,
+    this.onChangeEnd,
   });
 
   @override
@@ -348,6 +392,10 @@ class _PanKnob extends StatelessWidget {
               min: -1.0,
               max: 1.0,
               onChanged: onChanged,
+              onChangeStart: onChangeStart != null
+                  ? (_) => onChangeStart!()
+                  : null,
+              onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
             ),
           ),
         ),
@@ -361,37 +409,57 @@ class _PanKnob extends StatelessWidget {
 // =========================================================
 
 class _VolumeFader extends StatelessWidget {
-  final double value; // 0.0 to ~1.5 (or 2.0)
+  final double value; // dB: -60.0 (silence) to +6.0
   final Color accentColor;
   final ValueChanged<double> onChanged;
+  final VoidCallback? onChangeStart;
+  final VoidCallback? onChangeEnd;
 
   const _VolumeFader({
     required this.value,
     required this.accentColor,
     required this.onChanged,
+    this.onChangeStart,
+    this.onChangeEnd,
   });
 
   @override
   Widget build(BuildContext context) {
-    return RotatedBox(
-      quarterTurns: 3,
-      child: SliderTheme(
-        data: SliderThemeData(
-          trackHeight: 4,
-          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-          activeTrackColor: accentColor,
-          inactiveTrackColor: Colors.white10,
-          thumbColor: accentColor,
-          overlayColor: accentColor.withValues(alpha: 0.15),
-          overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-        ),
-        child: Slider(
-          value: value.clamp(0.0, 2.0),
-          min: 0.0,
-          max: 2.0,
-          onChanged: onChanged,
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // After RotatedBox(quarterTurns: 3), the slider's "width" becomes
+        // the parent's height. We need to give the rotated slider enough
+        // width (= parent's height) so the thumb can travel the full range.
+        final sliderWidth = constraints.maxHeight;
+        return RotatedBox(
+          quarterTurns: 3,
+          child: SizedBox(
+            width: sliderWidth,
+            height: constraints.maxWidth,
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                activeTrackColor: accentColor,
+                inactiveTrackColor: Colors.white10,
+                thumbColor: accentColor,
+                overlayColor: accentColor.withValues(alpha: 0.15),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              ),
+              child: Slider(
+                value: value.clamp(-60.0, 6.0),
+                min: -60.0,
+                max: 6.0,
+                onChanged: onChanged,
+                onChangeStart: onChangeStart != null
+                    ? (_) => onChangeStart!()
+                    : null,
+                onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

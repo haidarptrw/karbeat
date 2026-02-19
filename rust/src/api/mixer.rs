@@ -1,15 +1,31 @@
 use std::collections::HashMap;
 
 use crate::{
-    broadcast_state_change, commands::AudioCommand, core::project::mixer::{
+    broadcast_state_change,
+    commands::AudioCommand,
+    core::project::mixer::{
         BusId, EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState,
         RoutingConnection, RoutingNode,
-    }, ctx, utils::lock::{get_app_read, get_app_write}
+    },
+    ctx,
+    frb_generated::StreamSink,
+    utils::lock::{get_app_read, get_app_write},
 };
 
 /// ======================================
 /// Type Definitions
 /// ======================================
+
+/// Lightweight event pushed to Flutter when a mixer param changes
+/// from the backend (automation, undo, or any non-UI source).
+pub struct MixerParamEvent {
+    /// Track ID. `u32::MAX` means master bus.
+    pub track_id: u32,
+    pub volume: Option<f32>,
+    pub pan: Option<f32>,
+    pub mute: Option<bool>,
+    pub solo: Option<bool>,
+}
 
 /// UI representation of a mixer channel.
 pub struct UiMixerChannel {
@@ -25,6 +41,7 @@ pub struct UiMixerChannel {
 impl From<&MixerChannel> for UiMixerChannel {
     fn from(value: &MixerChannel) -> Self {
         Self {
+            // Volume is in dB (both UI and backend use dB)
             volume: value.volume,
             pan: value.pan,
             mute: value.mute,
@@ -135,6 +152,7 @@ pub enum UiMixerChannelParams {
     Pan(f32),
     Mute(bool),
     InvertedPhase(bool),
+    Solo(bool),
 }
 
 impl Into<UiMixerChannelParams> for &MixerChannelParams {
@@ -144,6 +162,7 @@ impl Into<UiMixerChannelParams> for &MixerChannelParams {
             MixerChannelParams::Pan(value) => UiMixerChannelParams::Pan(*value),
             MixerChannelParams::Mute(value) => UiMixerChannelParams::Mute(*value),
             MixerChannelParams::InvertedPhase(value) => UiMixerChannelParams::InvertedPhase(*value),
+            MixerChannelParams::Solo(value) => UiMixerChannelParams::Solo(*value),
         }
     }
 }
@@ -151,10 +170,36 @@ impl Into<UiMixerChannelParams> for &MixerChannelParams {
 impl Into<MixerChannelParams> for &UiMixerChannelParams {
     fn into(self) -> MixerChannelParams {
         match self {
+            // Volume is in dB (both UI and backend use dB)
             UiMixerChannelParams::Volume(value) => MixerChannelParams::Volume(*value),
             UiMixerChannelParams::Pan(value) => MixerChannelParams::Pan(*value),
             UiMixerChannelParams::Mute(value) => MixerChannelParams::Mute(*value),
             UiMixerChannelParams::InvertedPhase(value) => MixerChannelParams::InvertedPhase(*value),
+            UiMixerChannelParams::Solo(value) => MixerChannelParams::Solo(*value),
+        }
+    }
+}
+
+/// ======================================
+/// STREAM
+/// ======================================
+
+/// Create the Rust → Flutter event stream for mixer param changes.
+pub fn create_mixer_event_stream(sink: StreamSink<MixerParamEvent>) -> Result<(), String> {
+    let mut guard = ctx()
+        .mixer_event_sink
+        .lock()
+        .map_err(|e| format!("lock error: {}", e))?;
+    *guard = Some(sink);
+    log::info!("Mixer event stream connected");
+    Ok(())
+}
+
+/// Helper: push an event to the mixer sink (if connected).
+fn push_mixer_event(event: MixerParamEvent) {
+    if let Ok(guard) = ctx().mixer_event_sink.lock() {
+        if let Some(sink) = guard.as_ref() {
+            let _ = sink.add(event);
         }
     }
 }
@@ -208,12 +253,36 @@ pub fn get_routing_matrix() -> Vec<UiRoutingConnection> {
 // ======================================
 
 pub fn set_master_bus_params(params: Vec<UiMixerChannelParams>) -> Result<(), String> {
-    let mut app = get_app_write();
-    let mixer_state = &mut app.mixer;
-    let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
-    mixer_state
-        .set_params_master_bus(&params_legit)
-        .map_err(|e| e.message)?;
+    {
+        let mut app = get_app_write();
+        let mixer_state = &mut app.mixer;
+        let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
+        mixer_state
+            .set_params_master_bus(&params_legit)
+            .map_err(|e| e.message)?;
+    } // drop write lock before broadcast
+
+    broadcast_state_change();
+
+    // Push event to Flutter stream
+    let mut event = MixerParamEvent {
+        track_id: u32::MAX,
+        volume: None,
+        pan: None,
+        mute: None,
+        solo: None,
+    };
+    for p in &params {
+        match p {
+            UiMixerChannelParams::Volume(v) => event.volume = Some(*v),
+            UiMixerChannelParams::Pan(v) => event.pan = Some(*v),
+            UiMixerChannelParams::Mute(v) => event.mute = Some(*v),
+            UiMixerChannelParams::Solo(v) => event.solo = Some(*v),
+            _ => {}
+        }
+    }
+    push_mixer_event(event);
+
     Ok(())
 }
 
@@ -221,12 +290,36 @@ pub fn set_mixer_channel_params(
     track_id: u32,
     params: Vec<UiMixerChannelParams>,
 ) -> Result<(), String> {
-    let mut app = get_app_write();
-    let mixer_state = &mut app.mixer;
-    let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
-    mixer_state
-        .set_params_mixer_channel(&track_id.into(), &params_legit)
-        .map_err(|e| e.message)?;
+    {
+        let mut app = get_app_write();
+        let mixer_state = &mut app.mixer;
+        let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
+        mixer_state
+            .set_params_mixer_channel(&track_id.into(), &params_legit)
+            .map_err(|e| e.message)?;
+    } // drop write lock before broadcast
+
+    broadcast_state_change();
+
+    // Push event to Flutter stream
+    let mut event = MixerParamEvent {
+        track_id,
+        volume: None,
+        pan: None,
+        mute: None,
+        solo: None,
+    };
+    for p in &params {
+        match p {
+            UiMixerChannelParams::Volume(v) => event.volume = Some(*v),
+            UiMixerChannelParams::Pan(v) => event.pan = Some(*v),
+            UiMixerChannelParams::Mute(v) => event.mute = Some(*v),
+            UiMixerChannelParams::Solo(v) => event.solo = Some(*v),
+            _ => {}
+        }
+    }
+    push_mixer_event(event);
+
     Ok(())
 }
 

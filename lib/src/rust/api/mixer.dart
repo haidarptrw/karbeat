@@ -8,8 +8,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
+// These functions are ignored because they are not marked as `pub`: `push_mixer_event`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectInstance`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `into`, `into`
+
+/// ======================================
+/// STREAM
+/// ======================================
+/// Create the Rust → Flutter event stream for mixer param changes.
+Stream<MixerParamEvent> createMixerEventStream() =>
+    RustLib.instance.api.crateApiMixerCreateMixerEventStream();
 
 /// ======================================
 /// GETTERS
@@ -118,6 +126,47 @@ Future<void> removeRouting({
   isSend: isSend,
 );
 
+/// ======================================
+/// Type Definitions
+/// ======================================
+/// Lightweight event pushed to Flutter when a mixer param changes
+/// from the backend (automation, undo, or any non-UI source).
+class MixerParamEvent {
+  /// Track ID. `u32::MAX` means master bus.
+  final int trackId;
+  final double? volume;
+  final double? pan;
+  final bool? mute;
+  final bool? solo;
+
+  const MixerParamEvent({
+    required this.trackId,
+    this.volume,
+    this.pan,
+    this.mute,
+    this.solo,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      volume.hashCode ^
+      pan.hashCode ^
+      mute.hashCode ^
+      solo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MixerParamEvent &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          volume == other.volume &&
+          pan == other.pan &&
+          mute == other.mute &&
+          solo == other.solo;
+}
+
 /// UI representation of a mixer bus.
 class UiBus {
   final int id;
@@ -139,9 +188,6 @@ class UiBus {
           channel == other.channel;
 }
 
-/// ======================================
-/// Type Definitions
-/// ======================================
 /// UI representation of a mixer channel.
 class UiMixerChannel {
   final double volume;
@@ -196,6 +242,8 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
       UiMixerChannelParams_Mute;
   const factory UiMixerChannelParams.invertedPhase(bool field0) =
       UiMixerChannelParams_InvertedPhase;
+  const factory UiMixerChannelParams.solo(bool field0) =
+      UiMixerChannelParams_Solo;
 }
 
 /// UI representation of the mixer state.

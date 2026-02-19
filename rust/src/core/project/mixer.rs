@@ -139,6 +139,7 @@ pub enum MixerChannelParams {
     Pan(f32),
     Mute(bool),
     InvertedPhase(bool),
+    Solo(bool),
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -253,6 +254,7 @@ impl MixerState {
                 MixerChannelParams::Pan(value) => channel.pan = *value,
                 MixerChannelParams::Mute(value) => channel.mute = *value,
                 MixerChannelParams::InvertedPhase(value) => channel.inverted_phase = *value,
+                MixerChannelParams::Solo(value) => channel.solo = *value,
             }
         }
 
@@ -264,20 +266,19 @@ impl MixerState {
         &mut self,
         params: &[MixerChannelParams],
     ) -> Result<Arc<MixerChannel>, MixerSetParamError> {
-        let mut master_bus_channel = self.master_bus.clone();
-        let channel = Arc::make_mut(&mut master_bus_channel);
+        let channel = Arc::make_mut(&mut self.master_bus);
 
-        // Check what we are going to change
         for param in params.iter() {
             match param {
                 MixerChannelParams::Volume(value) => channel.volume = *value,
                 MixerChannelParams::Pan(value) => channel.pan = *value,
                 MixerChannelParams::Mute(value) => channel.mute = *value,
                 MixerChannelParams::InvertedPhase(value) => channel.inverted_phase = *value,
+                MixerChannelParams::Solo(value) => channel.solo = *value,
             }
         }
 
-        Ok(master_bus_channel)
+        Ok(self.master_bus.clone())
     }
 
     /// Add an effect descriptor to a mixer channel by its registry ID.
@@ -438,6 +439,7 @@ impl MixerState {
                 MixerChannelParams::Pan(value) => bus.channel.pan = *value,
                 MixerChannelParams::Mute(value) => bus.channel.mute = *value,
                 MixerChannelParams::InvertedPhase(value) => bus.channel.inverted_phase = *value,
+                MixerChannelParams::Solo(value) => bus.channel.solo = *value,
             }
         }
 

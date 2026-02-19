@@ -7,7 +7,7 @@ import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
-import 'package:karbeat/src/rust/api/mixer.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -41,6 +41,7 @@ enum ProjectEvent {
   sessionChanged,
   configChanged,
   patternChanged,
+  mixerChanged,
 }
 
 class KarbeatState extends ChangeNotifier {
@@ -73,9 +74,9 @@ class KarbeatState extends ChangeNotifier {
     cpuLoad: 0,
   );
 
-  UiMixerState _mixerState = UiMixerState(
+  mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState(
     channels: {},
-    masterBus: UiMixerChannel(
+    masterBus: mixer_api.UiMixerChannel(
       volume: 1.0,
       pan: 0.0,
       mute: false,
@@ -113,6 +114,13 @@ class KarbeatState extends ChangeNotifier {
 
   // ignore:unused_field
   StreamSubscription<ProjectEvent>? _stateSubscription;
+
+  // Mixer event stream from Rust for automation/backend-initiated changes
+  StreamSubscription<mixer_api.MixerParamEvent>? _mixerEventSubscription;
+
+  /// Params currently being touched by the user (trackId, paramName).
+  /// Automation events for these params are ignored while touched.
+  final Set<(int, String)> _touchedParams = {};
 
   // =========== EDITOR STATE ====================
   ToolSelection _selectedTool = ToolSelection.pointer;
@@ -170,6 +178,9 @@ class KarbeatState extends ChangeNotifier {
 
     // fetch available generators
     fetchAvailableGenerators();
+
+    // Start mixer event stream
+    _initMixerEventStream();
   }
 
   Future<void> fetchAvailableGenerators() async {
@@ -211,6 +222,9 @@ class KarbeatState extends ChangeNotifier {
         case ProjectEvent.patternChanged:
           await syncPatternList();
           break;
+        case ProjectEvent.mixerChanged:
+          await syncMixerState();
+          break;
       }
     });
   }
@@ -234,7 +248,7 @@ class KarbeatState extends ChangeNotifier {
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
-  UiMixerState get mixerState => _mixerState;
+  mixer_api.UiMixerState get mixerState => _mixerState;
 
   // Piano roll getters
   PianoRollToolSelection get pianoRollTool => _pianoRollTool;
@@ -424,7 +438,7 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> syncMixerState() async {
     try {
-      final newState = await getMixerState();
+      final newState = await mixer_api.getMixerState();
       _mixerState = newState;
       notifyListeners();
     } catch (e) {
@@ -1104,6 +1118,204 @@ class KarbeatState extends ChangeNotifier {
     } catch (e) {
       KarbeatLogger.error('Error setting preview generator: $e');
     }
+  }
+
+  // ====================================================
+  // ================== Mixer API's =====================
+  // ====================================================
+
+  // ================ MIXER EVENT STREAM ==================
+
+  /// Subscribe to the Rust → Dart mixer param event stream.
+  void _initMixerEventStream() {
+    _mixerEventSubscription?.cancel();
+    _mixerEventSubscription = mixer_api.createMixerEventStream().listen(
+      (event) {
+        _applyMixerParamLocally(event);
+      },
+      onError: (e) {
+        KarbeatLogger.error('Mixer event stream error: $e');
+      },
+    );
+  }
+
+  /// Apply a single mixer param event to local state, skipping touched params.
+  void _applyMixerParamLocally(mixer_api.MixerParamEvent event) {
+    final int trackId = event.trackId;
+    final bool isMaster = (trackId == 4294967295); // u32::MAX
+
+    mixer_api.UiMixerChannel channel;
+    if (isMaster) {
+      channel = _mixerState.masterBus;
+    } else {
+      final existing = _mixerState.channels[trackId];
+      if (existing == null) return;
+      channel = existing;
+    }
+
+    double volume = channel.volume;
+    double pan = channel.pan;
+    bool mute = channel.mute;
+    bool solo = channel.solo;
+    bool changed = false;
+
+    if (event.volume != null && !_touchedParams.contains((trackId, 'volume'))) {
+      volume = event.volume!;
+      changed = true;
+    }
+    if (event.pan != null && !_touchedParams.contains((trackId, 'pan'))) {
+      pan = event.pan!;
+      changed = true;
+    }
+    if (event.mute != null && !_touchedParams.contains((trackId, 'mute'))) {
+      mute = event.mute!;
+      changed = true;
+    }
+    if (event.solo != null && !_touchedParams.contains((trackId, 'solo'))) {
+      solo = event.solo!;
+      changed = true;
+    }
+
+    if (!changed) return;
+
+    final updatedChannel = mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: channel.invertedPhase,
+      effects: channel.effects,
+    );
+
+    if (isMaster) {
+      _mixerState = mixer_api.UiMixerState(
+        channels: _mixerState.channels,
+        masterBus: updatedChannel,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    } else {
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updatedChannel;
+      _mixerState = mixer_api.UiMixerState(
+        channels: newChannels,
+        masterBus: _mixerState.masterBus,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    }
+
+    notifyListeners();
+  }
+
+  /// Mark a mixer param as "touched" (user is actively dragging).
+  /// Automation events for this param will be ignored while touched.
+  void markParamTouched(int trackId, String paramName) {
+    _touchedParams.add((trackId, paramName));
+  }
+
+  /// Mark a mixer param as "released" (user finished dragging).
+  /// Automation events will resume for this param.
+  void markParamReleased(int trackId, String paramName) {
+    _touchedParams.remove((trackId, paramName));
+  }
+
+  Future<void> setMixerChannelParams({
+    required int trackId,
+    required List<mixer_api.UiMixerChannelParams> params,
+  }) async {
+    // Optimistic local update so the controlled Slider doesn't snap back
+    _applyParamsToLocalChannel(trackId, params, isMaster: false);
+
+    try {
+      await mixer_api.setMixerChannelParams(trackId: trackId, params: params);
+      // No need for notifyBackendChange here — the optimistic update already
+      // notified listeners, and the event stream will keep us in sync.
+    } catch (e) {
+      KarbeatLogger.error('Error setting mixer channel params: $e');
+      // On error, re-sync from the backend to undo the optimistic update
+      syncMixerState();
+    }
+  }
+
+  Future<void> setMasterBusParams({
+    required List<mixer_api.UiMixerChannelParams> params,
+  }) async {
+    // Optimistic local update so the controlled Slider doesn't snap back
+    _applyParamsToLocalChannel(0, params, isMaster: true);
+
+    try {
+      await mixer_api.setMasterBusParams(params: params);
+    } catch (e) {
+      KarbeatLogger.error('Error setting master bus params: $e');
+      syncMixerState();
+    }
+  }
+
+  /// Immediately apply param changes to local _mixerState and notify listeners.
+  void _applyParamsToLocalChannel(
+    int trackId,
+    List<mixer_api.UiMixerChannelParams> params, {
+    required bool isMaster,
+  }) {
+    final channel = isMaster
+        ? _mixerState.masterBus
+        : _mixerState.channels[trackId];
+    if (channel == null) return;
+
+    double volume = channel.volume;
+    double pan = channel.pan;
+    bool mute = channel.mute;
+    bool solo = channel.solo;
+    bool invertedPhase = channel.invertedPhase;
+
+    for (final p in params) {
+      switch (p) {
+        case mixer_api.UiMixerChannelParams_Volume():
+          volume = p.field0;
+        case mixer_api.UiMixerChannelParams_Pan():
+          pan = p.field0;
+        case mixer_api.UiMixerChannelParams_Mute():
+          mute = p.field0;
+        case mixer_api.UiMixerChannelParams_Solo():
+          solo = p.field0;
+        case mixer_api.UiMixerChannelParams_InvertedPhase():
+          invertedPhase = p.field0;
+      }
+    }
+
+    final updated = mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: invertedPhase,
+      effects: channel.effects,
+    );
+
+    if (isMaster) {
+      _mixerState = mixer_api.UiMixerState(
+        channels: _mixerState.channels,
+        masterBus: updated,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    } else {
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updated;
+      _mixerState = mixer_api.UiMixerState(
+        channels: newChannels,
+        masterBus: _mixerState.masterBus,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    }
+
+    notifyListeners();
   }
 }
 

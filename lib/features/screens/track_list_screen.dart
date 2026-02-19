@@ -179,8 +179,45 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
   }
 
-  void _updateZoom(double newZoom) {
-    context.read<KarbeatState>().horizontalZoomLevel = newZoom;
+  void _updateZoom(double newZoom, double focalPointX) {
+    final state = context.read<KarbeatState>();
+    final oldZoom = state.horizontalZoomLevel;
+
+    final clampedZoom = newZoom.clamp(0.01, 5000.0);
+    if (clampedZoom == oldZoom) return;
+
+    double currentScroll = 0;
+    if (_trackContentController.hasClients) {
+      currentScroll = _trackContentController.offset;
+    }
+
+    // 1. Calculate the exact time (in samples) located at the current cursor point
+    final double samplesAtFocalPoint = (currentScroll + focalPointX) * oldZoom;
+
+    // 2. Set the new zoom level
+    state.horizontalZoomLevel = clampedZoom;
+
+    // 3. Calculate what the new scroll position MUST be to keep that specific sample at the focal point
+    double newScroll = (samplesAtFocalPoint / clampedZoom) - focalPointX;
+    if (newScroll < 0) newScroll = 0;
+
+    // 4. Proactively expand the timeline boundary if we zoom in so deep that we pass it
+    if (newScroll > _timelineWidth - 1000) {
+      setState(() {
+        _timelineWidth = newScroll + 2000.0;
+      });
+      // Wait for layout rebuild to register the new width before jumping
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_trackContentController.hasClients) {
+          _trackContentController.jumpTo(newScroll);
+        }
+      });
+    } else {
+      // Jump immediately
+      if (_trackContentController.hasClients) {
+        _trackContentController.jumpTo(newScroll);
+      }
+    }
   }
 
   void _handleTimelineGesture(
@@ -393,7 +430,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                       final double multiplier = event.scrollDelta.dy > 0
                           ? 0.9
                           : 1.1;
-                      _updateZoom(currentZoom * multiplier);
+                      _updateZoom(
+                        currentZoom * multiplier,
+                        event.localPosition.dx,
+                      );
                     }
                   }
                 },
@@ -419,7 +459,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                     if (selectedTool == ToolSelection.zoom) {
                       final currentZoom = state.horizontalZoomLevel;
                       double multiplier = 1.0 - (details.delta.dy * 0.01);
-                      _updateZoom(currentZoom * multiplier);
+                      _updateZoom(
+                        currentZoom * multiplier,
+                        details.localPosition.dx,
+                      );
                       return;
                     }
                     if (selectedTool == ToolSelection.scrub) {

@@ -10,9 +10,11 @@ use rtrb::Producer;
 use triple_buffer::Input;
 
 use crate::{
+    api::mixer::MixerParamEvent,
     audio::{event::PlaybackPosition, render_state::AudioRenderState},
     commands::{AudioCommand, AudioFeedback},
     core::{history::HistoryManager, project::ApplicationState},
+    frb_generated::StreamSink,
     plugin::registry::PluginRegistry,
 };
 
@@ -46,6 +48,9 @@ pub struct KarbeatContext {
 
     /// Plugin factory registry
     pub plugin_registry: RwLock<PluginRegistry>,
+
+    /// Mixer parameter event stream sink (Rust → Flutter)
+    pub mixer_event_sink: Mutex<Option<StreamSink<MixerParamEvent>>>,
 }
 
 impl KarbeatContext {
@@ -60,6 +65,7 @@ impl KarbeatContext {
             stream_guard: Mutex::new(None),
             position_consumer: Mutex::new(None),
             plugin_registry: RwLock::new(PluginRegistry::new_with_defaults()),
+            mixer_event_sink: Mutex::new(None),
         }
     }
 }
