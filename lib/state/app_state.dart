@@ -142,6 +142,7 @@ class KarbeatState extends ChangeNotifier {
 
   // ================== OTHER STATES ====================
   bool _pendingPlayRequest = false;
+  bool _isPatternPlaying = false;
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
@@ -150,6 +151,12 @@ class KarbeatState extends ChangeNotifier {
     _positionBroadcastStream.listen((pos) {
       if (pos.isPlaying) {
         _pendingPlayRequest = false;
+      }
+
+      // Track pattern mode state
+      if (pos.isPatternMode != _isPatternPlaying) {
+        _isPatternPlaying = pos.isPatternMode;
+        notifyListeners();
       }
 
       // Only react if the state has actually changed
@@ -233,6 +240,8 @@ class KarbeatState extends ChangeNotifier {
   TransportState get transport => _transportState;
   ProjectMetadata get metadata => _metadata;
   bool get isPlaying => _transportState.isPlaying;
+  bool get isPatternPlaying => _isPatternPlaying;
+  bool get isSongPlaying => _transportState.isPlaying && !_isPatternPlaying;
   bool get isLooping => _transportState.isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
@@ -487,9 +496,16 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> togglePlay() async {
     try {
-      final newPlaying = !_transportState.isPlaying;
+      // If pattern is playing, stop it and switch to song mode first
+      final wasPatternPlaying = _isPatternPlaying;
+      if (wasPatternPlaying) {
+        await stopPatternPreview();
+      }
 
-      // FIX: Set the flag if we are attempting to play
+      // If we just stopped a pattern, the user's intent is to start song playback.
+      // We can't use !isPlaying here because the async state update hasn't arrived yet.
+      final newPlaying = wasPatternPlaying ? true : !_transportState.isPlaying;
+
       if (newPlaying) {
         _pendingPlayRequest = true;
       }
@@ -505,6 +521,11 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> stop() async {
     try {
+      // If pattern is playing, stop it and switch to song mode first
+      if (_isPatternPlaying) {
+        await stopPatternPreview();
+      }
+
       await transport_api.setPlaying(val: false);
       await transport_api.setPlayhead(val: 0);
       notifyBackendChange(ProjectEvent.transportChanged);

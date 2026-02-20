@@ -48,6 +48,7 @@ pub struct AudioEngine {
     pattern_playhead_samples: u32,
     pattern_beat: usize,
     pattern_bar: usize,
+    last_emitted_pattern_samples: u32,
 
     // Active Voices (lightweight references to plugins in plugin_state)
     active_generators: Vec<GeneratorVoice>,
@@ -146,6 +147,7 @@ impl AudioEngine {
             pattern_playhead_samples: 0,
             pattern_beat: 1,
             pattern_bar: 1,
+            last_emitted_pattern_samples: 0,
             last_emitted_samples: 0,
             mix_buffer,
             bus_buffers: HashMap::new(),
@@ -299,6 +301,7 @@ impl AudioEngine {
         // Use PATTERN playhead (independent from song)
         if self.pattern_playhead_samples >= loop_len_samples {
             self.pattern_playhead_samples = 0;
+            self.last_emitted_pattern_samples = 0;
             Self::stop_all_active_generators_impl(
                 &mut self.active_generators,
                 &mut self.plugin_state,
@@ -418,6 +421,7 @@ impl AudioEngine {
                     }
                     PlaybackMode::Pattern { .. } => {
                         self.pattern_playhead_samples = 0;
+                        self.last_emitted_pattern_samples = 0;
                         self.recalculate_pattern_beat_bar();
                         // In pattern mode, we treat 0 as the start of the loop
                     }
@@ -692,13 +696,25 @@ impl AudioEngine {
 
     fn emit_playback_position(&mut self) {
         let emission_interval = self.sample_rate / 60; // ~60fps
-        if self.playhead_samples >= self.last_emitted_samples + emission_interval {
+        let (current, last) = match self.playback_mode {
+            PlaybackMode::Song => (self.playhead_samples, self.last_emitted_samples),
+            PlaybackMode::Pattern { .. } => (
+                self.pattern_playhead_samples,
+                self.last_emitted_pattern_samples,
+            ),
+        };
+        if current >= last + emission_interval {
             if !self.position_producer.is_full() {
                 let _ = self
                     .position_producer
                     .push(self.build_position_struct(Some(true)));
             }
-            self.last_emitted_samples = self.playhead_samples;
+            match self.playback_mode {
+                PlaybackMode::Song => self.last_emitted_samples = self.playhead_samples,
+                PlaybackMode::Pattern { .. } => {
+                    self.last_emitted_pattern_samples = self.pattern_playhead_samples
+                }
+            }
         }
     }
 
@@ -829,7 +845,7 @@ impl AudioEngine {
         let buf_len = output.len();
 
         // Ensure bus buffers are properly sized
-        for (bus_id, buf) in self.bus_buffers.iter_mut() {
+        for (_bus_id, buf) in self.bus_buffers.iter_mut() {
             if buf.len() != buf_len {
                 buf.resize(buf_len, 0.0);
             }
@@ -1101,11 +1117,9 @@ impl AudioEngine {
                         read_pos = voice.start_boundary + (remainder % loop_len);
                     }
                 } else if read_pos >= trim_end - 1.0 {
-                    // Mark for cleanup? In this simple engine, we just stop adding
                     break;
                 }
 
-                // Inline sampling logic for speed
                 let (l, r) = sample_waveform_inline(&voice.waveform, read_pos, src_channels);
 
                 if channels > 0 {

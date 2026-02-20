@@ -156,8 +156,22 @@ impl KarbeatParametricEQFilterNode {
                 -2.0 * cos_w0,
                 1.0 - alpha,
             ),
-            FilterType::BandPass => todo!(),
-            FilterType::Notch => todo!(),
+            FilterType::BandPass => (
+                alpha,
+                0.0,
+                -alpha,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
+            ),
+            FilterType::Notch => (
+                1.0,
+                -2.0 * cos_w0,
+                1.0,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
+            ),
         };
 
         // Normalize by a0

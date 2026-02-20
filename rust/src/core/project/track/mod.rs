@@ -187,6 +187,7 @@ impl ApplicationState {
         let new_track = KarbeatTrack {
             track_type,
             id: new_track_id,
+            name: format!("Track {}", new_track_id.to_string()),
             ..Default::default()
         };
         self.tracks.insert(new_track_id, Arc::new(new_track));

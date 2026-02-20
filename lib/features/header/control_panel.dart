@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
-import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:provider/provider.dart';
 
@@ -206,16 +205,16 @@ class DefaultControlPanel extends StatelessWidget {
     // Transport Panel
     builder.addWidget(
       Selector<KarbeatState, bool>(
-        selector: (_, state) => state.isPlaying,
-        builder: (context, isPlaying, _) {
+        selector: (_, state) => state.isSongPlaying,
+        builder: (context, isSongPlaying, _) {
           return Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               ControlPanelToolbarItem(
-                name: isPlaying ? "Pause" : "Play",
-                icon: isPlaying ? Icons.pause : Icons.play_arrow,
+                name: isSongPlaying ? "Pause" : "Play",
+                icon: isSongPlaying ? Icons.pause : Icons.play_arrow,
                 color: Colors.greenAccent,
-                isActive: isPlaying,
+                isActive: isSongPlaying,
                 onTap: () => context.read<KarbeatState>().togglePlay(),
               ),
               ControlPanelToolbarItem(

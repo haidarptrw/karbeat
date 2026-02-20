@@ -14,8 +14,6 @@ class _MixerScreenState extends State<MixerScreen> {
   @override
   void initState() {
     super.initState();
-    // TODO: Integrate with backend – call syncMixerState() on init
-    // and subscribe to mixer state changes.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<KarbeatState>().syncMixerState();
     });
