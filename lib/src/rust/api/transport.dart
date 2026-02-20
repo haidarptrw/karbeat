@@ -17,3 +17,6 @@ Future<void> setLooping({required bool val}) =>
 
 Future<void> setBpm({required double val}) =>
     RustLib.instance.api.crateApiTransportSetBpm(val: val);
+
+Future<void> stopSongPlayback() =>
+    RustLib.instance.api.crateApiTransportStopSongPlayback();

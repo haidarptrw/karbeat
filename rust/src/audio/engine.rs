@@ -186,17 +186,23 @@ impl AudioEngine {
         // Transport Logic
         if self.current_state.transport.is_playing {
             match self.playback_mode {
-                PlaybackMode::Song => self.process_song_mode(frame_count, output_buffer, channels),
+                PlaybackMode::Song => {
+                    log::info!("Song mode");
+                    self.process_song_mode(frame_count, output_buffer, channels)
+                }
                 PlaybackMode::Pattern {
                     pattern_id,
                     generator_id,
-                } => self.process_pattern_mode(
-                    pattern_id,
-                    generator_id,
-                    frame_count,
-                    output_buffer,
-                    channels,
-                ),
+                } => {
+                    log::info!("Pattern mode");
+                    self.process_pattern_mode(
+                        pattern_id,
+                        generator_id,
+                        frame_count,
+                        output_buffer,
+                        channels,
+                    )
+                }
             }
         } else {
             // When transport is stopped, still render any active voices
@@ -410,22 +416,25 @@ impl AudioEngine {
                 // Silence everything to prevent hanging notes from the previous mode
                 self.stop_all_active_generators();
 
-                self.playback_mode = playback_mode;
+                // self.playback_mode = playback_mode;
 
                 // Reset the specific playhead for the new mode
-                match self.playback_mode {
-                    PlaybackMode::Song => {
+                match (self.playback_mode, playback_mode) {
+                    (PlaybackMode::Song, PlaybackMode::Pattern { .. }) => {
                         self.playhead_samples = 0;
                         self.recalculate_beat_bar();
                         self.last_emitted_samples = 0;
                     }
-                    PlaybackMode::Pattern { .. } => {
+                    (PlaybackMode::Pattern { .. }, PlaybackMode::Song) => {
                         self.pattern_playhead_samples = 0;
                         self.last_emitted_pattern_samples = 0;
                         self.recalculate_pattern_beat_bar();
-                        // In pattern mode, we treat 0 as the start of the loop
                     }
+                    _ => {} // Same mode, do nothing
                 }
+
+                // update with new playback mode
+                self.playback_mode = playback_mode;
 
                 // Snap UI to the beginning immediately
                 self.emit_current_playback_position();

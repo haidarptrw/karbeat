@@ -78,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1955470840;
+  int get rustContentHash => -347722748;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -398,6 +398,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiAudioStopAllPreviews();
 
   Future<void> crateApiPatternStopPatternPreview();
+
+  Future<void> crateApiTransportStopSongPlayback();
 
   Future<void> crateApiPluginSyncParametersFromAudio({
     required List<UiParameterSnapshot> snapshots,
@@ -2975,6 +2977,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "stop_pattern_preview", argNames: []);
 
   @override
+  Future<void> crateApiTransportStopSongPlayback() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 80,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTransportStopSongPlaybackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTransportStopSongPlaybackConstMeta =>
+      const TaskConstMeta(debugName: "stop_song_playback", argNames: []);
+
+  @override
   Future<void> crateApiPluginSyncParametersFromAudio({
     required List<UiParameterSnapshot> snapshots,
   }) {
@@ -2986,7 +3015,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 81,
             port: port_,
           );
         },
@@ -3016,7 +3045,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 82,
             port: port_,
           );
         },
@@ -3046,7 +3075,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 83,
             port: port_,
           );
         },
@@ -3620,19 +3649,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TransportState dco_decode_transport_state(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return TransportState(
       isPlaying: dco_decode_bool(arr[0]),
-      isRecording: dco_decode_bool(arr[1]),
-      isLooping: dco_decode_bool(arr[2]),
-      playheadPositionSamples: dco_decode_CastedPrimitive_u_64(arr[3]),
-      loopStartSamples: dco_decode_CastedPrimitive_u_64(arr[4]),
-      loopEndSamples: dco_decode_CastedPrimitive_u_64(arr[5]),
-      bpm: dco_decode_f_32(arr[6]),
-      timeSignature: dco_decode_record_u_8_u_8(arr[7]),
-      beatTracker: dco_decode_CastedPrimitive_usize(arr[8]),
-      barTracker: dco_decode_CastedPrimitive_usize(arr[9]),
+      isPatternPlaying: dco_decode_bool(arr[1]),
+      isRecording: dco_decode_bool(arr[2]),
+      isLooping: dco_decode_bool(arr[3]),
+      playheadPositionSamples: dco_decode_CastedPrimitive_u_64(arr[4]),
+      loopStartSamples: dco_decode_CastedPrimitive_u_64(arr[5]),
+      loopEndSamples: dco_decode_CastedPrimitive_u_64(arr[6]),
+      bpm: dco_decode_f_32(arr[7]),
+      timeSignature: dco_decode_record_u_8_u_8(arr[8]),
+      beatTracker: dco_decode_CastedPrimitive_usize(arr[9]),
+      barTracker: dco_decode_CastedPrimitive_usize(arr[10]),
     );
   }
 
@@ -4636,6 +4666,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TransportState sse_decode_transport_state(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_isPlaying = sse_decode_bool(deserializer);
+    var var_isPatternPlaying = sse_decode_bool(deserializer);
     var var_isRecording = sse_decode_bool(deserializer);
     var var_isLooping = sse_decode_bool(deserializer);
     var var_playheadPositionSamples = sse_decode_CastedPrimitive_u_64(
@@ -4649,6 +4680,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_barTracker = sse_decode_CastedPrimitive_usize(deserializer);
     return TransportState(
       isPlaying: var_isPlaying,
+      isPatternPlaying: var_isPatternPlaying,
       isRecording: var_isRecording,
       isLooping: var_isLooping,
       playheadPositionSamples: var_playheadPositionSamples,
@@ -5673,6 +5705,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.isPlaying, serializer);
+    sse_encode_bool(self.isPatternPlaying, serializer);
     sse_encode_bool(self.isRecording, serializer);
     sse_encode_bool(self.isLooping, serializer);
     sse_encode_CastedPrimitive_u_64(self.playheadPositionSamples, serializer);

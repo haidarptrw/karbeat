@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TransportState {
     pub is_playing: bool,
+    pub is_pattern_playing: bool,
     pub is_recording: bool,
     pub is_looping: bool,
     pub playhead_position_samples: u64,
@@ -24,6 +25,7 @@ impl Default for TransportState {
             bpm: 67.0,
             time_signature: (4, 4),
             is_playing: Default::default(),
+            is_pattern_playing: Default::default(),
             is_recording: Default::default(),
             is_looping: Default::default(),
             playhead_position_samples: Default::default(),
@@ -38,6 +40,7 @@ impl Default for TransportState {
 impl PartialEq for TransportState {
     fn eq(&self, other: &Self) -> bool {
         self.is_playing == other.is_playing
+            && self.is_pattern_playing == other.is_pattern_playing
             && self.is_recording == other.is_recording
             && self.is_looping == other.is_looping
             && self.playhead_position_samples == other.playhead_position_samples

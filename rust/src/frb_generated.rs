@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1955470840;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -347722748;
 
 // Section: executor
 
@@ -2828,6 +2828,38 @@ fn wire__crate__api__pattern__stop_pattern_preview_impl(
         },
     )
 }
+fn wire__crate__api__transport__stop_song_playback_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stop_song_playback",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::transport::stop_song_playback()?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__plugin__sync_parameters_from_audio_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -3614,6 +3646,7 @@ impl SseDecode for crate::core::project::transport::TransportState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_isPlaying = <bool>::sse_decode(deserializer);
+        let mut var_isPatternPlaying = <bool>::sse_decode(deserializer);
         let mut var_isRecording = <bool>::sse_decode(deserializer);
         let mut var_isLooping = <bool>::sse_decode(deserializer);
         let mut var_playheadPositionSamples = <u64>::sse_decode(deserializer);
@@ -3625,6 +3658,7 @@ impl SseDecode for crate::core::project::transport::TransportState {
         let mut var_barTracker = <usize>::sse_decode(deserializer);
         return crate::core::project::transport::TransportState {
             is_playing: var_isPlaying,
+            is_pattern_playing: var_isPatternPlaying,
             is_recording: var_isRecording,
             is_looping: var_isLooping,
             playhead_position_samples: var_playheadPositionSamples,
@@ -4211,19 +4245,22 @@ fn pde_ffi_dispatcher_primary_impl(
         79 => {
             wire__crate__api__pattern__stop_pattern_preview_impl(port, ptr, rust_vec_len, data_len)
         }
-        80 => wire__crate__api__plugin__sync_parameters_from_audio_impl(
+        80 => {
+            wire__crate__api__transport__stop_song_playback_impl(port, ptr, rust_vec_len, data_len)
+        }
+        81 => wire__crate__api__plugin__sync_parameters_from_audio_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__api__session__ui_clipboard_content_default_impl(
+        82 => wire__crate__api__session__ui_clipboard_content_default_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__session__undo_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4420,6 +4457,7 @@ impl flutter_rust_bridge::IntoDart for crate::core::project::transport::Transpor
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.is_playing.into_into_dart().into_dart(),
+            self.is_pattern_playing.into_into_dart().into_dart(),
             self.is_recording.into_into_dart().into_dart(),
             self.is_looping.into_into_dart().into_dart(),
             self.playhead_position_samples.into_into_dart().into_dart(),
@@ -5444,6 +5482,7 @@ impl SseEncode for crate::core::project::transport::TransportState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_playing, serializer);
+        <bool>::sse_encode(self.is_pattern_playing, serializer);
         <bool>::sse_encode(self.is_recording, serializer);
         <bool>::sse_encode(self.is_looping, serializer);
         <u64>::sse_encode(self.playhead_position_samples, serializer);

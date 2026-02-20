@@ -48,6 +48,7 @@ class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
   TransportState _transportState = TransportState(
     isPlaying: false,
+    isPatternPlaying: false,
     isRecording: false,
     isLooping: false,
     playheadPositionSamples: 0,
@@ -147,7 +148,6 @@ class KarbeatState extends ChangeNotifier {
 
   // ================== OTHER STATES ====================
   bool _pendingPlayRequest = false;
-  bool _isPatternPlaying = false;
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
@@ -158,9 +158,11 @@ class KarbeatState extends ChangeNotifier {
         _pendingPlayRequest = false;
       }
 
-      // Track pattern mode state
-      if (pos.isPatternMode != _isPatternPlaying) {
-        _isPatternPlaying = pos.isPatternMode;
+      // Track pattern mode state from transport
+      if (pos.isPatternMode != _transportState.isPatternPlaying) {
+        _transportState = _transportState.copyWith(
+          isPatternPlaying: pos.isPatternMode,
+        );
         notifyListeners();
       }
 
@@ -243,8 +245,9 @@ class KarbeatState extends ChangeNotifier {
   TransportState get transport => _transportState;
   ProjectMetadata get metadata => _metadata;
   bool get isPlaying => _transportState.isPlaying;
-  bool get isPatternPlaying => _isPatternPlaying;
-  bool get isSongPlaying => _transportState.isPlaying && !_isPatternPlaying;
+  bool get isPatternPlaying => _transportState.isPatternPlaying;
+  bool get isSongPlaying =>
+      _transportState.isPlaying && !_transportState.isPatternPlaying;
   bool get isLooping => _transportState.isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
@@ -492,15 +495,15 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> togglePlay() async {
     try {
-      // If pattern is playing, stop it and switch to song mode first
-      final wasPatternPlaying = _isPatternPlaying;
-      if (wasPatternPlaying) {
-        await stopPatternPreview();
-      }
-
-      // If we just stopped a pattern, the user's intent is to start song playback.
-      // We can't use !isPlaying here because the async state update hasn't arrived yet.
-      final newPlaying = wasPatternPlaying ? true : !_transportState.isPlaying;
+      // If pattern is playing, the user's intent is to switch to song playback.
+      // Since pattern mode sets isPlaying=true, !isPlaying would be false (stop),
+      // so we force newPlaying=true to start song mode instead.
+      KarbeatLogger.info(
+        "Toggle play, is playing: ${_transportState.isPlaying}, is pattern playing: ${_transportState.isPatternPlaying}",
+      );
+      final newPlaying = _transportState.isPatternPlaying
+          ? true
+          : !_transportState.isPlaying;
 
       if (newPlaying) {
         _pendingPlayRequest = true;
@@ -517,13 +520,7 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> stop() async {
     try {
-      // If pattern is playing, stop it and switch to song mode first
-      if (_isPatternPlaying) {
-        await stopPatternPreview();
-      }
-
-      await transport_api.setPlaying(val: false);
-      await transport_api.setPlayhead(val: 0);
+      await transport_api.stopSongPlayback();
       notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
       KarbeatLogger.error("Failed to stop play: $e");
@@ -1327,6 +1324,7 @@ class KarbeatState extends ChangeNotifier {
 extension TransportStateCopyWith on TransportState {
   TransportState copyWith({
     bool? isPlaying,
+    bool? isPatternPlaying,
     bool? isRecording,
     bool? isLooping,
     int? playheadPositionSamples,
@@ -1339,6 +1337,7 @@ extension TransportStateCopyWith on TransportState {
   }) {
     return TransportState(
       isPlaying: isPlaying ?? this.isPlaying,
+      isPatternPlaying: isPatternPlaying ?? this.isPatternPlaying,
       isRecording: isRecording ?? this.isRecording,
       isLooping: isLooping ?? this.isLooping,
       playheadPositionSamples:
