@@ -16,7 +16,7 @@ import 'package:karbeat/src/rust/api/track.dart' as track_api;
 import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
-import 'package:karbeat/src/rust/api/session.dart' as session_api;
+
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/src/rust/core/project/transport.dart';
 import 'package:karbeat/utils/formatter.dart';
@@ -38,7 +38,7 @@ enum ProjectEvent {
   metadataChanged,
   sourceListChanged,
   generatorListChanged,
-  sessionChanged,
+
   configChanged,
   patternChanged,
   mixerChanged,
@@ -94,7 +94,7 @@ class KarbeatState extends ChangeNotifier {
   Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
   Map<int, UiGeneratorInstance> _generators = {};
   Map<int, UiPattern> _patterns = {};
-  UiSessionState? _sessionState;
+
   List<UiPluginInfo> _availableGenerators = [];
   List<UiPluginInfo> get availableGenerators => _availableGenerators;
 
@@ -128,6 +128,11 @@ class KarbeatState extends ChangeNotifier {
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
   int _piannoRollGridDenom = 4;
   int? _editingPatternId;
+
+  // =========== SESSION STATE (frontend-only) ====================
+  int? _selectedTrackId;
+  List<int> _selectedClipIds = [];
+  int? _focusClipId;
 
   // =========== PIANO ROLL STATE ====================
   PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.pointer;
@@ -223,9 +228,7 @@ class KarbeatState extends ChangeNotifier {
         case ProjectEvent.configChanged:
           await syncAudioHardwareConfigState();
           break;
-        case ProjectEvent.sessionChanged:
-          await syncSessionState();
-          break;
+
         case ProjectEvent.patternChanged:
           await syncPatternList();
           break;
@@ -252,18 +255,21 @@ class KarbeatState extends ChangeNotifier {
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
   AudioHardwareConfig get hardwareConfig => _hardwareConfig;
   Stream<PlaybackPosition> get positionStream => _positionBroadcastStream;
-  UiSessionState? get sessionState => _sessionState;
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
   mixer_api.UiMixerState get mixerState => _mixerState;
 
+  // Session state getters (frontend-only)
+  int? get selectedTrackId => _selectedTrackId;
+  List<int> get selectedClipIds => _selectedClipIds;
+  int? get focusClipId => _focusClipId;
+
   // Piano roll getters
   PianoRollToolSelection get pianoRollTool => _pianoRollTool;
   Set<int> get selectedNoteIds => _selectedNoteIds;
-  int? get previewGeneratorId =>
-      _sessionState?.previewGeneratorId ?? _previewGeneratorId;
+  int? get previewGeneratorId => _previewGeneratorId;
 
   // ================ SETTERS ===================
   set pianoRollGridDenom(GridValue val) {
@@ -375,16 +381,6 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       KarbeatLogger.error("Failed to sync generator $generatorId: $error");
-    }
-  }
-
-  Future<void> syncSessionState() async {
-    try {
-      final newState = await getSessionState();
-      _sessionState = newState;
-      notifyListeners();
-    } catch (e) {
-      KarbeatLogger.error("Failed to sync session state: $e");
     }
   }
 
@@ -819,16 +815,13 @@ class KarbeatState extends ChangeNotifier {
 
   /// Convenience method to delete all currently selected clips
   Future<void> deleteSelectedClips() async {
-    final session = _sessionState;
-    if (session == null) return;
-
-    final trackId = session.selectedTrackId;
-    final clipIds = session.selectedClipIds;
+    final trackId = _selectedTrackId;
+    final clipIds = _selectedClipIds;
 
     if (trackId == null || clipIds.isEmpty) return;
 
     await deleteClipBatch(trackId, clipIds);
-    await deselectAllClips();
+    deselectAllClips();
   }
 
   // ===================== NOTE CHANGE API'S ==========================
@@ -1069,76 +1062,67 @@ class KarbeatState extends ChangeNotifier {
     );
   }
 
-  // ================== Session State public API's =====================
+  // ================== Session State (frontend-only) =====================
 
   /// Select a single clip (replaces any existing selection)
-  Future<void> selectClip({required int trackId, required int clipId}) async {
-    try {
-      await session_api.selectClip(trackId: trackId, clipId: clipId);
-      KarbeatLogger.info(
-        "Successfully selected clip $clipId on track $trackId",
-      );
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error when selecting clip: $e');
-    }
+  void selectClip({required int trackId, required int clipId}) {
+    _selectedTrackId = trackId;
+    _selectedClipIds = [clipId];
+    _focusClipId = clipId;
+    notifyListeners();
   }
 
   /// Add a clip to the current selection (for Ctrl+Click)
-  Future<void> addClipToSelection({
-    required int trackId,
-    required int clipId,
-  }) async {
-    try {
-      await session_api.addClipToSelection(trackId: trackId, clipId: clipId);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error adding clip to selection: $e');
+  void addClipToSelection({required int trackId, required int clipId}) {
+    // Different track - clear and start fresh
+    if (_selectedTrackId != null && _selectedTrackId != trackId) {
+      _selectedClipIds = [];
     }
+    _selectedTrackId = trackId;
+    if (!_selectedClipIds.contains(clipId)) {
+      _selectedClipIds = [..._selectedClipIds, clipId];
+    }
+    _focusClipId = clipId;
+    notifyListeners();
   }
 
   /// Remove a clip from the current selection
-  Future<void> removeClipFromSelection({required int clipId}) async {
-    try {
-      await session_api.removeClipFromSelection(clipId: clipId);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error removing clip from selection: $e');
+  void removeClipFromSelection({required int clipId}) {
+    _selectedClipIds = _selectedClipIds.where((id) => id != clipId).toList();
+
+    // If we removed the focus clip, update focus to last selected
+    if (_focusClipId == clipId) {
+      _focusClipId = _selectedClipIds.isNotEmpty ? _selectedClipIds.last : null;
     }
+
+    // If no clips left, clear the track selection too
+    if (_selectedClipIds.isEmpty) {
+      _selectedTrackId = null;
+      _focusClipId = null;
+    }
+    notifyListeners();
   }
 
   /// Select multiple clips at once (for range select)
-  Future<void> selectClips({
-    required int trackId,
-    required List<int> clipIds,
-  }) async {
-    try {
-      await session_api.selectClips(trackId: trackId, clipIds: clipIds);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error selecting clips: $e');
-    }
+  void selectClips({required int trackId, required List<int> clipIds}) {
+    _selectedTrackId = trackId;
+    _selectedClipIds = List.from(clipIds);
+    _focusClipId = clipIds.isNotEmpty ? clipIds.last : null;
+    notifyListeners();
   }
 
   /// Clear all clip selection
-  Future<void> deselectAllClips() async {
-    try {
-      await session_api.deselectAllClips();
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error deselecting clips: $e');
-    }
+  void deselectAllClips() {
+    _selectedTrackId = null;
+    _selectedClipIds = [];
+    _focusClipId = null;
+    notifyListeners();
   }
 
   /// Set the preview generator for piano roll
-  Future<void> setPreviewGenerator({int? generatorId}) async {
+  void setPreviewGenerator({int? generatorId}) {
     _previewGeneratorId = generatorId;
-    try {
-      await session_api.setPreviewGenerator(generatorId: generatorId);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error setting preview generator: $e');
-    }
+    notifyListeners();
   }
 
   // ====================================================

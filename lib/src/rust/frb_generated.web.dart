@@ -319,9 +319,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
 
   @protected
-  UiSessionState dco_decode_ui_session_state(dynamic raw);
-
-  @protected
   UiSourceType dco_decode_ui_source_type(dynamic raw);
 
   @protected
@@ -666,9 +663,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingConnection sse_decode_ui_routing_connection(
     SseDeserializer deserializer,
   );
-
-  @protected
-  UiSessionState sse_decode_ui_session_state(SseDeserializer deserializer);
 
   @protected
   UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
@@ -1081,12 +1075,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_routing_connection(
     UiRoutingConnection self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_ui_session_state(
-    UiSessionState self,
     SseSerializer serializer,
   );
 

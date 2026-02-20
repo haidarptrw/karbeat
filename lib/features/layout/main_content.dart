@@ -39,8 +39,8 @@ class MainContent extends StatelessWidget {
                     return Selector<KarbeatState, (int?, int?)>(
                       selector: (_, state) {
                         // Try to get pattern from focused clip (most recently selected)
-                        final clipId = state.sessionState?.focusClipId;
-                        final trackId = state.sessionState?.selectedTrackId;
+                        final clipId = state.focusClipId;
+                        final trackId = state.selectedTrackId;
 
                         if (clipId != null && trackId != null) {
                           final track = state.tracks[trackId];

@@ -144,6 +144,9 @@ class PianoRollScreenState extends State<PianoRollScreen> {
       startTick: tick,
       duration: snap,
     );
+
+    // Play preview sound when drawing notes
+    _handleNoteOn(midiKey);
   }
 
   void _resetPaintState() {

@@ -82,7 +82,7 @@ pub fn play_preview_note(
         return Err("Note key must be between 0 and 127".to_string());
     }
 
-    if velocity < 0 || note_key > 100 {
+    if velocity < 0 || velocity > 100 {
         return Err("Note velocity must be between 0 and 100".to_string());
     }
 
@@ -132,6 +132,8 @@ pub fn play_preview_note_generator(
 
     let note_key: u8 = note_key as u8;
     let velocity: u8 = velocity as u8;
+
+    log::info!("Playing note {}", note_key);
 
     if let Ok(mut command_guard) = ctx().command_sender.lock() {
         if let Some(sender) = command_guard.as_mut() {

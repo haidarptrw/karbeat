@@ -67,10 +67,10 @@ class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
     );
 
     final selectedClipIds = context.select<KarbeatState, List<int>>(
-      (state) => state.sessionState?.selectedClipIds ?? [],
+      (state) => state.selectedClipIds,
     );
     final selectedTrackId = context.select<KarbeatState, int?>(
-      (state) => state.sessionState?.selectedTrackId,
+      (state) => state.selectedTrackId,
     );
 
     if (track == null) return const SizedBox();

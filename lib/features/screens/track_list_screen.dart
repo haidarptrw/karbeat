@@ -845,11 +845,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
 
     final state = context.read<KarbeatState>();
-    final session = state.sessionState;
-    if (session == null) return [];
-
-    final selectedClipIds = session.selectedClipIds;
-    final selectedTrackId = session.selectedTrackId;
+    final selectedClipIds = state.selectedClipIds;
+    final selectedTrackId = state.selectedTrackId;
     if (selectedTrackId == null || selectedClipIds.isEmpty) return [];
 
     // Get the track and its clips
