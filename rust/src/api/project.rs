@@ -11,7 +11,7 @@ use crate::{
             generator::{GeneratorInstance, GeneratorInstanceType},
             track::{audio_waveform::AudioWaveform, KarbeatTrack, TrackType},
             transport::TransportState,
-            KarbeatSource, ProjectMetadata, SessionState,
+            KarbeatSource, ProjectMetadata,
         },
     },
     utils::lock::{get_app_read, get_app_write},
@@ -20,6 +20,7 @@ use crate::{
 pub struct UiTrack {
     pub id: u32,
     pub name: String,
+    pub color: String,
     pub track_type: TrackType,
     pub clips: Vec<UiClip>,
     pub generator_id: Option<u32>,
@@ -34,6 +35,7 @@ impl From<&KarbeatTrack> for UiTrack {
         Self {
             id: value.id.to_u32(),
             name: value.name.clone(),
+            color: value.color.to_string(),
             track_type: value.track_type.clone(),
             clips: value
                 .clips_to_vec()
@@ -97,7 +99,7 @@ pub struct AudioWaveformUiForSourceList {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct AudioWaveformUiForAudioProperties {
-    pub preview_buffer: Vec<f32>, // Store sample buffer, essential to draw waveform
+    pub preview_buffer: Vec<i8>, // Quantized i8 samples (-127..127) for waveform display
     pub file_path: String,
     pub name: String,
     pub sample_rate: u32,
@@ -114,7 +116,7 @@ pub struct AudioWaveformUiForAudioProperties {
 
 pub struct AudioWaveformUiForClip {
     pub name: String,
-    pub preview_buffer: Vec<f32>,
+    pub preview_buffer: Vec<i8>,
     pub sample_rate: u32,
 }
 
@@ -130,8 +132,13 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
 
 impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
     fn from(value: &AudioWaveform) -> Self {
+        let preview_buffer: Vec<i8> = value
+            .buffer
+            .iter()
+            .map(|&s| (s.clamp(-1.0, 1.0) * 127.0) as i8)
+            .collect();
         Self {
-            preview_buffer: value.buffer.to_vec(),
+            preview_buffer,
             file_path: value.file_path.clone(),
             name: value.name.clone(),
             sample_rate: value.sample_rate,
@@ -150,8 +157,13 @@ impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
 
 impl From<&AudioWaveform> for AudioWaveformUiForClip {
     fn from(value: &AudioWaveform) -> Self {
+        let preview_buffer: Vec<i8> = value
+            .buffer
+            .iter()
+            .map(|&s| (s.clamp(-1.0, 1.0) * 127.0) as i8)
+            .collect();
         Self {
-            preview_buffer: value.buffer.as_ref().clone(),
+            preview_buffer,
             name: value.name.clone(),
             sample_rate: value.sample_rate,
         }
@@ -190,51 +202,6 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
     }
 }
 
-// ============================================================
-// =====================SESSION STATE==========================
-// ============================================================
-
-pub struct UiSessionState {
-    // Track-locked multi-selection
-    pub selected_track_id: Option<u32>,
-    pub selected_clip_ids: Vec<u32>,
-
-    // For piano roll navigation - most recently interacted clip
-    pub focus_clip_id: Option<u32>,
-
-    // Optional override for piano roll preview generator
-    pub preview_generator_id: Option<u32>,
-}
-
-impl From<&SessionState> for UiSessionState {
-    fn from(session: &SessionState) -> Self {
-        Self {
-            selected_track_id: session.selected_track_id.map(|id| id.to_u32()),
-            selected_clip_ids: session
-                .selected_clip_ids
-                .iter()
-                .map(|id| id.to_u32())
-                .collect(),
-            focus_clip_id: session.focus_clip_id.map(|id| id.to_u32()),
-            preview_generator_id: session.preview_generator_id.map(|id| id.to_u32()),
-        }
-    }
-}
-
-impl Into<UiSessionState> for SessionState {
-    fn into(self) -> UiSessionState {
-        UiSessionState {
-            selected_track_id: self.selected_track_id.map(|id| id.to_u32()),
-            selected_clip_ids: self
-                .selected_clip_ids
-                .iter()
-                .map(|id| id.to_u32())
-                .collect(),
-            focus_clip_id: self.focus_clip_id.map(|id| id.to_u32()),
-            preview_generator_id: self.preview_generator_id.map(|id| id.to_u32()),
-        }
-    }
-}
 // ============================ APIs ==================================
 
 /// Get the current project metadata state from the backend
@@ -347,12 +314,4 @@ pub fn get_max_sample_index() -> Result<u32, String> {
     let app = get_app_read();
 
     Ok(app.max_sample_index)
-}
-
-/// Get the session state of from the project
-pub fn get_session_state() -> Result<UiSessionState, String> {
-    let app = get_app_read();
-
-    let session = UiSessionState::from(&app.session);
-    Ok(session)
 }

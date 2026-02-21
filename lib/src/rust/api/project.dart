@@ -12,7 +12,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'project.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Get the current project metadata state from the backend
 Future<ProjectMetadata> getProjectMetadata() =>
@@ -51,12 +51,8 @@ Future<Map<int, UiTrack>> getTracks() =>
 Future<int> getMaxSampleIndex() =>
     RustLib.instance.api.crateApiProjectGetMaxSampleIndex();
 
-/// Get the session state of from the project
-Future<UiSessionState> getSessionState() =>
-    RustLib.instance.api.crateApiProjectGetSessionState();
-
 class AudioWaveformUiForAudioProperties {
-  final Float32List previewBuffer;
+  final Int8List previewBuffer;
   final String filePath;
   final String name;
   final int sampleRate;
@@ -195,40 +191,10 @@ class UiGeneratorInstance {
           parameters == other.parameters;
 }
 
-class UiSessionState {
-  final int? selectedTrackId;
-  final Uint32List selectedClipIds;
-  final int? focusClipId;
-  final int? previewGeneratorId;
-
-  const UiSessionState({
-    this.selectedTrackId,
-    required this.selectedClipIds,
-    this.focusClipId,
-    this.previewGeneratorId,
-  });
-
-  @override
-  int get hashCode =>
-      selectedTrackId.hashCode ^
-      selectedClipIds.hashCode ^
-      focusClipId.hashCode ^
-      previewGeneratorId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiSessionState &&
-          runtimeType == other.runtimeType &&
-          selectedTrackId == other.selectedTrackId &&
-          selectedClipIds == other.selectedClipIds &&
-          focusClipId == other.focusClipId &&
-          previewGeneratorId == other.previewGeneratorId;
-}
-
 class UiTrack {
   final int id;
   final String name;
+  final String color;
   final TrackType trackType;
   final List<UiClip> clips;
   final int? generatorId;
@@ -236,6 +202,7 @@ class UiTrack {
   const UiTrack({
     required this.id,
     required this.name,
+    required this.color,
     required this.trackType,
     required this.clips,
     this.generatorId,
@@ -245,6 +212,7 @@ class UiTrack {
   int get hashCode =>
       id.hashCode ^
       name.hashCode ^
+      color.hashCode ^
       trackType.hashCode ^
       clips.hashCode ^
       generatorId.hashCode;
@@ -256,6 +224,7 @@ class UiTrack {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
+          color == other.color &&
           trackType == other.trackType &&
           clips == other.clips &&
           generatorId == other.generatorId;

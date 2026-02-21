@@ -67,10 +67,10 @@ class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
     );
 
     final selectedClipIds = context.select<KarbeatState, List<int>>(
-      (state) => state.sessionState?.selectedClipIds ?? [],
+      (state) => state.selectedClipIds,
     );
     final selectedTrackId = context.select<KarbeatState, int?>(
-      (state) => state.sessionState?.selectedTrackId,
+      (state) => state.selectedTrackId,
     );
 
     if (track == null) return const SizedBox();
@@ -138,6 +138,7 @@ class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
               isSelected: isSelected,
               selectedClipIds: selectedClipIds,
               clipDragController: widget.clipDragController,
+              horizontalScrollController: widget.horizontalScrollController,
             );
           }),
         ],
@@ -160,6 +161,7 @@ class _InteractiveClip extends StatefulWidget {
   final bool isSelected;
   final List<int> selectedClipIds;
   final ClipDragController clipDragController;
+  final ScrollController horizontalScrollController;
 
   const _InteractiveClip({
     super.key,
@@ -172,6 +174,7 @@ class _InteractiveClip extends StatefulWidget {
     required this.isSelected,
     required this.selectedClipIds,
     required this.clipDragController,
+    required this.horizontalScrollController,
   });
 
   @override
@@ -209,10 +212,18 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     _syncModel();
     // Listen to batch drag updates for follower visual sync
     widget.clipDragController.addListener(_onBatchDragUpdate);
+    // Listen to scroll to update visible pixel range for painter
+    widget.horizontalScrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    // Trigger rebuild so visibleStartPx/visibleEndPx are recalculated
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    widget.horizontalScrollController.removeListener(_onScroll);
     widget.clipDragController.removeListener(_onBatchDragUpdate);
     super.dispose();
   }
@@ -220,10 +231,15 @@ class _InteractiveClipState extends State<_InteractiveClip> {
   @override
   void didUpdateWidget(covariant _InteractiveClip oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Re-attach listener if controller changed
+    // Re-attach listeners if controllers changed
     if (oldWidget.clipDragController != widget.clipDragController) {
       oldWidget.clipDragController.removeListener(_onBatchDragUpdate);
       widget.clipDragController.addListener(_onBatchDragUpdate);
+    }
+    if (oldWidget.horizontalScrollController !=
+        widget.horizontalScrollController) {
+      oldWidget.horizontalScrollController.removeListener(_onScroll);
+      widget.horizontalScrollController.addListener(_onScroll);
     }
     // Only overwrite local state from backend if we are NOT currently dragging
     // and not in a batch drag as a follower
@@ -324,6 +340,9 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                       .sampleRate,
                   overrideOffset: _visualOffset.toDouble(),
                   isSelected: widget.isSelected,
+                  // Overlay can appear anywhere, draw all
+                  visibleStartPx: 0,
+                  visibleEndPx: double.infinity,
                 ),
               ),
             );
@@ -372,6 +391,29 @@ class _InteractiveClipState extends State<_InteractiveClip> {
     // Check if this is a follower in a batch move (should be semi-transparent)
     final isFollowerInBatchMove =
         _isFollower && widget.clipDragController.action == BatchDragAction.move;
+
+    // --- VIEWPORT BOUNDS (for painter optimization) ---
+    // Compute the visible pixel range in the Positioned widget's local coords.
+    // This tells the painter which pixels are actually visible on screen,
+    // so it can skip drawing the ~200,000 off-screen pixel columns.
+    double scrollOffset = 0;
+    double viewportWidth = 2000; // fallback
+    if (widget.horizontalScrollController.hasClients) {
+      scrollOffset = widget.horizontalScrollController.offset;
+      if (widget.horizontalScrollController.position.hasViewportDimension) {
+        viewportWidth =
+            widget.horizontalScrollController.position.viewportDimension;
+      }
+    }
+    // In the Positioned's local coords: x=0 is at `left` in scroll content.
+    // So scrollOffset maps to local x = scrollOffset - left.
+    const double pad = 50; // small padding to avoid pop-in
+    final double localVisStart = (scrollOffset - left - pad).clamp(
+      0,
+      safeWidth,
+    );
+    final double localVisEnd = (scrollOffset - left + viewportWidth + pad)
+        .clamp(0, safeWidth);
 
     return Positioned(
       left: left,
@@ -643,6 +685,8 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   .sampleRate,
               overrideOffset: _visualOffset.toDouble(),
               isSelected: widget.isSelected,
+              visibleStartPx: localVisStart,
+              visibleEndPx: localVisEnd,
             ),
           ),
         ),
@@ -663,6 +707,8 @@ class _ClipRenderer extends StatelessWidget {
   final int projectSampleRate;
   final double? overrideOffset;
   final bool isSelected;
+  final double visibleStartPx;
+  final double visibleEndPx;
 
   const _ClipRenderer({
     required this.clip,
@@ -672,6 +718,8 @@ class _ClipRenderer extends StatelessWidget {
     required this.projectSampleRate,
     this.overrideOffset,
     required this.isSelected,
+    required this.visibleStartPx,
+    required this.visibleEndPx,
   });
 
   @override
@@ -738,15 +786,19 @@ class _ClipRenderer extends StatelessWidget {
         final double effectiveOffset =
             overrideOffset ?? clip.offsetStart.toDouble();
 
-        return CustomPaint(
-          size: Size.infinite, // Fill the clip container
-          painter: StereoWaveformClipPainter(
-            samples: audioData.previewBuffer,
-            color: Colors.white.withAlpha(200),
-            zoomLevel: zoomLevel,
-            offsetSamples: effectiveOffset,
-            strokeWidth: 1.0,
-            ratio: ratio,
+        return RepaintBoundary(
+          child: CustomPaint(
+            size: Size.infinite, // Fill the clip container
+            painter: StereoWaveformClipPainter(
+              samples: audioData.previewBuffer,
+              color: Colors.white.withAlpha(200),
+              zoomLevel: zoomLevel,
+              offsetSamples: effectiveOffset,
+              strokeWidth: 1.0,
+              ratio: ratio,
+              visibleStartPx: visibleStartPx,
+              visibleEndPx: visibleEndPx,
+            ),
           ),
         );
       case UiClipSource_Midi(:final patternId):
@@ -762,14 +814,16 @@ class _ClipRenderer extends StatelessWidget {
           );
         }
 
-        return CustomPaint(
-          size: Size.infinite,
-          painter: MidiClipPainter(
-            pattern: pattern,
-            color: color,
-            zoomLevel: zoomLevel,
-            sampleRate: projectSampleRate,
-            bpm: state.transport.bpm,
+        return RepaintBoundary(
+          child: CustomPaint(
+            size: Size.infinite,
+            painter: MidiClipPainter(
+              pattern: pattern,
+              color: color,
+              zoomLevel: zoomLevel,
+              sampleRate: projectSampleRate,
+              bpm: state.transport.bpm,
+            ),
           ),
         );
       default:

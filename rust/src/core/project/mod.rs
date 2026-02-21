@@ -29,10 +29,7 @@ pub use track::{
 };
 pub use transport::TransportState;
 
-use crate::{
-    core::project::mixer::{EffectId, EffectInstance, MixerState},
-    define_id,
-};
+use crate::{core::project::mixer::MixerState, define_id};
 
 define_id!(SourceId);
 define_id!(NoteId);
@@ -72,9 +69,6 @@ pub struct ApplicationState {
 
     // ========== NON-SERIALIZABLE SESSION DATA ===============
     // These fields are marked to be skipped during Save/Load
-    #[serde(skip)]
-    pub session: SessionState,
-
     #[serde(skip)]
     pub audio_config: AudioHardwareConfig,
 
@@ -178,20 +172,6 @@ impl Default for AssetLibrary {
             source_map: HashMap::new(),
         }
     }
-}
-// ========= NON-SAVED STATE (Runtime Only) =================
-
-#[derive(Default, Clone)]
-pub struct SessionState {
-    // Track-locked multi-selection
-    pub selected_track_id: Option<TrackId>,
-    pub selected_clip_ids: Vec<ClipId>,
-
-    // For piano roll navigation - most recently interacted clip
-    pub focus_clip_id: Option<ClipId>,
-
-    // Optional override for piano roll preview generator
-    pub preview_generator_id: Option<GeneratorId>,
 }
 
 #[derive(Clone)]

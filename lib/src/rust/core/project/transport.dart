@@ -8,6 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 class TransportState {
   final bool isPlaying;
+  final bool isPatternPlaying;
   final bool isRecording;
   final bool isLooping;
   final int playheadPositionSamples;
@@ -20,6 +21,7 @@ class TransportState {
 
   const TransportState({
     required this.isPlaying,
+    required this.isPatternPlaying,
     required this.isRecording,
     required this.isLooping,
     required this.playheadPositionSamples,
@@ -34,6 +36,7 @@ class TransportState {
   @override
   int get hashCode =>
       isPlaying.hashCode ^
+      isPatternPlaying.hashCode ^
       isRecording.hashCode ^
       isLooping.hashCode ^
       playheadPositionSamples.hashCode ^
@@ -50,6 +53,7 @@ class TransportState {
       other is TransportState &&
           runtimeType == other.runtimeType &&
           isPlaying == other.isPlaying &&
+          isPatternPlaying == other.isPatternPlaying &&
           isRecording == other.isRecording &&
           isLooping == other.isLooping &&
           playheadPositionSamples == other.playheadPositionSamples &&

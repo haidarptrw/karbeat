@@ -8,16 +8,12 @@ use crate::{
     core::{
         history::ProjectAction,
         project::{
-            clip::{Clip, ClipId},
-            track::{
-                audio_waveform::AudioSourceId,
-                midi::{Pattern, PatternId},
-                TrackId, TrackType,
-            },
-            KarbeatSource,
+            KarbeatSource, clip::{Clip, ClipId}, track::{
+                TrackId, TrackType, audio_waveform::AudioSourceId, midi::{Pattern, PatternId}
+            }
         },
     },
-    utils::lock::{get_app_read, get_app_write, get_history_lock},
+    utils::{color::Color, lock::{get_app_read, get_app_write, get_history_lock}},
 };
 
 pub enum UiSourceType {
@@ -541,6 +537,41 @@ pub fn delete_clip_batch(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String
                 });
             }
         }
+    }
+
+    broadcast_state_change();
+    Ok(())
+}
+
+pub fn change_track_name(track_id: u32, new_name: &str) -> Result<(), String> {
+    // check the name's length
+    if new_name.len() > 20 {
+        return Err("Track name cannot exceed 20 characters".to_string());
+    }
+    
+    let track_id = TrackId::from(track_id);
+
+    {
+        let mut app = get_app_write();
+        let track_arc = app.tracks.get_mut(&track_id).ok_or("Track not found")?;
+        let track = Arc::make_mut(track_arc);
+        track.name = new_name.to_string();
+    }
+
+    broadcast_state_change();
+    Ok(())
+}
+
+/// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
+pub fn change_track_color(track_id: u32, new_color: &str) -> Result<(), String> {
+    let track_id = TrackId::from(track_id);
+
+    {
+        let mut app = get_app_write();
+        let track_arc = app.tracks.get_mut(&track_id).ok_or("Track not found")?;
+        let track = Arc::make_mut(track_arc);
+        track.color = Color::new_from_string(new_color)
+            .ok_or("Invalid color format. Use hex string like #RRGGBB or #RRGGBBAA")?;
     }
 
     broadcast_state_change();

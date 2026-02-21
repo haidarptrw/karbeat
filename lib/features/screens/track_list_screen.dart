@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
-import 'package:karbeat/features/components/interaction_panel.dart';
+import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -179,10 +179,45 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
   }
 
-  void _updateZoom(double newZoom) {
-    // Define min/max zoom limits to prevent bugs
-    final clamped = newZoom.clamp(0.01, 5000.0);
-    context.read<KarbeatState>().setHorizontalZoom(clamped);
+  void _updateZoom(double newZoom, double focalPointX) {
+    final state = context.read<KarbeatState>();
+    final oldZoom = state.horizontalZoomLevel;
+
+    final clampedZoom = newZoom.clamp(0.01, 5000.0);
+    if (clampedZoom == oldZoom) return;
+
+    double currentScroll = 0;
+    if (_trackContentController.hasClients) {
+      currentScroll = _trackContentController.offset;
+    }
+
+    // 1. Calculate the exact time (in samples) located at the current cursor point
+    final double samplesAtFocalPoint = (currentScroll + focalPointX) * oldZoom;
+
+    // 2. Set the new zoom level
+    state.horizontalZoomLevel = clampedZoom;
+
+    // 3. Calculate what the new scroll position MUST be to keep that specific sample at the focal point
+    double newScroll = (samplesAtFocalPoint / clampedZoom) - focalPointX;
+    if (newScroll < 0) newScroll = 0;
+
+    // 4. Proactively expand the timeline boundary if we zoom in so deep that we pass it
+    if (newScroll > _timelineWidth - 1000) {
+      setState(() {
+        _timelineWidth = newScroll + 2000.0;
+      });
+      // Wait for layout rebuild to register the new width before jumping
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_trackContentController.hasClients) {
+          _trackContentController.jumpTo(newScroll);
+        }
+      });
+    } else {
+      // Jump immediately
+      if (_trackContentController.hasClients) {
+        _trackContentController.jumpTo(newScroll);
+      }
+    }
   }
 
   void _handleTimelineGesture(
@@ -395,7 +430,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                       final double multiplier = event.scrollDelta.dy > 0
                           ? 0.9
                           : 1.1;
-                      _updateZoom(currentZoom * multiplier);
+                      _updateZoom(
+                        currentZoom * multiplier,
+                        event.localPosition.dx,
+                      );
                     }
                   }
                 },
@@ -421,7 +459,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                     if (selectedTool == ToolSelection.zoom) {
                       final currentZoom = state.horizontalZoomLevel;
                       double multiplier = 1.0 - (details.delta.dy * 0.01);
-                      _updateZoom(currentZoom * multiplier);
+                      _updateZoom(
+                        currentZoom * multiplier,
+                        details.localPosition.dx,
+                      );
                       return;
                     }
                     if (selectedTool == ToolSelection.scrub) {
@@ -612,29 +653,6 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               ],
             ),
           ),
-        // Interaction Panel Overlay
-        if (state.interactionTarget != null) ...[
-          // Backdrop to dismiss panel
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => state.hideInteractionPanel(),
-              child: Container(color: Colors.black.withAlpha(80)),
-            ),
-          ),
-          // Panel positioned at center-bottom (bottom sheet style)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 24,
-            child: Center(
-              child: InteractionPanel(
-                target: state.interactionTarget!,
-                onClose: () => state.hideInteractionPanel(),
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -804,11 +822,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
 
     final state = context.read<KarbeatState>();
-    final session = state.sessionState;
-    if (session == null) return [];
-
-    final selectedClipIds = session.selectedClipIds;
-    final selectedTrackId = session.selectedTrackId;
+    final selectedClipIds = state.selectedClipIds;
+    final selectedTrackId = state.selectedTrackId;
     if (selectedTrackId == null || selectedClipIds.isEmpty) return [];
 
     // Get the track and its clips
@@ -912,66 +927,128 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   Widget _buildTrackHeader(UiTrack track) {
-    return SizedBox(
-      height: widget.itemHeight,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          border: Border(
-            bottom: BorderSide(color: Colors.grey.shade400, width: 1),
-            right: BorderSide(color: Colors.grey.shade400, width: 1),
-          ),
+    return ContextMenuWrapper(
+      title: track.name,
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Name: ${track.name}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text("Type: ${track.trackType.name.toUpperCase()}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text("ID: ${track.id}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("Color: ", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              Container(
+                width: 14, 
+                height: 14, 
+                decoration: BoxDecoration(
+                  color: Color(int.parse(track.color.substring(1), radix: 16)), // Replace with track.color if available
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          )
+        ],
+      ),
+      actions: [
+        KarbeatContextAction(
+          title: "Rename",
+          icon: Icons.edit,
+          onTap: () {
+            // Replace with your actual rename logic via app_state
+            KarbeatLogger.info("Rename track requested for ID: ${track.id}");
+          },
         ),
-        child: Row(
-          children: [
-            Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track.name,
-                    style: TextStyle(
-                      color: Colors.grey.shade800,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+        KarbeatContextAction(
+          title: "Move Up",
+          icon: Icons.arrow_upward,
+          onTap: () {
+            // Replace with actual move up logic
+            KarbeatLogger.info("Move Up requested for track ID: ${track.id}");
+          },
+        ),
+        KarbeatContextAction(
+          title: "Move Down",
+          icon: Icons.arrow_downward,
+          onTap: () {
+            // Replace with actual move down logic
+            KarbeatLogger.info("Move Down requested for track ID: ${track.id}");
+          },
+        ),
+        KarbeatContextAction(
+          title: "Delete Track",
+          icon: Icons.delete,
+          isDestructive: true,
+          onTap: () {
+            // Replace with actual delete logic via app_state
+            KarbeatLogger.info("Delete track requested for ID: ${track.id}");
+          },
+        ),
+      ],
+      child: SizedBox(
+        height: widget.itemHeight,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade400, width: 1),
+              right: BorderSide(color: Colors.grey.shade400, width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      track.name,
+                      style: TextStyle(
+                        color: Colors.grey.shade800,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
+                    Text(
+                      "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  InkWell(
+                    onTap: () {},
+                    child: const Icon(
+                      Icons.mic_off,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                   ),
-                  Text(
-                    "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                  const SizedBox(height: 4),
+                  InkWell(
+                    onTap: () {},
+                    child: const Icon(
+                      Icons.volume_up,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                   ),
                 ],
               ),
-            ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                InkWell(
-                  onTap: () {},
-                  child: const Icon(
-                    Icons.mic_off,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                InkWell(
-                  onTap: () {},
-                  child: const Icon(
-                    Icons.volume_up,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

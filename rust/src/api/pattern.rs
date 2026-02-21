@@ -1,14 +1,17 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
+    audio::engine::PlaybackMode,
     broadcast_state_change,
+    commands::AudioCommand,
     core::{
         history::ProjectAction,
         project::{
             track::midi::{Pattern, PatternId},
-            Note, NoteId,
+            GeneratorId, Note, NoteId,
         },
     },
+    ctx,
     utils::lock::{get_app_read, get_app_write, get_history_lock},
 };
 
@@ -309,11 +312,6 @@ pub fn change_note_params(
 /// Play a pattern in isolation with a specific generator (looping automatically).
 /// This temporarily switches the engine to Pattern playback mode.
 pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), String> {
-    use crate::audio::engine::PlaybackMode;
-    use crate::commands::AudioCommand;
-    use crate::core::project::GeneratorId;
-    use crate::ctx;
-
     let pattern_id = PatternId::from(pattern_id);
     let generator_id = GeneratorId::from(generator_id);
 
@@ -339,6 +337,7 @@ pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), St
     {
         let mut app = get_app_write();
         app.transport.is_playing = true;
+        app.transport.is_pattern_playing = true;
     }
 
     broadcast_state_change();
@@ -347,21 +346,17 @@ pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), St
 
 /// Stop pattern preview and return to Song mode.
 pub fn stop_pattern_preview() -> Result<(), String> {
-    use crate::audio::engine::PlaybackMode;
-    use crate::commands::AudioCommand;
-    use crate::ctx;
-
     // Stop playback
     {
         let mut app = get_app_write();
         app.transport.is_playing = false;
+        app.transport.is_pattern_playing = false;
     }
 
     // Switch back to Song mode
     if let Ok(mut guard) = ctx().command_sender.lock() {
         if let Some(cmd_producer) = guard.as_mut() {
             let _ = cmd_producer.push(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
-            let _ = cmd_producer.push(AudioCommand::ResetPlayhead);
         }
     }
 

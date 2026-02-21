@@ -104,6 +104,21 @@ Future<void> deleteClipBatch({
   clipIds: clipIds,
 );
 
+Future<void> changeTrackName({required int trackId, required String newName}) =>
+    RustLib.instance.api.crateApiTrackChangeTrackName(
+      trackId: trackId,
+      newName: newName,
+    );
+
+/// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
+Future<void> changeTrackColor({
+  required int trackId,
+  required String newColor,
+}) => RustLib.instance.api.crateApiTrackChangeTrackColor(
+  trackId: trackId,
+  newColor: newColor,
+);
+
 enum ResizeEdge { left, right }
 
 enum UiSourceType { audio, midi }

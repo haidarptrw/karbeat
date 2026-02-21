@@ -2,9 +2,18 @@ import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+// =============================================================================
+// Common constant for i8 → float conversion
+// =============================================================================
+const double _kI8Scale = 1.0 / 127.0;
+
+// =============================================================================
+// 1. StereoWaveformPainter  (Overview — Audio Properties screen)
+// =============================================================================
+
 class StereoWaveformPainter extends CustomPainter {
-  /// Expecting raw interleaved stereo samples: [L, R, L, R, ...]
-  final List<double> samples;
+  /// Quantized i8 interleaved stereo samples: [L, R, L, R, ...]
+  final Int8List samples;
   final Color color;
   final double strokeWidth;
 
@@ -26,50 +35,34 @@ class StereoWaveformPainter extends CustomPainter {
 
     // Draw Divider Line (Center)
     final dividerPaint = Paint()
-      ..color = Colors.white.withAlpha((0.2*255).round())
+      ..color = Colors.white.withAlpha((0.2 * 255).round())
       ..strokeWidth = 1.0;
-    
+
     canvas.drawLine(
       Offset(0, size.height / 2),
       Offset(size.width, size.height / 2),
       dividerPaint,
     );
 
-    // 1. Calculate Metrics
-    // Interleaved [L, R] means Total Frames = Array Length / 2
     final int totalFrames = samples.length ~/ 2;
     final double width = size.width;
-    
-    // We draw 4 lines per pixel column (L_top, L_btm, R_top, R_btm)
-    // 4 lines * 2 points * 2 coords = 16 floats per pixel? 
-    // Optimization: We draw 1 line for L (from max to min) and 1 for R.
-    // L Line: (x, yMax) -> (x, yMin)
-    // R Line: (x, yMax) -> (x, yMin)
-    // Total: 2 lines * 2 points * 2 coords = 8 floats per pixel.
     final int pointsCount = width.ceil() * 8;
     final Float32List rawPoints = Float32List(pointsCount);
     int ptr = 0;
 
-    // Calculate how many audio frames fit into one screen pixel
     final double framesPerPixel = totalFrames / width;
-    
-    // Height Layout
+
     final double halfHeight = size.height / 2;
     final double quarterHeight = halfHeight / 2;
-    final double leftCenterY = quarterHeight; 
-    final double rightCenterY = halfHeight + quarterHeight; 
+    final double leftCenterY = quarterHeight;
+    final double rightCenterY = halfHeight + quarterHeight;
 
-    // 2. OPTIMIZATION: Adaptive Step
-    // If we are squeezing 10,000 samples into 1 pixel, we don't need to read all 10,000.
-    // Reading every ~50th sample is enough to find the visual shape.
     int step = 1;
     if (framesPerPixel > 50) {
       step = (framesPerPixel / 50).ceil();
     }
 
-    // 3. DRAWING LOOP
     for (int x = 0; x < width; x++) {
-      // Determine the start/end index in the buffer for this specific pixel column
       final int startFrame = (x * framesPerPixel).floor();
       final int endFrame = ((x + 1) * framesPerPixel).ceil();
 
@@ -77,27 +70,26 @@ class StereoWaveformPainter extends CustomPainter {
       final int actualEnd = endFrame.clamp(0, totalFrames);
 
       if (actualStart >= actualEnd) {
-        ptr += 8; // Advance pointer to keep alignment
+        ptr += 8;
         continue;
       }
 
-      // Track Peaks for this slice
       double lMin = 1.0, lMax = -1.0;
       double rMin = 1.0, rMax = -1.0;
       bool hasData = false;
 
-      // Inner Loop: Iterate FRAMES
       for (int i = actualStart; i < actualEnd; i += step) {
-        final int sampleIdx = i * 2; // Jump by 2 because it's interleaved
-        
+        final int sampleIdx = i * 2;
         if (sampleIdx + 1 >= samples.length) break;
 
-        final double l = samples[sampleIdx];
-        final double r = samples[sampleIdx + 1];
+        final double l = samples[sampleIdx] * _kI8Scale;
+        final double r = samples[sampleIdx + 1] * _kI8Scale;
 
         if (!hasData) {
-          lMin = l; lMax = l;
-          rMin = r; rMax = r;
+          lMin = l;
+          lMax = l;
+          rMin = r;
+          rMax = r;
           hasData = true;
         } else {
           if (l < lMin) lMin = l;
@@ -112,39 +104,45 @@ class StereoWaveformPainter extends CustomPainter {
         continue;
       }
 
-      // Visual tweak: ensure we always draw at least a dot if the wave is flat/silent
-      if (lMax == lMin) { lMax += 0.01; lMin -= 0.01; }
-      if (rMax == rMin) { rMax += 0.01; rMin -= 0.01; }
+      if (lMax == lMin) {
+        lMax += 0.01;
+        lMin -= 0.01;
+      }
+      if (rMax == rMin) {
+        rMax += 0.01;
+        rMin -= 0.01;
+      }
 
       final double xPos = x.toDouble();
 
-      // --- LEFT CHANNEL (Top) ---
-      // Invert Y: Positive samples go UP (subtract from center)
       rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = leftCenterY - (lMax * quarterHeight); // Top point
+      rawPoints[ptr++] = leftCenterY - (lMax * quarterHeight);
       rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = leftCenterY - (lMin * quarterHeight); // Bottom point
+      rawPoints[ptr++] = leftCenterY - (lMin * quarterHeight);
 
-      // --- RIGHT CHANNEL (Bottom) ---
       rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = rightCenterY - (rMax * quarterHeight); // Top point
+      rawPoints[ptr++] = rightCenterY - (rMax * quarterHeight);
       rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = rightCenterY - (rMin * quarterHeight); // Bottom point
+      rawPoints[ptr++] = rightCenterY - (rMin * quarterHeight);
     }
 
-    // 4. Batch Render
     canvas.drawRawPoints(PointMode.lines, rawPoints, paint);
   }
 
   @override
   bool shouldRepaint(covariant StereoWaveformPainter oldDelegate) {
-    return oldDelegate.samples != samples || oldDelegate.color != color;
+    return !identical(oldDelegate.samples, samples) ||
+        oldDelegate.color != color;
   }
 }
 
+// =============================================================================
+// 2. MonoWaveformPainter  (Overview — pre-binned data)
+// =============================================================================
+
 class MonoWaveformPainter extends CustomPainter {
-  /// Format per bin: [Left_Min, Left_Max, Right_Min, Right_Max]
-  final List<double> samples;
+  /// Format per bin: [Left_Min, Left_Max, Right_Min, Right_Max] as i8
+  final Int8List samples;
   final Color color;
   final double strokeWidth;
 
@@ -167,30 +165,20 @@ class MonoWaveformPainter extends CustomPainter {
     final double width = size.width;
     final double halfHeight = size.height / 2;
 
-    // 1. Calculate Total Bins
-    //    Since each bin has 4 values [L_min, L_max, R_min, R_max]
     final int totalBins = samples.length ~/ 4;
 
-    // 2. Prepare Batch Drawing Buffer
-    //    1 vertical line per pixel column. 2 points per line. 2 coords per point.
-    //    Total = width * 4
     final int pointsCount = width.ceil() * 4;
     final Float32List rawPoints = Float32List(pointsCount);
     int ptr = 0;
 
-    // 3. Coordinate Mapping
     final double binsPerPixel = totalBins / width;
 
-    // 4. OPTIMIZATION: Adaptive Step
-    //    If we are zoomed out so far that 1 pixel covers 500 bins, 
-    //    we don't need to check all 500. Checking ~50 is enough for a summary.
     int step = 1;
     if (binsPerPixel > 50) {
       step = (binsPerPixel / 50).ceil();
     }
 
     for (int x = 0; x < width; x++) {
-      // Determine which bins fall into this pixel column
       final int startBin = (x * binsPerPixel).floor();
       final int endBin = ((x + 1) * binsPerPixel).ceil();
 
@@ -199,43 +187,34 @@ class MonoWaveformPainter extends CustomPainter {
 
       if (actualStart >= actualEnd) continue;
 
-      // Track Min/Max for this pixel
-      // We initialize with values that will definitely be overwritten
-      double minAmp = 1.0; 
+      double minAmp = 1.0;
       double maxAmp = -1.0;
       bool hasData = false;
 
-      // Inner Loop: Iterate BINS
       for (int i = actualStart; i < actualEnd; i += step) {
-        final int idx = i * 4; // Jump 4 values at a time
-        
+        final int idx = i * 4;
         if (idx + 3 >= samples.length) break;
 
-        // Read Pre-calculated Extremes
-        final double lMin = samples[idx];     // Index 0
-        final double lMax = samples[idx + 1]; // Index 1
-        final double rMin = samples[idx + 2]; // Index 2
-        final double rMax = samples[idx + 3]; // Index 3
+        final double lMin = samples[idx] * _kI8Scale;
+        final double lMax = samples[idx + 1] * _kI8Scale;
+        final double rMin = samples[idx + 2] * _kI8Scale;
+        final double rMax = samples[idx + 3] * _kI8Scale;
 
-        // MERGE STEREO TO MONO
-        // We average the channels to get the "Mono Mix" level
         final double monoMin = (lMin + rMin) / 2.0;
         final double monoMax = (lMax + rMax) / 2.0;
 
         if (!hasData) {
-            minAmp = monoMin;
-            maxAmp = monoMax;
-            hasData = true;
+          minAmp = monoMin;
+          maxAmp = monoMax;
+          hasData = true;
         } else {
-            // We want the visual peak-to-peak range for this pixel
-            if (monoMin < minAmp) minAmp = monoMin;
-            if (monoMax > maxAmp) maxAmp = monoMax;
+          if (monoMin < minAmp) minAmp = monoMin;
+          if (monoMax > maxAmp) maxAmp = monoMax;
         }
       }
 
       if (!hasData) continue;
 
-      // Ensure we draw at least a dot if the wave is silent/flat
       if (maxAmp == minAmp) {
         maxAmp += 0.01;
         minAmp -= 0.01;
@@ -243,36 +222,38 @@ class MonoWaveformPainter extends CustomPainter {
 
       final double xPos = x.toDouble();
 
-      // Top Point (Max Amplitude) - Invert Y
       rawPoints[ptr++] = xPos;
       rawPoints[ptr++] = halfHeight - (maxAmp * halfHeight);
 
-      // Bottom Point (Min Amplitude) - Invert Y
       rawPoints[ptr++] = xPos;
       rawPoints[ptr++] = halfHeight - (minAmp * halfHeight);
     }
 
-    // Single GPU Draw Call
     canvas.drawRawPoints(PointMode.lines, rawPoints, paint);
   }
 
   @override
   bool shouldRepaint(covariant MonoWaveformPainter oldDelegate) {
-    return oldDelegate.samples != samples || 
-           oldDelegate.color != color;
+    return !identical(oldDelegate.samples, samples) ||
+        oldDelegate.color != color;
   }
 }
 
+// =============================================================================
+// 3. StereoWaveformClipPainter  (Timeline Clips — main optimization target)
+// =============================================================================
+
 class StereoWaveformClipPainter extends CustomPainter {
-  /// Raw interleaved stereo samples: [L, R, L, R, ...]
-  final List<double> samples;
+  final Int8List samples;
   final Color color;
   final double strokeWidth;
+  final double zoomLevel;
+  final double offsetSamples;
+  final double ratio;
 
-  // CONTEXT PARAMETERS
-  final double zoomLevel;     // Samples per Pixel (Timeline)
-  final double offsetSamples; // Scroll Offset (Timeline domain)
-  final double ratio;         // sourceRate / projectRate
+  /// Visible pixel range (in the painter's local coords) from the scroll controller.
+  final double visibleStartPx;
+  final double visibleEndPx;
 
   StereoWaveformClipPainter({
     required this.samples,
@@ -280,12 +261,17 @@ class StereoWaveformClipPainter extends CustomPainter {
     this.strokeWidth = 1.0,
     required this.zoomLevel,
     required this.offsetSamples,
-    this.ratio = 1.0, 
+    this.ratio = 1.0,
+    required this.visibleStartPx,
+    required this.visibleEndPx,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (samples.isEmpty || size.width <= 0) return;
+
+    final int totalFrames = samples.length ~/ 2;
+    final double framesPerPixel = zoomLevel * ratio;
 
     final paint = Paint()
       ..color = color
@@ -293,96 +279,134 @@ class StereoWaveformClipPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    // Draw Divider Line (Center)
+    // Center divider — only draw within visible range
+    final double divLeft = visibleStartPx.clamp(0, size.width);
+    final double divRight = visibleEndPx.clamp(0, size.width);
     final dividerPaint = Paint()
-      ..color = Colors.white.withAlpha((0.2*255).round())
+      ..color = Colors.white.withAlpha(50)
       ..strokeWidth = 1.0;
     canvas.drawLine(
-      Offset(0, size.height / 2),
-      Offset(size.width, size.height / 2),
+      Offset(divLeft, size.height / 2),
+      Offset(divRight, size.height / 2),
       dividerPaint,
     );
 
-    // 1. Setup Metrics
-    final int totalFrames = samples.length ~/ 2;
-    final double framesPerPixel = zoomLevel * ratio;
-    
-    // Layout centers
-    final double halfHeight = size.height / 2;
-    final double quarterHeight = halfHeight / 2;
-    final double leftCenterY = quarterHeight; 
-    final double rightCenterY = halfHeight + quarterHeight;
-
-    // 2. DECISION: High Detail (Polyline) vs Low Detail (Peak Bars)
-    // If 1 pixel covers fewer than 3 frames, we draw continuous lines (curvy).
-    // Otherwise, we draw vertical peak bars (traditional waveform).
-    if (framesPerPixel < 3.0) {
-      _drawPolylineWaveform(
-        canvas: canvas,
-        width: size.width,
-        totalFrames: totalFrames,
-        leftCenterY: leftCenterY,
-        rightCenterY: rightCenterY,
-        ampHeight: quarterHeight,
-        paint: paint,
-      );
+    if (framesPerPixel < 1.0) {
+      _paintConnectedLines(canvas, size, paint, totalFrames);
     } else {
-      _drawPeakWaveform(
-        canvas: canvas,
-        width: size.width,
-        totalFrames: totalFrames,
-        framesPerPixel: framesPerPixel,
-        leftCenterY: leftCenterY,
-        rightCenterY: rightCenterY,
-        ampHeight: quarterHeight,
-        paint: paint,
-      );
+      _paintVerticalBars(canvas, size, paint, totalFrames, framesPerPixel);
     }
   }
 
-  // --- MODE A: ZOOMED OUT (Peak Bars) ---
-  void _drawPeakWaveform({
-    required Canvas canvas,
-    required double width,
-    required int totalFrames,
-    required double framesPerPixel,
-    required double leftCenterY,
-    required double rightCenterY,
-    required double ampHeight,
-    required Paint paint,
-  }) {
-    // We need 4 points per pixel column (L_top, L_btm, R_top, R_btm) -> 8 floats
-    // But since drawRawPoints(lines) takes pairs, we strictly need:
-    // Line L: (x, y1) -> (x, y2)
-    // Line R: (x, y3) -> (x, y4)
-    final int pointsCount = width.ceil() * 8;
-    final Float32List rawPoints = Float32List(pointsCount);
+  // OPTIMIZED FOR ZOOMED IN (Low Density)
+  void _paintConnectedLines(
+    Canvas canvas,
+    Size size,
+    Paint paint,
+    int totalFrames,
+  ) {
+    final double vLeft = visibleStartPx.clamp(0, size.width);
+    final double vRight = visibleEndPx.clamp(0, size.width);
+
+    // Convert visible pixel range → frame range
+    final double startFrameFloat =
+        (offsetSamples + (vLeft * zoomLevel)) * ratio;
+    final double endFrameFloat = (offsetSamples + (vRight * zoomLevel)) * ratio;
+
+    final int startFrame = startFrameFloat.floor().clamp(0, totalFrames);
+    final int endFrame = endFrameFloat.ceil().clamp(0, totalFrames);
+
+    if (startFrame >= endFrame) return;
+
+    final int frameCount = endFrame - startFrame;
+    final Float32List leftPoints = Float32List(frameCount * 2);
+    final Float32List rightPoints = Float32List(frameCount * 2);
+
+    final double quarterHeight = size.height / 4;
+    final double leftCenterY = quarterHeight;
+    final double rightCenterY = size.height * 0.75;
+
+    final double invZoom = 1.0 / zoomLevel;
+    final double invRatio = 1.0 / ratio;
+
     int ptr = 0;
 
-    // Optimization: stride
-    int step = 1;
-    if (framesPerPixel > 50) {
-      step = (framesPerPixel / 50).ceil();
+    for (int i = startFrame; i < endFrame; i++) {
+      final double x = ((i * invRatio) - offsetSamples) * invZoom;
+
+      final int idx = i * 2;
+      final double l = samples[idx] * _kI8Scale;
+      final double r = samples[idx + 1] * _kI8Scale;
+
+      leftPoints[ptr] = x;
+      leftPoints[ptr + 1] = leftCenterY - (l * quarterHeight);
+
+      rightPoints[ptr] = x;
+      rightPoints[ptr + 1] = rightCenterY - (r * quarterHeight);
+
+      ptr += 2;
     }
 
-    for (int x = 0; x < width; x++) {
-      // Calculate Timeline Window
+    canvas.drawRawPoints(PointMode.polygon, leftPoints, paint);
+    canvas.drawRawPoints(PointMode.polygon, rightPoints, paint);
+  }
+
+  // OPTIMIZED FOR ZOOMED OUT (High Density)
+  void _paintVerticalBars(
+    Canvas canvas,
+    Size size,
+    Paint paint,
+    int totalFrames,
+    double framesPerPixel,
+  ) {
+    final double vLeft = visibleStartPx.clamp(0, size.width);
+    final double vRight = visibleEndPx.clamp(0, size.width);
+
+    // Intersect data bounds with viewport bounds
+    final double dataFirstPixel = -offsetSamples / zoomLevel;
+    final double dataLastPixel =
+        ((totalFrames / ratio) - offsetSamples) / zoomLevel;
+
+    final int startPixel = vLeft
+        .floor()
+        .clamp(dataFirstPixel.floor(), dataLastPixel.ceil())
+        .clamp(0, size.width.ceil());
+    final int endPixel = vRight
+        .ceil()
+        .clamp(dataFirstPixel.floor(), dataLastPixel.ceil())
+        .clamp(0, size.width.ceil());
+
+    if (startPixel >= endPixel) return;
+
+    final int pixelCount = endPixel - startPixel;
+    final Float32List rawPoints = Float32List(
+      pixelCount * 8,
+    ); // 4 points (2 vertical lines) per pixel
+    int ptr = 0;
+
+    final double quarterHeight = size.height / 4;
+    final double leftCenterY = quarterHeight;
+    final double rightCenterY = size.height * 0.75;
+
+    // Adaptive step for massive zoom-outs
+    int step = 1;
+    if (framesPerPixel > 50) step = (framesPerPixel / 50).ceil();
+
+    for (int x = startPixel; x < endPixel; x++) {
       final double pixelTimelinePos = offsetSamples + (x * zoomLevel);
       final double sourcePos = pixelTimelinePos * ratio;
 
       final int startFrame = sourcePos.floor();
       final int endFrame = (sourcePos + framesPerPixel).ceil();
-
       final int actualStart = startFrame.clamp(0, totalFrames);
       final int actualEnd = endFrame.clamp(0, totalFrames);
 
-      // If out of bounds (gap/silence), skip drawing
       if (actualStart >= actualEnd) {
-        ptr += 8; 
+        ptr += 8; // Skip this pixel slot in buffer
         continue;
       }
 
-      // Find Min/Max
+      // Min/Max Search
       double lMin = 1.0, lMax = -1.0;
       double rMin = 1.0, rMax = -1.0;
       bool hasData = false;
@@ -391,12 +415,14 @@ class StereoWaveformClipPainter extends CustomPainter {
         final int idx = i * 2;
         if (idx + 1 >= samples.length) break;
 
-        final double l = samples[idx];
-        final double r = samples[idx + 1];
+        final double l = samples[idx] * _kI8Scale;
+        final double r = samples[idx + 1] * _kI8Scale;
 
         if (!hasData) {
-          lMin = l; lMax = l;
-          rMin = r; rMax = r;
+          lMin = l;
+          lMax = l;
+          rMin = r;
+          rMax = r;
           hasData = true;
         } else {
           if (l < lMin) lMin = l;
@@ -407,111 +433,63 @@ class StereoWaveformClipPainter extends CustomPainter {
       }
 
       if (!hasData) {
-        ptr += 8; 
+        ptr += 8;
         continue;
       }
 
-      // Visual tweak for flatness
-      if (lMax == lMin) { lMax += 0.01; lMin -= 0.01; }
-      if (rMax == rMin) { rMax += 0.01; rMin -= 0.01; }
-
-      final double xPos = x.toDouble();
-
-      // LEFT CHANNEL (Top Half)
-      // Invert Y: Up is negative relative to center
-      rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = leftCenterY - (lMax * ampHeight);
-      rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = leftCenterY - (lMin * ampHeight);
-
-      // RIGHT CHANNEL (Bottom Half)
-      rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = rightCenterY - (rMax * ampHeight);
-      rawPoints[ptr++] = xPos;
-      rawPoints[ptr++] = rightCenterY - (rMin * ampHeight);
-    }
-
-    canvas.drawRawPoints(PointMode.lines, rawPoints, paint);
-  }
-
-  // --- MODE B: ZOOMED IN (Polyline/Curve) ---
-  void _drawPolylineWaveform({
-    required Canvas canvas,
-    required double width,
-    required int totalFrames,
-    required double leftCenterY,
-    required double rightCenterY,
-    required double ampHeight,
-    required Paint paint,
-  }) {
-    // For polyline, we calculate 1 point per pixel.
-    // Float32List is slightly harder for Polylines with breaks, 
-    // but for a clip we assume continuous data unless end of file.
-    
-    // We will build two paths or lists of points. 
-    // Float32List is faster than Path.
-    
-    final List<Offset> leftPoints = [];
-    final List<Offset> rightPoints = [];
-
-    for (int x = 0; x < width; x++) {
-      final double pixelTimelinePos = offsetSamples + (x * zoomLevel);
-      final double sourcePos = pixelTimelinePos * ratio;
-
-      // Bounds Check
-      if (sourcePos < 0 || sourcePos >= totalFrames - 1) {
-        // Stop drawing if we hit the end of the file
-        if (sourcePos >= totalFrames) break;
+      // Ensure min/max are distinct so we draw at least a dot
+      if (lMax == lMin) {
+        lMax += 0.01;
+        lMin -= 0.01;
+      }
+      if (rMax == rMin) {
+        rMax += 0.01;
+        rMin -= 0.01;
       }
 
-      // Linear Interpolation for Smooth Curves
-      final int idx = sourcePos.floor();
-      final double t = sourcePos - idx; // Fractional part
-
-      final int basePtr = idx * 2;
-      if (basePtr + 3 >= samples.length) break;
-
-      // Get current and next frame
-      final double l1 = samples[basePtr];
-      final double r1 = samples[basePtr + 1];
-      final double l2 = samples[basePtr + 2];
-      final double r2 = samples[basePtr + 3];
-
-      // Lerp
-      final double lVal = l1 + (l2 - l1) * t;
-      final double rVal = r1 + (r2 - r1) * t;
-
       final double xPos = x.toDouble();
 
-      leftPoints.add(Offset(xPos, leftCenterY - (lVal * ampHeight)));
-      rightPoints.add(Offset(xPos, rightCenterY - (rVal * ampHeight)));
+      // Left Channel Vertical Bar
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = leftCenterY - (lMax * quarterHeight);
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = leftCenterY - (lMin * quarterHeight);
+
+      // Right Channel Vertical Bar
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = rightCenterY - (rMax * quarterHeight);
+      rawPoints[ptr++] = xPos;
+      rawPoints[ptr++] = rightCenterY - (rMin * quarterHeight);
     }
 
-    if (leftPoints.isNotEmpty) {
-      canvas.drawPoints(PointMode.polygon, leftPoints, paint);
-      canvas.drawPoints(PointMode.polygon, rightPoints, paint);
-    }
+    // Note: PointMode.lines draws unconnected segments (p0-p1, p2-p3)
+    canvas.drawRawPoints(PointMode.lines, rawPoints, paint);
   }
 
   @override
   bool shouldRepaint(covariant StereoWaveformClipPainter oldDelegate) {
-    return oldDelegate.offsetSamples != offsetSamples || 
-           oldDelegate.zoomLevel != zoomLevel ||
-           oldDelegate.samples != samples || 
-           oldDelegate.color != color;
+    return oldDelegate.offsetSamples != offsetSamples ||
+        oldDelegate.zoomLevel != zoomLevel ||
+        oldDelegate.ratio != ratio ||
+        oldDelegate.visibleStartPx != visibleStartPx ||
+        oldDelegate.visibleEndPx != visibleEndPx ||
+        !identical(oldDelegate.samples, samples) ||
+        oldDelegate.color != color;
   }
 }
+// =============================================================================
+// 4. MonoWaveformClipPainter  (Timeline Clips — mono merge)
+// =============================================================================
 
 class MonoWaveformClipPainter extends CustomPainter {
-  /// Raw interleaved stereo samples: [L, R, L, R, ...]
-  final List<double> samples;
+  final Int8List samples;
   final Color color;
   final double strokeWidth;
-  
-  // CONTEXT PARAMETERS
-  final double zoomLevel;     // Samples per Pixel (Timeline)
-  final double offsetSamples; // Scroll Offset (Timeline domain)
-  final double ratio;         // sourceRate / projectRate
+  final double zoomLevel;
+  final double offsetSamples;
+  final double ratio;
+  final double visibleStartPx;
+  final double visibleEndPx;
 
   MonoWaveformClipPainter({
     required this.samples,
@@ -519,12 +497,13 @@ class MonoWaveformClipPainter extends CustomPainter {
     this.strokeWidth = 1.0,
     required this.zoomLevel,
     required this.offsetSamples,
-    this.ratio = 1.0, 
+    this.ratio = 1.0,
+    required this.visibleStartPx,
+    required this.visibleEndPx,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Safety check: Needs at least 2 samples (1 frame) to draw anything
     if (samples.length < 2 || size.width <= 0) return;
 
     final paint = Paint()
@@ -533,96 +512,139 @@ class MonoWaveformClipPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    final double width = size.width;
-    final double halfHeight = size.height / 2;
-
-    // 1. Calculate Total Audio FRAMES
-    //    Stereo interleaved means Frame Count = Array Length / 2
     final int totalFrames = samples.length ~/ 2;
-
-    // 2. Prepare Batch Drawing Buffer
-    //    1 vertical line per pixel column -> 2 points (top, bottom) -> 4 floats (x,y,x,y)
-    final int pointsCount = width.ceil() * 4;
-    final Float32List rawPoints = Float32List(pointsCount);
-    int ptr = 0;
-
-    // 3. OPTIMIZATION: Adaptive Step
-    //    How many SOURCE FRAMES correspond to ONE PIXEL?
     final double framesPerPixel = zoomLevel * ratio;
 
-    //    If zoomed out (1 pixel = 10k frames), skip checking every single frame to save CPU.
-    int step = 1;
-    if (framesPerPixel > 50) {
-      step = (framesPerPixel / 50).ceil();
+    if (framesPerPixel < 1.0) {
+      _paintConnectedLines(canvas, size, paint, totalFrames);
+    } else {
+      _paintVerticalBars(canvas, size, paint, totalFrames, framesPerPixel);
+    }
+  }
+
+  void _paintConnectedLines(
+    Canvas canvas,
+    Size size,
+    Paint paint,
+    int totalFrames,
+  ) {
+    final double vLeft = visibleStartPx.clamp(0, size.width);
+    final double vRight = visibleEndPx.clamp(0, size.width);
+
+    final double startFrameFloat =
+        (offsetSamples + (vLeft * zoomLevel)) * ratio;
+    final double endFrameFloat = (offsetSamples + (vRight * zoomLevel)) * ratio;
+
+    final int startFrame = startFrameFloat.floor().clamp(0, totalFrames);
+    final int endFrame = endFrameFloat.ceil().clamp(0, totalFrames);
+
+    if (startFrame >= endFrame) return;
+
+    final int frameCount = endFrame - startFrame;
+    final Float32List points = Float32List(frameCount * 2);
+
+    final double halfHeight = size.height / 2;
+    final double invZoom = 1.0 / zoomLevel;
+    final double invRatio = 1.0 / ratio;
+
+    int ptr = 0;
+
+    for (int i = startFrame; i < endFrame; i++) {
+      final double x = ((i * invRatio) - offsetSamples) * invZoom;
+
+      final int idx = i * 2;
+      final double l = samples[idx] * _kI8Scale;
+      final double r = samples[idx + 1] * _kI8Scale;
+      final double monoVal = (l + r) / 2.0;
+
+      points[ptr++] = x;
+      points[ptr++] = halfHeight - (monoVal * halfHeight);
     }
 
-    // 4. DRAWING LOOP
-    for (int x = 0; x < width; x++) {
-      // A. Calculate Timeline Position
-      final double pixelTimelinePos = offsetSamples + (x * zoomLevel);
-      
-      // B. Convert to Source Frame Index
-      final double sourcePos = pixelTimelinePos * ratio;
+    canvas.drawRawPoints(PointMode.polygon, points, paint);
+  }
 
+  void _paintVerticalBars(
+    Canvas canvas,
+    Size size,
+    Paint paint,
+    int totalFrames,
+    double framesPerPixel,
+  ) {
+    final double vLeft = visibleStartPx.clamp(0, size.width);
+    final double vRight = visibleEndPx.clamp(0, size.width);
+
+    final double dataFirstPixel = -offsetSamples / zoomLevel;
+    final double dataLastPixel =
+        ((totalFrames / ratio) - offsetSamples) / zoomLevel;
+
+    final int startPixel = vLeft
+        .floor()
+        .clamp(dataFirstPixel.floor(), dataLastPixel.ceil())
+        .clamp(0, size.width.ceil());
+    final int endPixel = vRight
+        .ceil()
+        .clamp(dataFirstPixel.floor(), dataLastPixel.ceil())
+        .clamp(0, size.width.ceil());
+
+    if (startPixel >= endPixel) return;
+
+    final int pixelCount = endPixel - startPixel;
+    final Float32List rawPoints = Float32List(pixelCount * 4);
+    int ptr = 0;
+
+    final double halfHeight = size.height / 2;
+    int step = 1;
+    if (framesPerPixel > 50) step = (framesPerPixel / 50).ceil();
+
+    for (int x = startPixel; x < endPixel; x++) {
+      final double pixelTimelinePos = offsetSamples + (x * zoomLevel);
+      final double sourcePos = pixelTimelinePos * ratio;
       final int startFrame = sourcePos.floor();
       final int endFrame = (sourcePos + framesPerPixel).ceil();
 
-      // C. Bounds Check (Frame Domain)
       final int actualStart = startFrame.clamp(0, totalFrames);
       final int actualEnd = endFrame.clamp(0, totalFrames);
 
-      // Skip if out of data
       if (actualStart >= actualEnd) {
-         ptr += 4; // Advance pointer to keep alignment
-         continue; 
+        ptr += 4;
+        continue;
       }
 
-      // D. Find Min/Max Amplitude
-      double minAmp = 1.0; 
+      double minAmp = 1.0;
       double maxAmp = -1.0;
       bool hasData = false;
 
-      // Inner Loop: Iterate FRAMES
       for (int i = actualStart; i < actualEnd; i += step) {
-        final int sampleIdx = i * 2; // Jump by 2 for stereo
-        
-        // Safety: Ensure we have both L and R
-        if (sampleIdx + 1 >= samples.length) break;
-
-        final double lVal = samples[sampleIdx];
-        final double rVal = samples[sampleIdx + 1];
-
-        // E. Mono Merge: Average L+R
-        final double monoVal = (lVal + rVal) / 2.0;
+        final int idx = i * 2;
+        if (idx + 1 >= samples.length) break;
+        final double l = samples[idx] * _kI8Scale;
+        final double r = samples[idx + 1] * _kI8Scale;
+        final double monoVal = (l + r) / 2.0;
 
         if (!hasData) {
-            minAmp = monoVal;
-            maxAmp = monoVal;
-            hasData = true;
+          minAmp = monoVal;
+          maxAmp = monoVal;
+          hasData = true;
         } else {
-            if (monoVal < minAmp) minAmp = monoVal;
-            if (monoVal > maxAmp) maxAmp = monoVal;
+          if (monoVal < minAmp) minAmp = monoVal;
+          if (monoVal > maxAmp) maxAmp = monoVal;
         }
       }
 
       if (!hasData) {
-         ptr += 4;
-         continue;
+        ptr += 4;
+        continue;
       }
 
-      // Visual tweak: ensure we always draw at least a dot
       if (maxAmp == minAmp) {
         maxAmp += 0.01;
         minAmp -= 0.01;
       }
 
       final double xPos = x.toDouble();
-
-      // Top Point (Inverted Y)
       rawPoints[ptr++] = xPos;
       rawPoints[ptr++] = halfHeight - (maxAmp * halfHeight);
-
-      // Bottom Point (Inverted Y)
       rawPoints[ptr++] = xPos;
       rawPoints[ptr++] = halfHeight - (minAmp * halfHeight);
     }
@@ -632,9 +654,12 @@ class MonoWaveformClipPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant MonoWaveformClipPainter oldDelegate) {
-    return oldDelegate.offsetSamples != offsetSamples || 
-           oldDelegate.zoomLevel != zoomLevel ||
-           oldDelegate.samples != samples || 
-           oldDelegate.color != color;
+    return oldDelegate.offsetSamples != offsetSamples ||
+        oldDelegate.zoomLevel != zoomLevel ||
+        oldDelegate.ratio != ratio ||
+        oldDelegate.visibleStartPx != visibleStartPx ||
+        oldDelegate.visibleEndPx != visibleEndPx ||
+        !identical(oldDelegate.samples, samples) ||
+        oldDelegate.color != color;
   }
 }

@@ -373,10 +373,15 @@ class PianoRollScreenState extends State<PianoRollScreen> {
                               // We currently don't support seeking inside pattern playback.
                               // TODO: Add pattern playback seek implementation
                             },
-                            zoomLevel: _zoomX,
+                            zoomLevel: 1.0 / _zoomX,
                             sampleSelector: (pos) {
                               if (pos.isPatternMode) {
-                                return pos.patternSamples;
+                                // Convert samples to ticks: ticks = samples * (PPQ * bpm) / (60 * sampleRate)
+                                const ppq = 960;
+                                final ticks =
+                                    (pos.patternSamples * ppq * pos.tempo) /
+                                    (60.0 * pos.sampleRate);
+                                return ticks.round();
                               }
                               return 0;
                             },
@@ -427,7 +432,7 @@ class _PianoRollToolbar extends StatelessWidget {
     final selectedTool = state.pianoRollTool;
     final generators = state.generators;
     final previewGeneratorId = state.previewGeneratorId;
-    final isPlaying = state.isPlaying;
+    final isPatternPlaying = state.isPatternPlaying;
 
     return Container(
       height: 50,
@@ -440,17 +445,17 @@ class _PianoRollToolbar extends StatelessWidget {
             // Pattern transport
             IconButton(
               icon: Icon(
-                isPlaying ? Icons.stop : Icons.play_arrow,
-                color: isPlaying ? Colors.orange : Colors.white70,
+                isPatternPlaying ? Icons.stop : Icons.play_arrow,
+                color: isPatternPlaying ? Colors.orange : Colors.white70,
               ),
               onPressed: previewGeneratorId != null
                   ? () => _togglePatternPlayback(
                       context,
-                      isPlaying,
+                      isPatternPlaying,
                       previewGeneratorId,
                     )
                   : null,
-              tooltip: isPlaying ? 'Stop' : 'Play Pattern',
+              tooltip: isPatternPlaying ? 'Stop' : 'Play Pattern',
               iconSize: 24,
             ),
             const SizedBox(width: 4),

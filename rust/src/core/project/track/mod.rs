@@ -12,10 +12,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     commands::AudioCommand,
     core::project::{
-        clip::ClipId, generator::GeneratorId, ApplicationState, Clip, GeneratorInstance,
-        GeneratorInstanceType, KarbeatSource, PluginInstance,
+        ApplicationState, Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, PluginInstance, clip::ClipId, generator::GeneratorId, mixer::MixerChannel
     },
-    ctx, define_id,
+    ctx, define_id, utils::color::Color,
 };
 
 define_id!(TrackId);
@@ -24,7 +23,7 @@ define_id!(TrackId);
 pub struct KarbeatTrack {
     pub id: TrackId,
     pub name: String,
-    pub color: String,
+    pub color: Color,
     pub track_type: TrackType,
     pub clips: BTreeSet<Arc<Clip>>,
     pub max_sample_index: u32,
@@ -36,7 +35,7 @@ impl Default for KarbeatTrack {
         Self {
             id: Default::default(),
             name: Default::default(),
-            color: Default::default(),
+            color: Color::new_from_rgb(255, 255, 255),
             track_type: TrackType::Audio,
             clips: BTreeSet::new(),
             max_sample_index: 0,
@@ -160,9 +159,9 @@ impl KarbeatTrack {
     }
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
-    pub fn add_clips_bulk(&mut self, new_clips: Vec<Arc<Clip>>) {
+    pub fn add_clips_bulk(&mut self, new_clips: &[Arc<Clip>]) {
         let clips_vec = &mut self.clips;
-        clips_vec.extend(new_clips);
+        clips_vec.extend(new_clips.iter().cloned());
 
         self.max_sample_index = clips_vec
             .iter()
@@ -187,9 +186,16 @@ impl ApplicationState {
         let new_track = KarbeatTrack {
             track_type,
             id: new_track_id,
+            name: format!("Track {}", new_track_id.to_string()),
             ..Default::default()
         };
         self.tracks.insert(new_track_id, Arc::new(new_track));
+
+        // Create a corresponding mixer channel and default routing
+        self.mixer
+            .channels
+            .insert(new_track_id, Arc::new(MixerChannel::default()));
+        self.mixer.add_track_default_routing(new_track_id);
     }
 
     /// Add a new MIDI track with a generator by its registry ID (preferred method).
@@ -243,12 +249,18 @@ impl ApplicationState {
             track_type: TrackType::Midi,
             id: track_id,
             name: generator_name.clone(),
-            color: "#FF8A65".to_string(),
+            color: Color::new_from_string("#FF8A65").unwrap(),
             generator: Some(generator),
             ..Default::default()
         };
 
         self.tracks.insert(track_id, Arc::new(new_track));
+
+        // Create a corresponding mixer channel and default routing
+        self.mixer
+            .channels
+            .insert(track_id, Arc::new(MixerChannel::default()));
+        self.mixer.add_track_default_routing(track_id);
 
         log::info!(
             "New MIDI track with generator {} (registry_id={}) is successfully created",
@@ -280,5 +292,34 @@ impl ApplicationState {
 
         // Delegate to ID-based method
         self.add_new_midi_track_with_generator_id(registry_id)
+    }
+
+    /// Remove a track and clean up its mixer channel, routing, and generator.
+    pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<()> {
+        // Get the generator ID before removing the track
+        let generator_id = self
+            .tracks
+            .get(&track_id)
+            .and_then(|t| t.generator.as_ref().map(|g| g.id));
+
+        // Remove the track
+        if self.tracks.remove(&track_id).is_none() {
+            return Err(anyhow::anyhow!("Track {:?} not found", track_id));
+        }
+
+        // Remove the mixer channel
+        self.mixer.channels.remove(&track_id);
+
+        // Remove all routing connections for this track
+        self.mixer.remove_track_routing(track_id);
+
+        // Remove the generator from the pool if the track had one
+        if let Some(gen_id) = generator_id {
+            self.generator_pool.remove(&gen_id);
+        }
+
+        self.update_max_sample_index();
+
+        Ok(())
     }
 }

@@ -6,6 +6,7 @@ import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -14,7 +15,7 @@ import 'package:karbeat/src/rust/api/track.dart' as track_api;
 import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/src/rust/core/project.dart';
-import 'package:karbeat/src/rust/api/session.dart' as session_api;
+
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/src/rust/core/project/transport.dart';
 import 'package:karbeat/utils/formatter.dart';
@@ -36,15 +37,17 @@ enum ProjectEvent {
   metadataChanged,
   sourceListChanged,
   generatorListChanged,
-  sessionChanged,
+
   configChanged,
   patternChanged,
+  mixerChanged,
 }
 
 class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
   TransportState _transportState = TransportState(
     isPlaying: false,
+    isPatternPlaying: false,
     isRecording: false,
     isLooping: false,
     playheadPositionSamples: 0,
@@ -71,6 +74,19 @@ class KarbeatState extends ChangeNotifier {
     cpuLoad: 0,
   );
 
+  mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState(
+    channels: {},
+    masterBus: mixer_api.UiMixerChannel(
+      volume: 1.0,
+      pan: 0.0,
+      mute: false,
+      solo: false,
+      invertedPhase: false,
+      effects: [],
+    ),
+    buses: [],
+    routing: [],
+  );
   // List<Clipboard>
 
   // =================== STORES ==========================
@@ -78,7 +94,7 @@ class KarbeatState extends ChangeNotifier {
   Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
   Map<int, UiGeneratorInstance> _generators = {};
   Map<int, UiPattern> _patterns = {};
-  UiSessionState? _sessionState;
+
   List<UiPluginInfo> _availableGenerators = [];
   List<UiPluginInfo> get availableGenerators => _availableGenerators;
 
@@ -99,12 +115,24 @@ class KarbeatState extends ChangeNotifier {
   // ignore:unused_field
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
+  // Mixer event stream from Rust for automation/backend-initiated changes
+  StreamSubscription<mixer_api.MixerParamEvent>? _mixerEventSubscription;
+
+  /// Params currently being touched by the user (trackId, paramName).
+  /// Automation events for these params are ignored while touched.
+  final Set<(int, String)> _touchedParams = {};
+
   // =========== EDITOR STATE ====================
   ToolSelection _selectedTool = ToolSelection.pointer;
   WorkspaceView _currentView = WorkspaceView.trackList;
   ToolbarMenuContextGroup _currentToolbarContext = ToolbarMenuContextGroup.none;
   int _piannoRollGridDenom = 4;
   int? _editingPatternId;
+
+  // =========== SESSION STATE (frontend-only) ====================
+  int? _selectedTrackId;
+  List<int> _selectedClipIds = [];
+  int? _focusClipId;
 
   // =========== PIANO ROLL STATE ====================
   PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.pointer;
@@ -127,6 +155,14 @@ class KarbeatState extends ChangeNotifier {
     _positionBroadcastStream.listen((pos) {
       if (pos.isPlaying) {
         _pendingPlayRequest = false;
+      }
+
+      // Track pattern mode state from transport
+      if (pos.isPatternMode != _transportState.isPatternPlaying) {
+        _transportState = _transportState.copyWith(
+          isPatternPlaying: pos.isPatternMode,
+        );
+        notifyListeners();
       }
 
       // Only react if the state has actually changed
@@ -155,6 +191,9 @@ class KarbeatState extends ChangeNotifier {
 
     // fetch available generators
     fetchAvailableGenerators();
+
+    // Start mixer event stream
+    _initMixerEventStream();
   }
 
   Future<void> fetchAvailableGenerators() async {
@@ -190,11 +229,12 @@ class KarbeatState extends ChangeNotifier {
         case ProjectEvent.configChanged:
           await syncAudioHardwareConfigState();
           break;
-        case ProjectEvent.sessionChanged:
-          await syncSessionState();
-          break;
+
         case ProjectEvent.patternChanged:
           await syncPatternList();
+          break;
+        case ProjectEvent.mixerChanged:
+          await syncMixerState();
           break;
       }
     });
@@ -204,6 +244,9 @@ class KarbeatState extends ChangeNotifier {
   TransportState get transport => _transportState;
   ProjectMetadata get metadata => _metadata;
   bool get isPlaying => _transportState.isPlaying;
+  bool get isPatternPlaying => _transportState.isPatternPlaying;
+  bool get isSongPlaying =>
+      _transportState.isPlaying && !_transportState.isPatternPlaying;
   bool get isLooping => _transportState.isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
@@ -214,17 +257,21 @@ class KarbeatState extends ChangeNotifier {
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
   AudioHardwareConfig get hardwareConfig => _hardwareConfig;
   Stream<PlaybackPosition> get positionStream => _positionBroadcastStream;
-  UiSessionState? get sessionState => _sessionState;
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
+  mixer_api.UiMixerState get mixerState => _mixerState;
+
+  // Session state getters (frontend-only)
+  int? get selectedTrackId => _selectedTrackId;
+  List<int> get selectedClipIds => _selectedClipIds;
+  int? get focusClipId => _focusClipId;
 
   // Piano roll getters
   PianoRollToolSelection get pianoRollTool => _pianoRollTool;
   Set<int> get selectedNoteIds => _selectedNoteIds;
-  int? get previewGeneratorId =>
-      _sessionState?.previewGeneratorId ?? _previewGeneratorId;
+  int? get previewGeneratorId => _previewGeneratorId;
 
   // ================ SETTERS ===================
   set pianoRollGridDenom(GridValue val) {
@@ -232,7 +279,21 @@ class KarbeatState extends ChangeNotifier {
   }
 
   // =============== GLOBAL UI STATE ==========================
-  double horizontalZoomLevel = 1000;
+  double _horizontalZoomLevel = 1000;
+  double get horizontalZoomLevel => _horizontalZoomLevel;
+
+  /// Min: 1 sample/px (each sample tick visible). Max: 100k samples/px.
+  static const double _minZoom = 1.0;
+  static const double _maxZoom = 100000.0;
+
+  set horizontalZoomLevel(double val) {
+    final clamped = val.clamp(_minZoom, _maxZoom);
+    if (_horizontalZoomLevel != clamped) {
+      _horizontalZoomLevel = clamped;
+      notifyListeners();
+    }
+  }
+
   Map<int, int> trackIdHeightMap = {};
 
   // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
@@ -325,16 +386,6 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<void> syncSessionState() async {
-    try {
-      final newState = await getSessionState();
-      _sessionState = newState;
-      notifyListeners();
-    } catch (e) {
-      KarbeatLogger.error("Failed to sync session state: $e");
-    }
-  }
-
   Future<void> syncAudioHardwareConfigState() async {
     try {
       final newState = await getAudioConfig();
@@ -392,6 +443,16 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> syncMixerState() async {
+    try {
+      final newState = await mixer_api.getMixerState();
+      _mixerState = newState;
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Failed to sync mixer state: $e");
+    }
+  }
+
   // =============== ACTIONS ===============
 
   /// Loads an audio file and refreshes the source list
@@ -433,9 +494,16 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> togglePlay() async {
     try {
-      final newPlaying = !_transportState.isPlaying;
+      // If pattern is playing, the user's intent is to switch to song playback.
+      // Since pattern mode sets isPlaying=true, !isPlaying would be false (stop),
+      // so we force newPlaying=true to start song mode instead.
+      KarbeatLogger.info(
+        "Toggle play, is playing: ${_transportState.isPlaying}, is pattern playing: ${_transportState.isPatternPlaying}",
+      );
+      final newPlaying = _transportState.isPatternPlaying
+          ? true
+          : !_transportState.isPlaying;
 
-      // FIX: Set the flag if we are attempting to play
       if (newPlaying) {
         _pendingPlayRequest = true;
       }
@@ -451,8 +519,7 @@ class KarbeatState extends ChangeNotifier {
 
   Future<void> stop() async {
     try {
-      await transport_api.setPlaying(val: false);
-      await transport_api.setPlayhead(val: 0);
+      await transport_api.stopSongPlayback();
       notifyBackendChange(ProjectEvent.transportChanged);
     } catch (e) {
       KarbeatLogger.error("Failed to stop play: $e");
@@ -744,16 +811,13 @@ class KarbeatState extends ChangeNotifier {
 
   /// Convenience method to delete all currently selected clips
   Future<void> deleteSelectedClips() async {
-    final session = _sessionState;
-    if (session == null) return;
-
-    final trackId = session.selectedTrackId;
-    final clipIds = session.selectedClipIds;
+    final trackId = _selectedTrackId;
+    final clipIds = _selectedClipIds;
 
     if (trackId == null || clipIds.isEmpty) return;
 
     await deleteClipBatch(trackId, clipIds);
-    await deselectAllClips();
+    deselectAllClips();
   }
 
   // ===================== NOTE CHANGE API'S ==========================
@@ -988,88 +1052,279 @@ class KarbeatState extends ChangeNotifier {
   UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
     return UiTrack(
       id: original.id,
+      color: "#FFFFFF",
       name: original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,
     );
   }
 
-  // ================== Session State public API's =====================
+  // ================== Session State (frontend-only) =====================
 
   /// Select a single clip (replaces any existing selection)
-  Future<void> selectClip({required int trackId, required int clipId}) async {
-    try {
-      await session_api.selectClip(trackId: trackId, clipId: clipId);
-      KarbeatLogger.info(
-        "Successfully selected clip $clipId on track $trackId",
-      );
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error when selecting clip: $e');
-    }
+  void selectClip({required int trackId, required int clipId}) {
+    _selectedTrackId = trackId;
+    _selectedClipIds = [clipId];
+    _focusClipId = clipId;
+    notifyListeners();
   }
 
   /// Add a clip to the current selection (for Ctrl+Click)
-  Future<void> addClipToSelection({
-    required int trackId,
-    required int clipId,
-  }) async {
-    try {
-      await session_api.addClipToSelection(trackId: trackId, clipId: clipId);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error adding clip to selection: $e');
+  void addClipToSelection({required int trackId, required int clipId}) {
+    // Different track - clear and start fresh
+    if (_selectedTrackId != null && _selectedTrackId != trackId) {
+      _selectedClipIds = [];
     }
+    _selectedTrackId = trackId;
+    if (!_selectedClipIds.contains(clipId)) {
+      _selectedClipIds = [..._selectedClipIds, clipId];
+    }
+    _focusClipId = clipId;
+    notifyListeners();
   }
 
   /// Remove a clip from the current selection
-  Future<void> removeClipFromSelection({required int clipId}) async {
-    try {
-      await session_api.removeClipFromSelection(clipId: clipId);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error removing clip from selection: $e');
+  void removeClipFromSelection({required int clipId}) {
+    _selectedClipIds = _selectedClipIds.where((id) => id != clipId).toList();
+
+    // If we removed the focus clip, update focus to last selected
+    if (_focusClipId == clipId) {
+      _focusClipId = _selectedClipIds.isNotEmpty ? _selectedClipIds.last : null;
     }
+
+    // If no clips left, clear the track selection too
+    if (_selectedClipIds.isEmpty) {
+      _selectedTrackId = null;
+      _focusClipId = null;
+    }
+    notifyListeners();
   }
 
   /// Select multiple clips at once (for range select)
-  Future<void> selectClips({
-    required int trackId,
-    required List<int> clipIds,
-  }) async {
-    try {
-      await session_api.selectClips(trackId: trackId, clipIds: clipIds);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error selecting clips: $e');
-    }
+  void selectClips({required int trackId, required List<int> clipIds}) {
+    _selectedTrackId = trackId;
+    _selectedClipIds = List.from(clipIds);
+    _focusClipId = clipIds.isNotEmpty ? clipIds.last : null;
+    notifyListeners();
   }
 
   /// Clear all clip selection
-  Future<void> deselectAllClips() async {
-    try {
-      await session_api.deselectAllClips();
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error deselecting clips: $e');
-    }
+  void deselectAllClips() {
+    _selectedTrackId = null;
+    _selectedClipIds = [];
+    _focusClipId = null;
+    notifyListeners();
   }
 
   /// Set the preview generator for piano roll
-  Future<void> setPreviewGenerator({int? generatorId}) async {
+  void setPreviewGenerator({int? generatorId}) {
     _previewGeneratorId = generatorId;
-    try {
-      await session_api.setPreviewGenerator(generatorId: generatorId);
-      notifyBackendChange(ProjectEvent.sessionChanged);
-    } catch (e) {
-      KarbeatLogger.error('Error setting preview generator: $e');
+    notifyListeners();
+  }
+
+  // ====================================================
+  // ================== Mixer API's =====================
+  // ====================================================
+
+  // ================ MIXER EVENT STREAM ==================
+
+  /// Subscribe to the Rust → Dart mixer param event stream.
+  void _initMixerEventStream() {
+    _mixerEventSubscription?.cancel();
+    _mixerEventSubscription = mixer_api.createMixerEventStream().listen(
+      (event) {
+        _applyMixerParamLocally(event);
+      },
+      onError: (e) {
+        KarbeatLogger.error('Mixer event stream error: $e');
+      },
+    );
+  }
+
+  /// Apply a single mixer param event to local state, skipping touched params.
+  void _applyMixerParamLocally(mixer_api.MixerParamEvent event) {
+    final int trackId = event.trackId;
+    final bool isMaster = (trackId == 4294967295); // u32::MAX
+
+    mixer_api.UiMixerChannel channel;
+    if (isMaster) {
+      channel = _mixerState.masterBus;
+    } else {
+      final existing = _mixerState.channels[trackId];
+      if (existing == null) return;
+      channel = existing;
     }
+
+    double volume = channel.volume;
+    double pan = channel.pan;
+    bool mute = channel.mute;
+    bool solo = channel.solo;
+    bool changed = false;
+
+    if (event.volume != null && !_touchedParams.contains((trackId, 'volume'))) {
+      volume = event.volume!;
+      changed = true;
+    }
+    if (event.pan != null && !_touchedParams.contains((trackId, 'pan'))) {
+      pan = event.pan!;
+      changed = true;
+    }
+    if (event.mute != null && !_touchedParams.contains((trackId, 'mute'))) {
+      mute = event.mute!;
+      changed = true;
+    }
+    if (event.solo != null && !_touchedParams.contains((trackId, 'solo'))) {
+      solo = event.solo!;
+      changed = true;
+    }
+
+    if (!changed) return;
+
+    final updatedChannel = mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: channel.invertedPhase,
+      effects: channel.effects,
+    );
+
+    if (isMaster) {
+      _mixerState = mixer_api.UiMixerState(
+        channels: _mixerState.channels,
+        masterBus: updatedChannel,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    } else {
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updatedChannel;
+      _mixerState = mixer_api.UiMixerState(
+        channels: newChannels,
+        masterBus: _mixerState.masterBus,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    }
+
+    notifyListeners();
+  }
+
+  /// Mark a mixer param as "touched" (user is actively dragging).
+  /// Automation events for this param will be ignored while touched.
+  void markParamTouched(int trackId, String paramName) {
+    _touchedParams.add((trackId, paramName));
+  }
+
+  /// Mark a mixer param as "released" (user finished dragging).
+  /// Automation events will resume for this param.
+  void markParamReleased(int trackId, String paramName) {
+    _touchedParams.remove((trackId, paramName));
+  }
+
+  Future<void> setMixerChannelParams({
+    required int trackId,
+    required List<mixer_api.UiMixerChannelParams> params,
+  }) async {
+    // Optimistic local update so the controlled Slider doesn't snap back
+    _applyParamsToLocalChannel(trackId, params, isMaster: false);
+
+    try {
+      await mixer_api.setMixerChannelParams(trackId: trackId, params: params);
+      // No need for notifyBackendChange here — the optimistic update already
+      // notified listeners, and the event stream will keep us in sync.
+    } catch (e) {
+      KarbeatLogger.error('Error setting mixer channel params: $e');
+      // On error, re-sync from the backend to undo the optimistic update
+      syncMixerState();
+    }
+  }
+
+  Future<void> setMasterBusParams({
+    required List<mixer_api.UiMixerChannelParams> params,
+  }) async {
+    // Optimistic local update so the controlled Slider doesn't snap back
+    _applyParamsToLocalChannel(0, params, isMaster: true);
+
+    try {
+      await mixer_api.setMasterBusParams(params: params);
+    } catch (e) {
+      KarbeatLogger.error('Error setting master bus params: $e');
+      syncMixerState();
+    }
+  }
+
+  /// Immediately apply param changes to local _mixerState and notify listeners.
+  void _applyParamsToLocalChannel(
+    int trackId,
+    List<mixer_api.UiMixerChannelParams> params, {
+    required bool isMaster,
+  }) {
+    final channel = isMaster
+        ? _mixerState.masterBus
+        : _mixerState.channels[trackId];
+    if (channel == null) return;
+
+    double volume = channel.volume;
+    double pan = channel.pan;
+    bool mute = channel.mute;
+    bool solo = channel.solo;
+    bool invertedPhase = channel.invertedPhase;
+
+    for (final p in params) {
+      switch (p) {
+        case mixer_api.UiMixerChannelParams_Volume():
+          volume = p.field0;
+        case mixer_api.UiMixerChannelParams_Pan():
+          pan = p.field0;
+        case mixer_api.UiMixerChannelParams_Mute():
+          mute = p.field0;
+        case mixer_api.UiMixerChannelParams_Solo():
+          solo = p.field0;
+        case mixer_api.UiMixerChannelParams_InvertedPhase():
+          invertedPhase = p.field0;
+      }
+    }
+
+    final updated = mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: invertedPhase,
+      effects: channel.effects,
+    );
+
+    if (isMaster) {
+      _mixerState = mixer_api.UiMixerState(
+        channels: _mixerState.channels,
+        masterBus: updated,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    } else {
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updated;
+      _mixerState = mixer_api.UiMixerState(
+        channels: newChannels,
+        masterBus: _mixerState.masterBus,
+        buses: _mixerState.buses,
+        routing: _mixerState.routing,
+      );
+    }
+
+    notifyListeners();
   }
 }
 
 extension TransportStateCopyWith on TransportState {
   TransportState copyWith({
     bool? isPlaying,
+    bool? isPatternPlaying,
     bool? isRecording,
     bool? isLooping,
     int? playheadPositionSamples,
@@ -1082,6 +1337,7 @@ extension TransportStateCopyWith on TransportState {
   }) {
     return TransportState(
       isPlaying: isPlaying ?? this.isPlaying,
+      isPatternPlaying: isPatternPlaying ?? this.isPatternPlaying,
       isRecording: isRecording ?? this.isRecording,
       isLooping: isLooping ?? this.isLooping,
       playheadPositionSamples:

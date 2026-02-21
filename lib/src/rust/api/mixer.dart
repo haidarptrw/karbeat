@@ -8,29 +8,46 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectInstance`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `into`, `into`
+// These functions are ignored because they are not marked as `pub`: `push_mixer_event`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `into`, `into`
+
+/// ======================================
+/// STREAM
+/// ======================================
+/// Create the Rust → Flutter event stream for mixer param changes.
+Stream<MixerParamEvent> createMixerEventStream() =>
+    RustLib.instance.api.crateApiMixerCreateMixerEventStream();
 
 /// ======================================
 /// GETTERS
 /// ======================================
 /// **GETTER: Fetch the mixer state**
-///
-/// Does not throw error. panic if the app state lock is poisoned
 Future<UiMixerState> getMixerState() =>
     RustLib.instance.api.crateApiMixerGetMixerState();
 
 /// **GETTER: Fetch a specific mixer channel**
-///
-/// Throws error if the channel is not found
 Future<UiMixerChannel> getMixerChannel({required int trackId}) =>
     RustLib.instance.api.crateApiMixerGetMixerChannel(trackId: trackId);
 
+Future<(UiMixerChannel, List<UiEffectInstance>)> getMixerChannelPopulated({
+  required int trackId,
+}) => RustLib.instance.api.crateApiMixerGetMixerChannelPopulated(
+  trackId: trackId,
+);
+
 /// **GETTER: Fetch the master bus**
-///
-/// Does not throw error. panic if the app state lock is poisoned
 Future<UiMixerChannel> getMasterBus() =>
     RustLib.instance.api.crateApiMixerGetMasterBus();
+
+Future<List<UiEffectInstance>> getMasterBusPopulated() =>
+    RustLib.instance.api.crateApiMixerGetMasterBusPopulated();
+
+/// **GETTER: Fetch all buses**
+Future<List<UiBus>> getBuses() => RustLib.instance.api.crateApiMixerGetBuses();
+
+/// **GETTER: Fetch the routing matrix**
+Future<List<UiRoutingConnection>> getRoutingMatrix() =>
+    RustLib.instance.api.crateApiMixerGetRoutingMatrix();
 
 Future<void> setMasterBusParams({required List<UiMixerChannelParams> params}) =>
     RustLib.instance.api.crateApiMixerSetMasterBusParams(params: params);
@@ -61,9 +78,166 @@ Future<void> addEffectToMixerChannel({
   effectName: effectName,
 );
 
+Future<void> addEffectToMasterBus({required int registryId}) => RustLib
+    .instance
+    .api
+    .crateApiMixerAddEffectToMasterBus(registryId: registryId);
+
+/// Create a new mixer bus and return its ID.
+Future<int> createBus({required String name}) =>
+    RustLib.instance.api.crateApiMixerCreateBus(name: name);
+
+/// Delete a mixer bus.
+Future<void> deleteBus({required int busId}) =>
+    RustLib.instance.api.crateApiMixerDeleteBus(busId: busId);
+
+/// Set bus channel parameters (volume, pan, mute).
+Future<void> setBusParams({
+  required int busId,
+  required List<UiMixerChannelParams> params,
+}) => RustLib.instance.api.crateApiMixerSetBusParams(
+  busId: busId,
+  params: params,
+);
+
+/// Set routing: source → destination with send level.
+/// source_type: 0=Track, 1=Bus
+/// dest_type: 1=Bus, 2=Master
+Future<void> setRouting({
+  required int sourceType,
+  required int sourceId,
+  required int destType,
+  required int destId,
+  required double sendLevel,
+  required bool isSend,
+}) => RustLib.instance.api.crateApiMixerSetRouting(
+  sourceType: sourceType,
+  sourceId: sourceId,
+  destType: destType,
+  destId: destId,
+  sendLevel: sendLevel,
+  isSend: isSend,
+);
+
+/// Remove a routing connection.
+Future<void> removeRouting({
+  required int sourceType,
+  required int sourceId,
+  required int destType,
+  required int destId,
+  required bool isSend,
+}) => RustLib.instance.api.crateApiMixerRemoveRouting(
+  sourceType: sourceType,
+  sourceId: sourceId,
+  destType: destType,
+  destId: destId,
+  isSend: isSend,
+);
+
 /// ======================================
 /// Type Definitions
 /// ======================================
+/// Lightweight event pushed to Flutter when a mixer param changes
+/// from the backend (automation, undo, or any non-UI source).
+class MixerParamEvent {
+  /// Track ID. `u32::MAX` means master bus.
+  final int trackId;
+  final double? volume;
+  final double? pan;
+  final bool? mute;
+  final bool? solo;
+
+  const MixerParamEvent({
+    required this.trackId,
+    this.volume,
+    this.pan,
+    this.mute,
+    this.solo,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      volume.hashCode ^
+      pan.hashCode ^
+      mute.hashCode ^
+      solo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MixerParamEvent &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          volume == other.volume &&
+          pan == other.pan &&
+          mute == other.mute &&
+          solo == other.solo;
+}
+
+/// UI representation of a mixer bus.
+class UiBus {
+  final int id;
+  final String name;
+  final UiMixerChannel channel;
+
+  const UiBus({required this.id, required this.name, required this.channel});
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ channel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiBus &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          channel == other.channel;
+}
+
+class UiEffectInstance {
+  final int id;
+  final String name;
+  final Map<int, double> parameters;
+
+  const UiEffectInstance({
+    required this.id,
+    required this.name,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiEffectInstance &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          parameters == other.parameters;
+}
+
+class UiEffectSummary {
+  final int id;
+  final String name;
+
+  const UiEffectSummary({required this.id, required this.name});
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiEffectSummary &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name;
+}
+
 /// UI representation of a mixer channel.
 class UiMixerChannel {
   final double volume;
@@ -72,8 +246,8 @@ class UiMixerChannel {
   final bool solo;
   final bool invertedPhase;
 
-  /// List of effect IDs. UI does not need the heavy data object of effect instance
-  final Uint32List effects;
+  /// List of effect summaries (ID and name).
+  final List<UiEffectSummary> effects;
 
   const UiMixerChannel({
     required this.volume,
@@ -118,17 +292,30 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
       UiMixerChannelParams_Mute;
   const factory UiMixerChannelParams.invertedPhase(bool field0) =
       UiMixerChannelParams_InvertedPhase;
+  const factory UiMixerChannelParams.solo(bool field0) =
+      UiMixerChannelParams_Solo;
 }
 
 /// UI representation of the mixer state.
 class UiMixerState {
   final Map<int, UiMixerChannel> channels;
   final UiMixerChannel masterBus;
+  final List<UiBus> buses;
+  final List<UiRoutingConnection> routing;
 
-  const UiMixerState({required this.channels, required this.masterBus});
+  const UiMixerState({
+    required this.channels,
+    required this.masterBus,
+    required this.buses,
+    required this.routing,
+  });
 
   @override
-  int get hashCode => channels.hashCode ^ masterBus.hashCode;
+  int get hashCode =>
+      channels.hashCode ^
+      masterBus.hashCode ^
+      buses.hashCode ^
+      routing.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -136,5 +323,50 @@ class UiMixerState {
       other is UiMixerState &&
           runtimeType == other.runtimeType &&
           channels == other.channels &&
-          masterBus == other.masterBus;
+          masterBus == other.masterBus &&
+          buses == other.buses &&
+          routing == other.routing;
+}
+
+/// UI representation of a routing connection.
+class UiRoutingConnection {
+  /// 0=Track, 1=Bus, 2=Master
+  final int sourceType;
+  final int sourceId;
+
+  /// 0=Track, 1=Bus, 2=Master
+  final int destType;
+  final int destId;
+  final double sendLevel;
+  final bool isSend;
+
+  const UiRoutingConnection({
+    required this.sourceType,
+    required this.sourceId,
+    required this.destType,
+    required this.destId,
+    required this.sendLevel,
+    required this.isSend,
+  });
+
+  @override
+  int get hashCode =>
+      sourceType.hashCode ^
+      sourceId.hashCode ^
+      destType.hashCode ^
+      destId.hashCode ^
+      sendLevel.hashCode ^
+      isSend.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiRoutingConnection &&
+          runtimeType == other.runtimeType &&
+          sourceType == other.sourceType &&
+          sourceId == other.sourceId &&
+          destType == other.destType &&
+          destId == other.destId &&
+          sendLevel == other.sendLevel &&
+          isSend == other.isSend;
 }

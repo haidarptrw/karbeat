@@ -48,7 +48,6 @@ pub fn broadcast_state_change() {
                 let mut input = producer.input_buffer_publisher();
                 *input = render_state;
             }
-            // producer.publish();
         }
     } else {
         log::error!("Error when publishing");
@@ -191,8 +190,9 @@ pub fn init_logger() {
         {
             use env_logger::Env;
 
-            let _ = env_logger::Builder::from_env(Env::default().default_filter_or("debug"))
+            let _ = env_logger::Builder::from_env(Env::default().default_filter_or("info"))
                 .format_timestamp_millis()
+                .target(env_logger::Target::Stdout)
                 .try_init();
         }
     });
