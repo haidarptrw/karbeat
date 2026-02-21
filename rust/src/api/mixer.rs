@@ -34,8 +34,13 @@ pub struct UiMixerChannel {
     pub mute: bool,
     pub solo: bool,
     pub inverted_phase: bool,
-    /// List of effect IDs. UI does not need the heavy data object of effect instance
-    pub effects: Vec<u32>,
+    /// List of effect summaries (ID and name).
+    pub effects: Vec<UiEffectSummary>,
+}
+
+pub struct UiEffectSummary {
+    pub id: u32,
+    pub name: String,
 }
 
 impl From<&MixerChannel> for UiMixerChannel {
@@ -50,7 +55,10 @@ impl From<&MixerChannel> for UiMixerChannel {
             effects: value
                 .effects
                 .iter()
-                .map(|instance| instance.id.to_u32())
+                .map(|instance| UiEffectSummary {
+                    id: instance.id.to_u32(),
+                    name: instance.instance.name.clone(),
+                })
                 .collect(),
         }
     }
@@ -225,11 +233,47 @@ pub fn get_mixer_channel(track_id: u32) -> Result<UiMixerChannel, String> {
         .map(|c| c.as_ref().into())
 }
 
+pub fn get_mixer_channel_populated(track_id: u32) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
+    let app = get_app_read();
+    let mixer_state = &app.mixer;
+    let channel = mixer_state.channels.get(&track_id.into());
+    let channel = channel.ok_or("Channel not found".to_owned())?;
+    let ui_channel: UiMixerChannel = channel.as_ref().into();
+    let effects = channel.effects.iter().map(|e| e.into()).collect();
+    Ok((ui_channel, effects))
+}
+
+pub fn get_effect_instance(track_id: u32, effect_id: u32) -> Result<UiEffectInstance, String> {
+    let app = get_app_read();
+    let mixer_state = &app.mixer;
+    let channel = mixer_state
+        .channels
+        .get(&track_id.into())
+        .ok_or("Channel not found".to_owned())?;
+    let effect = channel
+        .effects
+        .iter()
+        .find(|e| e.id.to_u32() == effect_id)
+        .ok_or("Effect instance not found".to_owned())?;
+    Ok(effect.into())
+}
+
 /// **GETTER: Fetch the master bus**
 pub fn get_master_bus() -> UiMixerChannel {
     let app = get_app_read();
     let mixer_state = &app.mixer;
     mixer_state.master_bus.as_ref().into()
+}
+
+pub fn get_master_bus_populated() -> Vec<UiEffectInstance> {
+    let app = get_app_read();
+    let mixer_state = &app.mixer;
+    mixer_state
+        .master_bus
+        .effects
+        .iter()
+        .map(|e| e.into())
+        .collect()
 }
 
 /// **GETTER: Fetch all buses**

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:karbeat/models/grid.dart';
@@ -83,7 +82,7 @@ class KarbeatState extends ChangeNotifier {
       mute: false,
       solo: false,
       invertedPhase: false,
-      effects: Uint32List(0),
+      effects: [],
     ),
     buses: [],
     routing: [],
@@ -1053,6 +1052,7 @@ class KarbeatState extends ChangeNotifier {
   UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
     return UiTrack(
       id: original.id,
+      color: "#FFFFFF",
       name: original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,

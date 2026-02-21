@@ -20,6 +20,7 @@ use crate::{
 pub struct UiTrack {
     pub id: u32,
     pub name: String,
+    pub color: String,
     pub track_type: TrackType,
     pub clips: Vec<UiClip>,
     pub generator_id: Option<u32>,
@@ -34,6 +35,7 @@ impl From<&KarbeatTrack> for UiTrack {
         Self {
             id: value.id.to_u32(),
             name: value.name.clone(),
+            color: value.color.to_string(),
             track_type: value.track_type.clone(),
             clips: value
                 .clips_to_vec()

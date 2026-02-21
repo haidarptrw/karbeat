@@ -165,6 +165,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
 
   @protected
+  List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
+
+  @protected
+  List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw);
+
+  @protected
   List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(
     dynamic raw,
   );
@@ -248,6 +254,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, int) dco_decode_record_u_8_u_8(dynamic raw);
 
   @protected
+  (UiMixerChannel, List<UiEffectInstance>)
+  dco_decode_record_ui_mixer_channel_list_ui_effect_instance(dynamic raw);
+
+  @protected
   ResizeEdge dco_decode_resize_edge(dynamic raw);
 
   @protected
@@ -279,6 +289,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw);
+
+  @protected
+  UiEffectInstance dco_decode_ui_effect_instance(dynamic raw);
+
+  @protected
+  UiEffectSummary dco_decode_ui_effect_summary(dynamic raw);
 
   @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
@@ -483,6 +499,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
 
   @protected
+  List<UiEffectInstance> sse_decode_list_ui_effect_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiEffectSummary> sse_decode_list_ui_effect_summary(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(
     SseDeserializer deserializer,
   );
@@ -582,6 +608,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, int) sse_decode_record_u_8_u_8(SseDeserializer deserializer);
 
   @protected
+  (UiMixerChannel, List<UiEffectInstance>)
+  sse_decode_record_ui_mixer_channel_list_ui_effect_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ResizeEdge sse_decode_resize_edge(SseDeserializer deserializer);
 
   @protected
@@ -615,6 +647,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiClipboardContent sse_decode_ui_clipboard_content(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiEffectInstance sse_decode_ui_effect_instance(SseDeserializer deserializer);
+
+  @protected
+  UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer);
 
   @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
@@ -855,6 +893,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_ui_effect_instance(
+    List<UiEffectInstance> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_effect_summary(
+    List<UiEffectSummary> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_mixer_channel_params(
     List<UiMixerChannelParams> self,
     SseSerializer serializer,
@@ -978,6 +1028,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_record_u_8_u_8((int, int) self, SseSerializer serializer);
 
   @protected
+  void sse_encode_record_ui_mixer_channel_list_ui_effect_instance(
+    (UiMixerChannel, List<UiEffectInstance>) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_resize_edge(ResizeEdge self, SseSerializer serializer);
 
   @protected
@@ -1013,6 +1069,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_clipboard_content(
     UiClipboardContent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_effect_instance(
+    UiEffectInstance self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_effect_summary(
+    UiEffectSummary self,
     SseSerializer serializer,
   );
 

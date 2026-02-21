@@ -12,10 +12,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     commands::AudioCommand,
     core::project::{
-        clip::ClipId, generator::GeneratorId, mixer::MixerChannel, ApplicationState, Clip,
-        GeneratorInstance, GeneratorInstanceType, KarbeatSource, PluginInstance,
+        ApplicationState, Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, PluginInstance, clip::ClipId, generator::GeneratorId, mixer::MixerChannel
     },
-    ctx, define_id,
+    ctx, define_id, utils::color::Color,
 };
 
 define_id!(TrackId);
@@ -24,7 +23,7 @@ define_id!(TrackId);
 pub struct KarbeatTrack {
     pub id: TrackId,
     pub name: String,
-    pub color: String,
+    pub color: Color,
     pub track_type: TrackType,
     pub clips: BTreeSet<Arc<Clip>>,
     pub max_sample_index: u32,
@@ -36,7 +35,7 @@ impl Default for KarbeatTrack {
         Self {
             id: Default::default(),
             name: Default::default(),
-            color: Default::default(),
+            color: Color::new_from_rgb(255, 255, 255),
             track_type: TrackType::Audio,
             clips: BTreeSet::new(),
             max_sample_index: 0,
@@ -160,9 +159,9 @@ impl KarbeatTrack {
     }
 
     /// Optimized for adding multiple clips (e.g., Paste / Duplicate).
-    pub fn add_clips_bulk(&mut self, new_clips: Vec<Arc<Clip>>) {
+    pub fn add_clips_bulk(&mut self, new_clips: &[Arc<Clip>]) {
         let clips_vec = &mut self.clips;
-        clips_vec.extend(new_clips);
+        clips_vec.extend(new_clips.iter().cloned());
 
         self.max_sample_index = clips_vec
             .iter()
@@ -250,7 +249,7 @@ impl ApplicationState {
             track_type: TrackType::Midi,
             id: track_id,
             name: generator_name.clone(),
-            color: "#FF8A65".to_string(),
+            color: Color::new_from_string("#FF8A65").unwrap(),
             generator: Some(generator),
             ..Default::default()
         };

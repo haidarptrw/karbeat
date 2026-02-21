@@ -9,7 +9,6 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `push_mixer_event`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `UiEffectInstance`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `into`, `into`
 
 /// ======================================
@@ -30,9 +29,26 @@ Future<UiMixerState> getMixerState() =>
 Future<UiMixerChannel> getMixerChannel({required int trackId}) =>
     RustLib.instance.api.crateApiMixerGetMixerChannel(trackId: trackId);
 
+Future<(UiMixerChannel, List<UiEffectInstance>)> getMixerChannelPopulated({
+  required int trackId,
+}) => RustLib.instance.api.crateApiMixerGetMixerChannelPopulated(
+  trackId: trackId,
+);
+
+Future<UiEffectInstance> getEffectInstance({
+  required int trackId,
+  required int effectId,
+}) => RustLib.instance.api.crateApiMixerGetEffectInstance(
+  trackId: trackId,
+  effectId: effectId,
+);
+
 /// **GETTER: Fetch the master bus**
 Future<UiMixerChannel> getMasterBus() =>
     RustLib.instance.api.crateApiMixerGetMasterBus();
+
+Future<List<UiEffectInstance>> getMasterBusPopulated() =>
+    RustLib.instance.api.crateApiMixerGetMasterBusPopulated();
 
 /// **GETTER: Fetch all buses**
 Future<List<UiBus>> getBuses() => RustLib.instance.api.crateApiMixerGetBuses();
@@ -188,6 +204,48 @@ class UiBus {
           channel == other.channel;
 }
 
+class UiEffectInstance {
+  final int id;
+  final String name;
+  final Map<int, double> parameters;
+
+  const UiEffectInstance({
+    required this.id,
+    required this.name,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiEffectInstance &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          parameters == other.parameters;
+}
+
+class UiEffectSummary {
+  final int id;
+  final String name;
+
+  const UiEffectSummary({required this.id, required this.name});
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiEffectSummary &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name;
+}
+
 /// UI representation of a mixer channel.
 class UiMixerChannel {
   final double volume;
@@ -196,8 +254,8 @@ class UiMixerChannel {
   final bool solo;
   final bool invertedPhase;
 
-  /// List of effect IDs. UI does not need the heavy data object of effect instance
-  final Uint32List effects;
+  /// List of effect summaries (ID and name).
+  final List<UiEffectSummary> effects;
 
   const UiMixerChannel({
     required this.volume,

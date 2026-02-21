@@ -11,6 +11,9 @@ class MixerScreen extends StatefulWidget {
 }
 
 class _MixerScreenState extends State<MixerScreen> {
+  // Track the currently selected track ID (or -1 for Master)
+  int? _selectedTrackId;
+
   @override
   void initState() {
     super.initState();
@@ -112,6 +115,12 @@ class _MixerScreenState extends State<MixerScreen> {
                             ],
                           );
                         },
+                        isSelected: _selectedTrackId == entry.id,
+                        onTap: () {
+                          setState(() {
+                            _selectedTrackId = entry.id;
+                          });
+                        },
                       );
                     },
                   ),
@@ -167,8 +176,142 @@ class _MixerScreenState extends State<MixerScreen> {
                   ],
                 );
               },
+              isSelected: _selectedTrackId == -1,
+              onTap: () {
+                setState(() {
+                  _selectedTrackId = -1;
+                });
+              },
             ),
           ),
+
+          // === Divider ===
+          Container(width: 1, color: Colors.white10),
+
+          // === Effect Rack Panel ===
+          _buildEffectRackPanel(mixerState),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEffectRackPanel(UiMixerState mixerState) {
+    if (_selectedTrackId == null) {
+      return const SizedBox(
+        width: 250,
+        child: Center(
+          child: Text(
+            'Select a channel to\nview effects',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white54, fontSize: 13),
+          ),
+        ),
+      );
+    }
+
+    final isMaster = _selectedTrackId == -1;
+    final channel = isMaster
+        ? mixerState.masterBus
+        : mixerState.channels[_selectedTrackId!];
+
+    if (channel == null) {
+      return const SizedBox(width: 250);
+    }
+
+    final channelName = isMaster ? 'Master' : 'Track $_selectedTrackId';
+
+    return Container(
+      width: 250,
+      color: Colors.grey.shade900,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            color: Colors.black26,
+            child: Row(
+              children: [
+                const Icon(Icons.blur_on, color: Colors.white70, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  '$channelName Effects',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    backgroundColor: Colors.transparent,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Effects List
+          Expanded(
+            child: channel.effects.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No effects',
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: channel.effects.length,
+                    itemBuilder: (context, index) {
+                      final effect = channel.effects[index];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(10),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.white.withAlpha(20),
+                          ),
+                        ),
+                        child: ListTile(
+                          dense: true,
+                          title: Text(
+                            effect.name,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          subtitle: Text(
+                            'ID: ${effect.id}',
+                            style: const TextStyle(color: Colors.white54),
+                          ),
+                          trailing: const Icon(
+                            Icons.settings,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          
+          // Add Effect Button
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ElevatedButton.icon(
+               style: ElevatedButton.styleFrom(
+                 backgroundColor: Colors.white.withAlpha(20),
+                 foregroundColor: Colors.white,
+               ),
+              onPressed: () {
+                // TODO: Open effect browser to add a new effect
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Add effect coming soon!')),
+                );
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Effect'),
+            ),
+          )
         ],
       ),
     );
@@ -207,6 +350,8 @@ class _ChannelStrip extends StatelessWidget {
   final VoidCallback? onPanChangeEnd;
   final VoidCallback onMuteToggled;
   final VoidCallback onSoloToggled;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   const _ChannelStrip({
     required this.entry,
@@ -218,6 +363,8 @@ class _ChannelStrip extends StatelessWidget {
     this.onPanChangeEnd,
     required this.onMuteToggled,
     required this.onSoloToggled,
+    required this.isSelected,
+    required this.onTap,
   });
 
   @override
@@ -226,22 +373,36 @@ class _ChannelStrip extends StatelessWidget {
         ? const Color(0xFFFFD700)
         : const Color(0xFF00E5FF);
 
-    return Container(
-      width: 72,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: entry.isMaster
-            ? const Color(0xFF2A2040)
-            : const Color(0xFF16213E),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 72,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
           color: entry.isMaster
-              ? Colors.amber.withValues(alpha: 0.3)
-              : Colors.white.withValues(alpha: 0.06),
+              ? const Color(0xFF2A2040)
+              : const Color(0xFF16213E),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? accentColor
+                : (entry.isMaster
+                    ? Colors.amber.withValues(alpha: 0.3)
+                    : Colors.white.withValues(alpha: 0.06)),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: accentColor.withValues(alpha: 0.2),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  )
+                ]
+              : null,
         ),
-      ),
-      child: Column(
-        children: [
+        child: Column(
+          children: [
           // === Channel Label ===
           Container(
             width: double.infinity,
@@ -326,6 +487,7 @@ class _ChannelStrip extends StatelessWidget {
           const SizedBox(height: 8),
         ],
       ),
+      )
     );
   }
 

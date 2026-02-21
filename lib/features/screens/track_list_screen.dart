@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
-import 'package:karbeat/features/components/interaction_panel.dart';
+import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -653,29 +653,6 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               ],
             ),
           ),
-        // Interaction Panel Overlay
-        if (state.interactionTarget != null) ...[
-          // Backdrop to dismiss panel
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => state.hideInteractionPanel(),
-              child: Container(color: Colors.black.withAlpha(80)),
-            ),
-          ),
-          // Panel positioned at center-bottom (bottom sheet style)
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: 24,
-            child: Center(
-              child: InteractionPanel(
-                target: state.interactionTarget!,
-                onClose: () => state.hideInteractionPanel(),
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -950,66 +927,128 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   Widget _buildTrackHeader(UiTrack track) {
-    return SizedBox(
-      height: widget.itemHeight,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          border: Border(
-            bottom: BorderSide(color: Colors.grey.shade400, width: 1),
-            right: BorderSide(color: Colors.grey.shade400, width: 1),
-          ),
+    return ContextMenuWrapper(
+      title: track.name,
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Name: ${track.name}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text("Type: ${track.trackType.name.toUpperCase()}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text("ID: ${track.id}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text("Color: ", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              Container(
+                width: 14, 
+                height: 14, 
+                decoration: BoxDecoration(
+                  color: Color(int.parse(track.color.substring(1), radix: 16)), // Replace with track.color if available
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          )
+        ],
+      ),
+      actions: [
+        KarbeatContextAction(
+          title: "Rename",
+          icon: Icons.edit,
+          onTap: () {
+            // Replace with your actual rename logic via app_state
+            KarbeatLogger.info("Rename track requested for ID: ${track.id}");
+          },
         ),
-        child: Row(
-          children: [
-            Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track.name,
-                    style: TextStyle(
-                      color: Colors.grey.shade800,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+        KarbeatContextAction(
+          title: "Move Up",
+          icon: Icons.arrow_upward,
+          onTap: () {
+            // Replace with actual move up logic
+            KarbeatLogger.info("Move Up requested for track ID: ${track.id}");
+          },
+        ),
+        KarbeatContextAction(
+          title: "Move Down",
+          icon: Icons.arrow_downward,
+          onTap: () {
+            // Replace with actual move down logic
+            KarbeatLogger.info("Move Down requested for track ID: ${track.id}");
+          },
+        ),
+        KarbeatContextAction(
+          title: "Delete Track",
+          icon: Icons.delete,
+          isDestructive: true,
+          onTap: () {
+            // Replace with actual delete logic via app_state
+            KarbeatLogger.info("Delete track requested for ID: ${track.id}");
+          },
+        ),
+      ],
+      child: SizedBox(
+        height: widget.itemHeight,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade400, width: 1),
+              right: BorderSide(color: Colors.grey.shade400, width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      track.name,
+                      style: TextStyle(
+                        color: Colors.grey.shade800,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
+                    Text(
+                      "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  InkWell(
+                    onTap: () {},
+                    child: const Icon(
+                      Icons.mic_off,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                   ),
-                  Text(
-                    "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                  const SizedBox(height: 4),
+                  InkWell(
+                    onTap: () {},
+                    child: const Icon(
+                      Icons.volume_up,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
                   ),
                 ],
               ),
-            ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                InkWell(
-                  onTap: () {},
-                  child: const Icon(
-                    Icons.mic_off,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                InkWell(
-                  onTap: () {},
-                  child: const Icon(
-                    Icons.volume_up,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -194,6 +194,7 @@ class UiGeneratorInstance {
 class UiTrack {
   final int id;
   final String name;
+  final String color;
   final TrackType trackType;
   final List<UiClip> clips;
   final int? generatorId;
@@ -201,6 +202,7 @@ class UiTrack {
   const UiTrack({
     required this.id,
     required this.name,
+    required this.color,
     required this.trackType,
     required this.clips,
     this.generatorId,
@@ -210,6 +212,7 @@ class UiTrack {
   int get hashCode =>
       id.hashCode ^
       name.hashCode ^
+      color.hashCode ^
       trackType.hashCode ^
       clips.hashCode ^
       generatorId.hashCode;
@@ -221,6 +224,7 @@ class UiTrack {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
+          color == other.color &&
           trackType == other.trackType &&
           clips == other.clips &&
           generatorId == other.generatorId;

@@ -416,7 +416,6 @@ impl AudioEngine {
                 // Silence everything to prevent hanging notes from the previous mode
                 self.stop_all_active_generators();
 
-                // self.playback_mode = playback_mode;
 
                 // Reset the specific playhead for the new mode
                 match (self.playback_mode, playback_mode) {

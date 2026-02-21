@@ -194,7 +194,7 @@ impl Default for MixerChannel {
             solo: Default::default(),
             effect_counter: 0,
             inverted_phase: Default::default(),
-            effects: Vec::new(),
+            effects: Vec::with_capacity(16),
         }
     }
 }
