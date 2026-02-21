@@ -4,10 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
+part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
 
 /// Get all available generators in Plugin Registry (names only, backwards compatible)
 Future<List<String>> getAvailableGenerators() =>
@@ -28,6 +31,14 @@ Future<List<UiPluginInfo>> getAvailableEffectsWithIds() =>
 /// Get a single generator state from the Generator Pool
 Future<UiGeneratorInstance> getGenerator({required int generatorId}) =>
     RustLib.instance.api.crateApiPluginGetGenerator(generatorId: generatorId);
+
+Future<UiEffectInstance> getEffect({
+  required int trackId,
+  required int effectId,
+}) => RustLib.instance.api.crateApiPluginGetEffect(
+  trackId: trackId,
+  effectId: effectId,
+);
 
 /// Get parameter specifications for a generator plugin.
 ///
@@ -91,25 +102,67 @@ Future<void> queryGeneratorParameters({required int generatorId}) => RustLib
 /// This should be called periodically (e.g., in a timer or on parameter screen)
 /// to receive parameter updates from the audio thread. Returns all pending
 /// parameter snapshots.
-Future<List<UiParameterSnapshot>> pollParameterFeedback() =>
-    RustLib.instance.api.crateApiPluginPollParameterFeedback();
+Future<List<UiGeneratorParameterSnapshot>> pollGeneratorParameterFeedback() =>
+    RustLib.instance.api.crateApiPluginPollGeneratorParameterFeedback();
 
 /// Sync parameter values from audio thread to stored parameters.
 ///
 /// Call this after `poll_parameter_feedback` to update the stored parameters
 /// with the latest values from the audio thread.
-Future<void> syncParametersFromAudio({
-  required List<UiParameterSnapshot> snapshots,
-}) => RustLib.instance.api.crateApiPluginSyncParametersFromAudio(
+Future<void> syncGeneratorParametersFromAudio({
+  required List<UiGeneratorParameterSnapshot> snapshots,
+}) => RustLib.instance.api.crateApiPluginSyncGeneratorParametersFromAudio(
   snapshots: snapshots,
 );
 
-/// Parameter snapshot from the audio thread
-class UiParameterSnapshot {
+Future<List<UiEffectParameterSnapshot>> pollEffectParameterFeedback() =>
+    RustLib.instance.api.crateApiPluginPollEffectParameterFeedback();
+
+Future<void> syncEffectParametersFromAudio({
+  required List<UiEffectParameterSnapshot> snapshots,
+}) => RustLib.instance.api.crateApiPluginSyncEffectParametersFromAudio(
+  snapshots: snapshots,
+);
+
+class UiEffectParameterSnapshot {
+  final UiEffectTarget target;
+  final int effectId;
+  final List<UiParameterValue> parameters;
+
+  const UiEffectParameterSnapshot({
+    required this.target,
+    required this.effectId,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode => target.hashCode ^ effectId.hashCode ^ parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiEffectParameterSnapshot &&
+          runtimeType == other.runtimeType &&
+          target == other.target &&
+          effectId == other.effectId &&
+          parameters == other.parameters;
+}
+
+@freezed
+sealed class UiEffectTarget with _$UiEffectTarget {
+  const UiEffectTarget._();
+
+  const factory UiEffectTarget.track(int field0) = UiEffectTarget_Track;
+  const factory UiEffectTarget.master() = UiEffectTarget_Master;
+  const factory UiEffectTarget.bus(int field0) = UiEffectTarget_Bus;
+}
+
+/// Parameter snapshot from the audio thread (DTO)
+class UiGeneratorParameterSnapshot {
   final int generatorId;
   final List<UiParameterValue> parameters;
 
-  const UiParameterSnapshot({
+  const UiGeneratorParameterSnapshot({
     required this.generatorId,
     required this.parameters,
   });
@@ -120,7 +173,7 @@ class UiParameterSnapshot {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is UiParameterSnapshot &&
+      other is UiGeneratorParameterSnapshot &&
           runtimeType == other.runtimeType &&
           generatorId == other.generatorId &&
           parameters == other.parameters;

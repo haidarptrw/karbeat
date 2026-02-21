@@ -156,14 +156,7 @@ impl KarbeatParametricEQFilterNode {
                 -2.0 * cos_w0,
                 1.0 - alpha,
             ),
-            FilterType::BandPass => (
-                alpha,
-                0.0,
-                -alpha,
-                1.0 + alpha,
-                -2.0 * cos_w0,
-                1.0 - alpha,
-            ),
+            FilterType::BandPass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha),
             FilterType::Notch => (
                 1.0,
                 -2.0 * cos_w0,
@@ -419,7 +412,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
                 &group,
                 node.freq,
                 20.0,
-                22000.0,
+                20000.0,
                 default_freqs[i],
             ));
             params.push(PluginParameter::new_float(

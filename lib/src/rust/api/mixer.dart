@@ -35,14 +35,6 @@ Future<(UiMixerChannel, List<UiEffectInstance>)> getMixerChannelPopulated({
   trackId: trackId,
 );
 
-Future<UiEffectInstance> getEffectInstance({
-  required int trackId,
-  required int effectId,
-}) => RustLib.instance.api.crateApiMixerGetEffectInstance(
-  trackId: trackId,
-  effectId: effectId,
-);
-
 /// **GETTER: Fetch the master bus**
 Future<UiMixerChannel> getMasterBus() =>
     RustLib.instance.api.crateApiMixerGetMasterBus();

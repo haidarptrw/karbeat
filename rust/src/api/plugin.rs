@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use crate::{
-    api::project::UiGeneratorInstance,
+    api::{mixer::UiEffectInstance, project::UiGeneratorInstance},
     broadcast_state_change,
-    commands::{AudioCommand, AudioFeedback},
-    core::project::generator::{GeneratorId, GeneratorInstanceType},
+    commands::{AudioCommand, AudioFeedback, EffectTarget},
+    core::project::{
+        TrackId, generator::{GeneratorId, GeneratorInstanceType}, mixer::{BusId, EffectId}
+    },
     ctx,
     plugin::wrapper::ParameterValueType,
     utils::lock::{get_app_read, get_app_write},
@@ -114,9 +118,20 @@ pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
     Ok(ui_generator)
 }
 
-// pub fn get_effect(effect_id: u32) -> Result<UiEffectInstance, String> {
-
-// }
+pub fn get_effect(track_id: u32, effect_id: u32) -> Result<UiEffectInstance, String> {
+    let app = get_app_read();
+    let mixer_state = &app.mixer;
+    let channel = mixer_state
+        .channels
+        .get(&track_id.into())
+        .ok_or("Channel not found".to_owned())?;
+    let effect = channel
+        .effects
+        .iter()
+        .find(|e| e.id.to_u32() == effect_id)
+        .ok_or("Effect instance not found".to_owned())?;
+    Ok(effect.into())
+}
 
 /// Get parameter specifications for a generator plugin.
 ///
@@ -268,10 +283,34 @@ pub fn get_generator_parameter(generator_id: u32, param_id: u32) -> Result<f32, 
 // PARAMETER FEEDBACK API (Audio -> UI)
 // ============================================================================
 
-/// Parameter snapshot from the audio thread
+/// Parameter snapshot from the audio thread (DTO)
 #[derive(Clone, Debug)]
-pub struct UiParameterSnapshot {
+pub struct UiGeneratorParameterSnapshot {
     pub generator_id: u32,
+    pub parameters: Vec<UiParameterValue>,
+}
+
+#[derive(Clone, Debug)]
+pub enum UiEffectTarget {
+    Track(u32),
+    Master,
+    Bus(u32),
+}
+
+impl From<EffectTarget> for UiEffectTarget {
+    fn from(target: EffectTarget) -> Self {
+        match target {
+            EffectTarget::Track(track_id) => UiEffectTarget::Track(track_id.into()),
+            EffectTarget::Master => UiEffectTarget::Master,
+            EffectTarget::Bus(bus_id) => UiEffectTarget::Bus(bus_id.into()),
+        }
+    }
+}   
+
+#[derive(Clone, Debug)]
+pub struct UiEffectParameterSnapshot {
+    pub target: UiEffectTarget,
+    pub effect_id: u32,
     pub parameters: Vec<UiParameterValue>,
 }
 
@@ -307,15 +346,15 @@ pub fn query_generator_parameters(generator_id: u32) -> Result<(), String> {
 /// This should be called periodically (e.g., in a timer or on parameter screen)
 /// to receive parameter updates from the audio thread. Returns all pending
 /// parameter snapshots.
-pub fn poll_parameter_feedback() -> Vec<UiParameterSnapshot> {
+pub fn poll_generator_parameter_feedback() -> Vec<UiGeneratorParameterSnapshot> {
     let mut snapshots = Vec::new();
 
     if let Some(consumer) = ctx().feedback_consumer.lock().unwrap().as_mut() {
         // Drain all pending feedback messages
         while let Ok(feedback) = consumer.pop() {
             match feedback {
-                AudioFeedback::ParameterSnapshot(snapshot) => {
-                    let ui_snapshot = UiParameterSnapshot {
+                AudioFeedback::GeneratorParameterSnapshot(snapshot) => {
+                    let ui_snapshot = UiGeneratorParameterSnapshot {
                         generator_id: snapshot.generator_id.into(),
                         parameters: snapshot
                             .parameters
@@ -325,10 +364,10 @@ pub fn poll_parameter_feedback() -> Vec<UiParameterSnapshot> {
                     };
                     snapshots.push(ui_snapshot);
                 }
-                AudioFeedback::ParameterChanged(update) => {
+                AudioFeedback::GeneratorParameterChanged(update) => {
                     // Single parameter change - could be from automation
                     // Convert to a single-parameter snapshot
-                    let ui_snapshot = UiParameterSnapshot {
+                    let ui_snapshot = UiGeneratorParameterSnapshot {
                         generator_id: update.generator_id.into(),
                         parameters: vec![UiParameterValue {
                             param_id: update.param_id,
@@ -337,6 +376,7 @@ pub fn poll_parameter_feedback() -> Vec<UiParameterSnapshot> {
                     };
                     snapshots.push(ui_snapshot);
                 }
+                _ => {}
             }
         }
     }
@@ -348,7 +388,7 @@ pub fn poll_parameter_feedback() -> Vec<UiParameterSnapshot> {
 ///
 /// Call this after `poll_parameter_feedback` to update the stored parameters
 /// with the latest values from the audio thread.
-pub fn sync_parameters_from_audio(snapshots: &[UiParameterSnapshot]) {
+pub fn sync_generator_parameters_from_audio(snapshots: &[UiGeneratorParameterSnapshot]) {
     let app = get_app_write();
 
     for snapshot in snapshots {
@@ -363,6 +403,99 @@ pub fn sync_parameters_from_audio(snapshots: &[UiParameterSnapshot]) {
                         plugin_instance
                             .parameters
                             .insert(param.param_id, param.value);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Do the same for effect plugin
+pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
+    let mut snapshots = Vec::new();
+
+    if let Some(consumer) = ctx().feedback_consumer.lock().unwrap().as_mut() {
+        // Drain all pending feedback messages
+        while let Ok(feedback) = consumer.pop() {
+            match feedback {
+                AudioFeedback::EffectParameterSnapshot(snapshot) => {
+                    let ui_snapshot = UiEffectParameterSnapshot {
+                        effect_id: snapshot.effect_id.into(),
+                        parameters: snapshot
+                            .parameters
+                            .into_iter()
+                            .map(|(param_id, value)| UiParameterValue { param_id, value })
+                            .collect(),
+                        target: snapshot.target.into(),
+                    };
+                    snapshots.push(ui_snapshot);
+                }
+                AudioFeedback::EffectParameterChanged(update) => {
+                    // Single parameter change - could be from automation
+                    // Convert to a single-parameter snapshot
+                    let ui_snapshot = UiEffectParameterSnapshot {
+                        effect_id: update.effect_id.into(),
+                        parameters: vec![UiParameterValue {
+                            param_id: update.param_id,
+                            value: update.value,
+                        }],
+                        target: update.target.into(),
+                    };
+                    snapshots.push(ui_snapshot);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    snapshots
+}
+
+pub fn sync_effect_parameters_from_audio(snapshots: &[UiEffectParameterSnapshot]) {
+    let mut app = get_app_write();
+
+    for snapshot in snapshots {
+        let effect_id = EffectId::from(snapshot.effect_id);
+
+        match snapshot.target {
+            UiEffectTarget::Master => {
+                // Update Master Bus Effect
+                let master = Arc::make_mut(&mut app.mixer.master_bus);
+                if let Some(effect) = master.effects.iter_mut().find(|e| e.id == effect_id) {
+                    let plugin = Arc::make_mut(&mut effect.instance);
+                    for param in &snapshot.parameters {
+                        plugin.parameters.insert(param.param_id, param.value);
+                    }
+                }
+            }
+            UiEffectTarget::Track(track_id_u32) => {
+                // Update specific Track Effect
+                let track_id = TrackId::from(track_id_u32);
+                if let Some(channel_arc) = app.mixer.channels.get_mut(&track_id) {
+                    let channel = Arc::make_mut(channel_arc);
+                    if let Some(effect) = channel.effects.iter_mut().find(|e| e.id == effect_id) {
+                        let plugin = Arc::make_mut(&mut effect.instance);
+                        for param in &snapshot.parameters {
+                            plugin.parameters.insert(param.param_id, param.value);
+                        }
+                    }
+                }
+            }
+            UiEffectTarget::Bus(bus_id_u32) => {
+                // Update specific Bus Effect
+                let bus_id = BusId::from(bus_id_u32);
+                if let Some(bus) = app.mixer.buses.get_mut(&bus_id) {
+                    let bus_mut = Arc::make_mut(bus);
+                    if let Some(effect) = bus_mut
+                        .channel
+                        .effects
+                        .iter_mut()
+                        .find(|e| e.id == effect_id)
+                    {
+                        let plugin = Arc::make_mut(&mut effect.instance);
+                        for param in &snapshot.parameters {
+                            plugin.parameters.insert(param.param_id, param.value);
+                        }
                     }
                 }
             }

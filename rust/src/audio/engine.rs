@@ -12,7 +12,10 @@ use crate::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
         },
     },
-    commands::{AudioCommand, AudioFeedback, GeneratorParameterSnapshot},
+    commands::{
+        AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
+        GeneratorParameterSnapshot,
+    },
     core::project::{
         mixer::{BusId, MixerChannel, RoutingNode},
         plugin::{MidiEvent, MidiMessage},
@@ -416,7 +419,6 @@ impl AudioEngine {
                 // Silence everything to prevent hanging notes from the previous mode
                 self.stop_all_active_generators();
 
-
                 // Reset the specific playhead for the new mode
                 match (self.playback_mode, playback_mode) {
                     (PlaybackMode::Song, PlaybackMode::Pattern { .. }) => {
@@ -548,7 +550,7 @@ impl AudioEngine {
                     // Best-effort push (don't block audio thread)
                     let _ = self
                         .feedback_producer
-                        .push(AudioFeedback::ParameterSnapshot(snapshot));
+                        .push(AudioFeedback::GeneratorParameterSnapshot(snapshot));
                 }
             }
             #[allow(unused_variables)]
@@ -591,10 +593,6 @@ impl AudioEngine {
                         .set_parameter(param_id, value);
                 }
             }
-
-            // =================================================================
-            // Bus Commands
-            // =================================================================
             AudioCommand::AddBus { bus_id, name } => {
                 // Initialize bus buffer and effects chain
                 self.plugin_state.bus_effects.insert(bus_id, Vec::new());
@@ -671,6 +669,75 @@ impl AudioEngine {
                     "[AudioEngine] Received routing update with {} connections",
                     routing.len()
                 );
+            }
+            AudioCommand::QueryTrackEffectParameters {
+                track_id,
+                effect_id,
+            } => {
+                if let Some(effects) = self.plugin_state.track_effects.get(&track_id) {
+                    if let Some(effect_instance) = effects.iter().find(|e| e.id == effect_id) {
+                        let specs = effect_instance.plugin.get_parameter_specs();
+                        let parameters: Vec<(u32, f32)> = specs
+                            .iter()
+                            .map(|spec| (spec.id, effect_instance.plugin.get_parameter(spec.id)))
+                            .collect();
+
+                        let snapshot = EffectParameterSnapshot {
+                            target: EffectTarget::Track(track_id),
+                            effect_id,
+                            parameters,
+                        };
+
+                        let _ = self
+                            .feedback_producer
+                            .push(AudioFeedback::EffectParameterSnapshot(snapshot));
+                    }
+                }
+            }
+            AudioCommand::QueryMasterEffectParameters { effect_id } => {
+                if let Some(effect_instance) = self
+                    .plugin_state
+                    .master_effects
+                    .iter()
+                    .find(|e| e.id == effect_id)
+                {
+                    let specs = effect_instance.plugin.get_parameter_specs();
+                    let parameters: Vec<(u32, f32)> = specs
+                        .iter()
+                        .map(|spec| (spec.id, effect_instance.plugin.get_parameter(spec.id)))
+                        .collect();
+
+                    let snapshot = EffectParameterSnapshot {
+                        target: EffectTarget::Master,
+                        effect_id,
+                        parameters,
+                    };
+
+                    let _ = self
+                        .feedback_producer
+                        .push(AudioFeedback::EffectParameterSnapshot(snapshot));
+                }
+            }
+            AudioCommand::QueryBusEffectParameters { bus_id, effect_id } => {
+                if let Some(effects) = self.plugin_state.bus_effects.get(&bus_id) {
+                    if let Some(effect_instance) = effects.iter().find(|e| e.id == effect_id) {
+                        let specs = effect_instance.plugin.get_parameter_specs();
+                        let parameters: Vec<(u32, f32)> = specs
+                            .iter()
+                            .map(|spec| (spec.id, effect_instance.plugin.get_parameter(spec.id)))
+                            .collect();
+
+                        let snapshot = EffectParameterSnapshot {
+                            target: EffectTarget::Bus(bus_id),
+                            effect_id,
+                            parameters,
+                        };
+
+                        let _ = self
+                            .feedback_producer
+                            .push(AudioFeedback::EffectParameterSnapshot(snapshot));
+                    }
+                }
             }
         }
     }

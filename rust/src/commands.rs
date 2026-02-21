@@ -47,7 +47,7 @@ pub enum AudioCommand {
         generator_id: GeneratorId,
         track_id: TrackId,
     },
-    /// Request parameter feedback for a generator (triggers ParameterUpdate responses)
+    /// Request parameter feedback for a generator (triggers ParameterSnapshot response)
     QueryGeneratorParameters {
         generator_id: GeneratorId,
     },
@@ -73,6 +73,11 @@ pub enum AudioCommand {
         param_id: u32,
         value: f32,
     },
+    /// Request parameter feedback for a track effect (triggers EffectParameterSnapshot response)
+    QueryTrackEffectParameters {
+        track_id: TrackId,
+        effect_id: EffectId,
+    },
 
     // ======================================================
     // Master Effect Command
@@ -91,6 +96,10 @@ pub enum AudioCommand {
         effect_id: EffectId,
         param_id: u32,
         value: f32,
+    },
+    /// Request parameter feedback for a master effect (triggers EffectParameterSnapshot response)
+    QueryMasterEffectParameters {
+        effect_id: EffectId,
     },
 
     // =========================================================================
@@ -130,6 +139,11 @@ pub enum AudioCommand {
         param_id: u32,
         value: f32,
     },
+    /// Request parameter feedback for a bus effect (triggers EffectParameterSnapshot response)
+    QueryBusEffectParameters {
+        bus_id: BusId,
+        effect_id: EffectId,
+    },
     /// Update the routing matrix (sync from main thread)
     UpdateRouting {
         routing: Vec<RoutingConnection>,
@@ -140,9 +154,17 @@ pub enum AudioCommand {
 // Audio → UI Feedback Messages
 // ============================================================================
 
-/// Parameter value update from audio thread to UI
+/// Specifies the location of an effect to ensure precise UI syncing
 #[derive(Clone, Debug)]
-pub struct ParameterUpdate {
+pub enum EffectTarget {
+    Track(TrackId),
+    Master,
+    Bus(BusId),
+}
+
+/// Parameter value update from a generator to the UI
+#[derive(Clone, Debug)]
+pub struct GeneratorParameterUpdate {
     pub generator_id: GeneratorId,
     pub param_id: u32,
     pub value: f32,
@@ -155,11 +177,35 @@ pub struct GeneratorParameterSnapshot {
     pub parameters: Vec<(u32, f32)>, // (param_id, value) pairs
 }
 
+/// Parameter value update from an effect to the UI
+#[derive(Clone, Debug)]
+pub struct EffectParameterUpdate {
+    pub target: EffectTarget,
+    pub effect_id: EffectId,
+    pub param_id: u32,
+    pub value: f32,
+}
+
+/// Full parameter snapshot for an effect (response to Query...EffectParameters)
+#[derive(Clone, Debug)]
+pub struct EffectParameterSnapshot {
+    pub target: EffectTarget,
+    pub effect_id: EffectId,
+    pub parameters: Vec<(u32, f32)>, // (param_id, value) pairs
+}
+
 /// Messages from audio thread to UI thread
 #[derive(Clone, Debug)]
 pub enum AudioFeedback {
+    // --- Generator Feedback ---
     /// Single parameter changed (e.g., automation moved it)
-    ParameterChanged(ParameterUpdate),
+    GeneratorParameterChanged(GeneratorParameterUpdate),
     /// Full parameter snapshot in response to query
-    ParameterSnapshot(GeneratorParameterSnapshot),
+    GeneratorParameterSnapshot(GeneratorParameterSnapshot),
+
+    // --- Effect Feedback ---
+    /// Single parameter changed on an effect (e.g., automation moved it)
+    EffectParameterChanged(EffectParameterUpdate),
+    /// Full parameter snapshot for an effect in response to query
+    EffectParameterSnapshot(EffectParameterSnapshot),
 }

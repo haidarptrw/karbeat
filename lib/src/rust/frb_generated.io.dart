@@ -168,7 +168,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
 
   @protected
+  List<UiEffectParameterSnapshot> dco_decode_list_ui_effect_parameter_snapshot(
+    dynamic raw,
+  );
+
+  @protected
   List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw);
+
+  @protected
+  List<UiGeneratorParameterSnapshot>
+  dco_decode_list_ui_generator_parameter_snapshot(dynamic raw);
 
   @protected
   List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(
@@ -177,9 +186,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
-
-  @protected
-  List<UiParameterSnapshot> dco_decode_list_ui_parameter_snapshot(dynamic raw);
 
   @protected
   List<UiParameterValue> dco_decode_list_ui_parameter_value(dynamic raw);
@@ -294,10 +300,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiEffectInstance dco_decode_ui_effect_instance(dynamic raw);
 
   @protected
+  UiEffectParameterSnapshot dco_decode_ui_effect_parameter_snapshot(
+    dynamic raw,
+  );
+
+  @protected
   UiEffectSummary dco_decode_ui_effect_summary(dynamic raw);
 
   @protected
+  UiEffectTarget dco_decode_ui_effect_target(dynamic raw);
+
+  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
+
+  @protected
+  UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(
+    dynamic raw,
+  );
 
   @protected
   UiMixerChannel dco_decode_ui_mixer_channel(dynamic raw);
@@ -310,9 +329,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiNote dco_decode_ui_note(dynamic raw);
-
-  @protected
-  UiParameterSnapshot dco_decode_ui_parameter_snapshot(dynamic raw);
 
   @protected
   UiParameterType dco_decode_ui_parameter_type(dynamic raw);
@@ -504,9 +520,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiEffectParameterSnapshot> sse_decode_list_ui_effect_parameter_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiEffectSummary> sse_decode_list_ui_effect_summary(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<UiGeneratorParameterSnapshot>
+  sse_decode_list_ui_generator_parameter_snapshot(SseDeserializer deserializer);
 
   @protected
   List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(
@@ -515,11 +540,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
-
-  @protected
-  List<UiParameterSnapshot> sse_decode_list_ui_parameter_snapshot(
-    SseDeserializer deserializer,
-  );
 
   @protected
   List<UiParameterValue> sse_decode_list_ui_parameter_value(
@@ -652,10 +672,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiEffectInstance sse_decode_ui_effect_instance(SseDeserializer deserializer);
 
   @protected
+  UiEffectParameterSnapshot sse_decode_ui_effect_parameter_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer);
 
   @protected
+  UiEffectTarget sse_decode_ui_effect_target(SseDeserializer deserializer);
+
+  @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(
     SseDeserializer deserializer,
   );
 
@@ -672,11 +705,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiNote sse_decode_ui_note(SseDeserializer deserializer);
-
-  @protected
-  UiParameterSnapshot sse_decode_ui_parameter_snapshot(
-    SseDeserializer deserializer,
-  );
 
   @protected
   UiParameterType sse_decode_ui_parameter_type(SseDeserializer deserializer);
@@ -899,8 +927,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_effect_parameter_snapshot(
+    List<UiEffectParameterSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_effect_summary(
     List<UiEffectSummary> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_generator_parameter_snapshot(
+    List<UiGeneratorParameterSnapshot> self,
     SseSerializer serializer,
   );
 
@@ -912,12 +952,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_list_ui_parameter_snapshot(
-    List<UiParameterSnapshot> self,
-    SseSerializer serializer,
-  );
 
   @protected
   void sse_encode_list_ui_parameter_value(
@@ -1079,14 +1113,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_effect_parameter_snapshot(
+    UiEffectParameterSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_effect_summary(
     UiEffectSummary self,
     SseSerializer serializer,
   );
 
   @protected
+  void sse_encode_ui_effect_target(
+    UiEffectTarget self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_generator_instance(
     UiGeneratorInstance self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_generator_parameter_snapshot(
+    UiGeneratorParameterSnapshot self,
     SseSerializer serializer,
   );
 
@@ -1107,12 +1159,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_note(UiNote self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_ui_parameter_snapshot(
-    UiParameterSnapshot self,
-    SseSerializer serializer,
-  );
 
   @protected
   void sse_encode_ui_parameter_type(

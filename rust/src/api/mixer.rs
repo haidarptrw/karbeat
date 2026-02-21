@@ -243,21 +243,6 @@ pub fn get_mixer_channel_populated(track_id: u32) -> Result<(UiMixerChannel, Vec
     Ok((ui_channel, effects))
 }
 
-pub fn get_effect_instance(track_id: u32, effect_id: u32) -> Result<UiEffectInstance, String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let channel = mixer_state
-        .channels
-        .get(&track_id.into())
-        .ok_or("Channel not found".to_owned())?;
-    let effect = channel
-        .effects
-        .iter()
-        .find(|e| e.id.to_u32() == effect_id)
-        .ok_or("Effect instance not found".to_owned())?;
-    Ok(effect.into())
-}
-
 /// **GETTER: Fetch the master bus**
 pub fn get_master_bus() -> UiMixerChannel {
     let app = get_app_read();

@@ -78,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -851387850;
+  int get rustContentHash => 1634968991;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -225,7 +225,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<UiClipboardContent> crateApiSessionGetClipboardContents();
 
-  Future<UiEffectInstance> crateApiMixerGetEffectInstance({
+  Future<UiEffectInstance> crateApiPluginGetEffect({
     required int trackId,
     required int effectId,
   });
@@ -335,7 +335,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiAudioPlaySourcePreview({required int id});
 
-  Future<List<UiParameterSnapshot>> crateApiPluginPollParameterFeedback();
+  Future<List<UiEffectParameterSnapshot>>
+  crateApiPluginPollEffectParameterFeedback();
+
+  Future<List<UiGeneratorParameterSnapshot>>
+  crateApiPluginPollGeneratorParameterFeedback();
 
   Future<void> crateApiPluginQueryGeneratorParameters({
     required int generatorId,
@@ -421,8 +425,12 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiTransportStopSongPlayback();
 
-  Future<void> crateApiPluginSyncParametersFromAudio({
-    required List<UiParameterSnapshot> snapshots,
+  Future<void> crateApiPluginSyncEffectParametersFromAudio({
+    required List<UiEffectParameterSnapshot> snapshots,
+  });
+
+  Future<void> crateApiPluginSyncGeneratorParametersFromAudio({
+    required List<UiGeneratorParameterSnapshot> snapshots,
   });
 
   Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault();
@@ -1593,7 +1601,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_clipboard_contents", argNames: []);
 
   @override
-  Future<UiEffectInstance> crateApiMixerGetEffectInstance({
+  Future<UiEffectInstance> crateApiPluginGetEffect({
     required int trackId,
     required int effectId,
   }) {
@@ -1614,18 +1622,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_ui_effect_instance,
           decodeErrorData: sse_decode_String,
         ),
-        constMeta: kCrateApiMixerGetEffectInstanceConstMeta,
+        constMeta: kCrateApiPluginGetEffectConstMeta,
         argValues: [trackId, effectId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiMixerGetEffectInstanceConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_effect_instance",
-        argNames: ["trackId", "effectId"],
-      );
+  TaskConstMeta get kCrateApiPluginGetEffectConstMeta => const TaskConstMeta(
+    debugName: "get_effect",
+    argNames: ["trackId", "effectId"],
+  );
 
   @override
   Future<UiGeneratorInstance> crateApiPluginGetGenerator({
@@ -2530,7 +2537,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "play_source_preview", argNames: ["id"]);
 
   @override
-  Future<List<UiParameterSnapshot>> crateApiPluginPollParameterFeedback() {
+  Future<List<UiEffectParameterSnapshot>>
+  crateApiPluginPollEffectParameterFeedback() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2543,18 +2551,52 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_ui_parameter_snapshot,
+          decodeSuccessData: sse_decode_list_ui_effect_parameter_snapshot,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPluginPollParameterFeedbackConstMeta,
+        constMeta: kCrateApiPluginPollEffectParameterFeedbackConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPluginPollParameterFeedbackConstMeta =>
-      const TaskConstMeta(debugName: "poll_parameter_feedback", argNames: []);
+  TaskConstMeta get kCrateApiPluginPollEffectParameterFeedbackConstMeta =>
+      const TaskConstMeta(
+        debugName: "poll_effect_parameter_feedback",
+        argNames: [],
+      );
+
+  @override
+  Future<List<UiGeneratorParameterSnapshot>>
+  crateApiPluginPollGeneratorParameterFeedback() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 67,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_ui_generator_parameter_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginPollGeneratorParameterFeedbackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPluginPollGeneratorParameterFeedbackConstMeta =>
+      const TaskConstMeta(
+        debugName: "poll_generator_parameter_feedback",
+        argNames: [],
+      );
 
   @override
   Future<void> crateApiPluginQueryGeneratorParameters({
@@ -2568,7 +2610,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 68,
             port: port_,
           );
         },
@@ -2598,7 +2640,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 68,
+            funcId: 69,
             port: port_,
           );
         },
@@ -2636,7 +2678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 69,
+            funcId: 70,
             port: port_,
           );
         },
@@ -2674,7 +2716,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 71,
             port: port_,
           );
         },
@@ -2712,7 +2754,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 71,
+            funcId: 72,
             port: port_,
           );
         },
@@ -2750,7 +2792,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 73,
             port: port_,
           );
         },
@@ -2787,7 +2829,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 73,
+            funcId: 74,
             port: port_,
           );
         },
@@ -2817,7 +2859,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 74,
+            funcId: 75,
             port: port_,
           );
         },
@@ -2849,7 +2891,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 75,
+            funcId: 76,
             port: port_,
           );
         },
@@ -2885,7 +2927,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 77,
             port: port_,
           );
         },
@@ -2916,7 +2958,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 78,
             port: port_,
           );
         },
@@ -2946,7 +2988,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 79,
             port: port_,
           );
         },
@@ -2981,7 +3023,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 80,
             port: port_,
           );
         },
@@ -3012,7 +3054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 81,
             port: port_,
           );
         },
@@ -3040,7 +3082,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 82,
             port: port_,
           );
         },
@@ -3080,7 +3122,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 83,
             port: port_,
           );
         },
@@ -3116,7 +3158,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 83,
+            funcId: 84,
             port: port_,
           );
         },
@@ -3143,7 +3185,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 84,
+            funcId: 85,
             port: port_,
           );
         },
@@ -3170,7 +3212,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 85,
+            funcId: 86,
             port: port_,
           );
         },
@@ -3189,18 +3231,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "stop_song_playback", argNames: []);
 
   @override
-  Future<void> crateApiPluginSyncParametersFromAudio({
-    required List<UiParameterSnapshot> snapshots,
+  Future<void> crateApiPluginSyncEffectParametersFromAudio({
+    required List<UiEffectParameterSnapshot> snapshots,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_ui_parameter_snapshot(snapshots, serializer);
+          sse_encode_list_ui_effect_parameter_snapshot(snapshots, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 86,
+            funcId: 87,
             port: port_,
           );
         },
@@ -3208,16 +3250,52 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPluginSyncParametersFromAudioConstMeta,
+        constMeta: kCrateApiPluginSyncEffectParametersFromAudioConstMeta,
         argValues: [snapshots],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPluginSyncParametersFromAudioConstMeta =>
+  TaskConstMeta get kCrateApiPluginSyncEffectParametersFromAudioConstMeta =>
       const TaskConstMeta(
-        debugName: "sync_parameters_from_audio",
+        debugName: "sync_effect_parameters_from_audio",
+        argNames: ["snapshots"],
+      );
+
+  @override
+  Future<void> crateApiPluginSyncGeneratorParametersFromAudio({
+    required List<UiGeneratorParameterSnapshot> snapshots,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_ui_generator_parameter_snapshot(
+            snapshots,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 88,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginSyncGeneratorParametersFromAudioConstMeta,
+        argValues: [snapshots],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPluginSyncGeneratorParametersFromAudioConstMeta =>
+      const TaskConstMeta(
+        debugName: "sync_generator_parameters_from_audio",
         argNames: ["snapshots"],
       );
 
@@ -3230,7 +3308,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 87,
+            funcId: 89,
             port: port_,
           );
         },
@@ -3260,7 +3338,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 88,
+            funcId: 90,
             port: port_,
           );
         },
@@ -3598,9 +3676,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<UiEffectParameterSnapshot> dco_decode_list_ui_effect_parameter_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_effect_parameter_snapshot)
+        .toList();
+  }
+
+  @protected
   List<UiEffectSummary> dco_decode_list_ui_effect_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_ui_effect_summary).toList();
+  }
+
+  @protected
+  List<UiGeneratorParameterSnapshot>
+  dco_decode_list_ui_generator_parameter_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_ui_generator_parameter_snapshot)
+        .toList();
   }
 
   @protected
@@ -3617,14 +3714,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<UiNote> dco_decode_list_ui_note(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_ui_note).toList();
-  }
-
-  @protected
-  List<UiParameterSnapshot> dco_decode_list_ui_parameter_snapshot(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_ui_parameter_snapshot)
-        .toList();
   }
 
   @protected
@@ -3974,6 +4063,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiEffectParameterSnapshot dco_decode_ui_effect_parameter_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return UiEffectParameterSnapshot(
+      target: dco_decode_ui_effect_target(arr[0]),
+      effectId: dco_decode_u_32(arr[1]),
+      parameters: dco_decode_list_ui_parameter_value(arr[2]),
+    );
+  }
+
+  @protected
   UiEffectSummary dco_decode_ui_effect_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -3986,6 +4090,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiEffectTarget dco_decode_ui_effect_target(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiEffectTarget_Track(dco_decode_u_32(raw[1]));
+      case 1:
+        return UiEffectTarget_Master();
+      case 2:
+        return UiEffectTarget_Bus(dco_decode_u_32(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -3995,6 +4114,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       id: dco_decode_u_32(arr[0]),
       name: dco_decode_String(arr[1]),
       parameters: dco_decode_Map_u_32_f_32_None(arr[2]),
+    );
+  }
+
+  @protected
+  UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return UiGeneratorParameterSnapshot(
+      generatorId: dco_decode_u_32(arr[0]),
+      parameters: dco_decode_list_ui_parameter_value(arr[1]),
     );
   }
 
@@ -4062,18 +4195,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       probability: dco_decode_f_32(arr[5]),
       microOffset: dco_decode_i_8(arr[6]),
       mute: dco_decode_bool(arr[7]),
-    );
-  }
-
-  @protected
-  UiParameterSnapshot dco_decode_ui_parameter_snapshot(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return UiParameterSnapshot(
-      generatorId: dco_decode_u_32(arr[0]),
-      parameters: dco_decode_list_ui_parameter_value(arr[1]),
     );
   }
 
@@ -4591,6 +4712,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<UiEffectParameterSnapshot> sse_decode_list_ui_effect_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiEffectParameterSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_effect_parameter_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<UiEffectSummary> sse_decode_list_ui_effect_summary(
     SseDeserializer deserializer,
   ) {
@@ -4600,6 +4735,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <UiEffectSummary>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_ui_effect_summary(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UiGeneratorParameterSnapshot>
+  sse_decode_list_ui_generator_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UiGeneratorParameterSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ui_generator_parameter_snapshot(deserializer));
     }
     return ans_;
   }
@@ -4626,20 +4776,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <UiNote>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_ui_note(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<UiParameterSnapshot> sse_decode_list_ui_parameter_snapshot(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <UiParameterSnapshot>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_ui_parameter_snapshot(deserializer));
     }
     return ans_;
   }
@@ -5075,11 +5211,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiEffectParameterSnapshot sse_decode_ui_effect_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_target = sse_decode_ui_effect_target(deserializer);
+    var var_effectId = sse_decode_u_32(deserializer);
+    var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
+    return UiEffectParameterSnapshot(
+      target: var_target,
+      effectId: var_effectId,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
   UiEffectSummary sse_decode_ui_effect_summary(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_u_32(deserializer);
     var var_name = sse_decode_String(deserializer);
     return UiEffectSummary(id: var_id, name: var_name);
+  }
+
+  @protected
+  UiEffectTarget sse_decode_ui_effect_target(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiEffectTarget_Track(var_field0);
+      case 1:
+        return UiEffectTarget_Master();
+      case 2:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiEffectTarget_Bus(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -5093,6 +5263,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return UiGeneratorInstance(
       id: var_id,
       name: var_name,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
+  UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_generatorId = sse_decode_u_32(deserializer);
+    var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
+    return UiGeneratorParameterSnapshot(
+      generatorId: var_generatorId,
       parameters: var_parameters,
     );
   }
@@ -5179,19 +5362,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       probability: var_probability,
       microOffset: var_microOffset,
       mute: var_mute,
-    );
-  }
-
-  @protected
-  UiParameterSnapshot sse_decode_ui_parameter_snapshot(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_generatorId = sse_decode_u_32(deserializer);
-    var var_parameters = sse_decode_list_ui_parameter_value(deserializer);
-    return UiParameterSnapshot(
-      generatorId: var_generatorId,
-      parameters: var_parameters,
     );
   }
 
@@ -5719,6 +5889,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_ui_effect_parameter_snapshot(
+    List<UiEffectParameterSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_effect_parameter_snapshot(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_ui_effect_summary(
     List<UiEffectSummary> self,
     SseSerializer serializer,
@@ -5727,6 +5909,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_ui_effect_summary(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ui_generator_parameter_snapshot(
+    List<UiGeneratorParameterSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ui_generator_parameter_snapshot(item, serializer);
     }
   }
 
@@ -5748,18 +5942,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_ui_note(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_ui_parameter_snapshot(
-    List<UiParameterSnapshot> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_ui_parameter_snapshot(item, serializer);
     }
   }
 
@@ -6138,6 +6320,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_ui_effect_parameter_snapshot(
+    UiEffectParameterSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_effect_target(self.target, serializer);
+    sse_encode_u_32(self.effectId, serializer);
+    sse_encode_list_ui_parameter_value(self.parameters, serializer);
+  }
+
+  @protected
   void sse_encode_ui_effect_summary(
     UiEffectSummary self,
     SseSerializer serializer,
@@ -6145,6 +6338,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.id, serializer);
     sse_encode_String(self.name, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_effect_target(
+    UiEffectTarget self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiEffectTarget_Track(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_32(field0, serializer);
+      case UiEffectTarget_Master():
+        sse_encode_i_32(1, serializer);
+      case UiEffectTarget_Bus(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_u_32(field0, serializer);
+    }
   }
 
   @protected
@@ -6156,6 +6367,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.id, serializer);
     sse_encode_String(self.name, serializer);
     sse_encode_Map_u_32_f_32_None(self.parameters, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_generator_parameter_snapshot(
+    UiGeneratorParameterSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.generatorId, serializer);
+    sse_encode_list_ui_parameter_value(self.parameters, serializer);
   }
 
   @protected
@@ -6217,16 +6438,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_32(self.probability, serializer);
     sse_encode_i_8(self.microOffset, serializer);
     sse_encode_bool(self.mute, serializer);
-  }
-
-  @protected
-  void sse_encode_ui_parameter_snapshot(
-    UiParameterSnapshot self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.generatorId, serializer);
-    sse_encode_list_ui_parameter_value(self.parameters, serializer);
   }
 
   @protected
