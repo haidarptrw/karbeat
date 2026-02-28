@@ -35,10 +35,10 @@ pub fn load_audio_file(path_string: String, name: Option<String>) -> Result<Audi
     let channels = decoder.channels();
     let all_samples: Vec<f32> = decoder.collect();
     let total_samples = all_samples.len() as u32;
-    let total_frames = if channels > 0 { total_samples / channels as u32 } else { 0 };
+    let total_frames = if channels.get() > 0 { total_samples / channels.get() as u32 } else { 0 };
     
-    let duration_seconds = if sample_rate > 0 {
-        total_frames as f64 / sample_rate as f64
+    let duration_seconds = if sample_rate.get() > 0 {
+        total_frames as f64 / sample_rate.get() as f64
     } else {
         0.0
     };
@@ -49,8 +49,8 @@ pub fn load_audio_file(path_string: String, name: Option<String>) -> Result<Audi
         buffer: Arc::new(all_samples),
         file_path: path_string,
         name: final_name,
-        sample_rate,
-        channels,
+        sample_rate: sample_rate.get(),
+        channels: channels.get(),
         duration: duration_seconds,
         trim_end: total_frames,
         ..Default::default()

@@ -156,7 +156,11 @@ pub fn start_audio_stream(
     let device = host.default_output_device().context("no audio output device available")?;
 
     // debug!("Output dev");
-    log::info!("Output device: {}", device.name().unwrap_or("Unknown".into()));
+    let device_name = match device.description() {
+        Ok(desc) => desc.to_string(),
+        Err(_) => "Unknown".into(),
+    };
+    log::info!("Output device: {}", device_name);
 
     let supported_configs_range = device
         .supported_output_configs()
@@ -187,7 +191,7 @@ pub fn start_audio_stream(
     };
 
     let sample_format = supported_config.sample_format();
-    let sample_rate: u32 = config.sample_rate.0;
+    let sample_rate: u32 = config.sample_rate;
     let channels = config.channels as usize;
 
     log::info!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);
@@ -195,7 +199,11 @@ pub fn start_audio_stream(
 
     if let Ok(mut state) = ctx().app_state.write() {
         state.audio_config.sample_rate = sample_rate;
-        state.audio_config.selected_output_device = device.name().unwrap_or("Unknown".to_string());
+        state.audio_config.selected_output_device = match device.description()
+        {
+            Ok(desc) => desc.to_string(),
+            Err(_) => "Unknown".into(),
+        }
     }
 
     state_consumer.update();
