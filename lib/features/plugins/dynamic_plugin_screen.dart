@@ -66,12 +66,12 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
 
     try {
       // 1. Poll for pending feedback from audio thread
-      final snapshots = await plugin_api.pollParameterFeedback();
+      final snapshots = await plugin_api.pollGeneratorParameterFeedback();
 
       if (snapshots.isEmpty) return;
 
       // 2. Sync to stored parameters (for persistence)
-      await plugin_api.syncParametersFromAudio(snapshots: snapshots);
+      await plugin_api.syncGeneratorParametersFromAudio(snapshots: snapshots);
 
       // 3. Update local UI state
       setState(() {

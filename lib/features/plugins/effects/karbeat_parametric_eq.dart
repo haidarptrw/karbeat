@@ -391,7 +391,7 @@ class _KarbeatParametricEqState extends State<KarbeatParametricEq> {
           ),
         ),
         Text(
-          "${val >= 1000 ? (val/1000).toStringAsFixed(1) + 'k' : val.toStringAsFixed(1)}$suffix", 
+          "${val >= 1000 ? '${(val/1000).toStringAsFixed(1)}k' : val.toStringAsFixed(1)}$suffix", 
           style: const TextStyle(color: Colors.white, fontSize: 9)
         ),
       ],

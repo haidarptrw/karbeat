@@ -769,8 +769,6 @@ class _ClipRenderer extends StatelessWidget {
     final state = context.read<KarbeatState>();
 
     switch (clip.source) {
-      // In future: Use CustomPainter to draw the waveform summary here
-
       case UiClipSource_Audio(:final sourceId):
         double ratio = 1.0;
         final audioData = state.audioSources[sourceId];

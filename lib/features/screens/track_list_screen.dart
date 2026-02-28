@@ -841,7 +841,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
 
     // Find source track index
-    final sortedTracks = widget.tracks.toList()
+    final sortedTracks = widget.tracks
       ..sort((a, b) => a.id.compareTo(b.id));
     final trackIndex = sortedTracks.indexWhere((t) => t.id == selectedTrackId);
     if (trackIndex < 0) return [];
