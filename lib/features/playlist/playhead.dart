@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
 class _PlayheadHandlePainter extends CustomPainter {
   @override
@@ -24,7 +24,7 @@ class _PlayheadHandlePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class PlayheadOverlay extends StatefulWidget {
+class PlayheadOverlay extends ConsumerStatefulWidget {
   /// Amount of pixels to offset the draw start (e.g. for Headers)
   final double offsetAdjustment;
   final ScrollController scrollController;
@@ -46,16 +46,16 @@ class PlayheadOverlay extends StatefulWidget {
   });
 
   @override
-  State<PlayheadOverlay> createState() => _PlayheadOverlayState();
+  ConsumerState<PlayheadOverlay> createState() => _PlayheadOverlayState();
 }
 
-class _PlayheadOverlayState extends State<PlayheadOverlay> {
+class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   late Stream<PlaybackPosition> _positionStream;
 
   @override
   void initState() {
     super.initState();
-    _positionStream = context.read<KarbeatState>().positionStream;
+    _positionStream = ref.read(karbeatStateProvider).positionStream;
   }
 
   @override

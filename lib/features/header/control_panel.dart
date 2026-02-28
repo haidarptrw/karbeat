@@ -1,10 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/src/rust/audio/event.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
-import 'package:provider/provider.dart';
 
 class ControlPanel extends StatelessWidget {
   final List<Widget> items;
@@ -140,11 +140,12 @@ class ControlPanelToolbarItem extends StatelessWidget {
   }
 }
 
-class DefaultControlPanel extends StatelessWidget {
+class DefaultControlPanel extends ConsumerWidget {
   const DefaultControlPanel({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(karbeatStateProvider);
     final builder = ControlPanelBuilder();
 
     // Screen Navigation
@@ -154,10 +155,8 @@ class DefaultControlPanel extends StatelessWidget {
         icon: Icons.view_list,
         color: Colors.cyanAccent,
         onTap: () =>
-            context.read<KarbeatState>().navigateTo(WorkspaceView.trackList),
-        isActive: context.select<KarbeatState, bool>(
-          (s) => s.currentView == WorkspaceView.trackList,
-        ),
+            ref.read(karbeatStateProvider).navigateTo(WorkspaceView.trackList),
+        isActive: state.currentView == WorkspaceView.trackList,
       ),
     );
 
@@ -167,10 +166,8 @@ class DefaultControlPanel extends StatelessWidget {
         icon: Icons.piano,
         color: Colors.cyanAccent,
         onTap: () =>
-            context.read<KarbeatState>().navigateTo(WorkspaceView.pianoRoll),
-        isActive: context.select<KarbeatState, bool>(
-          (s) => s.currentView == WorkspaceView.pianoRoll,
-        ),
+            ref.read(karbeatStateProvider).navigateTo(WorkspaceView.pianoRoll),
+        isActive: state.currentView == WorkspaceView.pianoRoll,
       ),
     );
 
@@ -180,10 +177,8 @@ class DefaultControlPanel extends StatelessWidget {
         icon: Icons.tune,
         color: Colors.cyanAccent,
         onTap: () =>
-            context.read<KarbeatState>().navigateTo(WorkspaceView.mixer),
-        isActive: context.select<KarbeatState, bool>(
-          (s) => s.currentView == WorkspaceView.mixer,
-        ),
+            ref.read(karbeatStateProvider).navigateTo(WorkspaceView.mixer),
+        isActive: state.currentView == WorkspaceView.mixer,
       ),
     );
 
@@ -193,10 +188,8 @@ class DefaultControlPanel extends StatelessWidget {
         icon: Icons.group_work,
         color: Colors.cyanAccent,
         onTap: () =>
-            context.read<KarbeatState>().navigateTo(WorkspaceView.source),
-        isActive: context.select<KarbeatState, bool>(
-          (s) => s.currentView == WorkspaceView.source,
-        ),
+            ref.read(karbeatStateProvider).navigateTo(WorkspaceView.source),
+        isActive: state.currentView == WorkspaceView.source,
       ),
     );
 
@@ -204,122 +197,105 @@ class DefaultControlPanel extends StatelessWidget {
 
     // Transport Panel
     builder.addWidget(
-      Selector<KarbeatState, bool>(
-        selector: (_, state) => state.isSongPlaying,
-        builder: (context, isSongPlaying, _) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ControlPanelToolbarItem(
-                name: isSongPlaying ? "Pause" : "Play",
-                icon: isSongPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.greenAccent,
-                isActive: isSongPlaying,
-                onTap: () => context.read<KarbeatState>().togglePlay(),
-              ),
-              ControlPanelToolbarItem(
-                name: "Stop",
-                icon: Icons.stop,
-                color: Colors.redAccent,
-                onTap: () => context.read<KarbeatState>().stop(),
-              ),
-            ],
-          );
-        },
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ControlPanelToolbarItem(
+            name: state.isSongPlaying ? "Pause" : "Play",
+            icon: state.isSongPlaying ? Icons.pause : Icons.play_arrow,
+            color: Colors.greenAccent,
+            isActive: state.isSongPlaying,
+            onTap: () => ref.read(karbeatStateProvider).togglePlay(),
+          ),
+          ControlPanelToolbarItem(
+            name: "Stop",
+            icon: Icons.stop,
+            color: Colors.redAccent,
+            onTap: () => ref.read(karbeatStateProvider).stop(),
+          ),
+        ],
       ),
     );
 
     builder.addWidget(
-      Selector<KarbeatState, bool>(
-        selector: (_, state) => state.isLooping,
-        builder: (context, isLooping, _) {
-          return ControlPanelToolbarItem(
-            name: "Loop",
-            icon: Icons.loop,
-            color: Colors.orangeAccent,
-            isActive: isLooping,
-            onTap: () => context.read<KarbeatState>().toggleLoop(),
-          );
-        },
+      ControlPanelToolbarItem(
+        name: "Loop",
+        icon: Icons.loop,
+        color: Colors.orangeAccent,
+        isActive: state.isLooping,
+        onTap: () => ref.read(karbeatStateProvider).toggleLoop(),
       ),
     );
 
     builder.addDivider();
 
     // Info Display
-    builder.addWidget(_buildInfoDisplay(context));
+    builder.addWidget(_buildInfoDisplay(context, ref));
 
     builder.addDivider();
 
     // Control Panel Tools
     builder.addWidget(
-      Selector<KarbeatState, ToolSelection>(
-        selector: (_, state) => state.selectedTool,
-        builder: (context, selectedTool, _) {
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ControlPanelToolbarItem(
-                name: "Pointer",
-                icon: Icons.near_me,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.pointer,
-                onTap: () => context.read<KarbeatState>().selectTool(
-                  ToolSelection.pointer,
-                ),
-              ),
-              ControlPanelToolbarItem(
-                name: "Cut",
-                icon: Icons.content_cut,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.cut,
-                onTap: () =>
-                    context.read<KarbeatState>().selectTool(ToolSelection.cut),
-              ),
-              ControlPanelToolbarItem(
-                name: "Draw",
-                icon: Icons.edit,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.draw,
-                onTap: () =>
-                    context.read<KarbeatState>().selectTool(ToolSelection.draw),
-              ),
-              ControlPanelToolbarItem(
-                name: "Move",
-                icon: Icons.open_with,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.move,
-                onTap: () =>
-                    context.read<KarbeatState>().selectTool(ToolSelection.move),
-              ),
-              ControlPanelToolbarItem(
-                name: "Delete",
-                icon: Icons.delete,
-                color: Colors.red,
-                isActive: selectedTool == ToolSelection.delete,
-                onTap: () => context.read<KarbeatState>().selectTool(
-                  ToolSelection.delete,
-                ),
-              ),
-              ControlPanelToolbarItem(
-                name: "Range Select",
-                icon: Icons.crop_free,
-                color: Colors.blueAccent,
-                isActive: selectedTool == ToolSelection.select,
-                onTap: () => context.read<KarbeatState>().selectTool(
-                  ToolSelection.select,
-                ),
-              ),
-            ],
-          );
-        },
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ControlPanelToolbarItem(
+            name: "Pointer",
+            icon: Icons.near_me,
+            color: Colors.blueAccent,
+            isActive: state.selectedTool == ToolSelection.pointer,
+            onTap: () => ref
+                .read(karbeatStateProvider)
+                .selectTool(ToolSelection.pointer),
+          ),
+          ControlPanelToolbarItem(
+            name: "Cut",
+            icon: Icons.content_cut,
+            color: Colors.blueAccent,
+            isActive: state.selectedTool == ToolSelection.cut,
+            onTap: () =>
+                ref.read(karbeatStateProvider).selectTool(ToolSelection.cut),
+          ),
+          ControlPanelToolbarItem(
+            name: "Draw",
+            icon: Icons.edit,
+            color: Colors.blueAccent,
+            isActive: state.selectedTool == ToolSelection.draw,
+            onTap: () =>
+                ref.read(karbeatStateProvider).selectTool(ToolSelection.draw),
+          ),
+          ControlPanelToolbarItem(
+            name: "Move",
+            icon: Icons.open_with,
+            color: Colors.blueAccent,
+            isActive: state.selectedTool == ToolSelection.move,
+            onTap: () =>
+                ref.read(karbeatStateProvider).selectTool(ToolSelection.move),
+          ),
+          ControlPanelToolbarItem(
+            name: "Delete",
+            icon: Icons.delete,
+            color: Colors.red,
+            isActive: state.selectedTool == ToolSelection.delete,
+            onTap: () =>
+                ref.read(karbeatStateProvider).selectTool(ToolSelection.delete),
+          ),
+          ControlPanelToolbarItem(
+            name: "Range Select",
+            icon: Icons.crop_free,
+            color: Colors.blueAccent,
+            isActive: state.selectedTool == ToolSelection.select,
+            onTap: () =>
+                ref.read(karbeatStateProvider).selectTool(ToolSelection.select),
+          ),
+        ],
       ),
     );
 
     return builder.build();
   }
 
-  Widget _buildInfoDisplay(BuildContext context) {
+  Widget _buildInfoDisplay(BuildContext context, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -329,7 +305,7 @@ class DefaultControlPanel extends StatelessWidget {
       ),
       child: IntrinsicHeight(
         child: StreamBuilder<PlaybackPosition>(
-          stream: context.read<KarbeatState>().positionStream,
+          stream: ref.read(karbeatStateProvider).positionStream,
           builder: (context, asyncSnapshot) {
             final pos = asyncSnapshot.data;
             final bar = pos?.bar ?? 0;
@@ -384,62 +360,57 @@ class DefaultControlPanel extends StatelessWidget {
   }
 }
 
-class BpmControl extends StatelessWidget {
+class BpmControl extends ConsumerWidget {
   const BpmControl({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Selector<KarbeatState, double>(
-      selector: (_, KarbeatState state) {
-        return state.tempo;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bpm = ref.watch(karbeatStateProvider.select((s) => s.tempo));
+
+    return Listener(
+      onPointerSignal: (event) {
+        if (event is PointerScrollEvent) {
+          final dy = event.scrollDelta.dy;
+          final change = dy < 0 ? 0.1 : -0.1;
+          _updateBpm(ref, bpm + change);
+        }
       },
-      builder: (BuildContext context, double bpm, Widget? child) {
-        return Listener(
-          onPointerSignal: (event) {
-            if (event is PointerScrollEvent) {
-              final dy = event.scrollDelta.dy;
-              final change = dy < 0 ? 0.1 : -0.1;
-              _updateBpm(context, bpm + change);
-            }
-          },
-          child: GestureDetector(
-            onVerticalDragUpdate: (details) {
-              final change = details.primaryDelta! * -0.5;
-              _updateBpm(context, bpm + change);
-            },
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeUpDown,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "BPM",
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    bpm.toStringAsFixed(1),
-                    style: const TextStyle(
-                      color: Colors.orangeAccent,
-                      fontSize: 14,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ],
+      child: GestureDetector(
+        onVerticalDragUpdate: (details) {
+          final change = details.primaryDelta! * -0.5;
+          _updateBpm(ref, bpm + change);
+        },
+        child: MouseRegion(
+          cursor: SystemMouseCursors.resizeUpDown,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "BPM",
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 8,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
+              Text(
+                bpm.toStringAsFixed(1),
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontSize: 14,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  void _updateBpm(BuildContext context, double newBpm) {
+  void _updateBpm(WidgetRef ref, double newBpm) {
     final clamped = newBpm.clamp(10.0, 999.0);
-    context.read<KarbeatState>().setBpm(clamped);
+    ref.read(karbeatStateProvider).setBpm(clamped);
   }
 }

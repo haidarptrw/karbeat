@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/layout/main_content.dart';
 import 'package:karbeat/features/side_panel/side_panel.dart';
 import 'package:karbeat/features/side_panel/sidebar.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
-class MainScreen extends StatelessWidget {
+class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentContext = ref.watch(
+      karbeatStateProvider.select((s) => s.currentToolbarContext),
+    );
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
@@ -17,26 +21,17 @@ class MainScreen extends StatelessWidget {
           const Row(
             children: [
               Sidebar(),
-              Expanded(
-                child: MainContent(),
-              ),
+              Expanded(child: MainContent()),
             ],
           ),
           // Optimized Context Panel Overlay
-          Selector<KarbeatState, ToolbarMenuContextGroup>(
-            selector: (_, state) => state.currentToolbarContext,
-            builder: (context, currentContext, child) {
-              if (currentContext == ToolbarMenuContextGroup.none) {
-                return const SizedBox.shrink();
-              }
-              return Positioned(
-                left: 60,
-                top: 0,
-                bottom: 0,
-                child: _buildContextPanel(context, currentContext),
-              );
-            },
-          ),
+          if (currentContext != ToolbarMenuContextGroup.none)
+            Positioned(
+              left: 60,
+              top: 0,
+              bottom: 0,
+              child: _buildContextPanel(context, ref, currentContext),
+            ),
         ],
       ),
     );
@@ -44,6 +39,7 @@ class MainScreen extends StatelessWidget {
 
   Widget _buildContextPanel(
     BuildContext context,
+    WidgetRef ref,
     ToolbarMenuContextGroup currentContext,
   ) {
     final group = KarbeatState.menuGroups.firstWhere(
@@ -53,14 +49,14 @@ class MainScreen extends StatelessWidget {
     return ContextPanel(
       group: group,
       onAction: (action) {
-        final state = context.read<KarbeatState>();
+        final state = ref.read(karbeatStateProvider);
         state.closeContextPanel();
         action.callback?.call(context, state);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Executed: ${action.title}')));
       },
-      onClose: () => context.read<KarbeatState>().closeContextPanel(),
+      onClose: () => ref.read(karbeatStateProvider).closeContextPanel(),
     );
   }
 }

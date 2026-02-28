@@ -1,15 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/scrollable_virtual_keyboard.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
 /// Generic Dynamic Plugin Screen that generates UI from plugin parameter specs.
 /// This replaces manual plugin screens like KarbeatzerScreen.
-class DynamicPluginScreen extends StatefulWidget {
+class DynamicPluginScreen extends ConsumerStatefulWidget {
   final int generatorId;
   final String generatorName;
 
@@ -20,10 +20,11 @@ class DynamicPluginScreen extends StatefulWidget {
   });
 
   @override
-  State<DynamicPluginScreen> createState() => _DynamicPluginScreenState();
+  ConsumerState<DynamicPluginScreen> createState() =>
+      _DynamicPluginScreenState();
 }
 
-class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
+class _DynamicPluginScreenState extends ConsumerState<DynamicPluginScreen> {
   List<plugin_api.UiPluginParameter> _parameters = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -152,9 +153,9 @@ class _DynamicPluginScreenState extends State<DynamicPluginScreen> {
       );
       // Sync generator list so Flutter state matches backend
       if (mounted) {
-        await context.read<KarbeatState>().syncGenerator(
-          generatorId: widget.generatorId,
-        );
+        await ref
+            .read(karbeatStateProvider)
+            .syncGenerator(generatorId: widget.generatorId);
       }
     } catch (e) {
       debugPrint('Error setting parameter: $e');

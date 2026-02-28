@@ -13,13 +13,13 @@ import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class TrackListScreen extends StatelessWidget {
+class TrackListScreen extends ConsumerWidget {
   const TrackListScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final parentHeight = constraints.maxHeight;
@@ -29,13 +29,16 @@ class TrackListScreen extends StatelessWidget {
         final double itemHeight = calculatedHeight.clamp(80.0, 150.0);
         const double headerWidth = 220.0;
 
-        return Consumer<KarbeatState>(
-          builder: (context, state, child) {
-            final tracks = state.tracks.values.toList()
+        return Builder(
+          builder: (context) {
+            final tracks = ref.watch(
+              karbeatStateProvider.select((s) => s.tracks),
+            );
+            final sortedTracks = tracks.values.toList()
               ..sort((a, b) => a.id.compareTo(b.id));
 
             return _SplitTrackView(
-              tracks: tracks,
+              tracks: sortedTracks,
               itemHeight: itemHeight,
               headerWidth: headerWidth,
             );
@@ -46,7 +49,7 @@ class TrackListScreen extends StatelessWidget {
   }
 }
 
-class _SplitTrackView extends StatefulWidget {
+class _SplitTrackView extends ConsumerStatefulWidget {
   final List<UiTrack> tracks;
   final double itemHeight;
   final double headerWidth;
@@ -58,10 +61,10 @@ class _SplitTrackView extends StatefulWidget {
   });
 
   @override
-  State<_SplitTrackView> createState() => _SplitTrackViewState();
+  ConsumerState<_SplitTrackView> createState() => _SplitTrackViewState();
 }
 
-class _SplitTrackViewState extends State<_SplitTrackView> {
+class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   late LinkedScrollControllerGroup _verticalControllers;
   late ScrollController _headerController;
   late ScrollController _timelineController;
@@ -108,7 +111,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
 
-    final state = context.read<KarbeatState>();
+    final state = ref.read(karbeatStateProvider);
     _activeSampleRate = state.hardwareConfig.sampleRate > 0
         ? state.hardwareConfig.sampleRate
         : 44100;
@@ -180,7 +183,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 
   void _updateZoom(double newZoom, double focalPointX) {
-    final state = context.read<KarbeatState>();
+    final state = ref.read(karbeatStateProvider);
     final oldZoom = state.horizontalZoomLevel;
 
     final clampedZoom = newZoom.clamp(0.01, 5000.0);
@@ -225,7 +228,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     Offset localPosition, {
     bool isDrag = false,
   }) {
-    final state = context.read<KarbeatState>();
+    final state = ref.read(karbeatStateProvider);
     double scrollX = 0;
     if (_trackContentController.hasClients) {
       scrollX = _trackContentController.offset;
@@ -370,13 +373,15 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     // Calculate total height to ensure both lists have exactly same extent
     // +1 for the Add Button row
     final int itemCount = widget.tracks.length + 1;
-    final state = context.read<KarbeatState>();
-    final isPlacing = context.select<KarbeatState, bool>((s) => s.isPlacing);
-    final selectedTool = context.select<KarbeatState, ToolSelection>(
-      (s) => s.selectedTool,
+    final state = ref.read(karbeatStateProvider);
+    final isPlacing = ref.watch(
+      karbeatStateProvider.select((s) => s.isPlacing),
     );
-    final horizontalZoom = context.select<KarbeatState, double>(
-      (s) => s.horizontalZoomLevel,
+    final selectedTool = ref.watch(
+      karbeatStateProvider.select((s) => s.selectedTool),
+    );
+    final horizontalZoom = ref.watch(
+      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
     );
     final currentTimelineWidth = _timelineWidth;
 
@@ -424,8 +429,8 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                 onPointerSignal: (event) {
                   if (event is PointerScrollEvent) {
                     if (_isCtrlPressed) {
-                      final currentZoom = context
-                          .read<KarbeatState>()
+                      final currentZoom = ref
+                          .read(karbeatStateProvider)
                           .horizontalZoomLevel;
                       final double multiplier = event.scrollDelta.dy > 0
                           ? 0.9
@@ -622,7 +627,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
               sampleSelector: (pos) => pos.samples,
               onSeek: (int newSamples) {
                 final safeSamples = newSamples < 0 ? 0 : newSamples;
-                context.read<KarbeatState>().seekTo(safeSamples);
+                ref.read(karbeatStateProvider).seekTo(safeSamples);
 
                 KarbeatLogger.info("Seeking to: $safeSamples samples");
               },
@@ -682,7 +687,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     if (absoluteX < 0) absoluteX = 0;
 
     // Convert X Pixels -> Samples
-    final zoomLevel = context.read<KarbeatState>().horizontalZoomLevel;
+    final zoomLevel = ref.read(karbeatStateProvider).horizontalZoomLevel;
     double samples = absoluteX * zoomLevel;
 
     state.updatePlacementTarget(targetTrack.id, samples);
@@ -728,7 +733,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
             }
           });
           // Update the logic state
-          final state = context.read<KarbeatState>();
+          final state = ref.read(karbeatStateProvider);
           _updatePlacementTarget(state);
         },
         child: Opacity(
@@ -821,7 +826,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
       return [];
     }
 
-    final state = context.read<KarbeatState>();
+    final state = ref.read(karbeatStateProvider);
     final selectedClipIds = state.selectedClipIds;
     final selectedTrackId = state.selectedTrackId;
     if (selectedTrackId == null || selectedClipIds.isEmpty) return [];
@@ -841,8 +846,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
     }
 
     // Find source track index
-    final sortedTracks = widget.tracks
-      ..sort((a, b) => a.id.compareTo(b.id));
+    final sortedTracks = widget.tracks..sort((a, b) => a.id.compareTo(b.id));
     final trackIndex = sortedTracks.indexWhere((t) => t.id == selectedTrackId);
     if (trackIndex < 0) return [];
 
@@ -932,25 +936,39 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
       header: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Name: ${track.name}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text(
+            "Name: ${track.name}",
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
           const SizedBox(height: 4),
-          Text("Type: ${track.trackType.name.toUpperCase()}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text(
+            "Type: ${track.trackType.name.toUpperCase()}",
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
           const SizedBox(height: 4),
-          Text("ID: ${track.id}", style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          Text(
+            "ID: ${track.id}",
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text("Color: ", style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const Text(
+                "Color: ",
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
               Container(
-                width: 14, 
-                height: 14, 
+                width: 14,
+                height: 14,
                 decoration: BoxDecoration(
-                  color: Color(int.parse(track.color.substring(1), radix: 16)), // Replace with track.color if available
+                  color: Color(
+                    int.parse(track.color.substring(1), radix: 16),
+                  ), // Replace with track.color if available
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
       actions: [
@@ -1020,7 +1038,10 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
                     ),
                     Text(
                       "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 10,
+                      ),
                     ),
                   ],
                 ),
@@ -1067,7 +1088,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
 
   void _showAddTrackDialog(BuildContext context) {
     // Access the list from state - now returns UiPluginInfo with id and name
-    final availablePlugins = context.read<KarbeatState>().availableGenerators;
+    final availablePlugins = ref.read(karbeatStateProvider).availableGenerators;
 
     showDialog(
       context: context,
@@ -1077,7 +1098,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
-              context.read<KarbeatState>().addTrack(TrackType.audio);
+              ref.read(karbeatStateProvider).addTrack(TrackType.audio);
             },
             child: const Row(
               children: [
@@ -1129,7 +1150,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
       onPressed: () {
         Navigator.pop(ctx);
         // Use ID-based method
-        context.read<KarbeatState>().addMidiTrackWithGeneratorId(registryId);
+        ref.read(karbeatStateProvider).addMidiTrackWithGeneratorId(registryId);
       },
       child: Row(
         children: [
@@ -1142,7 +1163,7 @@ class _SplitTrackViewState extends State<_SplitTrackView> {
   }
 }
 
-class _TimelineRuler extends StatelessWidget {
+class _TimelineRuler extends ConsumerWidget {
   final ScrollController scrollController;
   final int sampleRate;
 
@@ -1152,12 +1173,12 @@ class _TimelineRuler extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Read state for drawing
-    final zoomLevel = context.select<KarbeatState, double>(
-      (s) => s.horizontalZoomLevel,
+    final zoomLevel = ref.watch(
+      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
     );
-    final tempo = context.select<KarbeatState, double>((s) => s.tempo);
+    final tempo = ref.watch(karbeatStateProvider.select((s) => s.tempo));
     final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
 
     return RepaintBoundary(

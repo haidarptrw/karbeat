@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
-class Sidebar extends StatelessWidget {
+class Sidebar extends ConsumerWidget {
   const Sidebar({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentContext = ref.watch(
+      karbeatStateProvider.select((s) => s.currentToolbarContext),
+    );
+
     return Container(
       width: 60,
       color: Colors.grey.shade900,
@@ -18,25 +22,16 @@ class Sidebar extends StatelessWidget {
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    Selector<KarbeatState, ToolbarMenuContextGroup>(
-                      selector: (_, state) => state.currentToolbarContext,
-                      builder: (context, currentContext, _) {
-                        return Column(
-                          children: KarbeatState.menuGroups.map((group) {
-                            return SidebarItem(
-                              icon: group.icon,
-                              title: group.title,
-                              isActive: currentContext == group.id,
-                              onTap: () => context
-                                  .read<KarbeatState>()
-                                  .toggleToolbarContext(group.id),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-                  ],
+                  children: KarbeatState.menuGroups.map((group) {
+                    return SidebarItem(
+                      icon: group.icon,
+                      title: group.title,
+                      isActive: currentContext == group.id,
+                      onTap: () => ref
+                          .read(karbeatStateProvider)
+                          .toggleToolbarContext(group.id),
+                    );
+                  }).toList(),
                 ),
               ),
             ),

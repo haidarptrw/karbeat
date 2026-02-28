@@ -1,51 +1,42 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/plugins/dynamic_plugin_screen.dart';
 import 'package:karbeat/features/screens/audio_properties_screen.dart';
-import 'package:karbeat/src/rust/api/pattern.dart';
-import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
-class SourceListScreen extends StatelessWidget {
+class SourceListScreen extends ConsumerWidget {
   const SourceListScreen({super.key});
 
-  Future<void> _pickFile(BuildContext context) async {
+  Future<void> _pickFile(WidgetRef ref) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.audio,
     );
 
     if (result != null && result.files.single.path != null) {
       String path = result.files.single.path!;
-      // Call state logic to load file via Rust
-      if (context.mounted) {
-        await context.read<KarbeatState>().addAudioFile(path);
-      }
+      await ref.read(karbeatStateProvider).addAudioFile(path);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Access the source map from state
-    final audioSources = context
-        .select<KarbeatState, Map<int, AudioWaveformUiForAudioProperties>>(
-          (state) => state.audioSources,
-        );
-
-    final generators = context
-        .select<KarbeatState, Map<int, UiGeneratorInstance>>(
-          (value) => value.generators,
-        );
-
-    final patterns = context.select<KarbeatState, Map<int, UiPattern>>(
-      (value) => value.patterns,
+    final audioSources = ref.watch(
+      karbeatStateProvider.select((s) => s.audioSources),
     );
+
+    final generators = ref.watch(
+      karbeatStateProvider.select((s) => s.generators),
+    );
+
+    final patterns = ref.watch(karbeatStateProvider.select((s) => s.patterns));
 
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickFile(context),
+        onPressed: () => _pickFile(ref),
         backgroundColor: Colors.cyanAccent,
         child: const Icon(Icons.add),
       ),
@@ -101,7 +92,7 @@ class SourceListScreen extends StatelessWidget {
                   );
                 },
                 onPlace: null,
-                // onDelete: () => context.read<KarbeatState>().removeGenerator(id), // TODO implement
+                // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement
               );
             }, childCount: generators.length),
           ),
@@ -156,10 +147,9 @@ class SourceListScreen extends StatelessWidget {
                     ),
                   );
                 },
-                onPlace: () => context.read<KarbeatState>().startPlacement(
-                  id,
-                  type: UiSourceType.audio,
-                ),
+                onPlace: () => ref
+                    .read(karbeatStateProvider)
+                    .startPlacement(id, type: UiSourceType.audio),
               );
             }, childCount: audioSources.length),
           ),
@@ -205,12 +195,11 @@ class SourceListScreen extends StatelessWidget {
                 icon: Icons.music_note,
                 color: Colors.purpleAccent,
                 onTap: () {
-                  context.read<KarbeatState>().openPattern(id);
+                  ref.read(karbeatStateProvider).openPattern(id);
                 },
-                onPlace: () => context.read<KarbeatState>().startPlacement(
-                  id,
-                  type: UiSourceType.midi,
-                ),
+                onPlace: () => ref
+                    .read(karbeatStateProvider)
+                    .startPlacement(id, type: UiSourceType.midi),
               );
             }, childCount: patterns.length),
           ),

@@ -72,10 +72,10 @@ class KarbeatParametricEq extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _KarbeatParametricEqState createState() => _KarbeatParametricEqState();
+  KarbeatParametricEqState createState() => KarbeatParametricEqState();
 }
 
-class _KarbeatParametricEqState extends State<KarbeatParametricEq> {
+class KarbeatParametricEqState extends State<KarbeatParametricEq> {
   // State
   double masterGain = 0.0;
   late List<EqBand> bands;

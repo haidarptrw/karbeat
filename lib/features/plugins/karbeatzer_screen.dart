@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
 /// UI Screen for the Karbeatzer V2 Synthesizer
-class KarbeatzerScreen extends StatefulWidget {
+class KarbeatzerScreen extends ConsumerStatefulWidget {
   final int generatorId;
   final String generatorName;
 
@@ -15,10 +15,10 @@ class KarbeatzerScreen extends StatefulWidget {
   });
 
   @override
-  State<KarbeatzerScreen> createState() => _KarbeatzerScreenState();
+  ConsumerState<KarbeatzerScreen> createState() => _KarbeatzerScreenState();
 }
 
-class _KarbeatzerScreenState extends State<KarbeatzerScreen> {
+class _KarbeatzerScreenState extends ConsumerState<KarbeatzerScreen> {
   // Local state for parameters (for smooth UI updates)
   Map<int, double> _parameters = {};
   bool _isLoading = true;
@@ -40,7 +40,7 @@ class _KarbeatzerScreenState extends State<KarbeatzerScreen> {
 
   Future<void> _loadParameters() async {
     // Get parameters from state
-    final state = context.read<KarbeatState>();
+    final state = ref.read(karbeatStateProvider);
     final generator = state.generators[widget.generatorId];
 
     if (generator != null) {
@@ -68,7 +68,7 @@ class _KarbeatzerScreenState extends State<KarbeatzerScreen> {
       );
       // Sync generator list so Flutter state matches backend
       if (mounted) {
-        await context.read<KarbeatState>().syncGeneratorList();
+        await ref.read(karbeatStateProvider).syncGeneratorList();
       }
     } catch (e) {
       debugPrint('Error setting parameter: $e');

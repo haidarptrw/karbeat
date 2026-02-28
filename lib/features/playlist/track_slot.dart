@@ -7,9 +7,9 @@ import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class KarbeatTrackSlot extends StatefulWidget {
+class KarbeatTrackSlot extends ConsumerStatefulWidget {
   final int trackId;
   final double height;
   final ScrollController horizontalScrollController;
@@ -26,10 +26,10 @@ class KarbeatTrackSlot extends StatefulWidget {
   });
 
   @override
-  State<KarbeatTrackSlot> createState() => _KarbeatTrackSlotState();
+  ConsumerState<KarbeatTrackSlot> createState() => _KarbeatTrackSlotState();
 }
 
-class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
+class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
   void _handleEmptySpaceClick({
     required BuildContext context,
     required double localDx,
@@ -37,40 +37,37 @@ class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
   }) {
     final int startTime = (localDx * zoomLevel).round();
 
-    context.read<KarbeatState>().createEmptyPatternClip(
-      trackId: widget.trackId,
-      startTime: startTime,
-    );
+    ref
+        .read(karbeatStateProvider)
+        .createEmptyPatternClip(trackId: widget.trackId, startTime: startTime);
   }
 
   @override
   Widget build(BuildContext context) {
     // Listen to Zoom Level (Global)
-    final zoomLevel = context.select<KarbeatState, double>(
-      (state) => state.horizontalZoomLevel,
+    final zoomLevel = ref.watch(
+      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
     );
 
-    final gridSize = context.select<KarbeatState, int>(
-      (state) => state.gridSize,
-    );
-    final tempo = context.select<KarbeatState, double>((state) => state.tempo);
+    final gridSize = ref.watch(karbeatStateProvider.select((s) => s.gridSize));
+    final tempo = ref.watch(karbeatStateProvider.select((s) => s.tempo));
 
     // Listen to Track Data
-    final track = context.select<KarbeatState, UiTrack?>(
-      (state) => state.tracks[widget.trackId],
+    final track = ref.watch(
+      karbeatStateProvider.select((s) => s.tracks[widget.trackId]),
     );
 
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
-    final selectedTool = context.select<KarbeatState, ToolSelection>(
-      (s) => s.selectedTool,
+    final selectedTool = ref.watch(
+      karbeatStateProvider.select((s) => s.selectedTool),
     );
 
-    final selectedClipIds = context.select<KarbeatState, List<int>>(
-      (state) => state.selectedClipIds,
+    final selectedClipIds = ref.watch(
+      karbeatStateProvider.select((s) => s.selectedClipIds),
     );
-    final selectedTrackId = context.select<KarbeatState, int?>(
-      (state) => state.selectedTrackId,
+    final selectedTrackId = ref.watch(
+      karbeatStateProvider.select((s) => s.selectedTrackId),
     );
 
     if (track == null) return const SizedBox();
@@ -102,7 +99,7 @@ class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
                       zoomLevel: zoomLevel,
                     );
                   } else {
-                    context.read<KarbeatState>().deselectAllClips();
+                    ref.read(karbeatStateProvider).deselectAllClips();
                   }
                 },
                 child: RepaintBoundary(
@@ -151,7 +148,7 @@ class _KarbeatTrackSlotState extends State<KarbeatTrackSlot> {
 // INTERACTIVE CLIP WRAPPER (Handles Logic)
 // =============================================================================
 
-class _InteractiveClip extends StatefulWidget {
+class _InteractiveClip extends ConsumerStatefulWidget {
   final UiClip clip;
   final int trackId;
   final TrackType trackType;
@@ -178,12 +175,12 @@ class _InteractiveClip extends StatefulWidget {
   });
 
   @override
-  State<_InteractiveClip> createState() => _InteractiveClipState();
+  ConsumerState<_InteractiveClip> createState() => _InteractiveClipState();
 }
 
 enum _DragAction { none, resizeLeft, resizeRight, move }
 
-class _InteractiveClipState extends State<_InteractiveClip> {
+class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   // Local state for smooth UI updates during drag
   late int _visualStartTime;
   late int _visualLoopLength;
@@ -334,8 +331,8 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   trackType: widget.trackType,
                   color: Colors.cyanAccent.withAlpha((0.5 * 255).round()),
                   zoomLevel: widget.zoomLevel,
-                  projectSampleRate: context
-                      .read<KarbeatState>()
+                  projectSampleRate: ref
+                      .read(karbeatStateProvider)
                       .hardwareConfig
                       .sampleRate,
                   overrideOffset: _visualOffset.toDouble(),
@@ -457,7 +454,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 
             onTap: () {
               if (widget.selectedTool == ToolSelection.delete) {
-                final state = context.read<KarbeatState>();
+                final state = ref.read(karbeatStateProvider);
                 // If this clip is selected and there are multiple selections, batch delete
                 if (widget.isSelected && widget.selectedClipIds.length > 1) {
                   state.deleteSelectedClips();
@@ -465,7 +462,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   state.deleteClip(widget.trackId, widget.clip.id);
                 }
               } else if (widget.selectedTool == ToolSelection.select) {
-                final state = context.read<KarbeatState>();
+                final state = ref.read(karbeatStateProvider);
                 // Get tap position for panel positioning
                 final renderBox = context.findRenderObject() as RenderBox?;
                 final tapPosition =
@@ -498,10 +495,12 @@ class _InteractiveClipState extends State<_InteractiveClip> {
                   );
                 }
               } else if (widget.selectedTool == ToolSelection.pointer) {
-                context.read<KarbeatState>().selectClip(
-                  trackId: widget.trackId,
-                  clipId: widget.clip.id,
-                );
+                ref
+                    .read(karbeatStateProvider)
+                    .selectClip(
+                      trackId: widget.trackId,
+                      clipId: widget.clip.id,
+                    );
               }
             },
 
@@ -582,7 +581,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
             onPanEnd: (_) {
               if (_currentAction == _DragAction.none) return;
 
-              final state = context.read<KarbeatState>();
+              final state = ref.read(karbeatStateProvider);
               final isBatchOperation =
                   widget.isSelected && widget.selectedClipIds.length > 1;
               final controller = widget.clipDragController;
@@ -679,8 +678,8 @@ class _InteractiveClipState extends State<_InteractiveClip> {
               trackType: widget.trackType,
               color: Colors.cyanAccent.withAlpha(47),
               zoomLevel: widget.zoomLevel,
-              projectSampleRate: context
-                  .read<KarbeatState>()
+              projectSampleRate: ref
+                  .read(karbeatStateProvider)
                   .hardwareConfig
                   .sampleRate,
               overrideOffset: _visualOffset.toDouble(),
@@ -699,7 +698,7 @@ class _InteractiveClipState extends State<_InteractiveClip> {
 // 2. THE CLIP RENDERER (The actual colored box)
 // =============================================================================
 
-class _ClipRenderer extends StatelessWidget {
+class _ClipRenderer extends ConsumerWidget {
   final UiClip clip;
   final TrackType trackType;
   final Color color;
@@ -723,7 +722,7 @@ class _ClipRenderer extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       decoration: BoxDecoration(
         color: color,
@@ -737,7 +736,7 @@ class _ClipRenderer extends StatelessWidget {
         child: Stack(
           children: [
             // A. Content (Waveform or MIDI Notes)
-            Positioned.fill(child: _buildContent(context)),
+            Positioned.fill(child: _buildContent(context, ref)),
 
             // B. Label Header
             Positioned(
@@ -765,8 +764,8 @@ class _ClipRenderer extends StatelessWidget {
     );
   }
 
-  Widget _buildContent(BuildContext context) {
-    final state = context.read<KarbeatState>();
+  Widget _buildContent(BuildContext context, WidgetRef ref) {
+    final state = ref.read(karbeatStateProvider);
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
