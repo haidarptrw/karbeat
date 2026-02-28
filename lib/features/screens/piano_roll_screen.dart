@@ -12,9 +12,9 @@ import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class PianoRollScreen extends StatefulWidget {
+class PianoRollScreen extends ConsumerStatefulWidget {
   final int? patternId;
   // We need the Generator ID to know which Generator to preview sound with
   final int? generatorId;
@@ -22,12 +22,12 @@ class PianoRollScreen extends StatefulWidget {
   const PianoRollScreen({super.key, this.patternId, this.generatorId});
 
   @override
-  State<StatefulWidget> createState() {
+  ConsumerState<PianoRollScreen> createState() {
     return PianoRollScreenState();
   }
 }
 
-class PianoRollScreenState extends State<PianoRollScreen> {
+class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   final double _keyHeight = 20.0;
   final double _keyWidth = 60.0;
   double _zoomX = 0.5;
@@ -67,7 +67,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
 
   void _handleNoteOn(int note) {
     final generatorId =
-        context.read<KarbeatState>().previewGeneratorId ?? widget.generatorId;
+        ref.read(karbeatStateProvider).previewGeneratorId ?? widget.generatorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -84,7 +84,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
 
   void _handleNoteOff(int note) {
     final generatorId =
-        context.read<KarbeatState>().previewGeneratorId ?? widget.generatorId;
+        ref.read(karbeatStateProvider).previewGeneratorId ?? widget.generatorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -118,7 +118,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   }
 
   void _addNoteAtOffset(Offset localPos, int patternId) {
-    final state = context.read<KarbeatState>();
+    final state = ref.read(karbeatStateProvider);
     final gridDenom = state.pianoRollGridDenom;
 
     double offsetX = localPos.dx;
@@ -166,17 +166,17 @@ class PianoRollScreenState extends State<PianoRollScreen> {
       );
     }
 
-    final pattern = context.select<KarbeatState, UiPattern?>(
-      (s) => s.patterns[widget.patternId],
+    final pattern = ref.watch(
+      karbeatStateProvider.select((s) => s.patterns[widget.patternId]),
     );
 
     // Also listen to selected tool for cursor updates on the grid
-    final selectedTool = context.select<KarbeatState, PianoRollToolSelection>(
-      (s) => s.pianoRollTool,
+    final selectedTool = ref.watch(
+      karbeatStateProvider.select((s) => s.pianoRollTool),
     );
 
-    final gridDenom = context.select<KarbeatState, int>(
-      (s) => s.pianoRollGridDenom,
+    final gridDenom = ref.watch(
+      karbeatStateProvider.select((s) => s.pianoRollGridDenom),
     );
 
     if (pattern == null) {
@@ -219,7 +219,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
             onGridDenomChanged: (val) {
               if (val != null) {
                 setState(() {
-                  context.read<KarbeatState>().pianoRollGridDenom =
+                  ref.read(karbeatStateProvider).pianoRollGridDenom =
                       _intToGridValue(val);
                 });
               }
@@ -409,7 +409,7 @@ class PianoRollScreenState extends State<PianoRollScreen> {
   }
 }
 
-class _PianoRollToolbar extends StatelessWidget {
+class _PianoRollToolbar extends ConsumerWidget {
   final int patternId;
   final String name;
   final VoidCallback onZoomIn;
@@ -427,8 +427,8 @@ class _PianoRollToolbar extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final state = context.watch<KarbeatState>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(karbeatStateProvider);
     final selectedTool = state.pianoRollTool;
     final generators = state.generators;
     final previewGeneratorId = state.previewGeneratorId;
@@ -714,7 +714,7 @@ class _PianoKeyState extends State<_PianoKey> {
 // ignore: unused_field
 enum _NoteDragMode { none, move, resizeLeft, resizeRight }
 
-class _InteractiveNote extends StatefulWidget {
+class _InteractiveNote extends ConsumerStatefulWidget {
   final UiNote note;
   final int noteId;
   final int patternId;
@@ -737,12 +737,12 @@ class _InteractiveNote extends StatefulWidget {
   });
 
   @override
-  State<_InteractiveNote> createState() {
+  ConsumerState<_InteractiveNote> createState() {
     return _InteractiveNoteState();
   }
 }
 
-class _InteractiveNoteState extends State<_InteractiveNote> {
+class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
   late double _localLeft;
   late double _localWidth;
   late double _localTop;
@@ -811,10 +811,12 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
           behavior: HitTestBehavior.opaque,
           onTap: () {
             if (widget.selectedTool == PianoRollToolSelection.delete) {
-              context.read<KarbeatState>().deletePatternNote(
-                patternId: widget.patternId,
-                noteId: widget.noteId,
-              );
+              ref
+                  .read(karbeatStateProvider)
+                  .deletePatternNote(
+                    patternId: widget.patternId,
+                    noteId: widget.noteId,
+                  );
             }
           },
           onPanStart: (details) {
@@ -871,7 +873,7 @@ class _InteractiveNoteState extends State<_InteractiveNote> {
               _currentPreviewKey = null;
             }
 
-            final state = context.read<KarbeatState>();
+            final state = ref.read(karbeatStateProvider);
 
             if (widget.generatorId != null) {
               try {

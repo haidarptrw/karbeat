@@ -72,10 +72,10 @@ class KarbeatParametricEq extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _KarbeatParametricEqState createState() => _KarbeatParametricEqState();
+  KarbeatParametricEqState createState() => KarbeatParametricEqState();
 }
 
-class _KarbeatParametricEqState extends State<KarbeatParametricEq> {
+class KarbeatParametricEqState extends State<KarbeatParametricEq> {
   // State
   double masterGain = 0.0;
   late List<EqBand> bands;
@@ -391,7 +391,7 @@ class _KarbeatParametricEqState extends State<KarbeatParametricEq> {
           ),
         ),
         Text(
-          "${val >= 1000 ? (val/1000).toStringAsFixed(1) + 'k' : val.toStringAsFixed(1)}$suffix", 
+          "${val >= 1000 ? '${(val/1000).toStringAsFixed(1)}k' : val.toStringAsFixed(1)}$suffix", 
           style: const TextStyle(color: Colors.white, fontSize: 9)
         ),
       ],

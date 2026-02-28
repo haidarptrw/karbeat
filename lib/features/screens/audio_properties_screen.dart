@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
-class AudioPropertiesScreen extends StatelessWidget {
+class AudioPropertiesScreen extends ConsumerWidget {
   final int sourceId;
   final String sourceName;
 
@@ -16,11 +16,11 @@ class AudioPropertiesScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // 1. Synchronously retrieve data from State
     // We use .select() so this widget rebuilds if this specific source updates
-    final props = context.select<KarbeatState, AudioWaveformUiForAudioProperties?>(
-      (state) => state.audioSources[sourceId],
+    final props = ref.watch(
+      karbeatStateProvider.select((s) => s.audioSources[sourceId]),
     );
 
     return Scaffold(
@@ -59,7 +59,7 @@ class AudioPropertiesScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         child: CustomPaint(
                           painter: StereoWaveformPainter(
-                            samples: props.previewBuffer, 
+                            samples: props.previewBuffer,
                             color: Colors.cyanAccent,
                           ),
                         ),

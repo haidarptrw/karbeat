@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
@@ -20,6 +21,11 @@ import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/src/rust/core/project/transport.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
+
+/// Top-level Riverpod provider for the app state
+final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
+  return KarbeatState();
+});
 
 enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom, select }
 

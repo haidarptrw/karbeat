@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/state/app_state.dart';
-import 'package:provider/provider.dart';
 
-class MixerScreen extends StatefulWidget {
+class MixerScreen extends ConsumerStatefulWidget {
   const MixerScreen({super.key});
 
   @override
-  State<MixerScreen> createState() => _MixerScreenState();
+  ConsumerState<MixerScreen> createState() => _MixerScreenState();
 }
 
-class _MixerScreenState extends State<MixerScreen> {
+class _MixerScreenState extends ConsumerState<MixerScreen> {
   // Track the currently selected track ID (or -1 for Master)
   int? _selectedTrackId;
 
@@ -18,20 +18,18 @@ class _MixerScreenState extends State<MixerScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<KarbeatState>().syncMixerState();
+      ref.read(karbeatStateProvider).syncMixerState();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final mixerState = context.select<KarbeatState, UiMixerState>(
-      (state) => state.mixerState,
+    final mixerState = ref.watch(
+      karbeatStateProvider.select((s) => s.mixerState),
     );
-    final tracks = context.select<KarbeatState, Map<int, dynamic>>(
-      (state) => state.tracks,
-    );
+    final tracks = ref.watch(karbeatStateProvider.select((s) => s.tracks));
 
-    final stateReadOnly = context.read<KarbeatState>();
+    final stateReadOnly = ref.read(karbeatStateProvider);
 
     // Channel entries: pair each track ID with its mixer channel data
     final channelEntries = <_ChannelEntry>[];
@@ -269,9 +267,7 @@ class _MixerScreenState extends State<MixerScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white.withAlpha(10),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: Colors.white.withAlpha(20),
-                          ),
+                          border: Border.all(color: Colors.white.withAlpha(20)),
                         ),
                         child: ListTile(
                           dense: true,
@@ -293,15 +289,15 @@ class _MixerScreenState extends State<MixerScreen> {
                     },
                   ),
           ),
-          
+
           // Add Effect Button
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: ElevatedButton.icon(
-               style: ElevatedButton.styleFrom(
-                 backgroundColor: Colors.white.withAlpha(20),
-                 foregroundColor: Colors.white,
-               ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white.withAlpha(20),
+                foregroundColor: Colors.white,
+              ),
               onPressed: () {
                 // TODO: Open effect browser to add a new effect
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -311,7 +307,7 @@ class _MixerScreenState extends State<MixerScreen> {
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add Effect'),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -387,8 +383,8 @@ class _ChannelStrip extends StatelessWidget {
             color: isSelected
                 ? accentColor
                 : (entry.isMaster
-                    ? Colors.amber.withValues(alpha: 0.3)
-                    : Colors.white.withValues(alpha: 0.06)),
+                      ? Colors.amber.withValues(alpha: 0.3)
+                      : Colors.white.withValues(alpha: 0.06)),
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
@@ -397,97 +393,97 @@ class _ChannelStrip extends StatelessWidget {
                     color: accentColor.withValues(alpha: 0.2),
                     blurRadius: 8,
                     spreadRadius: 1,
-                  )
+                  ),
                 ]
               : null,
         ),
         child: Column(
           children: [
-          // === Channel Label ===
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.15),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(9),
+            // === Channel Label ===
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.15),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(9),
+                ),
+              ),
+              child: Text(
+                entry.name,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: accentColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
-            child: Text(
-              entry.name,
-              textAlign: TextAlign.center,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: accentColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
 
-          const SizedBox(height: 6),
+            const SizedBox(height: 6),
 
-          // === Pan Knob (placeholder rotary) ===
-          _PanKnob(
-            value: entry.channel.pan,
-            accentColor: accentColor,
-            onChanged: onPanChanged,
-            onChangeStart: onPanChangeStart,
-            onChangeEnd: onPanChangeEnd,
-          ),
-
-          const SizedBox(height: 4),
-
-          // === Volume Fader ===
-          Expanded(
-            child: _VolumeFader(
-              value: entry.channel.volume,
+            // === Pan Knob (placeholder rotary) ===
+            _PanKnob(
+              value: entry.channel.pan,
               accentColor: accentColor,
-              onChanged: onVolumeChanged,
-              onChangeStart: onVolumeChangeStart,
-              onChangeEnd: onVolumeChangeEnd,
+              onChanged: onPanChanged,
+              onChangeStart: onPanChangeStart,
+              onChangeEnd: onPanChangeEnd,
             ),
-          ),
 
-          const SizedBox(height: 4),
+            const SizedBox(height: 4),
 
-          // === dB readout ===
-          Text(
-            _volumeToDb(entry.channel.volume),
-            style: TextStyle(
-              color: Colors.grey.shade500,
-              fontSize: 9,
-              fontFamily: 'monospace',
+            // === Volume Fader ===
+            Expanded(
+              child: _VolumeFader(
+                value: entry.channel.volume,
+                accentColor: accentColor,
+                onChanged: onVolumeChanged,
+                onChangeStart: onVolumeChangeStart,
+                onChangeEnd: onVolumeChangeEnd,
+              ),
             ),
-          ),
 
-          const SizedBox(height: 6),
+            const SizedBox(height: 4),
 
-          // === Mute / Solo ===
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _ToggleButton(
-                label: 'M',
-                isActive: entry.channel.mute,
-                activeColor: Colors.redAccent,
-                onTap: onMuteToggled,
+            // === dB readout ===
+            Text(
+              _volumeToDb(entry.channel.volume),
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 9,
+                fontFamily: 'monospace',
               ),
-              const SizedBox(width: 4),
-              _ToggleButton(
-                label: 'S',
-                isActive: entry.channel.solo,
-                activeColor: Colors.amber,
-                onTap: onSoloToggled,
-              ),
-            ],
-          ),
+            ),
 
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 6),
+
+            // === Mute / Solo ===
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _ToggleButton(
+                  label: 'M',
+                  isActive: entry.channel.mute,
+                  activeColor: Colors.redAccent,
+                  onTap: onMuteToggled,
+                ),
+                const SizedBox(width: 4),
+                _ToggleButton(
+                  label: 'S',
+                  isActive: entry.channel.solo,
+                  activeColor: Colors.amber,
+                  onTap: onSoloToggled,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
-      )
     );
   }
 
