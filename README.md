@@ -1,16 +1,58 @@
-# Karbeat
+<div align="center">
+  <h1>🎵 Karbeat</h1>
+  <p><strong>A minimal, cross-platform Digital Audio Workstation (DAW) written in Flutter and Rust.</strong></p>
+  <p>
+    <a href="https://github.com/haidarptrw/karbeat/stargazers"><img src="https://img.shields.io/github/stars/haidarptrw/karbeat?style=for-the-badge&color=yellow" alt="Stars Badge"/></a>
+    <a href="https://github.com/haidarptrw/karbeat/network/members"><img src="https://img.shields.io/github/forks/haidarptrw/karbeat?style=for-the-badge&color=orange" alt="Forks Badge"/></a>
+    <a href="https://github.com/haidarptrw/karbeat/issues"><img src="https://img.shields.io/github/issues/haidarptrw/karbeat?style=for-the-badge&color=red" alt="Issues Badge"/></a>
+    <a href="https://github.com/haidarptrw/karbeat/blob/main/LICENSE.txt"><img src="https://img.shields.io/github/license/haidarptrw/karbeat?style=for-the-badge&color=blue" alt="License Badge"/></a>
+  </p>
+</div>
 
-A simple and minimal cross-platform Digital Audio Workstation (DAW). we prioritize our application to work effectively on Windows and Android. This project is written in Rust and Flutter.
+---
 
-## Words
+Karbeat is a clean, simple, and minimal Digital Audio Workstation (DAW) designed to be cross-platform. We prioritize delivering an effective mobile-first application
 
-Thanks to our contributors:
-- [haidarptrw](https://github.com/haidarptrw): Creator + Lead Developer + Audio Engineer
+By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio processing and the versatile UI capabilities of [Flutter](https://flutter.dev/), Karbeat aims to provide a reliable environment for your musical creativity.
 
-## REFERENCES
+## Features
 
-Unfortunately for info and documentation, we still haven't thought about it. So be patient!.
+- **Cross-Platform**: Built for Windows, with Android support planned in the near future.
+- **High-Performance Audio**: Core audio engine built in Rust using [CPAL](https://github.com/RustAudio/cpal).
+- **Minimalist Interface**: A clean UI developed with Flutter for a distraction-free workflow.
 
-## NOTE FOR DEVELOPERS
+_More features are currently in active development._
 
-This project uses [CPAL](https://github.com/RustAudio/cpal) as dependencies. Currently it uses Windows as the development environment. When the app is near complete, we will implement features for Android. Linux support is currently not available since handling audio host in Linux is more difficult than in Windows. We will implement linux compatibility later
+## Tech Stack
+
+- **Frontend**: [Flutter](https://flutter.dev/) & Dart
+- **Audio Engine**: [Rust](https://www.rust-lang.org/)
+- **Audio Host**: [CPAL (Cross-Platform Audio Library)](https://github.com/RustAudio/cpal)
+- **Bridge**: [Flutter Rust Bridge](https://fzyzcjy.github.io/flutter_rust_bridge/)
+
+## 👥 Contributors
+
+A huge thanks to the developers who made this project possible:
+
+| <a href="https://github.com/haidarptrw"><img src="https://github.com/haidarptrw.png" width="80px;" alt=""/></a><br /><sub><b>[haidarptrw](https://github.com/haidarptrw)</b></sub> |
+| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                                                                    **Creator, Lead Developer & Audio Engineer**                                                                    |
+
+_(Want to contribute? Check out our developer notes below!)_
+
+## 📚 References & Documentation
+
+Currently, technical documentation and detailed info are still being drafted. Please be patient as we focus on building the core features of the app!
+
+## 👨‍💻 Note for Developers
+
+Thank you for your interest in Karbeat! Here are a few things to keep in mind:
+
+- **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment.
+- **Future Platforms**: Once the core application is near completion, we'll implement and optimize features for **Android**.
+
+---
+
+<div align="center">
+  Made with ❤️ by the Karbeat Team
+</div>
