@@ -62,6 +62,14 @@ pub fn stop_song_playback() -> Result<(), String> {
         app.transport.is_playing = false;
         app.transport.is_pattern_playing = false;
     }
+
+    {
+        if let Ok(mut guard) = ctx().command_sender.lock() {
+            if let Some(cmd_producer) = guard.as_mut() {
+                let _ = cmd_producer.push(AudioCommand::SetPlayhead(0));
+            }
+        }
+    }
     broadcast_state_change();
     Ok(())
 }

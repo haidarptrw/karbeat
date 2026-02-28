@@ -81,21 +81,25 @@ macro_rules! run_stream {
 }
 
 /// Set host to use the optimized host for each platform.
-/// - Windows: WASAPI (low latency)
+/// - Windows: ASIO, then fallback to WASAPI (low latency)
 /// - Android: AAudio (low latency, requires API 26+)
+/// - Linux: JACK
 /// - Other platforms: default host
 fn set_host() -> cpal::Host {
     #[allow(unused_assignments)]
     let mut host = cpal::default_host();
 
     #[cfg(target_os = "windows")]
-    {
-        let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) else {
-            host = cpal::default_host();
-            return host;
-        };
-        host = wasapi_host;
-        log::info!("Connected to WASAPI Host");
+    {   
+        if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
+            host = asio_host;
+            log::info!("Connected to ASIO Host");
+        } else if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
+            host = wasapi_host;
+            log::info!("Connected to WASAPI Host");
+        } else {
+            log::warn!("Neither ASIO nor WASAPI available, falling back to default host");
+        }
     }
 
     #[cfg(target_os = "android")]
@@ -172,7 +176,7 @@ pub fn start_audio_stream(
         .map(|c| c.with_max_sample_rate())
         .context("device does not support f32 samples")?;
 
-    // This prevents PipeWire/JACK from resizing the buffer dynamically (the cause of the crash).
+    // This prevents PipeWire/JACK from resizing the buffer dynamically.
     let buffer_size = match supported_config.buffer_size() {
         cpal::SupportedBufferSize::Range { min, max } => {
             // Request 512 frames (good balance of latency vs stability)
