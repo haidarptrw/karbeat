@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ops::Deref};
 
+use flutter_rust_bridge::frb;
 use serde::Serialize;
 
 use crate::{
@@ -11,7 +12,7 @@ use crate::{
             generator::{GeneratorInstance, GeneratorInstanceType},
             track::{audio_waveform::AudioWaveform, KarbeatTrack, TrackType},
             transport::TransportState,
-            KarbeatSource, ProjectMetadata,
+            AudioHardwareConfig, KarbeatSource, ProjectMetadata,
         },
     },
     utils::lock::{get_app_read, get_app_write},
@@ -43,6 +44,73 @@ impl From<&KarbeatTrack> for UiTrack {
                 .map(|c| UiClip::from(c.deref()))
                 .collect(),
             generator_id,
+        }
+    }
+}
+
+impl ProjectMetadata {
+    #[frb(sync)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl AudioHardwareConfig {
+    #[frb(sync)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[frb(sync)]
+    pub fn new_with_param(
+        selected_input_device: String,
+        selected_output_device: String,
+        sample_rate: u32,
+        buffer_size: u32,
+        cpu_load: f32,
+    ) -> Self {
+        Self {
+            selected_input_device,
+            selected_output_device,
+            sample_rate,
+            buffer_size,
+            cpu_load,
+        }
+    }
+}
+
+impl TransportState {
+    #[frb(sync)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[frb(sync)]
+    pub fn new_with_param(
+        is_playing: bool,
+        is_pattern_playing: bool,
+        is_recording: bool,
+        is_looping: bool,
+        playhead_position_samples: u64,
+        loop_start_samples: u64,
+        loop_end_samples: u64,
+        bpm: f32,
+        time_signature: (u8, u8),
+        bar_tracker: usize,
+        beat_tracker: usize,
+    ) -> Self {
+        Self {
+            is_playing,
+            is_pattern_playing,
+            is_recording,
+            is_looping,
+            playhead_position_samples,
+            loop_start_samples,
+            loop_end_samples,
+            bpm,
+            time_signature,
+            bar_tracker,
+            beat_tracker,
         }
     }
 }

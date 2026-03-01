@@ -7,6 +7,7 @@ import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/features/components/context_menu.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -1087,9 +1088,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   void _showAddTrackDialog(BuildContext context) {
-    // Access the list from state - now returns UiPluginInfo with id and name
-    final availablePlugins = ref.read(karbeatStateProvider).availableGenerators;
-
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -1109,55 +1107,136 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
           ),
           const Divider(),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Text(
-              "Instruments",
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showGeneratorBrowser(context);
+            },
+            child: const Row(
+              children: [
+                Icon(Icons.piano, color: Colors.orangeAccent),
+                SizedBox(width: 10),
+                Text("Add generator..."),
+              ],
             ),
           ),
-
-          // DYNAMICALLY GENERATE OPTIONS using ID-based API
-          if (availablePlugins.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                "No plugins found",
-                style: TextStyle(color: Colors.grey),
-              ),
-            )
-          else
-            ...availablePlugins.map(
-              (plugin) => _buildGeneratorOption(
-                ctx,
-                plugin.id,
-                plugin.name,
-                Icons.piano,
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildGeneratorOption(
-    BuildContext ctx,
-    int registryId,
-    String name,
-    IconData icon,
-  ) {
-    return SimpleDialogOption(
-      onPressed: () {
-        Navigator.pop(ctx);
-        // Use ID-based method
-        ref.read(karbeatStateProvider).addMidiTrackWithGeneratorId(registryId);
-      },
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.orangeAccent),
-          const SizedBox(width: 10),
-          Text(name),
+  void _showGeneratorBrowser(BuildContext context) {
+    final availablePlugins = ref.read(karbeatStateProvider).availableGenerators;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Generator Browser"),
+        contentPadding: const EdgeInsets.only(top: 12, bottom: 24),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Category header: Karbeat Native
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.extension,
+                      size: 16,
+                      color: Colors.deepOrangeAccent,
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.deepOrangeAccent.withAlpha(30),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: Colors.deepOrangeAccent.withAlpha(80),
+                        ),
+                      ),
+                      child: const Text(
+                        "Karbeat Native",
+                        style: TextStyle(
+                          color: Colors.deepOrangeAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Plugin list
+              if (availablePlugins.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Text(
+                    "No generators found",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              else
+                ...availablePlugins.map(
+                  (plugin) => _buildGeneratorBrowserItem(ctx, plugin),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGeneratorBrowserItem(BuildContext ctx, UiPluginInfo plugin) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(ctx);
+        ref.read(karbeatStateProvider).addMidiTrackWithGeneratorId(plugin.id);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.piano, color: Colors.orangeAccent, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    plugin.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    "Karbeat Native",
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `hash`
 
 /// Get all available generators in Plugin Registry (names only, backwards compatible)
 Future<List<String>> getAvailableGenerators() =>
@@ -39,6 +39,15 @@ Future<UiEffectInstance> getEffect({
   trackId: trackId,
   effectId: effectId,
 );
+
+Future<UiEffectInstance> getEffectFromMaster({required int effectId}) =>
+    RustLib.instance.api.crateApiPluginGetEffectFromMaster(effectId: effectId);
+
+Future<List<UiEffectInstance>> getEffectsFromTrack({required int trackId}) =>
+    RustLib.instance.api.crateApiPluginGetEffectsFromTrack(trackId: trackId);
+
+Future<List<UiEffectInstance>> getMasterEffects() =>
+    RustLib.instance.api.crateApiPluginGetMasterEffects();
 
 /// Get parameter specifications for a generator plugin.
 ///
@@ -124,6 +133,8 @@ Future<void> syncEffectParametersFromAudio({
   snapshots: snapshots,
 );
 
+enum KarbeatPluginType { generator, effect }
+
 class UiEffectParameterSnapshot {
   final UiEffectTarget target;
   final int effectId;
@@ -201,15 +212,19 @@ class UiParameterValue {
           value == other.value;
 }
 
-/// Plugin info with ID for UI display
 class UiPluginInfo {
   final int id;
   final String name;
+  final KarbeatPluginType pluginType;
 
-  const UiPluginInfo({required this.id, required this.name});
+  const UiPluginInfo({
+    required this.id,
+    required this.name,
+    required this.pluginType,
+  });
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ pluginType.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -217,7 +232,8 @@ class UiPluginInfo {
       other is UiPluginInfo &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          name == other.name;
+          name == other.name &&
+          pluginType == other.pluginType;
 }
 
 /// Plugin parameter description for UI generation

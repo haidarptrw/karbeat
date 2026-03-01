@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use flutter_rust_bridge::frb;
+
 use crate::{
     broadcast_state_change,
     commands::AudioCommand,
@@ -155,6 +157,28 @@ impl From<&EffectInstance> for UiEffectInstance {
     }
 }
 
+impl UiMixerState {
+    #[frb(sync)]
+    pub fn new() -> Self {
+        Self::from(&MixerState::default())
+    }
+
+    #[frb(sync)]
+    pub fn new_with_param(
+        channels: HashMap<u32, UiMixerChannel>,
+        master_bus: UiMixerChannel,
+        buses: Vec<UiBus>,
+        routing: Vec<UiRoutingConnection>,
+    ) -> Self {
+        Self {
+            channels,
+            master_bus,
+            buses,
+            routing,
+        }
+    }
+}
+
 pub enum UiMixerChannelParams {
     Volume(f32),
     Pan(f32),
@@ -233,7 +257,9 @@ pub fn get_mixer_channel(track_id: u32) -> Result<UiMixerChannel, String> {
         .map(|c| c.as_ref().into())
 }
 
-pub fn get_mixer_channel_populated(track_id: u32) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
+pub fn get_mixer_channel_populated(
+    track_id: u32,
+) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
     let app = get_app_read();
     let mixer_state = &app.mixer;
     let channel = mixer_state.channels.get(&track_id.into());

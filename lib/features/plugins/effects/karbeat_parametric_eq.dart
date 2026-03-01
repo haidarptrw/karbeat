@@ -345,7 +345,7 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
           // Active Toggle
           Switch(
             value: band.active,
-            activeColor: color,
+            activeThumbColor: color,
             onChanged: (val) => _updateBandParam(i, 3, val ? 1.0 : 0.0),
           ),
 

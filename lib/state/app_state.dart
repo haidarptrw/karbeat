@@ -43,7 +43,7 @@ enum ProjectEvent {
   metadataChanged,
   sourceListChanged,
   generatorListChanged,
-
+  effectListChanged,
   configChanged,
   patternChanged,
   mixerChanged,
@@ -51,48 +51,19 @@ enum ProjectEvent {
 
 class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
-  TransportState _transportState = TransportState(
-    isPlaying: false,
-    isPatternPlaying: false,
-    isRecording: false,
-    isLooping: false,
-    playheadPositionSamples: 0,
-    loopStartSamples: 0,
-    loopEndSamples: 0,
-    bpm: 67.0,
-    timeSignature: (4, 4),
-    barTracker: 0,
-    beatTracker: 0,
-  );
+  TransportState _transportState = TransportState();
 
-  ProjectMetadata _metadata = ProjectMetadata(
-    name: "Untitled",
-    author: "User",
-    version: "1.0.0",
-    createdAt: 0, // Assuming u64
-  );
+  // ProjectMetadata _metadata = ProjectMetadata(
+  //   name: "Untitled",
+  //   author: "User",
+  //   version: "1.0.0",
+  //   createdAt: 0, // Assuming u64
+  // );
+  ProjectMetadata _metadata = ProjectMetadata();
 
-  AudioHardwareConfig _hardwareConfig = AudioHardwareConfig(
-    selectedInputDevice: '',
-    selectedOutputDevice: '',
-    sampleRate: 48000,
-    bufferSize: 256,
-    cpuLoad: 0,
-  );
+  AudioHardwareConfig _hardwareConfig = AudioHardwareConfig();
 
-  mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState(
-    channels: {},
-    masterBus: mixer_api.UiMixerChannel(
-      volume: 1.0,
-      pan: 0.0,
-      mute: false,
-      solo: false,
-      invertedPhase: false,
-      effects: [],
-    ),
-    buses: [],
-    routing: [],
-  );
+  mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState();
   // List<Clipboard>
 
   // =================== STORES ==========================
@@ -103,6 +74,9 @@ class KarbeatState extends ChangeNotifier {
 
   List<UiPluginInfo> _availableGenerators = [];
   List<UiPluginInfo> get availableGenerators => _availableGenerators;
+
+  List<UiPluginInfo> _availableEffects = [];
+  List<UiPluginInfo> get availableEffects => _availableEffects;
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
     KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -202,6 +176,11 @@ class KarbeatState extends ChangeNotifier {
     _initMixerEventStream();
   }
 
+  // =========================================================
+  // ============= Available Plugins API =====================
+  // =========================================================
+
+  /// Fetch available generators from system's registry
   Future<void> fetchAvailableGenerators() async {
     try {
       // Use the ID-based API that returns UiPluginInfo with id and name
@@ -210,6 +189,17 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       log("Error fetching plugins: $e");
+    }
+  }
+
+  /// Fetch available effects from system's registry
+  Future<void> fetchAvailableEffects() async {
+    try {
+      final list = await getAvailableEffectsWithIds();
+      _availableEffects = list;
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Error fetching effect plugins: $e");
     }
   }
 
@@ -241,6 +231,10 @@ class KarbeatState extends ChangeNotifier {
           break;
         case ProjectEvent.mixerChanged:
           await syncMixerState();
+          break;
+        case ProjectEvent.effectListChanged:
+          // TODO: Handle this case.
+          // throw UnimplementedError();
           break;
       }
     });
@@ -544,9 +538,18 @@ class KarbeatState extends ChangeNotifier {
 
   /// Sets the BPM.
   /// Updates local state optimistically and calls the backend API.
+  /// Auto-scales horizontalZoomLevel so that grid lines remain visually fixed.
   Future<void> setBpm(double value) async {
     try {
+      final oldBpm = _transportState.bpm;
       _transportState = _transportState.copyWith(bpm: value);
+
+      // Scale zoom so that (samplesPerBeat / zoomLevel) stays constant,
+      // keeping grid lines at the same pixel positions.
+      if (oldBpm > 0 && value > 0) {
+        horizontalZoomLevel = _horizontalZoomLevel * (value / oldBpm);
+      }
+
       notifyListeners();
 
       await transport_api.setBpm(val: value);
@@ -1196,7 +1199,7 @@ class KarbeatState extends ChangeNotifier {
     );
 
     if (isMaster) {
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: _mixerState.channels,
         masterBus: updatedChannel,
         buses: _mixerState.buses,
@@ -1207,7 +1210,7 @@ class KarbeatState extends ChangeNotifier {
         _mixerState.channels,
       );
       newChannels[trackId] = updatedChannel;
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: newChannels,
         masterBus: _mixerState.masterBus,
         buses: _mixerState.buses,
@@ -1304,7 +1307,7 @@ class KarbeatState extends ChangeNotifier {
     );
 
     if (isMaster) {
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: _mixerState.channels,
         masterBus: updated,
         buses: _mixerState.buses,
@@ -1315,7 +1318,7 @@ class KarbeatState extends ChangeNotifier {
         _mixerState.channels,
       );
       newChannels[trackId] = updated;
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: newChannels,
         masterBus: _mixerState.masterBus,
         buses: _mixerState.buses,
@@ -1341,7 +1344,7 @@ extension TransportStateCopyWith on TransportState {
     int? barTracker,
     int? beatTracker,
   }) {
-    return TransportState(
+    return TransportState.newWithParam(
       isPlaying: isPlaying ?? this.isPlaying,
       isPatternPlaying: isPatternPlaying ?? this.isPatternPlaying,
       isRecording: isRecording ?? this.isRecording,

@@ -208,11 +208,11 @@ impl AudioEngine {
         if self.current_state.transport.is_playing {
             match self.playback_mode {
                 PlaybackMode::Song => {
-                    log::info!("Song mode");
+                    // log::info!("Song mode");
                     self.process_song_mode(frame_count, output_buffer, channels);
                 }
                 PlaybackMode::Pattern { pattern_id, generator_id } => {
-                    log::info!("Pattern mode");
+                    // log::info!("Pattern mode");
                     self.process_pattern_mode(
                         pattern_id,
                         generator_id,

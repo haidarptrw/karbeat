@@ -303,12 +303,26 @@ class UiMixerState {
   final List<UiBus> buses;
   final List<UiRoutingConnection> routing;
 
-  const UiMixerState({
+  const UiMixerState.raw({
     required this.channels,
     required this.masterBus,
     required this.buses,
     required this.routing,
   });
+
+  factory UiMixerState() => RustLib.instance.api.crateApiMixerUiMixerStateNew();
+
+  static UiMixerState newWithParam({
+    required Map<int, UiMixerChannel> channels,
+    required UiMixerChannel masterBus,
+    required List<UiBus> buses,
+    required List<UiRoutingConnection> routing,
+  }) => RustLib.instance.api.crateApiMixerUiMixerStateNewWithParam(
+    channels: channels,
+    masterBus: masterBus,
+    buses: buses,
+    routing: routing,
+  );
 
   @override
   int get hashCode =>

@@ -35,6 +35,13 @@ dasp = { version = "0.11.0", features = ["all"] }
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 
+[profile.dev]
+opt-level = 3
+debug = true
+
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 # Optimize for ARM with f64
 codegen-units = 1
