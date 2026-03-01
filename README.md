@@ -17,7 +17,7 @@ By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio pr
 
 ## Features
 
-- **Cross-Platform**: Built for Windows, with Android support planned in the near future.
+- **Cross-Platform**: Built for Windows and Linux, with Android support planned in the near future.
 - **High-Performance Audio**: Core audio engine built in Rust using [CPAL](https://github.com/RustAudio/cpal).
 - **Minimalist Interface**: A clean UI developed with Flutter for a distraction-free workflow.
 
