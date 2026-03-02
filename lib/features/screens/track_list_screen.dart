@@ -26,8 +26,8 @@ class TrackListScreen extends ConsumerWidget {
         final parentHeight = constraints.maxHeight;
         if (parentHeight.isInfinite) return const SizedBox();
 
-        final calculatedHeight = parentHeight * 0.20;
-        final double itemHeight = calculatedHeight.clamp(80.0, 150.0);
+        final calculatedHeight = parentHeight * 0.15;
+        final double itemHeight = calculatedHeight.clamp(60.0, 150.0);
         const double headerWidth = 220.0;
 
         return Builder(
