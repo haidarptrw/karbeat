@@ -48,11 +48,8 @@ Currently, technical documentation and detailed info are still being drafted. Pl
 
 Thank you for your interest in Karbeat! Here are a few things to keep in mind:
 
-- **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment.
+- **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment. We will focus to complete features to an usable state for users.
 - **Future Platforms**: Once the core application is near completion, we'll implement and optimize features for **Android**.
+- **Plugin Host Support**: We will add plugin host and support for VST3, CLAP, and LV2 for Windows, Linux, and MacOS version
 
 ---
-
-<div align="center">
-  Made with ❤️ by the Karbeat Team
-</div>

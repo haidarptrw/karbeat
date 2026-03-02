@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/plugins/effects/karbeat_parametric_eq.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
+import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/state/app_state.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
@@ -187,13 +189,13 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           Container(width: 1, color: Colors.white10),
 
           // === Effect Rack Panel ===
-          _buildEffectRackPanel(mixerState),
+          _buildEffectRackPanel(context, mixerState),
         ],
       ),
     );
   }
 
-  Widget _buildEffectRackPanel(UiMixerState mixerState) {
+  Widget _buildEffectRackPanel(BuildContext ctx, UiMixerState mixerState) {
     if (_selectedTrackId == null) {
       return const SizedBox(
         width: 250,
@@ -284,6 +286,34 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                             color: Colors.white54,
                             size: 16,
                           ),
+                          onTap: () {
+                            // Match by name (adjust the string matching to exactly what your backend returns)
+                            if (effect.name.toLowerCase().contains('eq') ||
+                                effect.name.toLowerCase().contains(
+                                  'parametric',
+                                )) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => KarbeatParametricEq(
+                                    // Pass whatever your screen needs here
+                                    trackId: _selectedTrackId!,
+                                    effectIdx: effect.id,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              // Feedback for effects that don't have a UI yet
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${effect.name} UI is not implemented yet.',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
                         ),
                       );
                     },
@@ -299,16 +329,156 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 foregroundColor: Colors.white,
               ),
               onPressed: () {
-                // TODO: Open effect browser to add a new effect
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Add effect coming soon!')),
-                );
+                _showEffectBrowser(context);
               },
               icon: const Icon(Icons.add, size: 16),
               label: const Text('Add Effect'),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showEffectBrowser(BuildContext context) {
+    final availablePlugins = ref.read(karbeatStateProvider).availableEffects;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Generator Browser"),
+        contentPadding: const EdgeInsets.only(top: 12, bottom: 24),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Category header: Karbeat Native
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.extension,
+                      size: 16,
+                      color: Colors.deepOrangeAccent,
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.deepOrangeAccent.withAlpha(30),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: Colors.deepOrangeAccent.withAlpha(80),
+                        ),
+                      ),
+                      child: const Text(
+                        "Karbeat Native",
+                        style: TextStyle(
+                          color: Colors.deepOrangeAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // Plugin list
+              if (availablePlugins.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Text(
+                    "No generators found",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              else
+                ...availablePlugins.map(
+                  (plugin) => _buildEffectBrowserItem(ctx, plugin),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEffectBrowserItem(BuildContext ctx, UiPluginInfo plugin) {
+    return InkWell(
+      onTap: () {
+        Navigator.pop(ctx);
+        if (plugin.pluginType != KarbeatPluginType.effect) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Only effects can be added from the mixer panel for now.',
+              ),
+            ),
+          );
+          return;
+        }
+        if (_selectedTrackId == null) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'No track selected. Please select a track before adding an effect.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        if (_selectedTrackId == -1) {
+          ref.read(karbeatStateProvider).addEffectToMasterBus(plugin.id);
+          return;
+        }
+        ref
+            .read(karbeatStateProvider)
+            .addEffectToMixerChannel(_selectedTrackId!, plugin.id);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.piano, color: Colors.orangeAccent, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    plugin.name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    "Karbeat Native",
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -361,8 +361,7 @@ impl MixerState {
     }
 
     pub fn add_effect_to_master_bus(&mut self, registry_id: u32) -> anyhow::Result<()> {
-        let mut master_bus_arc = self.master_bus.clone();
-        let channel = Arc::make_mut(&mut master_bus_arc);
+        let channel = Arc::make_mut(&mut self.master_bus);
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
         if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {

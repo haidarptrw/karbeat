@@ -14,9 +14,9 @@ use crate::{
     utils::lock::{get_app_read, get_app_write},
 };
 
-/// ======================================
-/// Type Definitions
-/// ======================================
+// ======================================
+// Type Definitions
+// ======================================
 
 /// Lightweight event pushed to Flutter when a mixer param changes
 /// from the backend (automation, undo, or any non-UI source).
@@ -386,6 +386,11 @@ pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Res
         mixer_state
             .add_effect_descriptor_by_id(&track_id.into(), registry_id)
             .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Added effect with registry ID {} to track {}",
+            registry_id,
+            track_id
+        );
     }
     broadcast_state_change();
     Ok(())
@@ -411,6 +416,10 @@ pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
         app.mixer
             .add_effect_to_master_bus(registry_id)
             .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Added effect with registry ID {} to master bus",
+            registry_id,
+        );
     }
     broadcast_state_change();
     Ok(())

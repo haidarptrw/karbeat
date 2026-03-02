@@ -1,4 +1,3 @@
-
 //                Planned UI Layout
 // |                                            |
 // |  Response Curve with draggable             |
@@ -6,7 +5,7 @@
 // |                                            |
 // |                                            |
 // --------------------------------------------
-// | Master | Band 1 | Band 2 | Band 3 | Band 4 | 
+// | Master | Band 1 | Band 2 | Band 3 | Band 4 |
 // |        |        |        |        |        |
 
 import 'package:flutter/material.dart';
@@ -35,7 +34,8 @@ double _xToFreq(double x, double width) {
 
 double _gainToY(double gain, double height) {
   // Y is inverted (0 at top, height at bottom)
-  final normalized = (gain.clamp(minGain, maxGain) - minGain) / (maxGain - minGain);
+  final normalized =
+      (gain.clamp(minGain, maxGain) - minGain) / (maxGain - minGain);
   return height - (normalized * height);
 }
 
@@ -120,7 +120,16 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
   }
 
   void _initDefaultBands() {
-    final defaultFreqs = [60.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0];
+    final defaultFreqs = [
+      60.0,
+      125.0,
+      250.0,
+      500.0,
+      1000.0,
+      2000.0,
+      4000.0,
+      8000.0,
+    ];
     bands = List.generate(8, (i) {
       int type = 0; // Peaking
       if (i == 0) type = 1; // Low Shelf
@@ -147,11 +156,21 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
     setState(() {
       final band = bands[bandIdx];
       switch (paramType) {
-        case 0: band.freq = value; break;
-        case 1: band.gain = value; break;
-        case 2: band.q = value; break;
-        case 3: band.active = value > 0.5; break;
-        case 4: band.filterType = value.toInt(); break;
+        case 0:
+          band.freq = value;
+          break;
+        case 1:
+          band.gain = value;
+          break;
+        case 2:
+          band.q = value;
+          break;
+        case 3:
+          band.active = value > 0.5;
+          break;
+        case 4:
+          band.filterType = value.toInt();
+          break;
       }
     });
 
@@ -185,12 +204,13 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
 
     for (int i = 0; i < bands.length; i++) {
       if (!bands[i].active) continue;
-      
+
       final nx = _freqToX(bands[i].freq, constraints.maxWidth);
       final ny = _gainToY(bands[i].gain, constraints.maxHeight);
-      
+
       final dist = sqrt(pow(nx - localPos.dx, 2) + pow(ny - localPos.dy, 2));
-      if (dist < 30.0 && dist < minDistance) { // 30px hit radius
+      if (dist < 30.0 && dist < minDistance) {
+        // 30px hit radius
         minDistance = dist;
         closestIndex = i;
       }
@@ -201,11 +221,14 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
     }
   }
 
-  void _onGraphPanUpdate(DragUpdateDetails details, BoxConstraints constraints) {
+  void _onGraphPanUpdate(
+    DragUpdateDetails details,
+    BoxConstraints constraints,
+  ) {
     if (_draggingNodeIndex == null) return;
-    
+
     final localPos = details.localPosition;
-    
+
     // Convert pixels back to values
     final newFreq = _xToFreq(localPos.dx, constraints.maxWidth);
     final newGain = _yToGain(localPos.dy, constraints.maxHeight);
@@ -222,67 +245,85 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey.shade900,
-      child: Column(
-        children: [
-          // TOP: Response Curve
-          Expanded(
-            flex: 3,
-            child: Container(
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16213E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade800),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return GestureDetector(
-                      onPanStart: (d) => _onGraphPanStart(d, constraints),
-                      onPanUpdate: (d) => _onGraphPanUpdate(d, constraints),
-                      onPanEnd: _onGraphPanEnd,
-                      child: CustomPaint(
-                        size: Size(constraints.maxWidth, constraints.maxHeight),
-                        painter: _EqResponsePainter(
-                          bands: bands,
-                          bandColors: _bandColors,
-                          activeNodeIndex: _draggingNodeIndex,
+    return Scaffold(
+      backgroundColor: Colors.grey.shade900,
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF16213E),
+        elevation: 0,
+        title: const Text(
+          "Parametric EQ",
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: Container(
+        color: Colors.grey.shade900,
+        child: Column(
+          children: [
+            // TOP: Response Curve
+            Expanded(
+              flex: 3,
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16213E),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade800),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return GestureDetector(
+                        onPanStart: (d) => _onGraphPanStart(d, constraints),
+                        onPanUpdate: (d) => _onGraphPanUpdate(d, constraints),
+                        onPanEnd: _onGraphPanEnd,
+                        child: CustomPaint(
+                          size: Size(
+                            constraints.maxWidth,
+                            constraints.maxHeight,
+                          ),
+                          painter: _EqResponsePainter(
+                            bands: bands,
+                            bandColors: _bandColors,
+                            activeNodeIndex: _draggingNodeIndex,
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // BOTTOM: Controls
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: Colors.grey.shade800)),
-              ),
-              child: Row(
-                children: [
-                  _buildMasterStrip(),
-                  Container(width: 1, color: Colors.grey.shade800, margin: const EdgeInsets.symmetric(horizontal: 8)),
-                  Expanded(
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: bands.length,
-                      itemBuilder: (context, index) => _buildBandStrip(index),
+            // BOTTOM: Controls
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Colors.grey.shade800)),
+                ),
+                child: Row(
+                  children: [
+                    _buildMasterStrip(),
+                    Container(
+                      width: 1,
+                      color: Colors.grey.shade800,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: bands.length,
+                        itemBuilder: (context, index) => _buildBandStrip(index),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -293,13 +334,25 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
       padding: const EdgeInsets.all(8),
       child: Column(
         children: [
-          const Text("MASTER", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+          const Text(
+            "MASTER",
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 16),
           Expanded(
             child: RotatedBox(
               quarterTurns: 3,
               child: SliderTheme(
-                data: SliderThemeData(trackHeight: 4, thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8)),
+                data: SliderThemeData(
+                  trackHeight: 4,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 8,
+                  ),
+                ),
                 child: Slider(
                   value: masterGain,
                   min: minGain,
@@ -311,7 +364,10 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
             ),
           ),
           const SizedBox(height: 8),
-          Text("${masterGain.toStringAsFixed(1)} dB", style: const TextStyle(color: Colors.white54, fontSize: 10)),
+          Text(
+            "${masterGain.toStringAsFixed(1)} dB",
+            style: const TextStyle(color: Colors.white54, fontSize: 10),
+          ),
         ],
       ),
     );
@@ -328,7 +384,9 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
       decoration: BoxDecoration(
         color: Colors.grey.shade800.withAlpha(50),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: band.active ? color.withAlpha(100) : Colors.transparent),
+        border: Border.all(
+          color: band.active ? color.withAlpha(100) : Colors.transparent,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -336,12 +394,23 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: color)),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+              ),
               const SizedBox(width: 4),
-              Text("BAND ${i + 1}", style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
+              Text(
+                "BAND ${i + 1}",
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
-          
+
           // Active Toggle
           Switch(
             value: band.active,
@@ -358,22 +427,55 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
             underline: const SizedBox(),
             onChanged: (val) => _updateBandParam(i, 4, val!.toDouble()),
             items: List.generate(_filterTypes.length, (idx) {
-              return DropdownMenuItem(value: idx, child: Text(_filterTypes[idx]));
+              return DropdownMenuItem(
+                value: idx,
+                child: Text(_filterTypes[idx]),
+              );
             }),
           ),
-          
+
           const Spacer(),
 
           // Simple numerical controls (Can replace with Knobs if you have the widget)
-          _buildParamControl("Freq", band.freq, minFreq, maxFreq, (v) => _updateBandParam(i, 0, v), isLog: true, suffix: "Hz"),
-          _buildParamControl("Gain", band.gain, minGain, maxGain, (v) => _updateBandParam(i, 1, v), suffix: "dB"),
-          _buildParamControl("Q", band.q, 0.1, 20.0, (v) => _updateBandParam(i, 2, v), suffix: ""),
+          _buildParamControl(
+            "Freq",
+            band.freq,
+            minFreq,
+            maxFreq,
+            (v) => _updateBandParam(i, 0, v),
+            isLog: true,
+            suffix: "Hz",
+          ),
+          _buildParamControl(
+            "Gain",
+            band.gain,
+            minGain,
+            maxGain,
+            (v) => _updateBandParam(i, 1, v),
+            suffix: "dB",
+          ),
+          _buildParamControl(
+            "Q",
+            band.q,
+            0.1,
+            20.0,
+            (v) => _updateBandParam(i, 2, v),
+            suffix: "",
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildParamControl(String label, double val, double min, double max, Function(double) onChanged, {bool isLog = false, String suffix = ""}) {
+  Widget _buildParamControl(
+    String label,
+    double val,
+    double min,
+    double max,
+    Function(double) onChanged, {
+    bool isLog = false,
+    String suffix = "",
+  }) {
     return Column(
       children: [
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 9)),
@@ -384,15 +486,19 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
           ),
           child: Slider(
-            value: isLog ? log(val) / ln10 : val,
+            value: (isLog ? log(val) / ln10 : val).clamp(
+              isLog ? log(min) / ln10 : min,
+              isLog ? log(max) / ln10 : max,
+            ),
             min: isLog ? log(min) / ln10 : min,
             max: isLog ? log(max) / ln10 : max,
-            onChanged: (newVal) => onChanged(isLog ? pow(10, newVal).toDouble() : newVal),
+            onChanged: (newVal) =>
+                onChanged(isLog ? pow(10, newVal).toDouble() : newVal),
           ),
         ),
         Text(
-          "${val >= 1000 ? '${(val/1000).toStringAsFixed(1)}k' : val.toStringAsFixed(1)}$suffix", 
-          style: const TextStyle(color: Colors.white, fontSize: 9)
+          "${val >= 1000 ? '${(val / 1000).toStringAsFixed(1)}k' : val.toStringAsFixed(1)}$suffix",
+          style: const TextStyle(color: Colors.white, fontSize: 9),
         ),
       ],
     );
@@ -417,47 +523,61 @@ class _EqResponsePainter extends CustomPainter {
     final h = size.height;
 
     // 1. Draw Grid Lines
-    final gridPaint = Paint()..color = Colors.white.withAlpha(20)..strokeWidth = 1;
+    final gridPaint = Paint()
+      ..color = Colors.white.withAlpha(20)
+      ..strokeWidth = 1;
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
 
     final freqsToDraw = [50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0];
     for (var f in freqsToDraw) {
       final x = _freqToX(f, w);
       canvas.drawLine(Offset(x, 0), Offset(x, h), gridPaint);
-      
-      textPainter.text = TextSpan(text: f >= 1000 ? "${f~/1000}k" : "${f.toInt()}", style: const TextStyle(color: Colors.white30, fontSize: 10));
+
+      textPainter.text = TextSpan(
+        text: f >= 1000 ? "${f ~/ 1000}k" : "${f.toInt()}",
+        style: const TextStyle(color: Colors.white30, fontSize: 10),
+      );
       textPainter.layout();
       textPainter.paint(canvas, Offset(x + 2, h - 14));
     }
 
     // 0dB Center Line
-    canvas.drawLine(Offset(0, h / 2), Offset(w, h / 2), Paint()..color = Colors.white54..strokeWidth = 1);
+    canvas.drawLine(
+      Offset(0, h / 2),
+      Offset(w, h / 2),
+      Paint()
+        ..color = Colors.white54
+        ..strokeWidth = 1,
+    );
 
     // 2. Calculate and Draw the Composite Curve
     // We approximate the sum of magnitudes for visual representation
     final path = Path();
     final step = w / 200; // Resolution of the curve
-    
+
     for (double x = 0; x <= w; x += step) {
       final currentFreq = _xToFreq(x, w);
       double totalGainDb = 0.0;
 
       for (var band in bands) {
         if (!band.active || band.gain.abs() < 0.1) continue;
-        
+
         // Very basic visual approximation of filter bell shapes in log space
         // This is purely for the UI graph, the actual DSP math happens in Rust.
         double wRatio = currentFreq / band.freq;
         double bw = (wRatio - (1.0 / wRatio)) / band.q;
-        double responseGain = band.gain / (1.0 + (bw * bw)); 
-        
+        double responseGain = band.gain / (1.0 + (bw * bw));
+
         // Handle shelves/cuts visually (simplified)
-        if (band.filterType == 1) { // Low Shelf
-           if (currentFreq < band.freq) responseGain = band.gain;
-        } else if (band.filterType == 2) { // High Shelf
-           if (currentFreq > band.freq) responseGain = band.gain;
-        } else if (band.filterType >= 3) { // Cuts
-           responseGain = 0; // Don't try to draw complex cut curves roughly
+        if (band.filterType == 1) {
+          // Low Shelf
+          if (currentFreq < band.freq) responseGain = band.gain;
+        } else if (band.filterType == 2) {
+          // High Shelf
+          if (currentFreq > band.freq) responseGain = band.gain;
+        } else if (band.filterType >= 3) {
+          // Cuts
+          responseGain = 0; // Don't try to draw complex cut curves roughly
         }
 
         totalGainDb += responseGain;
@@ -477,10 +597,21 @@ class _EqResponsePainter extends CustomPainter {
       ..lineTo(0, h / 2)
       ..close();
 
-    canvas.drawPath(fillPath, Paint()..color = Colors.cyanAccent.withAlpha(20)..style = PaintingStyle.fill);
-    
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..color = Colors.cyanAccent.withAlpha(20)
+        ..style = PaintingStyle.fill,
+    );
+
     // Stroke curve
-    canvas.drawPath(path, Paint()..color = Colors.cyanAccent..strokeWidth = 2..style = PaintingStyle.stroke);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = Colors.cyanAccent
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke,
+    );
 
     // 3. Draw Interactable Nodes
     for (int i = 0; i < bands.length; i++) {
@@ -492,16 +623,45 @@ class _EqResponsePainter extends CustomPainter {
       final isDragging = activeNodeIndex == i;
 
       // Draw vertical drop line
-      canvas.drawLine(Offset(x, y), Offset(x, h/2), Paint()..color = color.withAlpha(isDragging ? 150 : 50)..strokeWidth = 1);
+      canvas.drawLine(
+        Offset(x, y),
+        Offset(x, h / 2),
+        Paint()
+          ..color = color.withAlpha(isDragging ? 150 : 50)
+          ..strokeWidth = 1,
+      );
 
       // Node Circle
-      canvas.drawCircle(Offset(x, y), isDragging ? 8 : 6, Paint()..color = color..style = PaintingStyle.fill);
-      canvas.drawCircle(Offset(x, y), isDragging ? 8 : 6, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1);
-      
+      canvas.drawCircle(
+        Offset(x, y),
+        isDragging ? 8 : 6,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawCircle(
+        Offset(x, y),
+        isDragging ? 8 : 6,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+
       // Draw Band Number
-      textPainter.text = TextSpan(text: "${i+1}", style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.bold));
+      textPainter.text = TextSpan(
+        text: "${i + 1}",
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+        ),
+      );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(x - textPainter.width/2, y - textPainter.height/2));
+      textPainter.paint(
+        canvas,
+        Offset(x - textPainter.width / 2, y - textPainter.height / 2),
+      );
     }
   }
 

@@ -92,6 +92,10 @@ class KarbeatState extends ChangeNotifier {
   final StreamController<ProjectEvent> _stateEventController =
       StreamController.broadcast();
 
+  // A custom defined internal event bus for state synchronization
+  final StreamController<Future<void> Function()> _customStateEventController =
+      StreamController.broadcast();
+
   // ignore:unused_field
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
@@ -169,11 +173,31 @@ class KarbeatState extends ChangeNotifier {
     syncGeneratorList();
     syncAudioHardwareConfigState();
 
-    // fetch available generators
+    // fetch available generators and effects
     fetchAvailableGenerators();
+    fetchAvailableEffects();
 
     // Start mixer event stream
     _initMixerEventStream();
+  }
+
+  @override
+  void dispose() {
+    // Cancel active stream subscriptions from the Rust backend and internal event bus
+    _stateSubscription?.cancel();
+    _mixerEventSubscription?.cancel();
+
+    // Close the internal event bus controllers
+    if (!_stateEventController.isClosed) {
+      _stateEventController.close();
+    }
+
+    if (!_customStateEventController.isClosed) {
+      _customStateEventController.close();
+    }
+
+    // Always call super.dispose() last to properly tear down the ChangeNotifier
+    super.dispose();
   }
 
   // =========================================================
@@ -236,6 +260,15 @@ class KarbeatState extends ChangeNotifier {
           // TODO: Handle this case.
           // throw UnimplementedError();
           break;
+      }
+    });
+
+    // Listen and execute caller-defined custom sync actions
+    _customStateEventController.stream.listen((action) async {
+      try {
+        await action();
+      } catch (e) {
+        KarbeatLogger.error("Error executing custom backend change: $e");
       }
     });
   }
@@ -443,6 +476,13 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Triggers a state refresh. Call this after any Rust API action.
+  void notifyCustomBackendChange(Future<void> Function() action) {
+    if (!_customStateEventController.isClosed) {
+      _customStateEventController.add(action);
+    }
+  }
+
   Future<void> syncMixerState() async {
     try {
       final newState = await mixer_api.getMixerState();
@@ -450,6 +490,30 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       KarbeatLogger.error("Failed to sync mixer state: $e");
+    }
+  }
+
+  Future<void> syncMixerChannel(int trackId) async {
+    try {
+      final updatedChannel = await mixer_api.getMixerChannel(trackId: trackId);
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updatedChannel;
+      _mixerState = _mixerState.copyWith(channels: newChannels);
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Error syncing mixer channel $trackId: $e");
+    }
+  }
+
+  Future<void> syncMasterBus() async {
+    try {
+      final updatedMaster = await mixer_api.getMasterBus();
+      _mixerState = _mixerState.copyWith(masterBus: updatedMaster);
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Failed to sync master bus: $e");
     }
   }
 
@@ -489,6 +553,43 @@ class KarbeatState extends ChangeNotifier {
       notifyBackendChange(ProjectEvent.generatorListChanged);
     } catch (e) {
       KarbeatLogger.error("Failed to add midi track: $e");
+    }
+  }
+
+  Future<void> addEffectToMixerChannel(int channelId, int registryId) async {
+    try {
+      if (channelId == -1) {
+        KarbeatLogger.info("Adding effect to master channel");
+        await mixer_api.addEffectToMasterBus(registryId: registryId);
+        notifyCustomBackendChange(() async {
+          await syncMasterBus();
+        });
+      } else {
+        KarbeatLogger.info("Adding effect to track channel $channelId");
+        await mixer_api.addEffectToMixerChannelById(
+          trackId: channelId,
+          registryId: registryId,
+        );
+        notifyCustomBackendChange(() async {
+          await syncMixerChannel(channelId);
+        });
+      }
+    } catch (e) {
+      KarbeatLogger.error("Failed to add effect to channel: $e");
+    }
+  }
+
+  Future<void> addEffectToMasterBus(int registryId) async {
+    try {
+      await mixer_api.addEffectToMasterBus(registryId: registryId);
+      // notifyBackendChange(ProjectEvent.mixerChanged);
+      // only update the master bus
+      notifyCustomBackendChange(() async {
+        await syncMasterBus();
+        KarbeatLogger.info("Adding effect to master channel");
+      });
+    } catch (e) {
+      KarbeatLogger.error("Failed to add effect to master bus: $e");
     }
   }
 
@@ -547,7 +648,7 @@ class KarbeatState extends ChangeNotifier {
       // Scale zoom so that (samplesPerBeat / zoomLevel) stays constant,
       // keeping grid lines at the same pixel positions.
       if (oldBpm > 0 && value > 0) {
-        horizontalZoomLevel = _horizontalZoomLevel * (value / oldBpm);
+        horizontalZoomLevel = _horizontalZoomLevel * (oldBpm / value);
       }
 
       notifyListeners();
@@ -1327,6 +1428,22 @@ class KarbeatState extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+}
+
+extension on mixer_api.UiMixerState {
+  mixer_api.UiMixerState copyWith({
+    Map<int, mixer_api.UiMixerChannel>? channels,
+    mixer_api.UiMixerChannel? masterBus,
+    List<mixer_api.UiBus>? buses,
+    List<mixer_api.UiRoutingConnection>? routing,
+  }) {
+    return mixer_api.UiMixerState.newWithParam(
+      channels: channels ?? this.channels,
+      masterBus: masterBus ?? this.masterBus,
+      buses: buses ?? this.buses,
+      routing: routing ?? this.routing,
+    );
   }
 }
 

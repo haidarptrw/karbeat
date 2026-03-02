@@ -134,9 +134,6 @@ Future<void> removeRouting({
   isSend: isSend,
 );
 
-/// ======================================
-/// Type Definitions
-/// ======================================
 /// Lightweight event pushed to Flutter when a mixer param changes
 /// from the backend (automation, undo, or any non-UI source).
 class MixerParamEvent {
