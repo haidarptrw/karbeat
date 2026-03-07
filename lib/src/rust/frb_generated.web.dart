@@ -208,6 +208,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
 
   @protected
+  List<UiResponseCurvePoint> dco_decode_list_ui_response_curve_point(
+    dynamic raw,
+  );
+
+  @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
 
   @protected
@@ -355,6 +360,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
+
+  @protected
+  UiResponseCurvePoint dco_decode_ui_response_curve_point(dynamic raw);
 
   @protected
   UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
@@ -583,6 +591,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiResponseCurvePoint> sse_decode_list_ui_response_curve_point(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
     SseDeserializer deserializer,
   );
@@ -746,6 +759,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginParameter sse_decode_ui_plugin_parameter(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiResponseCurvePoint sse_decode_ui_response_curve_point(
     SseDeserializer deserializer,
   );
 
@@ -1016,6 +1034,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_response_curve_point(
+    List<UiResponseCurvePoint> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_routing_connection(
     List<UiRoutingConnection> self,
     SseSerializer serializer,
@@ -1225,6 +1249,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_plugin_parameter(
     UiPluginParameter self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_response_curve_point(
+    UiResponseCurvePoint self,
     SseSerializer serializer,
   );
 

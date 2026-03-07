@@ -9,8 +9,10 @@
 // |        |        |        |        |        |
 
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'dart:math';
+
+import 'package:karbeat/features/plugins/effects/abstract_effect_screen.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
 /// Math helpers for Logarithmic Frequency Mapping
 const double minFreq = 20.0;
@@ -51,6 +53,7 @@ class EqBand {
   double freq;
   double gain;
   double q;
+  int order; // 0=12dB/oct, 1=24dB, 2=36dB, 3=48dB
 
   EqBand({
     required this.active,
@@ -58,31 +61,30 @@ class EqBand {
     required this.freq,
     required this.gain,
     required this.q,
+    this.order = 0,
   });
 }
 
-class KarbeatParametricEq extends StatefulWidget {
-  final int trackId;
-  final int effectIdx; // Index of the effect in the track's chain
-
+class KarbeatParametricEq extends AbstractEffectScreen {
   const KarbeatParametricEq({
     Key? key,
-    required this.trackId,
-    required this.effectIdx,
+    required super.trackId,
+    required super.effectIdx,
   }) : super(key: key);
 
   @override
   KarbeatParametricEqState createState() => KarbeatParametricEqState();
 }
 
-class KarbeatParametricEqState extends State<KarbeatParametricEq> {
-  // State
+class KarbeatParametricEqState
+    extends AbstractEffectScreenState<KarbeatParametricEq> {
+  // EQ-specific state
   double masterGain = 0.0;
   late List<EqBand> bands;
   int? _draggingNodeIndex;
 
-  // Polling timer (similar to DynamicPluginScreen)
-  Timer? _parameterPollTimer;
+  // Backend-computed response curve
+  List<plugin_api.UiResponseCurvePoint> _responseCurve = [];
 
   final List<Color> _bandColors = [
     Colors.redAccent,
@@ -105,18 +107,37 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
     "Notch",
   ];
 
+  final List<String> _slopeChoices = [
+    "12 dB/oct",
+    "24 dB/oct",
+    "36 dB/oct",
+    "48 dB/oct",
+  ];
+
+  @override
+  String get effectName => 'Parametric EQ';
+
   @override
   void initState() {
     super.initState();
     _initDefaultBands();
-    // TODO: Fetch actual initial parameters from Rust backend here
-    // _startParameterPolling();
+    _fetchResponseCurve();
   }
 
-  @override
-  void dispose() {
-    _parameterPollTimer?.cancel();
-    super.dispose();
+  /// Fetch the response curve from the Rust backend
+  Future<void> _fetchResponseCurve() async {
+    try {
+      final curve = await plugin_api.getEqResponseCurve(
+        trackId: widget.trackId,
+        effectId: widget.effectIdx,
+        numPoints: 200,
+      );
+      if (mounted) {
+        setState(() => _responseCurve = curve);
+      }
+    } catch (e) {
+      debugPrint('Error fetching EQ response curve: $e');
+    }
   }
 
   void _initDefaultBands() {
@@ -149,7 +170,8 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
 
   void _updateMasterGain(double value) {
     setState(() => masterGain = value);
-    _sendParamToRust(2, value);
+    setParameter(2, value.toDouble());
+    _fetchResponseCurve();
   }
 
   void _updateBandParam(int bandIdx, int paramType, double value) {
@@ -171,27 +193,16 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
         case 4:
           band.filterType = value.toInt();
           break;
+        case 5:
+          band.order = value.toInt();
+          break;
       }
     });
 
-    // ID Formula from parametric_eq.rs: base_id = 3 + (band_idx * 5)
-    int paramId = 3 + (bandIdx * 5) + paramType;
-    _sendParamToRust(paramId, value);
-  }
-
-  Future<void> _sendParamToRust(int paramId, double value) async {
-    try {
-      // Assuming you have an API to set track effect parameters based on engine.rs
-      // e.g. AudioCommand::SetTrackEffectParameter
-      // await track_api.setTrackEffectParameter(
-      //   trackId: widget.trackId,
-      //   effectIdx: widget.effectIdx,
-      //   paramId: paramId,
-      //   value: value,
-      // );
-    } catch (e) {
-      debugPrint("Error updating EQ param: $e");
-    }
+    // ID Formula from parametric_eq.rs: base_id = 3 + (band_idx * 6)
+    int paramId = 3 + (bandIdx * 6) + paramType;
+    setParameter(paramId, value.toDouble());
+    _fetchResponseCurve();
   }
 
   // --- Graph Interaction ---
@@ -244,86 +255,73 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
   // --- UI Building ---
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade900,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF16213E),
-        elevation: 0,
-        title: const Text(
-          "Parametric EQ",
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: Container(
-        color: Colors.grey.shade900,
-        child: Column(
-          children: [
-            // TOP: Response Curve
-            Expanded(
-              flex: 3,
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF16213E),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade800),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return GestureDetector(
-                        onPanStart: (d) => _onGraphPanStart(d, constraints),
-                        onPanUpdate: (d) => _onGraphPanUpdate(d, constraints),
-                        onPanEnd: _onGraphPanEnd,
-                        child: CustomPaint(
-                          size: Size(
-                            constraints.maxWidth,
-                            constraints.maxHeight,
-                          ),
-                          painter: _EqResponsePainter(
-                            bands: bands,
-                            bandColors: _bandColors,
-                            activeNodeIndex: _draggingNodeIndex,
-                          ),
+  Widget buildEffectBody(BuildContext context) {
+    return Container(
+      color: Colors.grey.shade900,
+      child: Column(
+        children: [
+          // TOP: Response Curve
+          Expanded(
+            flex: 3,
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16213E),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade800),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return GestureDetector(
+                      onPanStart: (d) => _onGraphPanStart(d, constraints),
+                      onPanUpdate: (d) => _onGraphPanUpdate(d, constraints),
+                      onPanEnd: _onGraphPanEnd,
+                      child: CustomPaint(
+                        size: Size(constraints.maxWidth, constraints.maxHeight),
+                        painter: _EqResponsePainter(
+                          bands: bands,
+                          bandColors: _bandColors,
+                          activeNodeIndex: _draggingNodeIndex,
+                          responseCurve: _responseCurve,
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-
-            // BOTTOM: Controls
-            Expanded(
-              flex: 2,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: Colors.grey.shade800)),
-                ),
-                child: Row(
-                  children: [
-                    _buildMasterStrip(),
-                    Container(
-                      width: 1,
-                      color: Colors.grey.shade800,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: bands.length,
-                        itemBuilder: (context, index) => _buildBandStrip(index),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+
+          // BOTTOM: Controls
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.grey.shade800)),
+              ),
+              child: Row(
+                children: [
+                  _buildMasterStrip(),
+                  Container(
+                    width: 1,
+                    color: Colors.grey.shade800,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: bands.length,
+                      itemBuilder: (context, index) => _buildBandStrip(index),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -379,7 +377,7 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
 
     return Container(
       width: 100,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
         color: Colors.grey.shade800.withAlpha(50),
@@ -388,81 +386,126 @@ class KarbeatParametricEqState extends State<KarbeatParametricEq> {
           color: band.active ? color.withAlpha(100) : Colors.transparent,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                "BAND ${i + 1}",
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Band Header + Active Toggle
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      "B${i + 1}",
+                      style: TextStyle(
+                        color: band.active ? Colors.white70 : Colors.white30,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
+                // Compact toggle
+                SizedBox(
+                  width: 32,
+                  height: 20,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: Switch(
+                      value: band.active,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      activeThumbColor: color,
+                      onChanged: (val) =>
+                          _updateBandParam(i, 3, val ? 1.0 : 0.0),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Type Dropdown (compact)
+            SizedBox(
+              height: 28,
+              child: DropdownButton<int>(
+                value: band.filterType,
+                isExpanded: true,
+                dropdownColor: Colors.grey.shade800,
+                style: const TextStyle(color: Colors.white54, fontSize: 9),
+                underline: const SizedBox(),
+                isDense: true,
+                onChanged: (val) => _updateBandParam(i, 4, val!.toDouble()),
+                items: List.generate(_filterTypes.length, (idx) {
+                  return DropdownMenuItem(
+                    value: idx,
+                    child: Text(_filterTypes[idx]),
+                  );
+                }),
               ),
-            ],
-          ),
+            ),
 
-          // Active Toggle
-          Switch(
-            value: band.active,
-            activeThumbColor: color,
-            onChanged: (val) => _updateBandParam(i, 3, val ? 1.0 : 0.0),
-          ),
+            const SizedBox(height: 2),
 
-          // Type Dropdown
-          DropdownButton<int>(
-            value: band.filterType,
-            isExpanded: true,
-            dropdownColor: Colors.grey.shade800,
-            style: const TextStyle(color: Colors.white54, fontSize: 10),
-            underline: const SizedBox(),
-            onChanged: (val) => _updateBandParam(i, 4, val!.toDouble()),
-            items: List.generate(_filterTypes.length, (idx) {
-              return DropdownMenuItem(
-                value: idx,
-                child: Text(_filterTypes[idx]),
-              );
-            }),
-          ),
+            // Parameter controls
+            _buildParamControl(
+              "Freq",
+              band.freq,
+              minFreq,
+              maxFreq,
+              (v) => _updateBandParam(i, 0, v),
+              isLog: true,
+              suffix: "Hz",
+            ),
+            _buildParamControl(
+              "Gain",
+              band.gain,
+              minGain,
+              maxGain,
+              (v) => _updateBandParam(i, 1, v),
+              suffix: "dB",
+            ),
+            _buildParamControl(
+              "Q",
+              band.q,
+              0.1,
+              20.0,
+              (v) => _updateBandParam(i, 2, v),
+              suffix: "",
+            ),
 
-          const Spacer(),
-
-          // Simple numerical controls (Can replace with Knobs if you have the widget)
-          _buildParamControl(
-            "Freq",
-            band.freq,
-            minFreq,
-            maxFreq,
-            (v) => _updateBandParam(i, 0, v),
-            isLog: true,
-            suffix: "Hz",
-          ),
-          _buildParamControl(
-            "Gain",
-            band.gain,
-            minGain,
-            maxGain,
-            (v) => _updateBandParam(i, 1, v),
-            suffix: "dB",
-          ),
-          _buildParamControl(
-            "Q",
-            band.q,
-            0.1,
-            20.0,
-            (v) => _updateBandParam(i, 2, v),
-            suffix: "",
-          ),
-        ],
+            // Slope dropdown
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 28,
+              child: DropdownButton<int>(
+                value: band.order.clamp(0, _slopeChoices.length - 1),
+                isExpanded: true,
+                dropdownColor: Colors.grey.shade800,
+                style: const TextStyle(color: Colors.white54, fontSize: 9),
+                underline: const SizedBox(),
+                isDense: true,
+                onChanged: (val) => _updateBandParam(i, 5, val!.toDouble()),
+                items: List.generate(_slopeChoices.length, (idx) {
+                  return DropdownMenuItem(
+                    value: idx,
+                    child: Text(_slopeChoices[idx]),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -510,11 +553,13 @@ class _EqResponsePainter extends CustomPainter {
   final List<EqBand> bands;
   final List<Color> bandColors;
   final int? activeNodeIndex;
+  final List<plugin_api.UiResponseCurvePoint> responseCurve;
 
   _EqResponsePainter({
     required this.bands,
     required this.bandColors,
     required this.activeNodeIndex,
+    required this.responseCurve,
   });
 
   @override
@@ -550,68 +595,47 @@ class _EqResponsePainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    // 2. Calculate and Draw the Composite Curve
-    // We approximate the sum of magnitudes for visual representation
-    final path = Path();
-    final step = w / 200; // Resolution of the curve
+    // 2. Draw the response curve from backend-computed data
+    if (responseCurve.isNotEmpty) {
+      final path = Path();
 
-    for (double x = 0; x <= w; x += step) {
-      final currentFreq = _xToFreq(x, w);
-      double totalGainDb = 0.0;
+      for (int i = 0; i < responseCurve.length; i++) {
+        final point = responseCurve[i];
+        final x = _freqToX(point.frequency.toDouble(), w);
+        final y = _gainToY(
+          point.magnitudeDb.toDouble().clamp(minGain, maxGain),
+          h,
+        );
 
-      for (var band in bands) {
-        if (!band.active || band.gain.abs() < 0.1) continue;
-
-        // Very basic visual approximation of filter bell shapes in log space
-        // This is purely for the UI graph, the actual DSP math happens in Rust.
-        double wRatio = currentFreq / band.freq;
-        double bw = (wRatio - (1.0 / wRatio)) / band.q;
-        double responseGain = band.gain / (1.0 + (bw * bw));
-
-        // Handle shelves/cuts visually (simplified)
-        if (band.filterType == 1) {
-          // Low Shelf
-          if (currentFreq < band.freq) responseGain = band.gain;
-        } else if (band.filterType == 2) {
-          // High Shelf
-          if (currentFreq > band.freq) responseGain = band.gain;
-        } else if (band.filterType >= 3) {
-          // Cuts
-          responseGain = 0; // Don't try to draw complex cut curves roughly
+        if (i == 0) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
         }
-
-        totalGainDb += responseGain;
       }
 
-      final y = _gainToY(totalGainDb, h);
-      if (x == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+      // Fill under curve
+      final fillPath = Path.from(path)
+        ..lineTo(w, h / 2)
+        ..lineTo(0, h / 2)
+        ..close();
+
+      canvas.drawPath(
+        fillPath,
+        Paint()
+          ..color = Colors.cyanAccent.withAlpha(20)
+          ..style = PaintingStyle.fill,
+      );
+
+      // Stroke curve
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = Colors.cyanAccent
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke,
+      );
     }
-
-    // Fill under curve
-    final fillPath = Path.from(path)
-      ..lineTo(w, h / 2)
-      ..lineTo(0, h / 2)
-      ..close();
-
-    canvas.drawPath(
-      fillPath,
-      Paint()
-        ..color = Colors.cyanAccent.withAlpha(20)
-        ..style = PaintingStyle.fill,
-    );
-
-    // Stroke curve
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = Colors.cyanAccent
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke,
-    );
 
     // 3. Draw Interactable Nodes
     for (int i = 0; i < bands.length; i++) {
