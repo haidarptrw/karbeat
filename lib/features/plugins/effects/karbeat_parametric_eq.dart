@@ -166,7 +166,7 @@ class KarbeatParametricEqState
     });
   }
 
-  // --- Backend Communication ---
+  // ==== Backend Communication ====
 
   void _updateMasterGain(double value) {
     setState(() => masterGain = value);
@@ -205,7 +205,7 @@ class KarbeatParametricEqState
     _fetchResponseCurve();
   }
 
-  // --- Graph Interaction ---
+  // === Graph Interaction ===
 
   void _onGraphPanStart(DragStartDetails details, BoxConstraints constraints) {
     // Find the closest node to the tap
@@ -251,8 +251,6 @@ class KarbeatParametricEqState
   void _onGraphPanEnd(DragEndDetails details) {
     setState(() => _draggingNodeIndex = null);
   }
-
-  // --- UI Building ---
 
   @override
   Widget buildEffectBody(BuildContext context) {
@@ -567,7 +565,7 @@ class _EqResponsePainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // 1. Draw Grid Lines
+    // Draw Grid Lines
     final gridPaint = Paint()
       ..color = Colors.white.withAlpha(20)
       ..strokeWidth = 1;
@@ -595,7 +593,7 @@ class _EqResponsePainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    // 2. Draw the response curve from backend-computed data
+    // Draw the response curve from backend-computed data
     if (responseCurve.isNotEmpty) {
       final path = Path();
 
@@ -637,7 +635,7 @@ class _EqResponsePainter extends CustomPainter {
       );
     }
 
-    // 3. Draw Interactable Nodes
+    // Draw Interactable Nodes
     for (int i = 0; i < bands.length; i++) {
       if (!bands[i].active) continue;
 
@@ -690,5 +688,5 @@ class _EqResponsePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _EqResponsePainter oldDelegate) => true; // Ideally check for actual changes
+  bool shouldRepaint(covariant _EqResponsePainter oldDelegate) => true;
 }

@@ -478,6 +478,39 @@ pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<
 }
 
 // ======================================
+// BUS EFFECT MANAGEMENT APIs
+// ======================================
+
+/// Add an effect to a bus by its registry ID.
+pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.mixer
+            .add_effect_to_bus(bus_id.into(), registry_id)
+            .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Added effect with registry ID {} to bus {}",
+            registry_id,
+            bus_id
+        );
+    }
+    broadcast_state_change();
+    Ok(())
+}
+
+pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.mixer.rename_bus(bus_id.into(), &new_name)?;
+    }
+    broadcast_state_change();
+    Ok(())
+}
+
+// TODO: Implement remove_effect_from_bus when the Audio Engine already
+// handled the RemoveEffectFromBus command
+
+// ======================================
 // ROUTING APIs
 // ======================================
 

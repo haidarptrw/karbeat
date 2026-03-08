@@ -9,9 +9,9 @@ use std::collections::HashMap;
 
 use crate::core::project::plugin::{KarbeatEffect, KarbeatGenerator, MidiEvent};
 
-use super::automation::AutomationManager;
 use super::effect_base::EffectBase;
 use super::synth_base::SynthBase;
+use crate::core::project::track::automation::AutomationManager;
 
 // ============================================================================
 // PARAMETER API

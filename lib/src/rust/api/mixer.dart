@@ -100,6 +100,16 @@ Future<void> setBusParams({
   params: params,
 );
 
+/// Add an effect to a bus by its registry ID.
+Future<void> addEffectToBus({required int busId, required int registryId}) =>
+    RustLib.instance.api.crateApiMixerAddEffectToBus(
+      busId: busId,
+      registryId: registryId,
+    );
+
+Future<void> renameBus({required int busId, required String newName}) =>
+    RustLib.instance.api.crateApiMixerRenameBus(busId: busId, newName: newName);
+
 /// Set routing: source → destination with send level.
 /// source_type: 0=Track, 1=Bus
 /// dest_type: 1=Bus, 2=Master

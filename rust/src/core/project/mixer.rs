@@ -232,6 +232,12 @@ impl MixerChannel {
 
         Ok((effect_plugin, effect_name, effect_id))
     }
+
+    pub fn remove_effect(&mut self, effect_id: EffectId) -> anyhow::Result<()> {
+        self.effects.retain(|effect| effect.id != effect_id);
+
+        Ok(())
+    }
 }
 
 impl MixerState {
@@ -379,6 +385,14 @@ impl MixerState {
         Ok(())
     }
 
+    pub fn remove_effect_from_master_bus(&mut self, effect_id: EffectId) -> anyhow::Result<()> {
+        let channel = Arc::make_mut(&mut self.master_bus);
+        channel.remove_effect(effect_id)?;
+
+        // TODO: implement sending command to audio thread to delete the effect
+        Ok(())
+    }
+
     // =========================================================================
     // Bus Management
     // =========================================================================
@@ -443,6 +457,68 @@ impl MixerState {
         }
 
         Ok(bus_arc.clone())
+    }
+
+    pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> Result<(), String> {
+        let bus_arc = self
+            .buses
+            .get_mut(&bus_id)
+            .ok_or_else(|| format!("Bus {:?} not found", bus_id))?;
+
+        let bus = Arc::make_mut(bus_arc);
+        let old_name = bus.name.clone();
+        bus.name = new_name.to_string();
+
+        log::info!("Bus {:?} renamed from {} to {}", bus_id, old_name, new_name);
+        Ok(())
+    }
+
+    pub fn add_effect_to_bus(
+        &mut self,
+        bus_id: BusId,
+        registry_id: u32,
+    ) -> anyhow::Result<(String, EffectId)> {
+        let bus_arc = self
+            .buses
+            .get_mut(&bus_id)
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
+
+        let bus = Arc::make_mut(bus_arc);
+        let (effect_plugin, effect_name, effect_id) = bus.channel.add_effect(registry_id)?;
+
+        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+            let _ = sender.push(AudioCommand::AddBusEffect {
+                bus_id,
+                effect_id,
+                effect: effect_plugin,
+            });
+        }
+
+        log::info!(
+            "Effect {} (registry_id={}) added to bus {:?}",
+            effect_name,
+            registry_id,
+            bus_id
+        );
+
+        Ok((effect_name, effect_id))
+    }
+
+    pub fn remove_effect_from_bus(
+        &mut self,
+        bus_id: BusId,
+        effect_id: EffectId,
+    ) -> anyhow::Result<()> {
+        let bus_arc = self
+            .buses
+            .get_mut(&bus_id)
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
+
+        let bus = Arc::make_mut(bus_arc);
+        bus.channel.remove_effect(effect_id)?;
+
+        // TODO: implement sending command to audio thread to delete the effect
+        Ok(())
     }
 
     // =========================================================================
