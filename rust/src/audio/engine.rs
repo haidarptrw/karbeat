@@ -24,6 +24,7 @@ use crate::{
     core::project::{
         mixer::{BusId, MixerChannel, RoutingNode},
         plugin::{MidiEvent, MidiMessage},
+        track::automation::AutomationTarget,
         AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
         PatternId, TrackId,
     },
@@ -299,6 +300,9 @@ impl AudioEngine {
     ) {
         // Schedule Events (MIDI / Audio Clips)
         self.resolve_sequencer_events(buffer_size);
+
+        // Apply Automation (parameter modulation)
+        self.evaluate_automation_lanes();
 
         // Render Active Voices
         self.render_voices_to_buffer(output_buffer, channels);
@@ -1706,6 +1710,82 @@ impl AudioEngine {
             }
         }
         events.sort_by_key(|e| e.sample_offset);
+    }
+
+    fn evaluate_automation_lanes(&mut self) {
+        let tempo = self.current_state.transport.bpm;
+        if tempo <= 0.0 {
+            return;
+        }
+
+        // Convert playhead from samples to beats
+        let samples_per_beat = (60.0 / tempo) * (self.sample_rate as f32);
+        let current_beat = self.playhead_samples as f64 / samples_per_beat as f64;
+
+        for lane in self.current_state.graph.automation_lanes.values() {
+            let value = lane.value_at_beats(current_beat);
+
+            match &lane.target {
+                AutomationTarget::TrackGeneratorPluginParam {
+                    track_id: _,
+                    param_id,
+                } => {
+                    // Find the generator on this track and set the parameter
+                    // Note: generator→track mapping is in plugin_state.generators
+                    for gen in self.plugin_state.generators.values_mut() {
+                        // TODO: filter by track_id when we have that mapping
+                        gen.plugin.set_parameter(*param_id, value);
+                    }
+                }
+                AutomationTarget::TrackPluginParam {
+                    track_id,
+                    effect_id,
+                    param_id,
+                } => {
+                    if let Some(effects) = self.plugin_state.track_effects.get_mut(track_id) {
+                        if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
+                            effect.plugin.set_parameter(*param_id, value);
+                        }
+                    }
+                }
+                AutomationTarget::BusPluginParam {
+                    bus_id,
+                    effect_id,
+                    param_id,
+                } => {
+                    if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id) {
+                        if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
+                            effect.plugin.set_parameter(*param_id, value);
+                        }
+                    }
+                }
+                AutomationTarget::MasterPluginParam {
+                    effect_id,
+                    param_id,
+                } => {
+                    if let Some(effect) = self
+                        .plugin_state
+                        .master_effects
+                        .iter_mut()
+                        .find(|e| e.id == *effect_id)
+                    {
+                        effect.plugin.set_parameter(*param_id, value);
+                    }
+                }
+                // Volume/Pan targets are applied during mixing (read from state),
+                // not via set_parameter. These are logged as TODO for now.
+                AutomationTarget::TrackVolume(_)
+                | AutomationTarget::TrackPan(_)
+                | AutomationTarget::BusVolume(_)
+                | AutomationTarget::BusPan(_)
+                | AutomationTarget::MasterVolume
+                | AutomationTarget::MasterPan
+                | AutomationTarget::TempoBpm => {
+                    // These targets modify mixer/transport state directly.
+                    // Will be handled in a future pass.
+                }
+            }
+        }
     }
 }
 

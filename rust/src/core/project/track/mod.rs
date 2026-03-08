@@ -20,8 +20,6 @@ use crate::{
     utils::color::Color,
 };
 
-use automation::{AutomationId, AutomationLane, AutomationPoint, AutomationTarget};
-
 define_id!(TrackId);
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -33,8 +31,6 @@ pub struct KarbeatTrack {
     pub clips: BTreeSet<Arc<Clip>>,
     pub max_sample_index: u32,
     pub generator: Option<GeneratorInstance>,
-    /// Automation lanes for this track (volume, pan, plugin params, etc.)
-    pub automation_lanes: Vec<AutomationLane>,
 }
 
 impl Default for KarbeatTrack {
@@ -47,7 +43,6 @@ impl Default for KarbeatTrack {
             clips: BTreeSet::new(),
             max_sample_index: 0,
             generator: None,
-            automation_lanes: Vec::new(),
         }
     }
 }
@@ -302,7 +297,7 @@ impl ApplicationState {
         self.add_new_midi_track_with_generator_id(registry_id)
     }
 
-    /// Remove a track and clean up its mixer channel, routing, and generator.
+    /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
     pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<()> {
         // Get the generator ID before removing the track
         let generator_id = self
@@ -326,180 +321,10 @@ impl ApplicationState {
             self.generator_pool.remove(&gen_id);
         }
 
+        // Remove all automation lanes for this track
+        self.remove_automation_lanes_for_track(track_id);
+
         self.update_max_sample_index();
-
-        Ok(())
-    }
-
-    // =========================================================================
-    // Automation Lane Management
-    // =========================================================================
-
-    /// Add an automation lane to a track.
-    pub fn add_automation_lane(
-        &mut self,
-        track_id: TrackId,
-        target: AutomationTarget,
-        label: impl Into<String>,
-        min: f32,
-        max: f32,
-        default_value: f32,
-    ) -> anyhow::Result<AutomationId> {
-        let track_arc = self
-            .tracks
-            .get_mut(&track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-        let track = Arc::make_mut(track_arc);
-
-        // Prevent duplicate lanes for the same target
-        if track.automation_lanes.iter().any(|l| l.target == target) {
-            return Err(anyhow::anyhow!(
-                "Automation lane for this target already exists on track {:?}",
-                track_id
-            ));
-        }
-
-        let lane_id = AutomationId::next(&mut self.clip_counter); // reuse clip counter for IDs
-        let lane = AutomationLane::new(lane_id, target, label, min, max, default_value);
-        track.automation_lanes.push(lane);
-
-        log::info!(
-            "Added automation lane {:?} to track {:?}",
-            lane_id,
-            track_id
-        );
-        Ok(lane_id)
-    }
-
-    /// Remove an automation lane from a track by its ID.
-    pub fn remove_automation_lane(
-        &mut self,
-        track_id: TrackId,
-        lane_id: AutomationId,
-    ) -> anyhow::Result<()> {
-        let track_arc = self
-            .tracks
-            .get_mut(&track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-        let track = Arc::make_mut(track_arc);
-        let before = track.automation_lanes.len();
-        track.automation_lanes.retain(|l| l.id != lane_id);
-
-        if track.automation_lanes.len() == before {
-            return Err(anyhow::anyhow!(
-                "Automation lane {:?} not found on track {:?}",
-                lane_id,
-                track_id
-            ));
-        }
-
-        log::info!(
-            "Removed automation lane {:?} from track {:?}",
-            lane_id,
-            track_id
-        );
-        Ok(())
-    }
-
-    /// Add an automation point to a lane on a track.
-    pub fn add_automation_point(
-        &mut self,
-        track_id: TrackId,
-        lane_id: AutomationId,
-        point: AutomationPoint,
-    ) -> anyhow::Result<()> {
-        let track_arc = self
-            .tracks
-            .get_mut(&track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-        let track = Arc::make_mut(track_arc);
-        let lane = track
-            .automation_lanes
-            .iter_mut()
-            .find(|l| l.id == lane_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Automation lane {:?} not found on track {:?}",
-                    lane_id,
-                    track_id
-                )
-            })?;
-
-        lane.add_point(point);
-        Ok(())
-    }
-
-    /// Remove an automation point from a lane by its index.
-    pub fn remove_automation_point(
-        &mut self,
-        track_id: TrackId,
-        lane_id: AutomationId,
-        point_index: usize,
-    ) -> anyhow::Result<AutomationPoint> {
-        let track_arc = self
-            .tracks
-            .get_mut(&track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-        let track = Arc::make_mut(track_arc);
-        let lane = track
-            .automation_lanes
-            .iter_mut()
-            .find(|l| l.id == lane_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Automation lane {:?} not found on track {:?}",
-                    lane_id,
-                    track_id
-                )
-            })?;
-
-        lane.remove_point(point_index).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Point index {} out of bounds (lane has {} points)",
-                point_index,
-                lane.points.len()
-            )
-        })
-    }
-
-    /// Update an automation point (move in time and/or value).
-    pub fn update_automation_point(
-        &mut self,
-        track_id: TrackId,
-        lane_id: AutomationId,
-        point_index: usize,
-        time_beats: f64,
-        value: f32,
-    ) -> anyhow::Result<()> {
-        let track_arc = self
-            .tracks
-            .get_mut(&track_id)
-            .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
-
-        let track = Arc::make_mut(track_arc);
-        let lane = track
-            .automation_lanes
-            .iter_mut()
-            .find(|l| l.id == lane_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Automation lane {:?} not found on track {:?}",
-                    lane_id,
-                    track_id
-                )
-            })?;
-
-        if !lane.update_point(point_index, time_beats, value) {
-            return Err(anyhow::anyhow!(
-                "Point index {} out of bounds (lane has {} points)",
-                point_index,
-                lane.points.len()
-            ));
-        }
 
         Ok(())
     }

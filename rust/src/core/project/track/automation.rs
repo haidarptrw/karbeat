@@ -8,7 +8,13 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{core::project::mixer::EffectId, define_id};
+use crate::{
+    core::project::{
+        mixer::{BusId, EffectId},
+        track::TrackId,
+    },
+    define_id,
+};
 
 // ============================================================================
 // IDs
@@ -26,16 +32,54 @@ define_id!(AutomationId);
 /// generator, or effect slot).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum AutomationTarget {
-    /// Mixer channel volume (0.0 = -inf dB, 1.0 = +6 dB)
-    MixerVolume,
-    /// Mixer channel pan (-1.0 = left, 1.0 = right)
-    MixerPan,
     /// A parameter on the track's generator plugin
-    GeneratorParam { param_id: u32 },
-    /// A parameter on one of the track's insert effects
-    EffectParam { effect_id: EffectId, param_id: u32 },
+    TrackGeneratorPluginParam {
+        track_id: TrackId,
+        param_id: u32,
+    },
+
+    // Track Targets
+    TrackVolume(TrackId),
+    TrackPan(TrackId),
+    TrackPluginParam {
+        track_id: TrackId,
+        effect_id: EffectId,
+        param_id: u32,
+    },
+
+    // Bus Targets
+    BusVolume(BusId),
+    BusPan(BusId),
+    BusPluginParam {
+        bus_id: BusId,
+        effect_id: EffectId,
+        param_id: u32,
+    },
+
+    // Master Targets
+    MasterVolume,
+    MasterPan,
+    MasterPluginParam {
+        effect_id: EffectId,
+        param_id: u32,
+    },
+
+    // Global Targets
+    TempoBpm,
 }
 
+impl AutomationTarget {
+    /// Returns true if this target references the given track ID.
+    pub fn references_track(&self, id: TrackId) -> bool {
+        match self {
+            AutomationTarget::TrackGeneratorPluginParam { track_id, .. }
+            | AutomationTarget::TrackVolume(track_id)
+            | AutomationTarget::TrackPan(track_id)
+            | AutomationTarget::TrackPluginParam { track_id, .. } => *track_id == id,
+            _ => false,
+        }
+    }
+}
 // ============================================================================
 // CURVE TYPES
 // ============================================================================
@@ -94,7 +138,7 @@ impl AutomationPoint {
 
 /// An automation lane that controls a single parameter.
 ///
-/// Lives on `KarbeatTrack` and is serialized with the project.
+/// Lives in `ApplicationState::automation_pool` and is serialized with the project.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationLane {
     pub id: AutomationId,
@@ -115,7 +159,7 @@ pub struct AutomationLane {
 }
 
 impl AutomationLane {
-    /// Create a new empty automation lane for the given target.
+    /// Create a new empty automation lane for the given target on the given track.
     pub fn new(
         id: AutomationId,
         target: AutomationTarget,
@@ -300,7 +344,10 @@ impl AutomationManager {
         self.lanes.entry(param_id).or_insert_with(|| {
             AutomationLane::new(
                 AutomationId::from(0),
-                AutomationTarget::GeneratorParam { param_id },
+                AutomationTarget::TrackGeneratorPluginParam {
+                    track_id: TrackId::from(0),
+                    param_id,
+                },
                 format!("Param {}", param_id),
                 0.0,
                 1.0,
