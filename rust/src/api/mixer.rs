@@ -85,35 +85,47 @@ impl From<&MixerBus> for UiBus {
 
 /// UI representation of a routing connection.
 pub struct UiRoutingConnection {
-    /// 0=Track, 1=Bus, 2=Master
-    pub source_type: u32,
-    pub source_id: u32,
-    /// 0=Track, 1=Bus, 2=Master
-    pub dest_type: u32,
-    pub dest_id: u32,
+    pub source: UiRoutingNode,
+    pub destination: UiRoutingNode,
     pub send_level: f32,
     pub is_send: bool,
 }
 
 impl From<&RoutingConnection> for UiRoutingConnection {
     fn from(value: &RoutingConnection) -> Self {
-        let (source_type, source_id) = match value.source {
-            RoutingNode::Track(id) => (0, id.to_u32()),
-            RoutingNode::Bus(id) => (1, id.to_u32()),
-            RoutingNode::Master => (2, 0),
-        };
-        let (dest_type, dest_id) = match value.destination {
-            RoutingNode::Track(id) => (0, id.to_u32()),
-            RoutingNode::Bus(id) => (1, id.to_u32()),
-            RoutingNode::Master => (2, 0),
-        };
         Self {
-            source_type,
-            source_id,
-            dest_type,
-            dest_id,
+            source: (&value.source).into(),
+            destination: (&value.destination).into(),
             send_level: value.send_level,
             is_send: value.is_send,
+        }
+    }
+}
+
+/// UI DTO describing a routing node (Track, Bus, Master).
+#[frb]
+pub enum UiRoutingNode {
+    Track(u32),
+    Bus(u32),
+    Master,
+}
+
+impl From<&RoutingNode> for UiRoutingNode {
+    fn from(value: &RoutingNode) -> Self {
+        match value {
+            RoutingNode::Track(id) => UiRoutingNode::Track(id.to_u32()),
+            RoutingNode::Bus(id) => UiRoutingNode::Bus(id.to_u32()),
+            RoutingNode::Master => UiRoutingNode::Master,
+        }
+    }
+}
+
+impl Into<RoutingNode> for &UiRoutingNode {
+    fn into(self) -> RoutingNode {
+        match self {
+            UiRoutingNode::Track(id) => RoutingNode::Track((*id).into()),
+            UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(*id)),
+            UiRoutingNode::Master => RoutingNode::Master,
         }
     }
 }
@@ -122,7 +134,7 @@ impl From<&RoutingConnection> for UiRoutingConnection {
 pub struct UiMixerState {
     pub channels: HashMap<u32, UiMixerChannel>,
     pub master_bus: UiMixerChannel,
-    pub buses: Vec<UiBus>,
+    pub buses: HashMap<u32, UiBus>,
     pub routing: Vec<UiRoutingConnection>,
 }
 
@@ -135,7 +147,11 @@ impl From<&MixerState> for UiMixerState {
                 .map(|(id, channel)| (id.to_u32(), channel.as_ref().into()))
                 .collect(),
             master_bus: value.master_bus.as_ref().into(),
-            buses: value.buses.values().map(|b| b.as_ref().into()).collect(),
+            buses: value
+                .buses
+                .iter()
+                .map(|(id, bus)| (id.to_u32(), bus.as_ref().into()))
+                .collect(),
             routing: value.routing.iter().map(|c| c.into()).collect(),
         }
     }
@@ -167,7 +183,7 @@ impl UiMixerState {
     pub fn new_with_param(
         channels: HashMap<u32, UiMixerChannel>,
         master_bus: UiMixerChannel,
-        buses: Vec<UiBus>,
+        buses: HashMap<u32, UiBus>,
         routing: Vec<UiRoutingConnection>,
     ) -> Self {
         Self {
@@ -288,12 +304,12 @@ pub fn get_master_bus_populated() -> Vec<UiEffectInstance> {
 }
 
 /// **GETTER: Fetch all buses**
-pub fn get_buses() -> Vec<UiBus> {
+pub fn get_buses() -> HashMap<u32, UiBus> {
     let app = get_app_read();
     app.mixer
         .buses
-        .values()
-        .map(|b| b.as_ref().into())
+        .iter()
+        .map(|(i, b)| (i.to_u32(), b.as_ref().into()))
         .collect()
 }
 
@@ -515,30 +531,16 @@ pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
 // ======================================
 
 /// Set routing: source → destination with send level.
-/// source_type: 0=Track, 1=Bus
-/// dest_type: 1=Bus, 2=Master
 pub fn set_routing(
-    source_type: u32,
-    source_id: u32,
-    dest_type: u32,
-    dest_id: u32,
+    source: UiRoutingNode,
+    destination: UiRoutingNode,
     send_level: f32,
     is_send: bool,
 ) -> Result<(), String> {
     {
         let mut app = get_app_write();
-
-        let source = match source_type {
-            0 => RoutingNode::Track(source_id.into()),
-            1 => RoutingNode::Bus(BusId::from(source_id)),
-            _ => return Err("Invalid source type".to_string()),
-        };
-
-        let destination = match dest_type {
-            1 => RoutingNode::Bus(BusId::from(dest_id)),
-            2 => RoutingNode::Master,
-            _ => return Err("Invalid destination type".to_string()),
-        };
+        let source: RoutingNode = (&source).into();
+        let destination: RoutingNode = (&destination).into();
 
         let conn = RoutingConnection {
             source,
@@ -562,26 +564,14 @@ pub fn set_routing(
 
 /// Remove a routing connection.
 pub fn remove_routing(
-    source_type: u32,
-    source_id: u32,
-    dest_type: u32,
-    dest_id: u32,
+    source: UiRoutingNode,
+    destination: UiRoutingNode,
     is_send: bool,
 ) -> Result<(), String> {
     {
         let mut app = get_app_write();
-
-        let source = match source_type {
-            0 => RoutingNode::Track(source_id.into()),
-            1 => RoutingNode::Bus(BusId::from(source_id)),
-            _ => return Err("Invalid source type".to_string()),
-        };
-
-        let destination = match dest_type {
-            1 => RoutingNode::Bus(BusId::from(dest_id)),
-            2 => RoutingNode::Master,
-            _ => return Err("Invalid destination type".to_string()),
-        };
+        let source: RoutingNode = (&source).into();
+        let destination: RoutingNode = (&destination).into();
 
         app.mixer.remove_routing(source, destination, is_send)?;
 

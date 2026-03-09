@@ -16,6 +16,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   // Track the currently selected track ID (or -1 for Master)
   int? _selectedTrackId;
 
+  // Initial width for the track panel
+  double _trackPanelWidth = 400.0;
+
   @override
   void initState() {
     super.initState();
@@ -31,7 +34,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     );
     final tracks = ref.watch(karbeatStateProvider.select((s) => s.tracks));
 
-    final stateReadOnly = ref.read(karbeatStateProvider);
+    final state = ref.read(karbeatStateProvider);
 
     // Channel entries: pair each track ID with its mixer channel data
     final channelEntries = <_ChannelEntry>[];
@@ -48,149 +51,321 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       );
     }
 
+    final busEntries = <_ChannelEntry>[];
+    for (int i = 0; i < mixerState.buses.length; i++) {
+      final bus = mixerState.buses[i]!;
+      busEntries.add(
+        _ChannelEntry(
+          id: bus.id,
+          name: bus.name,
+          channel: bus.channel,
+          isMaster: false,
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
-      body: Row(
-        children: [
-          // === Track Channels (scrollable) ===
-          Expanded(
-            child: channelEntries.isEmpty
-                ? Center(
-                    child: Text(
-                      'No channels',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontStyle: FontStyle.italic,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // Safety bounds for resizing (e.g., don't let a panel get smaller than 150px)
+          const double minPanelWidth = 150.0;
+          // Leave room for the bus panel and the master bus
+          final double maxPanelWidth =
+              constraints.maxWidth - minPanelWidth - 100.0;
+
+          // Ensure our starting width is within bounds
+          _trackPanelWidth = _trackPanelWidth.clamp(
+            minPanelWidth,
+            maxPanelWidth,
+          );
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // === Track Channels (scrollable, fixed width) ===
+              SizedBox(
+                width: _trackPanelWidth,
+                child: channelEntries.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No channels',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 12,
+                        ),
+                        itemCount: channelEntries.length,
+                        itemBuilder: (context, index) {
+                          final entry = channelEntries[index];
+                          return _ChannelStrip(
+                            entry: entry,
+                            onVolumeChanged: (value) {
+                              state.setMixerChannelParams(
+                                trackId: entry.id,
+                                params: [UiMixerChannelParams.volume(value)],
+                              );
+                            },
+                            onVolumeChangeStart: () {
+                              state.markParamTouched(entry.id, 'volume');
+                            },
+                            onVolumeChangeEnd: () {
+                              state.markParamReleased(entry.id, 'volume');
+                            },
+                            onPanChanged: (value) {
+                              state.setMixerChannelParams(
+                                trackId: entry.id,
+                                params: [UiMixerChannelParams.pan(value)],
+                              );
+                            },
+                            onPanChangeStart: () {
+                              state.markParamTouched(entry.id, 'pan');
+                            },
+                            onPanChangeEnd: () {
+                              state.markParamReleased(entry.id, 'pan');
+                            },
+                            onMuteToggled: () {
+                              state.setMixerChannelParams(
+                                trackId: entry.id,
+                                params: [
+                                  UiMixerChannelParams.mute(
+                                    !entry.channel.mute,
+                                  ),
+                                ],
+                              );
+                            },
+                            onSoloToggled: () {
+                              state.setMixerChannelParams(
+                                trackId: entry.id,
+                                params: [
+                                  UiMixerChannelParams.solo(
+                                    !entry.channel.solo,
+                                  ),
+                                ],
+                              );
+                            },
+                            isSelected: _selectedTrackId == entry.id,
+                            onTap: () {
+                              setState(() {
+                                _selectedTrackId = entry.id;
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
+
+              // === Resizable Divider between Tracks and Buses ===
+              GestureDetector(
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    _trackPanelWidth = (_trackPanelWidth + details.delta.dx)
+                        .clamp(minPanelWidth, maxPanelWidth);
+                  });
+                },
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeColumn,
+                  child: Container(
+                    width: 8,
+                    color: Colors.transparent,
+                    child: Center(
+                      child: Container(
+                        width: 2,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(1),
+                        ),
                       ),
                     ),
-                  )
-                : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 12,
-                    ),
-                    itemCount: channelEntries.length,
-                    itemBuilder: (context, index) {
-                      final entry = channelEntries[index];
-                      return _ChannelStrip(
-                        entry: entry,
-                        onVolumeChanged: (value) {
-                          stateReadOnly.setMixerChannelParams(
-                            trackId: entry.id,
-                            params: [UiMixerChannelParams.volume(value)],
-                          );
-                        },
-                        onVolumeChangeStart: () {
-                          stateReadOnly.markParamTouched(entry.id, 'volume');
-                        },
-                        onVolumeChangeEnd: () {
-                          stateReadOnly.markParamReleased(entry.id, 'volume');
-                        },
-                        onPanChanged: (value) {
-                          stateReadOnly.setMixerChannelParams(
-                            trackId: entry.id,
-                            params: [UiMixerChannelParams.pan(value)],
-                          );
-                        },
-                        onPanChangeStart: () {
-                          stateReadOnly.markParamTouched(entry.id, 'pan');
-                        },
-                        onPanChangeEnd: () {
-                          stateReadOnly.markParamReleased(entry.id, 'pan');
-                        },
-                        onMuteToggled: () {
-                          stateReadOnly.setMixerChannelParams(
-                            trackId: entry.id,
-                            params: [
-                              UiMixerChannelParams.mute(!entry.channel.mute),
-                            ],
-                          );
-                        },
-                        onSoloToggled: () {
-                          stateReadOnly.setMixerChannelParams(
-                            trackId: entry.id,
-                            params: [
-                              UiMixerChannelParams.solo(!entry.channel.solo),
-                            ],
-                          );
-                        },
-                        isSelected: _selectedTrackId == entry.id,
-                        onTap: () {
-                          setState(() {
-                            _selectedTrackId = entry.id;
-                          });
-                        },
-                      );
-                    },
                   ),
-          ),
-
-          // === Divider ===
-          Container(width: 1, color: Colors.white10),
-
-          // === Master Channel (fixed) ===
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-            child: _ChannelStrip(
-              entry: _ChannelEntry(
-                id: -1,
-                name: 'Master',
-                channel: mixerState.masterBus,
-                isMaster: true,
+                ),
               ),
-              onVolumeChanged: (value) {
-                stateReadOnly.setMasterBusParams(
-                  params: [UiMixerChannelParams.volume(value)],
-                );
-              },
-              onVolumeChangeStart: () {
-                // u32::MAX for master bus
-                stateReadOnly.markParamTouched(4294967295, 'volume');
-              },
-              onVolumeChangeEnd: () {
-                stateReadOnly.markParamReleased(4294967295, 'volume');
-              },
-              onPanChanged: (value) {
-                stateReadOnly.setMasterBusParams(
-                  params: [UiMixerChannelParams.pan(value)],
-                );
-              },
-              onPanChangeStart: () {
-                stateReadOnly.markParamTouched(4294967295, 'pan');
-              },
-              onPanChangeEnd: () {
-                stateReadOnly.markParamReleased(4294967295, 'pan');
-              },
-              onMuteToggled: () {
-                stateReadOnly.setMasterBusParams(
-                  params: [
-                    UiMixerChannelParams.mute(!mixerState.masterBus.mute),
-                  ],
-                );
-              },
-              onSoloToggled: () {
-                stateReadOnly.setMasterBusParams(
-                  params: [
-                    UiMixerChannelParams.solo(!mixerState.masterBus.solo),
-                  ],
-                );
-              },
-              isSelected: _selectedTrackId == -1,
-              onTap: () {
-                setState(() {
-                  _selectedTrackId = -1;
-                });
-              },
-            ),
-          ),
 
-          // === Divider ===
-          Container(width: 1, color: Colors.white10),
+              // === Bus Channels (scrollable) ===
+              Expanded(
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 12,
+                  ),
+                  itemCount: busEntries.length + 1,
+                  itemBuilder: (context, index) {
+                    // Last item: "Add Bus" ghost strip
+                    if (index == busEntries.length) {
+                      return GestureDetector(
+                        onTap: () async {
+                          final busCount = busEntries.length + 1;
+                          await state.createNewBusChannel(
+                            name: "Bus $busCount",
+                          );
+                        },
+                        child: Container(
+                          width: 72,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.02),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              width: 1,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add_rounded,
+                                color: Colors.white.withValues(alpha: 0.25),
+                                size: 28,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Add Bus',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.25),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
 
-          // === Effect Rack Panel ===
-          _buildEffectRackPanel(context, mixerState),
-        ],
+                    final entry = busEntries[index];
+                    return _ChannelStrip(
+                      entry: entry,
+                      onVolumeChanged: (value) {
+                        state.setBusChannelParams(
+                          busId: entry.id,
+                          params: [UiMixerChannelParams.volume(value)],
+                        );
+                      },
+                      onVolumeChangeStart: () {
+                        state.markParamTouched(entry.id, 'volume');
+                      },
+                      onVolumeChangeEnd: () {
+                        state.markParamReleased(entry.id, 'volume');
+                      },
+                      onPanChanged: (value) {
+                        state.setBusChannelParams(
+                          busId: entry.id,
+                          params: [UiMixerChannelParams.pan(value)],
+                        );
+                      },
+                      onPanChangeStart: () {
+                        state.markParamTouched(entry.id, 'pan');
+                      },
+                      onPanChangeEnd: () {
+                        state.markParamReleased(entry.id, 'pan');
+                      },
+                      onMuteToggled: () {
+                        state.setBusChannelParams(
+                          busId: entry.id,
+                          params: [
+                            UiMixerChannelParams.mute(!entry.channel.mute),
+                          ],
+                        );
+                      },
+                      onSoloToggled: () {
+                        state.setBusChannelParams(
+                          busId: entry.id,
+                          params: [
+                            UiMixerChannelParams.solo(!entry.channel.solo),
+                          ],
+                        );
+                      },
+                      isSelected: _selectedTrackId == entry.id,
+                      onTap: () {
+                        setState(() {
+                          _selectedTrackId = entry.id;
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+
+              // === Divider ===
+              Container(width: 1, color: Colors.white10),
+
+              // === Master Channel (fixed) ===
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 12,
+                ),
+                child: _ChannelStrip(
+                  entry: _ChannelEntry(
+                    id: -1,
+                    name: 'Master',
+                    channel: mixerState.masterBus,
+                    isMaster: true,
+                  ),
+                  onVolumeChanged: (value) {
+                    state.setMasterBusParams(
+                      params: [UiMixerChannelParams.volume(value)],
+                    );
+                  },
+                  onVolumeChangeStart: () {
+                    // u32::MAX for master bus
+                    state.markParamTouched(4294967295, 'volume');
+                  },
+                  onVolumeChangeEnd: () {
+                    state.markParamReleased(4294967295, 'volume');
+                  },
+                  onPanChanged: (value) {
+                    state.setMasterBusParams(
+                      params: [UiMixerChannelParams.pan(value)],
+                    );
+                  },
+                  onPanChangeStart: () {
+                    state.markParamTouched(4294967295, 'pan');
+                  },
+                  onPanChangeEnd: () {
+                    state.markParamReleased(4294967295, 'pan');
+                  },
+                  onMuteToggled: () {
+                    state.setMasterBusParams(
+                      params: [
+                        UiMixerChannelParams.mute(!mixerState.masterBus.mute),
+                      ],
+                    );
+                  },
+                  onSoloToggled: () {
+                    state.setMasterBusParams(
+                      params: [
+                        UiMixerChannelParams.solo(!mixerState.masterBus.solo),
+                      ],
+                    );
+                  },
+                  isSelected: _selectedTrackId == -1,
+                  onTap: () {
+                    setState(() {
+                      _selectedTrackId = -1;
+                    });
+                  },
+                ),
+              ),
+
+              // === Divider ===
+              Container(width: 1, color: Colors.white10),
+
+              // === Effect Rack Panel ===
+              _buildEffectRackPanel(context, mixerState),
+            ],
+          );
+        },
       ),
     );
   }

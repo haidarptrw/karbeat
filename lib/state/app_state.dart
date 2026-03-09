@@ -493,6 +493,16 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> syncBuses() async {
+    try {
+      final newBuses = await mixer_api.getBuses();
+      _mixerState = _mixerState.copyWith(buses: newBuses);
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Failedto sync mixer bus: $e");
+    }
+  }
+
   Future<void> syncMixerChannel(int trackId) async {
     try {
       final updatedChannel = await mixer_api.getMixerChannel(trackId: trackId);
@@ -1366,6 +1376,35 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> setBusChannelParams({
+    required int busId,
+    required List<mixer_api.UiMixerChannelParams> params,
+  }) async {
+    // Optimistic local update so the controlled Slider doesn't snap back
+    _applyParamsToBusChannel(busId, params);
+
+    try {
+      await mixer_api.setBusParams(busId: busId, params: params);
+    } catch (e) {
+      KarbeatLogger.error('Error setting bus channel params: $e');
+      syncMixerState();
+    }
+  }
+
+  Future<void> createNewBusChannel({
+    String name = "Untitled"
+  })  async {
+    try {
+      await mixer_api.createBus(name: name);
+      notifyCustomBackendChange(() async {
+        await syncBuses();
+      });
+    } catch (e) {
+      KarbeatLogger.error('Error when trying to add a new bus channel: $e');
+      syncBuses();
+    }
+  }
+
   /// Immediately apply param changes to local _mixerState and notify listeners.
   void _applyParamsToLocalChannel(
     int trackId,
@@ -1429,13 +1468,70 @@ class KarbeatState extends ChangeNotifier {
 
     notifyListeners();
   }
+
+  /// Immediately apply param changes to a bus in local _mixerState and notify listeners.
+  void _applyParamsToBusChannel(
+    int busId,
+    List<mixer_api.UiMixerChannelParams> params,
+  ) {
+    final bus = _mixerState.buses[busId];
+    if (bus == null) return;
+
+    final channel = bus.channel;
+    double volume = channel.volume;
+    double pan = channel.pan;
+    bool mute = channel.mute;
+    bool solo = channel.solo;
+    bool invertedPhase = channel.invertedPhase;
+
+    for (final p in params) {
+      switch (p) {
+        case mixer_api.UiMixerChannelParams_Volume():
+          volume = p.field0;
+        case mixer_api.UiMixerChannelParams_Pan():
+          pan = p.field0;
+        case mixer_api.UiMixerChannelParams_Mute():
+          mute = p.field0;
+        case mixer_api.UiMixerChannelParams_Solo():
+          solo = p.field0;
+        case mixer_api.UiMixerChannelParams_InvertedPhase():
+          invertedPhase = p.field0;
+      }
+    }
+
+    final updatedChannel = mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: invertedPhase,
+      effects: channel.effects,
+    );
+
+    final updatedBus = mixer_api.UiBus(
+      id: bus.id,
+      name: bus.name,
+      channel: updatedChannel,
+    );
+
+    final newBuses = Map<int, mixer_api.UiBus>.from(_mixerState.buses);
+    newBuses[busId] = updatedBus;
+    _mixerState = mixer_api.UiMixerState.newWithParam(
+      channels: _mixerState.channels,
+      masterBus: _mixerState.masterBus,
+      buses: newBuses,
+      routing: _mixerState.routing,
+    );
+
+    notifyListeners();
+  }
 }
 
 extension on mixer_api.UiMixerState {
   mixer_api.UiMixerState copyWith({
     Map<int, mixer_api.UiMixerChannel>? channels,
     mixer_api.UiMixerChannel? masterBus,
-    List<mixer_api.UiBus>? buses,
+    Map<int, mixer_api.UiBus>? buses,
     List<mixer_api.UiRoutingConnection>? routing,
   }) {
     return mixer_api.UiMixerState.newWithParam(

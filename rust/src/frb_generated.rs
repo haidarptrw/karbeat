@@ -2807,19 +2807,15 @@ fn wire__crate__api__mixer__remove_routing_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_source_type = <u32>::sse_decode(&mut deserializer);
-            let api_source_id = <u32>::sse_decode(&mut deserializer);
-            let api_dest_type = <u32>::sse_decode(&mut deserializer);
-            let api_dest_id = <u32>::sse_decode(&mut deserializer);
+            let api_source = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
+            let api_destination = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
             let api_is_send = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::mixer::remove_routing(
-                        api_source_type,
-                        api_source_id,
-                        api_dest_type,
-                        api_dest_id,
+                        api_source,
+                        api_destination,
                         api_is_send,
                     )?;
                     Ok(output_ok)
@@ -3363,20 +3359,16 @@ fn wire__crate__api__mixer__set_routing_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_source_type = <u32>::sse_decode(&mut deserializer);
-            let api_source_id = <u32>::sse_decode(&mut deserializer);
-            let api_dest_type = <u32>::sse_decode(&mut deserializer);
-            let api_dest_id = <u32>::sse_decode(&mut deserializer);
+            let api_source = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
+            let api_destination = <crate::api::mixer::UiRoutingNode>::sse_decode(&mut deserializer);
             let api_send_level = <f32>::sse_decode(&mut deserializer);
             let api_is_send = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, String>((move || {
                     let output_ok = crate::api::mixer::set_routing(
-                        api_source_type,
-                        api_source_id,
-                        api_dest_type,
-                        api_dest_id,
+                        api_source,
+                        api_destination,
                         api_send_level,
                         api_is_send,
                     )?;
@@ -3729,7 +3721,9 @@ fn wire__crate__api__mixer__ui_mixer_state_new_with_param_impl(
                     &mut deserializer,
                 );
             let api_master_bus = <crate::api::mixer::UiMixerChannel>::sse_decode(&mut deserializer);
-            let api_buses = <Vec<crate::api::mixer::UiBus>>::sse_decode(&mut deserializer);
+            let api_buses = <std::collections::HashMap<u32, crate::api::mixer::UiBus>>::sse_decode(
+                &mut deserializer,
+            );
             let api_routing =
                 <Vec<crate::api::mixer::UiRoutingConnection>>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -3806,6 +3800,14 @@ impl SseDecode for std::collections::HashMap<u32, f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <Vec<(u32, f32)>>::sse_decode(deserializer);
+        return inner.into_iter().collect();
+    }
+}
+
+impl SseDecode for std::collections::HashMap<u32, crate::api::mixer::UiBus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <Vec<(u32, crate::api::mixer::UiBus)>>::sse_decode(deserializer);
         return inner.into_iter().collect();
     }
 }
@@ -4062,6 +4064,18 @@ impl SseDecode for Vec<(u32, f32)> {
     }
 }
 
+impl SseDecode for Vec<(u32, crate::api::mixer::UiBus)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<(u32, crate::api::mixer::UiBus)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<(u32, crate::api::project::UiGeneratorInstance)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4111,18 +4125,6 @@ impl SseDecode for Vec<(u32, crate::api::project::UiTrack)> {
             ans_.push(<(u32, crate::api::project::UiTrack)>::sse_decode(
                 deserializer,
             ));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<crate::api::mixer::UiBus> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = vec![];
-        for idx_ in 0..len_ {
-            ans_.push(<crate::api::mixer::UiBus>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -4451,6 +4453,15 @@ impl SseDecode for (u32, f32) {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_field0 = <u32>::sse_decode(deserializer);
         let mut var_field1 = <f32>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
+impl SseDecode for (u32, crate::api::mixer::UiBus) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <u32>::sse_decode(deserializer);
+        let mut var_field1 = <crate::api::mixer::UiBus>::sse_decode(deserializer);
         return (var_field0, var_field1);
     }
 }
@@ -4832,7 +4843,8 @@ impl SseDecode for crate::api::mixer::UiMixerState {
                 deserializer,
             );
         let mut var_masterBus = <crate::api::mixer::UiMixerChannel>::sse_decode(deserializer);
-        let mut var_buses = <Vec<crate::api::mixer::UiBus>>::sse_decode(deserializer);
+        let mut var_buses =
+            <std::collections::HashMap<u32, crate::api::mixer::UiBus>>::sse_decode(deserializer);
         let mut var_routing =
             <Vec<crate::api::mixer::UiRoutingConnection>>::sse_decode(deserializer);
         return crate::api::mixer::UiMixerState {
@@ -4967,20 +4979,39 @@ impl SseDecode for crate::api::plugin::UiResponseCurvePoint {
 impl SseDecode for crate::api::mixer::UiRoutingConnection {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_sourceType = <u32>::sse_decode(deserializer);
-        let mut var_sourceId = <u32>::sse_decode(deserializer);
-        let mut var_destType = <u32>::sse_decode(deserializer);
-        let mut var_destId = <u32>::sse_decode(deserializer);
+        let mut var_source = <crate::api::mixer::UiRoutingNode>::sse_decode(deserializer);
+        let mut var_destination = <crate::api::mixer::UiRoutingNode>::sse_decode(deserializer);
         let mut var_sendLevel = <f32>::sse_decode(deserializer);
         let mut var_isSend = <bool>::sse_decode(deserializer);
         return crate::api::mixer::UiRoutingConnection {
-            source_type: var_sourceType,
-            source_id: var_sourceId,
-            dest_type: var_destType,
-            dest_id: var_destId,
+            source: var_source,
+            destination: var_destination,
             send_level: var_sendLevel,
             is_send: var_isSend,
         };
+    }
+}
+
+impl SseDecode for crate::api::mixer::UiRoutingNode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                let mut var_field0 = <u32>::sse_decode(deserializer);
+                return crate::api::mixer::UiRoutingNode::Track(var_field0);
+            }
+            1 => {
+                let mut var_field0 = <u32>::sse_decode(deserializer);
+                return crate::api::mixer::UiRoutingNode::Bus(var_field0);
+            }
+            2 => {
+                return crate::api::mixer::UiRoutingNode::Master;
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 
@@ -6039,10 +6070,8 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::plugin::UiResponseCurvePoint>
 impl flutter_rust_bridge::IntoDart for crate::api::mixer::UiRoutingConnection {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.source_type.into_into_dart().into_dart(),
-            self.source_id.into_into_dart().into_dart(),
-            self.dest_type.into_into_dart().into_dart(),
-            self.dest_id.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.destination.into_into_dart().into_dart(),
             self.send_level.into_into_dart().into_dart(),
             self.is_send.into_into_dart().into_dart(),
         ]
@@ -6057,6 +6086,34 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mixer::UiRoutingConnection>
     for crate::api::mixer::UiRoutingConnection
 {
     fn into_into_dart(self) -> crate::api::mixer::UiRoutingConnection {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mixer::UiRoutingNode {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::mixer::UiRoutingNode::Track(field0) => {
+                [0.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::mixer::UiRoutingNode::Bus(field0) => {
+                [1.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::mixer::UiRoutingNode::Master => [2.into_dart()].into_dart(),
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mixer::UiRoutingNode
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mixer::UiRoutingNode>
+    for crate::api::mixer::UiRoutingNode
+{
+    fn into_into_dart(self) -> crate::api::mixer::UiRoutingNode {
         self
     }
 }
@@ -6127,6 +6184,13 @@ impl SseEncode for std::collections::HashMap<u32, f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<(u32, f32)>>::sse_encode(self.into_iter().collect(), serializer);
+    }
+}
+
+impl SseEncode for std::collections::HashMap<u32, crate::api::mixer::UiBus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<(u32, crate::api::mixer::UiBus)>>::sse_encode(self.into_iter().collect(), serializer);
     }
 }
 
@@ -6355,6 +6419,16 @@ impl SseEncode for Vec<(u32, f32)> {
     }
 }
 
+impl SseEncode for Vec<(u32, crate::api::mixer::UiBus)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(u32, crate::api::mixer::UiBus)>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<(u32, crate::api::project::UiGeneratorInstance)> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6391,16 +6465,6 @@ impl SseEncode for Vec<(u32, crate::api::project::UiTrack)> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <(u32, crate::api::project::UiTrack)>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<crate::api::mixer::UiBus> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::api::mixer::UiBus>::sse_encode(item, serializer);
         }
     }
 }
@@ -6649,6 +6713,14 @@ impl SseEncode for (u32, f32) {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.0, serializer);
         <f32>::sse_encode(self.1, serializer);
+    }
+}
+
+impl SseEncode for (u32, crate::api::mixer::UiBus) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.0, serializer);
+        <crate::api::mixer::UiBus>::sse_encode(self.1, serializer);
     }
 }
 
@@ -6964,7 +7036,9 @@ impl SseEncode for crate::api::mixer::UiMixerState {
             serializer,
         );
         <crate::api::mixer::UiMixerChannel>::sse_encode(self.master_bus, serializer);
-        <Vec<crate::api::mixer::UiBus>>::sse_encode(self.buses, serializer);
+        <std::collections::HashMap<u32, crate::api::mixer::UiBus>>::sse_encode(
+            self.buses, serializer,
+        );
         <Vec<crate::api::mixer::UiRoutingConnection>>::sse_encode(self.routing, serializer);
     }
 }
@@ -7055,12 +7129,32 @@ impl SseEncode for crate::api::plugin::UiResponseCurvePoint {
 impl SseEncode for crate::api::mixer::UiRoutingConnection {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.source_type, serializer);
-        <u32>::sse_encode(self.source_id, serializer);
-        <u32>::sse_encode(self.dest_type, serializer);
-        <u32>::sse_encode(self.dest_id, serializer);
+        <crate::api::mixer::UiRoutingNode>::sse_encode(self.source, serializer);
+        <crate::api::mixer::UiRoutingNode>::sse_encode(self.destination, serializer);
         <f32>::sse_encode(self.send_level, serializer);
         <bool>::sse_encode(self.is_send, serializer);
+    }
+}
+
+impl SseEncode for crate::api::mixer::UiRoutingNode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::mixer::UiRoutingNode::Track(field0) => {
+                <i32>::sse_encode(0, serializer);
+                <u32>::sse_encode(field0, serializer);
+            }
+            crate::api::mixer::UiRoutingNode::Bus(field0) => {
+                <i32>::sse_encode(1, serializer);
+                <u32>::sse_encode(field0, serializer);
+            }
+            crate::api::mixer::UiRoutingNode::Master => {
+                <i32>::sse_encode(2, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 

@@ -231,7 +231,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<UiPluginInfo>> crateApiPluginGetAvailableGeneratorsWithIds();
 
-  Future<List<UiBus>> crateApiMixerGetBuses();
+  Future<Map<int, UiBus>> crateApiMixerGetBuses();
 
   Future<UiClip> crateApiTrackGetClip({
     required int trackId,
@@ -391,10 +391,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiSessionRedo();
 
   Future<void> crateApiMixerRemoveRouting({
-    required int sourceType,
-    required int sourceId,
-    required int destType,
-    required int destId,
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
     required bool isSend,
   });
 
@@ -466,10 +464,8 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiTransportSetPlaying({required bool val});
 
   Future<void> crateApiMixerSetRouting({
-    required int sourceType,
-    required int sourceId,
-    required int destType,
-    required int destId,
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
     required double sendLevel,
     required bool isSend,
   });
@@ -511,7 +507,7 @@ abstract class RustLibApi extends BaseApi {
   UiMixerState crateApiMixerUiMixerStateNewWithParam({
     required Map<int, UiMixerChannel> channels,
     required UiMixerChannel masterBus,
-    required List<UiBus> buses,
+    required Map<int, UiBus> buses,
     required List<UiRoutingConnection> routing,
   });
 
@@ -1698,7 +1694,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<List<UiBus>> crateApiMixerGetBuses() {
+  Future<Map<int, UiBus>> crateApiMixerGetBuses() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1711,7 +1707,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_ui_bus,
+          decodeSuccessData: sse_decode_Map_u_32_ui_bus_None,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiMixerGetBusesConstMeta,
@@ -3067,20 +3063,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<void> crateApiMixerRemoveRouting({
-    required int sourceType,
-    required int sourceId,
-    required int destType,
-    required int destId,
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
     required bool isSend,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(sourceType, serializer);
-          sse_encode_u_32(sourceId, serializer);
-          sse_encode_u_32(destType, serializer);
-          sse_encode_u_32(destId, serializer);
+          sse_encode_box_autoadd_ui_routing_node(source, serializer);
+          sse_encode_box_autoadd_ui_routing_node(destination, serializer);
           sse_encode_bool(isSend, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -3094,7 +3086,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiMixerRemoveRoutingConstMeta,
-        argValues: [sourceType, sourceId, destType, destId, isSend],
+        argValues: [source, destination, isSend],
         apiImpl: this,
       ),
     );
@@ -3102,7 +3094,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiMixerRemoveRoutingConstMeta => const TaskConstMeta(
     debugName: "remove_routing",
-    argNames: ["sourceType", "sourceId", "destType", "destId", "isSend"],
+    argNames: ["source", "destination", "isSend"],
   );
 
   @override
@@ -3582,10 +3574,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<void> crateApiMixerSetRouting({
-    required int sourceType,
-    required int sourceId,
-    required int destType,
-    required int destId,
+    required UiRoutingNode source,
+    required UiRoutingNode destination,
     required double sendLevel,
     required bool isSend,
   }) {
@@ -3593,10 +3583,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(sourceType, serializer);
-          sse_encode_u_32(sourceId, serializer);
-          sse_encode_u_32(destType, serializer);
-          sse_encode_u_32(destId, serializer);
+          sse_encode_box_autoadd_ui_routing_node(source, serializer);
+          sse_encode_box_autoadd_ui_routing_node(destination, serializer);
           sse_encode_f_32(sendLevel, serializer);
           sse_encode_bool(isSend, serializer);
           pdeCallFfi(
@@ -3611,7 +3599,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiMixerSetRoutingConstMeta,
-        argValues: [sourceType, sourceId, destType, destId, sendLevel, isSend],
+        argValues: [source, destination, sendLevel, isSend],
         apiImpl: this,
       ),
     );
@@ -3619,14 +3607,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiMixerSetRoutingConstMeta => const TaskConstMeta(
     debugName: "set_routing",
-    argNames: [
-      "sourceType",
-      "sourceId",
-      "destType",
-      "destId",
-      "sendLevel",
-      "isSend",
-    ],
+    argNames: ["source", "destination", "sendLevel", "isSend"],
   );
 
   @override
@@ -3943,7 +3924,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiMixerState crateApiMixerUiMixerStateNewWithParam({
     required Map<int, UiMixerChannel> channels,
     required UiMixerChannel masterBus,
-    required List<UiBus> buses,
+    required Map<int, UiBus> buses,
     required List<UiRoutingConnection> routing,
   }) {
     return handler.executeSync(
@@ -3952,7 +3933,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_Map_u_32_ui_mixer_channel_None(channels, serializer);
           sse_encode_box_autoadd_ui_mixer_channel(masterBus, serializer);
-          sse_encode_list_ui_bus(buses, serializer);
+          sse_encode_Map_u_32_ui_bus_None(buses, serializer);
           sse_encode_list_ui_routing_connection(routing, serializer);
           return pdeCallFfi(
             generalizedFrbRustBinding,
@@ -4050,6 +4031,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return Map.fromEntries(
       dco_decode_list_record_u_32_f_32(raw).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
+  Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_u_32_ui_bus(raw).map((e) => MapEntry(e.$1, e.$2)),
     );
   }
 
@@ -4202,6 +4191,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ui_routing_node(raw);
+  }
+
+  @protected
   double dco_decode_f_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
@@ -4291,6 +4286,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(int, UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_bus).toList();
+  }
+
+  @protected
   List<(int, UiGeneratorInstance)>
   dco_decode_list_record_u_32_ui_generator_instance(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -4321,12 +4322,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_record_u_32_ui_track).toList();
-  }
-
-  @protected
-  List<UiBus> dco_decode_list_ui_bus(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_ui_bus).toList();
   }
 
   @protected
@@ -4541,6 +4536,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('Expected 2 elements, got ${arr.length}');
     }
     return (dco_decode_u_32(arr[0]), dco_decode_f_32(arr[1]));
+  }
+
+  @protected
+  (int, UiBus) dco_decode_record_u_32_ui_bus(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_u_32(arr[0]), dco_decode_ui_bus(arr[1]));
   }
 
   @protected
@@ -4851,7 +4856,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return UiMixerState.raw(
       channels: dco_decode_Map_u_32_ui_mixer_channel_None(arr[0]),
       masterBus: dco_decode_ui_mixer_channel(arr[1]),
-      buses: dco_decode_list_ui_bus(arr[2]),
+      buses: dco_decode_Map_u_32_ui_bus_None(arr[2]),
       routing: dco_decode_list_ui_routing_connection(arr[3]),
     );
   }
@@ -4955,16 +4960,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return UiRoutingConnection(
-      sourceType: dco_decode_u_32(arr[0]),
-      sourceId: dco_decode_u_32(arr[1]),
-      destType: dco_decode_u_32(arr[2]),
-      destId: dco_decode_u_32(arr[3]),
-      sendLevel: dco_decode_f_32(arr[4]),
-      isSend: dco_decode_bool(arr[5]),
+      source: dco_decode_ui_routing_node(arr[0]),
+      destination: dco_decode_ui_routing_node(arr[1]),
+      sendLevel: dco_decode_f_32(arr[2]),
+      isSend: dco_decode_bool(arr[3]),
     );
+  }
+
+  @protected
+  UiRoutingNode dco_decode_ui_routing_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiRoutingNode_Track(dco_decode_u_32(raw[1]));
+      case 1:
+        return UiRoutingNode_Bus(dco_decode_u_32(raw[1]));
+      case 2:
+        return UiRoutingNode_Master();
+      default:
+        throw Exception("unreachable");
+    }
   }
 
   @protected
@@ -5046,6 +5064,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_record_u_32_f_32(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
+  Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_u_32_ui_bus(deserializer);
     return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
   }
 
@@ -5213,6 +5240,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UiRoutingNode sse_decode_box_autoadd_ui_routing_node(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ui_routing_node(deserializer));
+  }
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat32();
@@ -5331,6 +5366,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(int, UiBus)> sse_decode_list_record_u_32_ui_bus(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, UiBus)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_u_32_ui_bus(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<(int, UiGeneratorInstance)>
   sse_decode_list_record_u_32_ui_generator_instance(
     SseDeserializer deserializer,
@@ -5383,18 +5432,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <(int, UiTrack)>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_record_u_32_ui_track(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
-  List<UiBus> sse_decode_list_ui_bus(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <UiBus>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_ui_bus(deserializer));
     }
     return ans_;
   }
@@ -5732,6 +5769,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  (int, UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 = sse_decode_ui_bus(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
   (int, UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(
     SseDeserializer deserializer,
   ) {
@@ -6060,7 +6105,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_channels = sse_decode_Map_u_32_ui_mixer_channel_None(deserializer);
     var var_masterBus = sse_decode_ui_mixer_channel(deserializer);
-    var var_buses = sse_decode_list_ui_bus(deserializer);
+    var var_buses = sse_decode_Map_u_32_ui_bus_None(deserializer);
     var var_routing = sse_decode_list_ui_routing_connection(deserializer);
     return UiMixerState.raw(
       channels: var_channels,
@@ -6179,20 +6224,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_sourceType = sse_decode_u_32(deserializer);
-    var var_sourceId = sse_decode_u_32(deserializer);
-    var var_destType = sse_decode_u_32(deserializer);
-    var var_destId = sse_decode_u_32(deserializer);
+    var var_source = sse_decode_ui_routing_node(deserializer);
+    var var_destination = sse_decode_ui_routing_node(deserializer);
     var var_sendLevel = sse_decode_f_32(deserializer);
     var var_isSend = sse_decode_bool(deserializer);
     return UiRoutingConnection(
-      sourceType: var_sourceType,
-      sourceId: var_sourceId,
-      destType: var_destType,
-      destId: var_destId,
+      source: var_source,
+      destination: var_destination,
       sendLevel: var_sendLevel,
       isSend: var_isSend,
     );
+  }
+
+  @protected
+  UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiRoutingNode_Track(var_field0);
+      case 1:
+        var var_field0 = sse_decode_u_32(deserializer);
+        return UiRoutingNode_Bus(var_field0);
+      case 2:
+        return UiRoutingNode_Master();
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -6278,6 +6338,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_record_u_32_f_32(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_Map_u_32_ui_bus_None(
+    Map<int, UiBus> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_u_32_ui_bus(
       self.entries.map((e) => (e.key, e.value)).toList(),
       serializer,
     );
@@ -6457,6 +6529,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_ui_routing_node(
+    UiRoutingNode self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ui_routing_node(self, serializer);
+  }
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat32(self);
@@ -6580,6 +6661,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_record_u_32_ui_bus(
+    List<(int, UiBus)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_ui_bus(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_record_u_32_ui_generator_instance(
     List<(int, UiGeneratorInstance)> self,
     SseSerializer serializer,
@@ -6624,15 +6717,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_record_u_32_ui_track(item, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_list_ui_bus(List<UiBus> self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_ui_bus(item, serializer);
     }
   }
 
@@ -6926,6 +7010,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_record_u_32_ui_bus(
+    (int, UiBus) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_ui_bus(self.$2, serializer);
+  }
+
+  @protected
   void sse_encode_record_u_32_ui_generator_instance(
     (int, UiGeneratorInstance) self,
     SseSerializer serializer,
@@ -7204,7 +7298,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_Map_u_32_ui_mixer_channel_None(self.channels, serializer);
     sse_encode_ui_mixer_channel(self.masterBus, serializer);
-    sse_encode_list_ui_bus(self.buses, serializer);
+    sse_encode_Map_u_32_ui_bus_None(self.buses, serializer);
     sse_encode_list_ui_routing_connection(self.routing, serializer);
   }
 
@@ -7291,12 +7385,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.sourceType, serializer);
-    sse_encode_u_32(self.sourceId, serializer);
-    sse_encode_u_32(self.destType, serializer);
-    sse_encode_u_32(self.destId, serializer);
+    sse_encode_ui_routing_node(self.source, serializer);
+    sse_encode_ui_routing_node(self.destination, serializer);
     sse_encode_f_32(self.sendLevel, serializer);
     sse_encode_bool(self.isSend, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_routing_node(
+    UiRoutingNode self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiRoutingNode_Track(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_u_32(field0, serializer);
+      case UiRoutingNode_Bus(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_u_32(field0, serializer);
+      case UiRoutingNode_Master():
+        sse_encode_i_32(2, serializer);
+    }
   }
 
   @protected

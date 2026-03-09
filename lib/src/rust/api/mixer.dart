@@ -9,7 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `push_mixer_event`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `into`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `into`, `into`, `into`
 
 /// ======================================
 /// STREAM
@@ -43,7 +43,8 @@ Future<List<UiEffectInstance>> getMasterBusPopulated() =>
     RustLib.instance.api.crateApiMixerGetMasterBusPopulated();
 
 /// **GETTER: Fetch all buses**
-Future<List<UiBus>> getBuses() => RustLib.instance.api.crateApiMixerGetBuses();
+Future<Map<int, UiBus>> getBuses() =>
+    RustLib.instance.api.crateApiMixerGetBuses();
 
 /// **GETTER: Fetch the routing matrix**
 Future<List<UiRoutingConnection>> getRoutingMatrix() =>
@@ -111,36 +112,26 @@ Future<void> renameBus({required int busId, required String newName}) =>
     RustLib.instance.api.crateApiMixerRenameBus(busId: busId, newName: newName);
 
 /// Set routing: source → destination with send level.
-/// source_type: 0=Track, 1=Bus
-/// dest_type: 1=Bus, 2=Master
 Future<void> setRouting({
-  required int sourceType,
-  required int sourceId,
-  required int destType,
-  required int destId,
+  required UiRoutingNode source,
+  required UiRoutingNode destination,
   required double sendLevel,
   required bool isSend,
 }) => RustLib.instance.api.crateApiMixerSetRouting(
-  sourceType: sourceType,
-  sourceId: sourceId,
-  destType: destType,
-  destId: destId,
+  source: source,
+  destination: destination,
   sendLevel: sendLevel,
   isSend: isSend,
 );
 
 /// Remove a routing connection.
 Future<void> removeRouting({
-  required int sourceType,
-  required int sourceId,
-  required int destType,
-  required int destId,
+  required UiRoutingNode source,
+  required UiRoutingNode destination,
   required bool isSend,
 }) => RustLib.instance.api.crateApiMixerRemoveRouting(
-  sourceType: sourceType,
-  sourceId: sourceId,
-  destType: destType,
-  destId: destId,
+  source: source,
+  destination: destination,
   isSend: isSend,
 );
 
@@ -307,7 +298,7 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
 class UiMixerState {
   final Map<int, UiMixerChannel> channels;
   final UiMixerChannel masterBus;
-  final List<UiBus> buses;
+  final Map<int, UiBus> buses;
   final List<UiRoutingConnection> routing;
 
   const UiMixerState.raw({
@@ -322,7 +313,7 @@ class UiMixerState {
   static UiMixerState newWithParam({
     required Map<int, UiMixerChannel> channels,
     required UiMixerChannel masterBus,
-    required List<UiBus> buses,
+    required Map<int, UiBus> buses,
     required List<UiRoutingConnection> routing,
   }) => RustLib.instance.api.crateApiMixerUiMixerStateNewWithParam(
     channels: channels,
@@ -351,31 +342,22 @@ class UiMixerState {
 
 /// UI representation of a routing connection.
 class UiRoutingConnection {
-  /// 0=Track, 1=Bus, 2=Master
-  final int sourceType;
-  final int sourceId;
-
-  /// 0=Track, 1=Bus, 2=Master
-  final int destType;
-  final int destId;
+  final UiRoutingNode source;
+  final UiRoutingNode destination;
   final double sendLevel;
   final bool isSend;
 
   const UiRoutingConnection({
-    required this.sourceType,
-    required this.sourceId,
-    required this.destType,
-    required this.destId,
+    required this.source,
+    required this.destination,
     required this.sendLevel,
     required this.isSend,
   });
 
   @override
   int get hashCode =>
-      sourceType.hashCode ^
-      sourceId.hashCode ^
-      destType.hashCode ^
-      destId.hashCode ^
+      source.hashCode ^
+      destination.hashCode ^
       sendLevel.hashCode ^
       isSend.hashCode;
 
@@ -384,10 +366,17 @@ class UiRoutingConnection {
       identical(this, other) ||
       other is UiRoutingConnection &&
           runtimeType == other.runtimeType &&
-          sourceType == other.sourceType &&
-          sourceId == other.sourceId &&
-          destType == other.destType &&
-          destId == other.destId &&
+          source == other.source &&
+          destination == other.destination &&
           sendLevel == other.sendLevel &&
           isSend == other.isSend;
+}
+
+@freezed
+sealed class UiRoutingNode with _$UiRoutingNode {
+  const UiRoutingNode._();
+
+  const factory UiRoutingNode.track(int field0) = UiRoutingNode_Track;
+  const factory UiRoutingNode.bus(int field0) = UiRoutingNode_Bus;
+  const factory UiRoutingNode.master() = UiRoutingNode_Master;
 }

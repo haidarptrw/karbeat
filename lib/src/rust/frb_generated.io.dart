@@ -50,6 +50,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw);
 
   @protected
+  Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw);
+
+  @protected
   Map<int, UiGeneratorInstance> dco_decode_Map_u_32_ui_generator_instance_None(
     dynamic raw,
   );
@@ -108,6 +111,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
   @protected
+  UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -153,6 +159,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw);
 
   @protected
+  List<(int, UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw);
+
+  @protected
   List<(int, UiGeneratorInstance)>
   dco_decode_list_record_u_32_ui_generator_instance(dynamic raw);
 
@@ -166,9 +175,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, UiTrack)> dco_decode_list_record_u_32_ui_track(dynamic raw);
-
-  @protected
-  List<UiBus> dco_decode_list_ui_bus(dynamic raw);
 
   @protected
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
@@ -255,6 +261,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, double) dco_decode_record_u_32_f_32(dynamic raw);
+
+  @protected
+  (int, UiBus) dco_decode_record_u_32_ui_bus(dynamic raw);
 
   @protected
   (int, UiGeneratorInstance) dco_decode_record_u_32_ui_generator_instance(
@@ -366,6 +375,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
 
   @protected
+  UiRoutingNode dco_decode_ui_routing_node(dynamic raw);
+
+  @protected
   UiSourceType dco_decode_ui_source_type(dynamic raw);
 
   @protected
@@ -397,6 +409,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer);
+
+  @protected
+  Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(SseDeserializer deserializer);
 
   @protected
   Map<int, UiGeneratorInstance> sse_decode_Map_u_32_ui_generator_instance_None(
@@ -471,6 +486,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiRoutingNode sse_decode_box_autoadd_ui_routing_node(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -520,6 +540,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, UiBus)> sse_decode_list_record_u_32_ui_bus(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<(int, UiGeneratorInstance)>
   sse_decode_list_record_u_32_ui_generator_instance(
     SseDeserializer deserializer,
@@ -539,9 +564,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(int, UiTrack)> sse_decode_list_record_u_32_ui_track(
     SseDeserializer deserializer,
   );
-
-  @protected
-  List<UiBus> sse_decode_list_ui_bus(SseDeserializer deserializer);
 
   @protected
   List<UiClip> sse_decode_list_ui_clip(SseDeserializer deserializer);
@@ -642,6 +664,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
+
+  @protected
+  (int, UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer);
 
   @protected
   (int, UiGeneratorInstance) sse_decode_record_u_32_ui_generator_instance(
@@ -771,6 +796,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiRoutingNode sse_decode_ui_routing_node(SseDeserializer deserializer);
+
+  @protected
   UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
 
   @protected
@@ -806,6 +834,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_u_32_f_32_None(
     Map<int, double> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_u_32_ui_bus_None(
+    Map<int, UiBus> self,
     SseSerializer serializer,
   );
 
@@ -891,6 +925,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_routing_node(
+    UiRoutingNode self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -951,6 +991,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_ui_bus(
+    List<(int, UiBus)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_ui_generator_instance(
     List<(int, UiGeneratorInstance)> self,
     SseSerializer serializer,
@@ -973,9 +1019,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<(int, UiTrack)> self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_list_ui_bus(List<UiBus> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_ui_clip(List<UiClip> self, SseSerializer serializer);
@@ -1097,6 +1140,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_f_32(
     (int, double) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_ui_bus(
+    (int, UiBus) self,
     SseSerializer serializer,
   );
 
@@ -1261,6 +1310,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UiRoutingConnection self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_ui_routing_node(UiRoutingNode self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);

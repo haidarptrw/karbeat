@@ -3,3 +3,5 @@ rust_root: rust/
 dart_output: lib/src/rust
 type_64bit_int: true
 dart_enums_style: true
+dart3: true
+enable_lifetime: true
