@@ -412,15 +412,18 @@ pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Res
     Ok(())
 }
 
-/// Add an effect to a mixer channel by name (backwards compatible).
-pub fn add_effect_to_mixer_channel(track_id: u32, effect_name: String) -> Result<(), String> {
+pub fn remove_effect_from_mixer_channel(track_id: u32, effect_instance_id: u32) -> Result<(), String> {
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
-        #[allow(deprecated)]
         mixer_state
-            .add_effect_descriptor(&track_id.into(), &effect_name, "")
+            .remove_effect_by_id(&track_id.into(), effect_instance_id.into())
             .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Removed effect instance ID {} from track {}",
+            effect_instance_id,
+            track_id
+        );
     }
     broadcast_state_change();
     Ok(())
@@ -435,6 +438,21 @@ pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
         log::info!(
             "Added effect with registry ID {} to master bus",
             registry_id,
+        );
+    }
+    broadcast_state_change();
+    Ok(())
+}
+
+pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.mixer
+            .remove_effect_from_master_bus(effect_instance_id.into())
+            .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Removed effect instance ID {} from master bus",
+            effect_instance_id,
         );
     }
     broadcast_state_change();

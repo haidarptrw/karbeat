@@ -70,13 +70,12 @@ Future<void> addEffectToMixerChannelById({
   registryId: registryId,
 );
 
-/// Add an effect to a mixer channel by name (backwards compatible).
-Future<void> addEffectToMixerChannel({
+Future<void> removeEffectFromMixerChannel({
   required int trackId,
-  required String effectName,
-}) => RustLib.instance.api.crateApiMixerAddEffectToMixerChannel(
+  required int effectInstanceId,
+}) => RustLib.instance.api.crateApiMixerRemoveEffectFromMixerChannel(
   trackId: trackId,
-  effectName: effectName,
+  effectInstanceId: effectInstanceId,
 );
 
 Future<void> addEffectToMasterBus({required int registryId}) => RustLib

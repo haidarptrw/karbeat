@@ -92,6 +92,13 @@ impl KarbeatParametricEQFilterNode {
     }
 
     /// Calculate Biquad Coefficients for Peaking EQ
+    /// 
+    /// The calculation of biquad coefficients is based on the standard formulas for digital biquad filters,
+    /// which depend on the filter type, frequency, Q factor, and gain. 
+    /// The coefficients are normalized by a0 to ensure stability and consistent gain across different filter types and parameters.
+    /// 
+    /// The calculation algorithm is adapted from the Audio EQ Cookbook by Robert Bristow-Johnson, 
+    /// which provides a comprehensive set of formulas for various biquad filter types.
     pub fn update_coefficients(&mut self, sample_rate: f32) {
         if sample_rate <= 0.0 {
             return;

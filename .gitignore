@@ -46,3 +46,4 @@ app.*.map.json
 
 # VSCode Workspace
 *.code-workspace
+.agents/
