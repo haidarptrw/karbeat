@@ -12,6 +12,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
+import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -650,7 +651,20 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 ),
                 const SizedBox(width: 16),
                 FloatingActionButton.extended(
-                  onPressed: () => state.confirmPlacement(),
+                  onPressed: () {
+                    final messenger = ScaffoldMessenger.of(context);
+                    state.confirmPlacement().then((value) {
+                      if (!mounted) return;
+                      switch (value) {
+                        case Ok<void>():
+                          break;
+                        case Error<void>():
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(value.toErrorMessage())),
+                          );
+                      }
+                    });
+                  },
                   label: const Text('Confirm'),
                   heroTag: 'confirm_place',
                   icon: Icon(Icons.check),

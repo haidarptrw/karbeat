@@ -15,6 +15,31 @@ sealed class Result<T> {
 
   /// Create an instance of Result containing an error
   factory Result.error(Exception error) => Error(error);
+
+  bool isErr() {
+    return this is Error<T>;
+  }
+
+  bool isOk() {
+    return this is Ok<T>;
+  }
+
+  Exception err() {
+    return (this as Error<T>).error;
+  }
+
+  T ok() {
+    return (this as Ok<T>).value;
+  }
+
+  @override
+  String toString() {
+    if (isOk()) {
+      return 'Ok(${ok()})';
+    } else {
+      return 'Error(${err()})';
+    }
+  }
 }
 
 /// Subclass of Result for values
@@ -31,4 +56,8 @@ final class Error<T> extends Result<T> {
 
   /// Returned error in result
   final Exception error;
+
+  String toErrorMessage() {
+    return error.toString();
+  }
 }
