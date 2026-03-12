@@ -48,8 +48,8 @@ Currently, technical documentation and detailed info are still being drafted. Pl
 
 Thank you for your interest in Karbeat! Here are a few things to keep in mind:
 
-- **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment. We will focus to complete features to an usable state for users.
+- **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment for faster development. We will focus to complete features to an usable state for users. Eventually we will fully focus on mobile devices support as it is our main priority in the first place
 - **Future Platforms**: Once the core application is near completion, we'll implement and optimize features for **Android**.
-- **Plugin Host Support**: We will add plugin host and support for VST3, CLAP, and LV2 for Windows, Linux, and MacOS version
-
+- **Plugin Host Support**: We will add plugin host and support for VST3, CLAP, and LV2 for Windows, Linux, and MacOS version. As for android, we are still exploring the best fit and possibility of creating our own plugin format.
+- **Plugin Development**: Currently our plugin registry is very few. You can help to create a plugin by using the Karbeat Plugin API by implementing the `KarbeatGenerator` or `KarbeatEffect` trait.
 ---
