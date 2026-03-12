@@ -1,6 +1,5 @@
 // src/core/track/mod.rs
 pub mod audio_waveform;
-pub mod automation;
 pub mod midi;
 
 use std::{

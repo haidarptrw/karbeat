@@ -106,8 +106,8 @@ pub enum CurveType {
 /// fields define the mapping to the actual parameter range.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AutomationPoint {
-    /// Position in beats (relative to project start)
-    pub time_beats: f64,
+    /// Position in ticks (relative to project start)
+    pub time_ticks: u32,
     /// Normalized parameter value (0.0–1.0)
     pub value: f32,
     /// Interpolation curve to the NEXT point
@@ -115,17 +115,17 @@ pub struct AutomationPoint {
 }
 
 impl AutomationPoint {
-    pub fn new(time_beats: f64, value: f32) -> Self {
+    pub fn new(time_ticks: u32, value: f32) -> Self {
         Self {
-            time_beats,
+            time_ticks,
             value: value.clamp(0.0, 1.0),
             curve_type: CurveType::Linear,
         }
     }
 
-    pub fn with_curve(time_beats: f64, value: f32, curve_type: CurveType) -> Self {
+    pub fn with_curve(time_ticks: u32, value: f32, curve_type: CurveType) -> Self {
         Self {
-            time_beats,
+            time_ticks,
             value: value.clamp(0.0, 1.0),
             curve_type,
         }
@@ -184,11 +184,7 @@ impl AutomationLane {
     pub fn add_point(&mut self, point: AutomationPoint) {
         let idx = self
             .points
-            .binary_search_by(|p| {
-                p.time_beats
-                    .partial_cmp(&point.time_beats)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            .binary_search_by(|p| p.time_ticks.cmp(&point.time_ticks))
             .unwrap_or_else(|i| i);
         self.points.insert(idx, point);
     }
@@ -203,49 +199,41 @@ impl AutomationLane {
     }
 
     /// Update a point at the given index.
-    pub fn update_point(&mut self, index: usize, time_beats: f64, value: f32) -> bool {
+    pub fn update_point(&mut self, index: usize, time_ticks: u32, value: f32) -> bool {
         if let Some(point) = self.points.get_mut(index) {
-            point.time_beats = time_beats;
+            point.time_ticks = time_ticks;
             point.value = value.clamp(0.0, 1.0);
 
             // Re-sort after update (point may have moved in time)
-            self.points.sort_by(|a, b| {
-                a.time_beats
-                    .partial_cmp(&b.time_beats)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+            self.points.sort_by(|a, b| a.time_ticks.cmp(&b.time_ticks));
             true
         } else {
             false
         }
     }
 
-    /// Get the interpolated normalized value (0.0–1.0) at a given time in beats.
+    /// Get the interpolated normalized value (0.0–1.0) at a given time in ticks.
     /// Returns `None` if the lane is disabled or has no points.
-    pub fn value_at(&self, time_beats: f64) -> Option<f32> {
+    pub fn value_at(&self, time_ticks: u32) -> Option<f32> {
         if !self.enabled || self.points.is_empty() {
             return None;
         }
 
         // Before first point: return first point's value
-        if time_beats <= self.points[0].time_beats {
+        if time_ticks <= self.points[0].time_ticks {
             return Some(self.points[0].value);
         }
 
         // After last point: return last point's value
         let last = self.points.last().unwrap();
-        if time_beats >= last.time_beats {
+        if time_ticks >= last.time_ticks {
             return Some(last.value);
         }
 
         // Find surrounding points using binary search
         let idx = self
             .points
-            .binary_search_by(|p| {
-                p.time_beats
-                    .partial_cmp(&time_beats)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            .binary_search_by(|p| p.time_ticks.cmp(&time_ticks))
             .unwrap_or_else(|i| i);
 
         // idx is where we'd insert, so points[idx-1] <= time < points[idx]
@@ -257,12 +245,12 @@ impl AutomationLane {
         let p2 = &self.points[idx];
 
         // Calculate interpolation factor (0.0 to 1.0)
-        let duration = p2.time_beats - p1.time_beats;
-        if duration <= 0.0 {
+        let duration = p2.time_ticks.saturating_sub(p1.time_ticks);
+        if duration == 0 {
             return Some(p1.value);
         }
 
-        let t = ((time_beats - p1.time_beats) / duration) as f32;
+        let t = ((time_ticks - p1.time_ticks) as f32) / (duration as f32);
 
         // Interpolate based on curve type of the FIRST point
         let value = match p1.curve_type {
@@ -296,9 +284,9 @@ impl AutomationLane {
         ((value - self.min) / (self.max - self.min)).clamp(0.0, 1.0)
     }
 
-    /// Get the denormalized value at a given time in beats.
-    pub fn denormalized_value_at(&self, time_beats: f64) -> Option<f32> {
-        self.value_at(time_beats).map(|v| self.denormalize(v))
+    /// Get the denormalized value at a given time in ticks.
+    pub fn denormalized_value_at(&self, time_ticks: u32) -> Option<f32> {
+        self.value_at(time_ticks).map(|v| self.denormalize(v))
     }
 
     /// Clear all points.
@@ -368,10 +356,10 @@ impl AutomationManager {
 
     /// Apply all automation values at the given time.
     /// Returns a vec of (param_id, denormalized_value) pairs that should be applied.
-    pub fn get_values_at(&self, time_beats: f64) -> Vec<(u32, f32)> {
+    pub fn get_values_at(&self, time_ticks: u32) -> Vec<(u32, f32)> {
         self.lanes
             .iter()
-            .filter_map(|(id, lane)| lane.denormalized_value_at(time_beats).map(|v| (*id, v)))
+            .filter_map(|(id, lane)| lane.denormalized_value_at(time_ticks).map(|v| (*id, v)))
             .collect()
     }
 

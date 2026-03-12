@@ -25,9 +25,9 @@ use crate::{
         GeneratorParameterSnapshot,
     },
     core::project::{
+        automation::AutomationTarget,
         mixer::{BusId, MixerChannel, RoutingNode},
         plugin::{MidiEvent, MidiMessage},
-        track::automation::AutomationTarget,
         AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
         PatternId, TrackId,
     },
@@ -1816,12 +1816,13 @@ impl AudioEngine {
             return;
         }
 
-        // Convert playhead from samples to beats
+        // Convert playhead from samples to ticks (960 ticks per beat)
         let samples_per_beat = (60.0 / tempo) * (self.sample_rate as f32);
-        let current_beat = self.playhead_samples as f64 / samples_per_beat as f64;
+        let samples_per_tick = samples_per_beat / 960.0;
+        let current_tick = (self.playhead_samples as f64 / samples_per_tick as f64) as u32;
 
         for lane in self.current_state.graph.automation_lanes.values() {
-            let value = lane.value_at_beats(current_beat);
+            let value = lane.value_at_ticks(current_tick);
 
             match &lane.target {
                 AutomationTarget::TrackGeneratorPluginParam { track_id, param_id } => {

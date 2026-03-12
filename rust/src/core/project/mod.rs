@@ -1,5 +1,6 @@
 // src/core/project/mod.rs
 
+pub mod automation;
 pub mod clip;
 pub mod clipboard;
 pub mod generator;
@@ -24,13 +25,18 @@ pub use generator::{GeneratorId, GeneratorInstance, GeneratorInstanceType};
 pub use plugin::{instance::PluginInstance, KarbeatPlugin};
 pub use track::{
     audio_waveform::{AudioSourceId, AudioWaveform},
-    automation::{AutomationId, AutomationLane, AutomationPoint, AutomationTarget},
     midi::{Pattern, PatternId},
     KarbeatTrack, TrackId, TrackType,
 };
 pub use transport::TransportState;
 
-use crate::{core::project::mixer::MixerState, define_id};
+use crate::{
+    core::project::{
+        automation::{AutomationId, AutomationLane, AutomationPoint, AutomationTarget},
+        mixer::MixerState,
+    },
+    define_id,
+};
 
 define_id!(SourceId);
 define_id!(NoteId);
@@ -318,7 +324,7 @@ impl ApplicationState {
         &mut self,
         lane_id: AutomationId,
         point_index: usize,
-        time_beats: f64,
+        time_ticks: u32,
         value: f32,
     ) -> anyhow::Result<()> {
         let lane_arc = self
@@ -327,7 +333,7 @@ impl ApplicationState {
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
         let lane = Arc::make_mut(lane_arc);
-        if !lane.update_point(point_index, time_beats, value) {
+        if !lane.update_point(point_index, time_ticks, value) {
             return Err(anyhow!(
                 "Point index {} out of bounds (lane has {} points)",
                 point_index,

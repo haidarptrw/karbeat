@@ -2,10 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     core::project::{
+        automation::{AutomationId, AutomationPoint, AutomationTarget, CurveType},
         mixer::{BusId, EffectId, MixerState},
         plugin::{KarbeatEffect, KarbeatGenerator},
         track::{
-            automation::{AutomationId, AutomationPoint, AutomationTarget, CurveType},
             midi::{Pattern, PatternId},
             KarbeatTrack,
         },
@@ -62,14 +62,14 @@ pub struct AudioAutomationLane {
 }
 
 impl AudioAutomationLane {
-    /// Get the denormalized value at a given time in beats.
+    /// Get the denormalized value at a given time in ticks.
     /// Returns `default_value` (denormalized) if disabled or no points.
     #[inline]
-    pub fn value_at_beats(&self, time_beats: f64) -> f32 {
+    pub fn value_at_ticks(&self, time_ticks: u32) -> f32 {
         if !self.enabled || self.points.is_empty() {
             return self.denormalize(self.default_value);
         }
-        let normalized = interpolate_points(&self.points, time_beats);
+        let normalized = interpolate_points(&self.points, time_ticks);
         self.denormalize(normalized)
     }
 
@@ -79,28 +79,24 @@ impl AudioAutomationLane {
     }
 }
 
-/// Interpolate sorted automation points at the given time in beats.
+/// Interpolate sorted automation points at the given time in ticks.
 /// Returns a normalized value (0.0–1.0).
 #[inline]
-fn interpolate_points(points: &[AutomationPoint], time_beats: f64) -> f32 {
+fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
     // Before first point
-    if time_beats <= points[0].time_beats {
+    if time_ticks <= points[0].time_ticks {
         return points[0].value;
     }
 
     // After last point
     let last = &points[points.len() - 1];
-    if time_beats >= last.time_beats {
+    if time_ticks >= last.time_ticks {
         return last.value;
     }
 
     // Binary search for the surrounding pair
     let idx = points
-        .binary_search_by(|p| {
-            p.time_beats
-                .partial_cmp(&time_beats)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        .binary_search_by(|p| p.time_ticks.cmp(&time_ticks))
         .unwrap_or_else(|i| i);
 
     if idx == 0 {
@@ -109,12 +105,12 @@ fn interpolate_points(points: &[AutomationPoint], time_beats: f64) -> f32 {
 
     let p1 = &points[idx - 1];
     let p2 = &points[idx];
-    let duration = p2.time_beats - p1.time_beats;
-    if duration <= 0.0 {
+    let duration = p2.time_ticks.saturating_sub(p1.time_ticks);
+    if duration == 0 {
         return p1.value;
     }
 
-    let t = ((time_beats - p1.time_beats) / duration) as f32;
+    let t = ((time_ticks - p1.time_ticks) as f32) / (duration as f32);
 
     match p1.curve_type {
         CurveType::Linear => p1.value + (p2.value - p1.value) * t,
