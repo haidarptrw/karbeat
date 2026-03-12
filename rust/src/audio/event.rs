@@ -1,3 +1,5 @@
+use crate::core::project::{TrackId, mixer::{BusId, EffectId}};
+
 /// Event struct for playback position that will be sent to Frontend side
 #[derive(Clone, Copy, Debug)]
 pub struct PlaybackPosition {
@@ -17,9 +19,38 @@ pub struct PlaybackPosition {
 }
 
 
-/// Automation event for event-driven automation system
-pub enum AutomationEvent {
+// Automation event for event-driven automation system
+
+// src/audio/event.rs (or wherever you define these)
+
+pub enum GeneratorAutomationEvent {
     PluginParam { param_id: u32, value: f32 },
+}
+
+pub enum TrackAutomationEvent {
     Volume(f32),
     Pan(f32),
+    PluginParam { effect_id: EffectId, param_id: u32, value: f32 },
+}
+
+pub enum BusAutomationEvent {
+    Volume(f32),
+    Pan(f32),
+    PluginParam { effect_id: EffectId, param_id: u32, value: f32 },
+}
+
+pub enum MasterAutomationEvent {
+    Volume(f32),
+    Pan(f32),
+    PluginParam { effect_id: EffectId, param_id: u32, value: f32 },
+}
+
+pub enum GlobalAutomationEvent {
+    TempoBpm(f32),
+}
+
+pub enum AudioSourceAutomationEvent {
+    Pitch(f32),
+    Pan(f32),
+    Volume(f32),
 }

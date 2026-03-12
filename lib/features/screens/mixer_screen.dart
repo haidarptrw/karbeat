@@ -13,8 +13,9 @@ class MixerScreen extends ConsumerStatefulWidget {
 }
 
 class _MixerScreenState extends ConsumerState<MixerScreen> {
-  // Track the currently selected track ID (or -1 for Master)
-  int? _selectedTrackId;
+  // Track the currently selected channel ID (or -1 for Master)
+  int? _selectedChannelId;
+  bool _isSelectedBus = false;
 
   // Initial width for the track panel
   double _trackPanelWidth = 400.0;
@@ -52,14 +53,14 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     }
 
     final busEntries = <_ChannelEntry>[];
-    for (int i = 0; i < mixerState.buses.length; i++) {
-      final bus = mixerState.buses[i]!;
+    for (final bus in mixerState.buses.values) {
       busEntries.add(
         _ChannelEntry(
           id: bus.id,
           name: bus.name,
           channel: bus.channel,
           isMaster: false,
+          isBus: true,
         ),
       );
     }
@@ -151,10 +152,14 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                 ],
                               );
                             },
-                            isSelected: _selectedTrackId == entry.id,
+                            isSelected:
+                                _selectedChannelId == entry.id &&
+                                !_isSelectedBus &&
+                                !entry.isMaster,
                             onTap: () {
                               setState(() {
-                                _selectedTrackId = entry.id;
+                                _selectedChannelId = entry.id;
+                                _isSelectedBus = false;
                               });
                             },
                           );
@@ -285,10 +290,12 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                           ],
                         );
                       },
-                      isSelected: _selectedTrackId == entry.id,
+                      isSelected:
+                          _selectedChannelId == entry.id && _isSelectedBus,
                       onTap: () {
                         setState(() {
-                          _selectedTrackId = entry.id;
+                          _selectedChannelId = entry.id;
+                          _isSelectedBus = true;
                         });
                       },
                     );
@@ -349,10 +356,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       ],
                     );
                   },
-                  isSelected: _selectedTrackId == -1,
+                  isSelected: _selectedChannelId == -1 && !_isSelectedBus,
                   onTap: () {
                     setState(() {
-                      _selectedTrackId = -1;
+                      _selectedChannelId = -1;
+                      _isSelectedBus = false;
                     });
                   },
                 ),
@@ -371,7 +379,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   }
 
   Widget _buildEffectRackPanel(BuildContext ctx, UiMixerState mixerState) {
-    if (_selectedTrackId == null) {
+    if (_selectedChannelId == null) {
       return const SizedBox(
         width: 250,
         child: Center(
@@ -384,16 +392,22 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
       );
     }
 
-    final isMaster = _selectedTrackId == -1;
+    final isMaster = _selectedChannelId == -1 && !_isSelectedBus;
     final channel = isMaster
         ? mixerState.masterBus
-        : mixerState.channels[_selectedTrackId!];
+        : _isSelectedBus
+        ? mixerState.buses[_selectedChannelId!]?.channel
+        : mixerState.channels[_selectedChannelId!];
 
     if (channel == null) {
       return const SizedBox(width: 250);
     }
 
-    final channelName = isMaster ? 'Master' : 'Track $_selectedTrackId';
+    final channelName = isMaster
+        ? 'Master'
+        : (_isSelectedBus
+              ? 'Bus $_selectedChannelId'
+              : 'Track $_selectedChannelId');
 
     return Container(
       width: 250,
@@ -472,7 +486,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                 MaterialPageRoute(
                                   builder: (context) => KarbeatParametricEq(
                                     // Pass whatever your screen needs here
-                                    trackId: _selectedTrackId!,
+                                    trackId: _selectedChannelId!,
                                     effectIdx: effect.id,
                                   ),
                                 ),
@@ -608,24 +622,31 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           );
           return;
         }
-        if (_selectedTrackId == null) {
+        if (_selectedChannelId == null) {
           ScaffoldMessenger.of(ctx).showSnackBar(
             const SnackBar(
               content: Text(
-                'No track selected. Please select a track before adding an effect.',
+                'No channel selected. Please select a channel before adding an effect.',
               ),
             ),
           );
           return;
         }
 
-        if (_selectedTrackId == -1) {
+        if (_selectedChannelId == -1 && !_isSelectedBus) {
           ref.read(karbeatStateProvider).addEffectToMasterBus(plugin.id);
           return;
         }
-        ref
-            .read(karbeatStateProvider)
-            .addEffectToMixerChannel(_selectedTrackId!, plugin.id);
+
+        if (_isSelectedBus) {
+          ref
+              .read(karbeatStateProvider)
+              .addEffectToBusChannel(_selectedChannelId!, plugin.id);
+        } else {
+          ref
+              .read(karbeatStateProvider)
+              .addEffectToMixerChannel(_selectedChannelId!, plugin.id);
+        }
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -668,12 +689,14 @@ class _ChannelEntry {
   final String name;
   final UiMixerChannel channel;
   final bool isMaster;
+  final bool isBus;
 
   const _ChannelEntry({
     required this.id,
     required this.name,
     required this.channel,
     required this.isMaster,
+    this.isBus = false,
   });
 }
 

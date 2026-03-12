@@ -12,7 +12,10 @@ use triple_buffer::Output;
 
 use crate::{
     audio::{
-        event::PlaybackPosition,
+        event::{
+            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent, PlaybackPosition,
+            TrackAutomationEvent,
+        },
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
         },
@@ -86,6 +89,13 @@ pub struct AudioEngine {
 
     /// Song playback vs Pattern playback
     playback_mode: PlaybackMode,
+
+    // =========================
+    // Automation Event Queue
+    // =========================
+    track_automation_events: HashMap<TrackId, Vec<TrackAutomationEvent>>,
+    bus_automation_events: HashMap<BusId, Vec<BusAutomationEvent>>,
+    master_automation_events: Vec<MasterAutomationEvent>,
 }
 
 /// Lightweight voice reference - the actual plugin lives in AudioPluginState
@@ -93,9 +103,22 @@ pub struct GeneratorVoice {
     pub id: GeneratorId,
     pub track_id: TrackId,
     // Events queued for the CURRENT buffer block only
-    pub events: Vec<MidiEvent>,
+    pub midi_events: Vec<MidiEvent>,
+    pub automation_events: Vec<GeneratorAutomationEvent>,
     // Track if this generator is persistent or temporary
     pub active: bool,
+}
+
+impl GeneratorVoice {
+    pub fn new(id: GeneratorId, track_id: TrackId, active: bool) -> Self {
+        Self {
+            id,
+            track_id,
+            midi_events: Vec::new(),
+            automation_events: Vec::new(),
+            active,
+        }
+    }
 }
 
 pub struct AudioVoice {
@@ -163,6 +186,9 @@ impl AudioEngine {
             bus_temp_buffer: Vec::with_capacity(2048),
             cached_routing_order: Vec::new(),
             playback_mode: PlaybackMode::Song,
+            track_automation_events: HashMap::new(),
+            bus_automation_events: HashMap::new(),
+            master_automation_events: Vec::new(),
         }
     }
 
@@ -372,12 +398,8 @@ impl AudioEngine {
                     .map(|g| g.track_id)
                     .unwrap_or(TrackId::from(0));
 
-                self.active_generators.push(GeneratorVoice {
-                    id: generator_id,
-                    track_id,
-                    events: Vec::new(),
-                    active: true,
-                });
+                self.active_generators
+                    .push(GeneratorVoice::new(generator_id, track_id, true));
                 self.active_generators.len() - 1
             });
 
@@ -385,7 +407,7 @@ impl AudioEngine {
         gen_voice.active = true;
 
         Self::schedule_pattern_notes_raw(
-            &mut gen_voice.events,
+            &mut gen_voice.midi_events,
             &pattern.notes,
             self.sample_rate,
             tempo,
@@ -418,7 +440,7 @@ impl AudioEngine {
                 gen_instance.plugin.reset();
             }
             // Clear any pending MIDI events that might have been queued
-            voice.events.clear();
+            voice.midi_events.clear();
         }
     }
 
@@ -873,7 +895,7 @@ impl AudioEngine {
         // Generators stay alive (persistent), just clear their MIDI events for the next frame
         self.active_generators.retain(|g| g.active);
         for gen in self.active_generators.iter_mut() {
-            gen.events.clear();
+            gen.midi_events.clear();
         }
 
         // Audio voices are One-Shot per buffer (cleared every frame)
@@ -906,7 +928,7 @@ impl AudioEngine {
                     MidiMessage::NoteOff { key }
                 };
 
-                gen_voice.events.push(MidiEvent {
+                gen_voice.midi_events.push(MidiEvent {
                     sample_offset: 0,
                     data: message,
                 });
@@ -927,12 +949,8 @@ impl AudioEngine {
                 .iter()
                 .position(|g| g.id == generator_id)
                 .unwrap_or_else(|| {
-                    self.active_generators.push(GeneratorVoice {
-                        id: generator_id,
-                        track_id,
-                        events: Vec::new(),
-                        active: true,
-                    });
+                    self.active_generators
+                        .push(GeneratorVoice::new(generator_id, track_id, true));
                     self.active_generators.len() - 1
                 });
 
@@ -943,7 +961,7 @@ impl AudioEngine {
                 MidiMessage::NoteOff { key }
             };
 
-            gen_voice.events.push(MidiEvent {
+            gen_voice.midi_events.push(MidiEvent {
                 sample_offset: 0,
                 data: message,
             });
@@ -1024,10 +1042,18 @@ impl AudioEngine {
                 .find(|g| g.track_id == track_id && g.active)
             {
                 let gen_id = gen_voice.id;
-                let events = &gen_voice.events;
+                let events = &gen_voice.midi_events;
+                let param_events = &gen_voice.automation_events;
 
-                // Access the generator from plugin_state (owned, no lock)
                 if let Some(gen_instance) = self.plugin_state.generators.get_mut(&gen_id) {
+                    // CONSUME AUTOMATION
+                    for ev in param_events {
+                        #[allow(irrefutable_let_patterns)]
+                        if let GeneratorAutomationEvent::PluginParam { param_id, value } = ev {
+                            gen_instance.plugin.set_parameter(*param_id, *value);
+                        }
+                    }
+                    // PROCESS AUDIO
                     gen_instance.plugin.process(&mut self.mix_buffer, events);
                     has_signal = true;
                 }
@@ -1052,6 +1078,7 @@ impl AudioEngine {
             Self::apply_mixer_channel_with_effects(
                 channel,
                 &mut self.plugin_state.track_effects,
+                &self.track_automation_events,
                 track_id,
                 &mut self.mix_buffer,
                 channels,
@@ -1134,6 +1161,33 @@ impl AudioEngine {
                 }
                 self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
 
+                let mut bus_volume = bus_settings.volume;
+                let mut bus_pan = bus_settings.pan;
+
+                // CONSUME BUS AUTOMATION
+                if let Some(auto_events) = self.bus_automation_events.get(bus_id) {
+                    for event in auto_events {
+                        match event {
+                            BusAutomationEvent::Volume(v) => bus_volume = *v,
+                            BusAutomationEvent::Pan(v) => bus_pan = *v,
+                            BusAutomationEvent::PluginParam {
+                                effect_id,
+                                param_id,
+                                value,
+                            } => {
+                                if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id)
+                                {
+                                    if let Some(effect) =
+                                        effects.iter_mut().find(|e| e.id == *effect_id)
+                                    {
+                                        effect.plugin.set_parameter(*param_id, *value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Apply bus effects
                 if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id) {
                     for effect in effects.iter_mut() {
@@ -1142,8 +1196,8 @@ impl AudioEngine {
                 }
 
                 // Apply volume and pan (volume is stored in dB)
-                let volume = db_to_linear(bus_settings.volume);
-                let pan = bus_settings.pan.clamp(-1.0, 1.0);
+                let volume = db_to_linear(bus_volume);
+                let pan = bus_pan.clamp(-1.0, 1.0);
                 let (left_gain, right_gain) = if channels == 2 {
                     let p = (pan + 1.0) * 0.5;
                     ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
@@ -1198,6 +1252,7 @@ impl AudioEngine {
         Self::apply_master_bus_with_effects(
             &master_bus,
             &mut self.plugin_state.master_effects,
+            &self.master_automation_events,
             output,
             channels,
         );
@@ -1280,11 +1335,37 @@ impl AudioEngine {
     /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
     fn apply_mixer_channel_with_effects(
         mixer_channel: &MixerChannel,
-        track_effects: &mut std::collections::HashMap<TrackId, Vec<AudioEffectInstance>>,
+        track_effects: &mut HashMap<TrackId, Vec<AudioEffectInstance>>,
+        track_automation_events: &HashMap<TrackId, Vec<TrackAutomationEvent>>,
         track_id: TrackId,
         buffer: &mut [f32],
         channels: usize,
     ) {
+        // Extract base values from the current UI state
+        let mut track_volume = mixer_channel.volume;
+        let mut track_pan = mixer_channel.pan;
+
+        // CONSUME TRACK AUTOMATION
+        if let Some(auto_events) = track_automation_events.get(&track_id) {
+            for event in auto_events {
+                match event {
+                    TrackAutomationEvent::Volume(v) => track_volume = *v,
+                    TrackAutomationEvent::Pan(v) => track_pan = *v,
+                    TrackAutomationEvent::PluginParam {
+                        effect_id,
+                        param_id,
+                        value,
+                    } => {
+                        if let Some(effects) = track_effects.get_mut(&track_id) {
+                            if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
+                                effect.plugin.set_parameter(*param_id, *value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Invert Phase
         if mixer_channel.inverted_phase {
             for sample in buffer.iter_mut() {
@@ -1299,9 +1380,10 @@ impl AudioEngine {
             }
         }
 
-        // Volume and Pan (volume is stored in dB)
-        let pan = mixer_channel.pan.clamp(-1.0, 1.0);
-        let volume = db_to_linear(mixer_channel.volume);
+        // Apply calculated Volume and Pan
+        let pan = track_pan.clamp(-1.0, 1.0);
+        let volume = db_to_linear(track_volume);
+
         let (left_gain, right_gain) = if channels == 2 {
             let p = (pan + 1.0) * 0.5;
             ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
@@ -1335,9 +1417,30 @@ impl AudioEngine {
     fn apply_master_bus_with_effects(
         master_bus: &MixerChannel,
         master_effects: &mut [AudioEffectInstance],
+        master_automation_events: &[MasterAutomationEvent],
         buffer: &mut [f32],
         channels: usize,
     ) {
+        let mut master_volume = master_bus.volume;
+        let mut master_pan = master_bus.pan;
+
+        // CONSUME MASTER AUTOMATION
+        for event in master_automation_events {
+            match event {
+                MasterAutomationEvent::Volume(v) => master_volume = *v,
+                MasterAutomationEvent::Pan(v) => master_pan = *v,
+                MasterAutomationEvent::PluginParam {
+                    effect_id,
+                    param_id,
+                    value,
+                } => {
+                    if let Some(effect) = master_effects.iter_mut().find(|e| e.id == *effect_id) {
+                        effect.plugin.set_parameter(*param_id, *value);
+                    }
+                }
+            }
+        }
+
         // Invert Phase
         if master_bus.inverted_phase {
             for sample in buffer.iter_mut() {
@@ -1351,8 +1454,8 @@ impl AudioEngine {
         }
 
         // Volume and Pan (volume is stored in dB)
-        let pan = master_bus.pan.clamp(-1.0, 1.0);
-        let volume = db_to_linear(master_bus.volume);
+        let pan = master_pan.clamp(-1.0, 1.0);
+        let volume = db_to_linear(master_volume);
         let (left_gain, right_gain) = if channels == 2 {
             let p = (pan + 1.0) * 0.5;
             ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
@@ -1433,7 +1536,7 @@ impl AudioEngine {
                         if let Some(idx) = gen_voice_idx {
                             let gen_voice = &mut self.active_generators[idx];
                             Self::schedule_midi_events(
-                                &mut gen_voice.events,
+                                &mut gen_voice.midi_events,
                                 self.sample_rate,
                                 self.current_state.transport.bpm,
                                 clip,
@@ -1467,12 +1570,7 @@ impl AudioEngine {
         // Check if the plugin exists in our owned state
         if plugin_state.generators.contains_key(&gen_instance.id) {
             // Create lightweight voice reference (actual plugin is in plugin_state)
-            active_generators.push(GeneratorVoice {
-                id: gen_instance.id,
-                track_id,
-                events: Vec::new(),
-                active: true,
-            });
+            active_generators.push(GeneratorVoice::new(gen_instance.id, track_id, true));
             return Some(active_generators.len() - 1);
         }
 
@@ -1726,64 +1824,74 @@ impl AudioEngine {
             let value = lane.value_at_beats(current_beat);
 
             match &lane.target {
-                AutomationTarget::TrackGeneratorPluginParam {
-                    track_id: _,
-                    param_id,
-                } => {
-                    // Find the generator on this track and set the parameter
-                    // Note: generator→track mapping is in plugin_state.generators
-                    for gen in self.plugin_state.generators.values_mut() {
-                        // TODO: filter by track_id when we have that mapping
-                        gen.plugin.set_parameter(*param_id, value);
+                AutomationTarget::TrackGeneratorPluginParam { track_id, param_id } => {
+                    if let Some(voice) = self
+                        .active_generators
+                        .iter_mut()
+                        .find(|v| v.track_id == *track_id)
+                    {
+                        voice
+                            .automation_events
+                            .push(GeneratorAutomationEvent::PluginParam {
+                                param_id: *param_id,
+                                value,
+                            });
                     }
+                }
+                AutomationTarget::TrackVolume(track_id) => {
+                    self.track_automation_events
+                        .entry(*track_id)
+                        .or_default()
+                        .push(TrackAutomationEvent::Volume(value));
+                }
+                AutomationTarget::TrackPan(track_id) => {
+                    self.track_automation_events
+                        .entry(*track_id)
+                        .or_default()
+                        .push(TrackAutomationEvent::Pan(value));
                 }
                 AutomationTarget::TrackPluginParam {
                     track_id,
                     effect_id,
                     param_id,
                 } => {
-                    if let Some(effects) = self.plugin_state.track_effects.get_mut(track_id) {
-                        if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                            effect.plugin.set_parameter(*param_id, value);
-                        }
-                    }
+                    self.track_automation_events
+                        .entry(*track_id)
+                        .or_default()
+                        .push(TrackAutomationEvent::PluginParam {
+                            effect_id: *effect_id,
+                            param_id: *param_id,
+                            value,
+                        });
+                }
+                AutomationTarget::BusVolume(bus_id) => {
+                    self.bus_automation_events
+                        .entry(*bus_id)
+                        .or_default()
+                        .push(BusAutomationEvent::Volume(value));
                 }
                 AutomationTarget::BusPluginParam {
                     bus_id,
                     effect_id,
                     param_id,
                 } => {
-                    if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id) {
-                        if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                            effect.plugin.set_parameter(*param_id, value);
-                        }
-                    }
+                    self.bus_automation_events.entry(*bus_id).or_default().push(
+                        BusAutomationEvent::PluginParam {
+                            effect_id: *effect_id,
+                            param_id: *param_id,
+                            value,
+                        },
+                    );
                 }
-                AutomationTarget::MasterPluginParam {
-                    effect_id,
-                    param_id,
-                } => {
-                    if let Some(effect) = self
-                        .plugin_state
-                        .master_effects
-                        .iter_mut()
-                        .find(|e| e.id == *effect_id)
-                    {
-                        effect.plugin.set_parameter(*param_id, value);
-                    }
+                AutomationTarget::MasterVolume => {
+                    self.master_automation_events
+                        .push(MasterAutomationEvent::Volume(value));
                 }
-                // Volume/Pan targets are applied during mixing (read from state),
-                // not via set_parameter. These are logged as TODO for now.
-                AutomationTarget::TrackVolume(_)
-                | AutomationTarget::TrackPan(_)
-                | AutomationTarget::BusVolume(_)
-                | AutomationTarget::BusPan(_)
-                | AutomationTarget::MasterVolume
-                | AutomationTarget::MasterPan
-                | AutomationTarget::TempoBpm => {
-                    // These targets modify mixer/transport state directly.
-                    // Will be handled in a future pass.
+                AutomationTarget::TempoBpm => {
+                    // Global target handled immediately since transport is owned by AudioEngine
+                    self.current_state.transport.bpm = value;
                 }
+                _ => {}
             }
         }
     }

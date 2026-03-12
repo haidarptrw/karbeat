@@ -609,6 +609,20 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<Result<void>> addEffectToBusChannel(int busId, int registryId) async {
+    try {
+      KarbeatLogger.info("Adding effect to bus channel $busId");
+      await mixer_api.addEffectToBus(busId: busId, registryId: registryId);
+      notifyCustomBackendChange(() async {
+        await syncBuses();
+      });
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to add effect to bus channel: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
   Future<Result<void>> addEffectToMasterBus(int registryId) async {
     try {
       await mixer_api.addEffectToMasterBus(registryId: registryId);
