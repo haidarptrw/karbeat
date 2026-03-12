@@ -83,6 +83,11 @@ Future<void> addEffectToMasterBus({required int registryId}) => RustLib
     .api
     .crateApiMixerAddEffectToMasterBus(registryId: registryId);
 
+Future<void> removeEffectFromMasterBus({required int effectInstanceId}) =>
+    RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(
+      effectInstanceId: effectInstanceId,
+    );
+
 /// Create a new mixer bus and return its ID.
 Future<int> createBus({required String name}) =>
     RustLib.instance.api.crateApiMixerCreateBus(name: name);

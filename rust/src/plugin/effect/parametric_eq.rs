@@ -5,7 +5,7 @@ const MAX_ORDER: usize = 4;
 
 use crate::{
     core::project::PluginInstance,
-    plugin::wrapper::{EffectWrapper, RawEffectEngine},
+    plugin::wrapper::{RawEffectEngine, RawEffectWrapper},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -92,12 +92,12 @@ impl KarbeatParametricEQFilterNode {
     }
 
     /// Calculate Biquad Coefficients for Peaking EQ
-    /// 
+    ///
     /// The calculation of biquad coefficients is based on the standard formulas for digital biquad filters,
-    /// which depend on the filter type, frequency, Q factor, and gain. 
+    /// which depend on the filter type, frequency, Q factor, and gain.
     /// The coefficients are normalized by a0 to ensure stability and consistent gain across different filter types and parameters.
-    /// 
-    /// The calculation algorithm is adapted from the Audio EQ Cookbook by Robert Bristow-Johnson, 
+    ///
+    /// The calculation algorithm is adapted from the Audio EQ Cookbook by Robert Bristow-Johnson,
     /// which provides a comprehensive set of formulas for various biquad filter types.
     pub fn update_coefficients(&mut self, sample_rate: f32) {
         if sample_rate <= 0.0 {
@@ -320,7 +320,18 @@ impl KarbeatParametricEQEngine {
 }
 
 impl RawEffectEngine for KarbeatParametricEQEngine {
-    fn process(&mut self, base: &mut crate::plugin::effect_base::EffectBase, buffer: &mut [f32]) {
+    fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
+        if (sample_rate - self.last_sample_rate).abs() > 0.1 {
+            self.last_sample_rate = sample_rate;
+            self.update_all_nodes();
+        }
+    }
+
+    fn process(
+        &mut self,
+        base: &mut crate::plugin::effect_base::StandardEffectBase,
+        buffer: &mut [f32],
+    ) {
         // Check for sample rate changes
         if (base.sample_rate - self.last_sample_rate).abs() > 0.1 {
             self.last_sample_rate = base.sample_rate;
@@ -554,10 +565,12 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
     }
 }
 
-pub type KarbeatParametricEQ = EffectWrapper<KarbeatParametricEQEngine>;
+pub type KarbeatParametricEQ = RawEffectWrapper<KarbeatParametricEQEngine>;
 
-pub fn create_parametric_eq(sample_rate: Option<f32>) -> EffectWrapper<KarbeatParametricEQEngine> {
-    EffectWrapper::new(
+pub fn create_parametric_eq(
+    sample_rate: Option<f32>,
+) -> RawEffectWrapper<KarbeatParametricEQEngine> {
+    RawEffectWrapper::new(
         KarbeatParametricEQEngine::new(),
         sample_rate.unwrap_or(48000.0),
     )

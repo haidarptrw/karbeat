@@ -290,7 +290,7 @@ impl SynthVoice {
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct SynthBase {
+pub struct StandardSynthBase {
     pub sample_rate: f32,
     pub active_voices: Vec<SynthVoice>,
     pub voice_buffer: Vec<f32>,
@@ -299,13 +299,13 @@ pub struct SynthBase {
     pub amp_envelope: AdsrSettings,
 }
 
-impl Default for SynthBase {
+impl Default for StandardSynthBase {
     fn default() -> Self {
         Self::new(48000.0)
     }
 }
 
-impl SynthBase {
+impl StandardSynthBase {
     /// Create a new SynthBase with the given sample rate
     pub fn new(sample_rate: f32) -> Self {
         Self {

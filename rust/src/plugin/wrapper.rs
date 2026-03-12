@@ -8,9 +8,10 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use crate::core::project::plugin::{KarbeatEffect, KarbeatGenerator, MidiEvent};
+use crate::plugin::effect_base::EffectBase;
 
-use super::effect_base::EffectBase;
-use super::synth_base::SynthBase;
+use super::effect_base::StandardEffectBase;
+use super::synth_base::StandardSynthBase;
 use crate::core::project::automation::AutomationManager;
 
 // ============================================================================
@@ -134,7 +135,7 @@ impl PluginParameter {
 pub trait RawSynthEngine: Send + Sync {
     /// Process audio using the shared base state.
     /// Write stereo interleaved audio to output buffer.
-    fn process(&mut self, base: &mut SynthBase, output: &mut [f32], midi: &[MidiEvent]);
+    fn process(&mut self, base: &mut StandardSynthBase, output: &mut [f32], midi: &[MidiEvent]);
 
     /// Set a custom parameter (IDs beyond base range, typically >= 8)
     fn set_custom_parameter(&mut self, id: u32, value: f32);
@@ -159,8 +160,15 @@ pub trait RawSynthEngine: Send + Sync {
 /// Implement this for your custom effect, and wrap it with EffectWrapper
 /// to get automation support and base parameter handling.
 pub trait RawEffectEngine: Send + Sync {
+    /// Prepare the engine (set sample rate, calculate coefficients)
+    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+
     /// Process audio in-place using the shared base state.
-    fn process(&mut self, base: &mut EffectBase, buffer: &mut [f32]);
+    fn process(
+        &mut self,
+        base: &mut crate::plugin::effect_base::StandardEffectBase,
+        buffer: &mut [f32],
+    );
 
     /// Reset internal effect state (delay lines, etc.)
     fn reset(&mut self);
@@ -185,6 +193,18 @@ pub trait RawEffectEngine: Send + Sync {
         Self: Sized;
 }
 
+pub trait EffectEngine<B: EffectBase>: Send + Sync {
+    fn name(&self) -> &str;
+    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    fn reset(&mut self);
+    /// Engine receives the generic Base, allowing it to read custom state
+    fn process(&mut self, base: &mut B, buffer: &mut [f32]);
+    fn get_custom_parameter(&self, id: u32) -> Option<f32>;
+    fn set_custom_parameter(&mut self, id: u32, value: f32);
+    fn default_parameters(&self) -> HashMap<u32, f32>;
+    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+}
+
 // ============================================================================
 // SYNTH WRAPPER
 // ============================================================================
@@ -192,21 +212,21 @@ pub trait RawEffectEngine: Send + Sync {
 /// Wrapper that adds automation and base parameters to any synth engine.
 /// Implements `KarbeatGenerator` so it can be used directly in the audio engine.
 #[derive(Clone)]
-pub struct SynthWrapper<T: RawSynthEngine + Clone> {
+pub struct RawSynthWrapper<T: RawSynthEngine + Clone> {
     /// The custom synth engine (oscillators, wavetables, etc.)
     pub engine: T,
     /// Shared synth state (voices, filter, envelope, gain)
-    pub base: SynthBase,
+    pub base: StandardSynthBase,
     /// Automation lanes for parameter modulation
     pub automation: AutomationManager,
 }
 
-impl<T: RawSynthEngine + Clone> SynthWrapper<T> {
+impl<T: RawSynthEngine + Clone> RawSynthWrapper<T> {
     /// Create a new wrapped synth with default settings
     pub fn new(engine: T, sample_rate: f32) -> Self {
         Self {
             engine,
-            base: SynthBase::new(sample_rate),
+            base: StandardSynthBase::new(sample_rate),
             automation: AutomationManager::new(),
         }
     }
@@ -233,7 +253,7 @@ impl<T: RawSynthEngine + Clone> SynthWrapper<T> {
     }
 }
 
-impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for SynthWrapper<T> {
+impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for RawSynthWrapper<T> {
     fn name(&self) -> &str {
         T::name()
     }
@@ -264,7 +284,7 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for SynthWrapper<T> {
     }
 
     fn default_parameters(&self) -> HashMap<u32, f32> {
-        let mut params = SynthBase::default_parameters();
+        let mut params = StandardSynthBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
     }
@@ -285,23 +305,23 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for SynthWrapper<T> {
 /// Wrapper that adds automation and base parameters to any effect engine.
 /// Implements `KarbeatEffect` so it can be used directly in the audio engine.
 #[derive(Clone)]
-pub struct EffectWrapper<T: RawEffectEngine + Clone> {
+pub struct RawEffectWrapper<T: RawEffectEngine + Clone> {
     /// The custom effect engine (reverb, delay, etc.)
     pub engine: T,
     /// Shared effect state (bypass, mix)
-    pub base: EffectBase,
+    pub base: StandardEffectBase,
     /// Automation lanes for parameter modulation
     pub automation: AutomationManager,
     /// Buffer for dry signal (for mix processing)
     dry_buffer: Vec<f32>,
 }
 
-impl<T: RawEffectEngine + Clone> EffectWrapper<T> {
+impl<T: RawEffectEngine + Clone> RawEffectWrapper<T> {
     /// Create a new wrapped effect with default settings
     pub fn new(engine: T, sample_rate: f32) -> Self {
         Self {
             engine,
-            base: EffectBase::new(sample_rate),
+            base: StandardEffectBase::new(sample_rate),
             automation: AutomationManager::new(),
             dry_buffer: Vec::new(),
         }
@@ -322,13 +342,13 @@ impl<T: RawEffectEngine + Clone> EffectWrapper<T> {
     }
 
     pub fn get_all_parameters(&self) -> Vec<PluginParameter> {
-        let mut params = self.base.get_parameter_specs();
+        let mut params = StandardEffectBase::get_parameter_specs();
         params.extend(self.engine.get_parameter_specs());
         params
     }
 }
 
-impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for EffectWrapper<T> {
+impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for RawEffectWrapper<T> {
     fn name(&self) -> &str {
         T::name()
     }
@@ -377,13 +397,136 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for EffectWrapper<T> {
     }
 
     fn default_parameters(&self) -> HashMap<u32, f32> {
-        let mut params = EffectBase::default_parameters();
+        let mut params = StandardEffectBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
     }
 
     fn get_parameter_specs(&self) -> Vec<PluginParameter> {
         self.get_all_parameters()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+// ================= CUSTOMIZABLE EFFECT WRAPPER ====================
+
+pub struct EffectWrapper<E, B>
+where
+    B: EffectBase,
+    E: EffectEngine<B>,
+{
+    base: B,
+    engine: E,
+    dry_buffer: Vec<f32>,
+    automation: AutomationManager,
+}
+
+impl<E, B> EffectWrapper<E, B>
+where
+    B: EffectBase,
+    E: EffectEngine<B>,
+{
+    pub fn new(base: B, engine: E) -> Self {
+        Self {
+            base,
+            engine,
+            dry_buffer: Vec::new(),
+            automation: AutomationManager::new(),
+        }
+    }
+
+    /// Apply automation values at the given time in ticks
+    pub fn apply_automation(&mut self, time_ticks: u32) {
+        for (param_id, value) in self.automation.get_values_at(time_ticks) {
+            self.set_parameter_internal(param_id, value);
+        }
+    }
+
+
+    /// Internal parameter setter (routes to base or engine)
+    fn set_parameter_internal(&mut self, id: u32, value: f32) {
+        if !self.base.set_parameter(id, value) {
+            self.engine.set_custom_parameter(id, value);
+        }
+    }
+
+    pub fn get_all_parameters(&self) -> Vec<PluginParameter> {
+        let mut params = B::get_parameter_specs();
+        params.extend(self.engine.get_parameter_specs());
+        params
+    }
+}
+
+// Implement KarbeatEffect for the Wrapper
+impl<E, B> KarbeatEffect for EffectWrapper<E, B>
+where
+    B: EffectBase + 'static + Send + Sync,
+    E: EffectEngine<B> + 'static + Send + Sync,
+{
+    fn name(&self) -> &str {
+        self.engine.name()
+    }
+
+    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
+        // Now calling custom prepare logic!
+        self.base.prepare(sample_rate, max_buffer_size);
+        self.engine.prepare(sample_rate, max_buffer_size);
+
+        if self.dry_buffer.len() < max_buffer_size * 2 {
+            self.dry_buffer.resize(max_buffer_size * 2, 0.0);
+        }
+    }
+
+    fn reset(&mut self) {
+        self.base.reset();
+        self.engine.reset();
+    }
+
+    fn process(&mut self, buffer: &mut [f32]) {
+        // Use the trait's bypass check
+        if self.base.is_bypass() {
+            return;
+        }
+
+        let buf_len = buffer.len();
+        if self.dry_buffer.len() < buf_len {
+            self.dry_buffer.resize(buf_len, 0.0);
+        }
+        self.dry_buffer[..buf_len].copy_from_slice(buffer);
+
+        // Pass the generic base to the engine
+        self.engine.process(&mut self.base, buffer);
+
+        // Use the trait's mix function
+        self.base.apply_mix(&self.dry_buffer[..buf_len], buffer);
+    }
+
+    fn set_parameter(&mut self, id: u32, value: f32) {
+        if !self.base.set_parameter(id, value) {
+            self.engine.set_custom_parameter(id, value);
+        }
+    }
+
+    fn get_parameter(&self, id: u32) -> f32 {
+        self.base
+            .get_parameter(id)
+            .or_else(|| self.engine.get_custom_parameter(id))
+            .unwrap_or(0.0)
+    }
+
+    fn default_parameters(&self) -> HashMap<u32, f32> {
+        let mut map = B::default_parameters();
+        map.extend(self.engine.default_parameters());
+        map
+    }
+
+    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        let mut specs = B::get_parameter_specs();
+        specs.extend(self.engine.get_parameter_specs());
+        specs
     }
 
     fn as_any(&self) -> &dyn Any {

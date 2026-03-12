@@ -6,6 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// Event struct for playback position that will be sent to Frontend side
 class PlaybackPosition {
   final int samples;
   final int beat;

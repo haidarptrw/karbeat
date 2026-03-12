@@ -108,6 +108,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
+  UiEffectTarget dco_decode_box_autoadd_ui_effect_target(dynamic raw);
+
+  @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
   @protected
@@ -479,6 +482,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  UiEffectTarget sse_decode_box_autoadd_ui_effect_target(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
@@ -917,6 +925,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_ui_effect_target(
+    UiEffectTarget self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_ui_mixer_channel(

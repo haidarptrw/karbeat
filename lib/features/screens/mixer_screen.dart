@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/plugins/effects/karbeat_parametric_eq.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
@@ -485,8 +486,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => KarbeatParametricEq(
-                                    // Pass whatever your screen needs here
-                                    trackId: _selectedChannelId!,
+                                    target: isMaster
+                                        ? const plugin_api.UiEffectTarget.master()
+                                        : _isSelectedBus
+                                        ? plugin_api.UiEffectTarget.bus(
+                                            _selectedChannelId!,
+                                          )
+                                        : plugin_api.UiEffectTarget.track(
+                                            _selectedChannelId!,
+                                          ),
                                     effectIdx: effect.id,
                                   ),
                                 ),

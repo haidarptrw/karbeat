@@ -3,8 +3,8 @@
 use std::{collections::HashMap, f32::consts::PI};
 
 use crate::core::project::plugin::{MidiEvent, MidiMessage};
-use crate::plugin::synth_base::{AdsrSettings, SynthBase, SynthVoice};
-use crate::plugin::wrapper::{RawSynthEngine, SynthWrapper};
+use crate::plugin::synth_base::{AdsrSettings, StandardSynthBase, SynthVoice};
+use crate::plugin::wrapper::{RawSynthEngine, RawSynthWrapper};
 
 // ============================================================================
 // SYNTH-SPECIFIC TYPES
@@ -153,7 +153,7 @@ impl RawSynthEngine for KarbeatzerEngine {
 
     fn process(
         &mut self,
-        base: &mut SynthBase,
+        base: &mut StandardSynthBase,
         output_buffer: &mut [f32],
         midi_events: &[MidiEvent],
     ) {
@@ -460,9 +460,9 @@ impl RawSynthEngine for KarbeatzerEngine {
 // ============================================================================
 
 /// The full Karbeatzer V2 synth (Subtractive Synthesizer).
-pub type KarbeatzerV2 = SynthWrapper<KarbeatzerEngine>;
+pub type KarbeatzerV2 = RawSynthWrapper<KarbeatzerEngine>;
 
 /// Helper to create a new Karbeatzer instance
 pub fn create_karbeatzer(sample_rate: Option<f32>) -> KarbeatzerV2 {
-    SynthWrapper::new(KarbeatzerEngine::default(), sample_rate.unwrap_or(48000.0))
+    RawSynthWrapper::new(KarbeatzerEngine::default(), sample_rate.unwrap_or(48000.0))
 }

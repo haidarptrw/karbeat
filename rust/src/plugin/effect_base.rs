@@ -7,6 +7,20 @@ use std::collections::HashMap;
 
 use crate::plugin::wrapper::PluginParameter;
 
+pub trait EffectBase: Send + Sync + Clone {
+    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    fn reset(&mut self);
+    fn is_bypass(&self) -> bool;
+    fn apply_mix(&self, dry_buffer: &[f32], wet_buffer: &mut [f32]);
+
+    /// Returns true if the parameter was handled by the base
+    fn set_parameter(&mut self, id: u32, value: f32) -> bool;
+    fn get_parameter(&self, id: u32) -> Option<f32>;
+
+    fn default_parameters() -> HashMap<u32, f32>;
+    fn get_parameter_specs() -> Vec<PluginParameter>;
+}
+
 // ============================================================================
 // EFFECT BASE (Composition Pattern)
 // ============================================================================
@@ -23,19 +37,19 @@ use crate::plugin::wrapper::PluginParameter;
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct EffectBase {
+pub struct StandardEffectBase {
     pub sample_rate: f32,
     pub bypass: bool,
     pub mix: f32, // Dry/wet mix (0.0 = fully dry, 1.0 = fully wet)
 }
 
-impl Default for EffectBase {
+impl Default for StandardEffectBase {
     fn default() -> Self {
         Self::new(48000.0)
     }
 }
 
-impl EffectBase {
+impl StandardEffectBase {
     /// Create a new EffectBase with the given sample rate
     pub fn new(sample_rate: f32) -> Self {
         Self {
@@ -112,10 +126,10 @@ impl EffectBase {
         map
     }
 
-    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+    pub fn get_parameter_specs() -> Vec<PluginParameter> {
         vec![
-            PluginParameter::new_bool(0, "Bypass", "General", self.bypass, false),
-            PluginParameter::new_float(1, "Mix", "General", self.mix, 0.0, 1.0, 1.0),
+            PluginParameter::new_bool(0, "Bypass", "General", false, false),
+            PluginParameter::new_float(1, "Mix", "General", 1.0, 0.0, 1.0, 1.0),
         ]
     }
 

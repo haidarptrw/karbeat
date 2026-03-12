@@ -138,10 +138,10 @@ Future<void> syncEffectParametersFromAudio({
 /// Creates a temporary plugin instance from the registry to query static parameter
 /// specs, then overlays the current stored parameter values.
 Future<List<UiPluginParameter>> getEffectParameterSpecs({
-  required int trackId,
+  required UiEffectTarget target,
   required int effectId,
 }) => RustLib.instance.api.crateApiPluginGetEffectParameterSpecs(
-  trackId: trackId,
+  target: target,
   effectId: effectId,
 );
 
@@ -150,12 +150,12 @@ Future<List<UiPluginParameter>> getEffectParameterSpecs({
 /// Sends a command to the audio thread to update the parameter and also
 /// persists the value in the stored PluginInstance parameters.
 Future<void> setEffectParameter({
-  required int trackId,
+  required UiEffectTarget target,
   required int effectId,
   required int paramId,
   required double value,
 }) => RustLib.instance.api.crateApiPluginSetEffectParameter(
-  trackId: trackId,
+  target: target,
   effectId: effectId,
   paramId: paramId,
   value: value,
@@ -166,10 +166,10 @@ Future<void> setEffectParameter({
 /// The audio thread will respond via AudioFeedback::EffectParameterSnapshot,
 /// which can be polled using `poll_effect_parameter_feedback`.
 Future<void> queryEffectParameters({
-  required int trackId,
+  required UiEffectTarget target,
   required int effectId,
 }) => RustLib.instance.api.crateApiPluginQueryEffectParameters(
-  trackId: trackId,
+  target: target,
   effectId: effectId,
 );
 
@@ -178,11 +178,11 @@ Future<void> queryEffectParameters({
 /// Creates a temporary plugin instance, applies stored parameters, and evaluates
 /// the exact biquad transfer function at log-spaced frequency points.
 Future<List<UiResponseCurvePoint>> getEqResponseCurve({
-  required int trackId,
+  required UiEffectTarget target,
   required int effectId,
   required int numPoints,
 }) => RustLib.instance.api.crateApiPluginGetEqResponseCurve(
-  trackId: trackId,
+  target: target,
   effectId: effectId,
   numPoints: numPoints,
 );

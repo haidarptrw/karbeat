@@ -68,7 +68,7 @@ class EqBand {
 class KarbeatParametricEq extends AbstractEffectScreen {
   const KarbeatParametricEq({
     Key? key,
-    required super.trackId,
+    required super.target,
     required super.effectIdx,
   }) : super(key: key);
 
@@ -128,7 +128,7 @@ class KarbeatParametricEqState
   Future<void> _fetchResponseCurve() async {
     try {
       final curve = await plugin_api.getEqResponseCurve(
-        trackId: widget.trackId,
+        target: widget.target,
         effectId: widget.effectIdx,
         numPoints: 200,
       );
@@ -138,6 +138,50 @@ class KarbeatParametricEqState
     } catch (e) {
       debugPrint('Error fetching EQ response curve: $e');
     }
+  }
+
+  @override
+  void onParametersUpdated() {
+    if (parameters.isEmpty) return;
+
+    setState(() {
+      for (final p in parameters) {
+        if (p.group == 'Master' && p.name == 'Base Gain') {
+          masterGain = p.value;
+          continue;
+        }
+
+        final match = RegExp(r'Band (\d+)').firstMatch(p.group);
+        if (match != null) {
+          final bandIndex = int.parse(match.group(1)!) - 1;
+          if (bandIndex >= 0 && bandIndex < bands.length) {
+            final band = bands[bandIndex];
+            switch (p.name) {
+              case 'Active':
+                band.active = p.value > 0.5;
+                break;
+              case 'Type':
+                band.filterType = p.value.toInt();
+                break;
+              case 'Frequency':
+                band.freq = p.value;
+                break;
+              case 'Q':
+                band.q = p.value;
+                break;
+              case 'Gain':
+                band.gain = p.value;
+                break;
+              case 'Slope':
+                band.order = p.value.toInt();
+                break;
+            }
+          }
+        }
+      }
+    });
+
+    _fetchResponseCurve();
   }
 
   void _initDefaultBands() {
