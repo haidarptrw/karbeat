@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use crate::core::project::plugin::{KarbeatEffect, KarbeatGenerator};
 use crate::plugin::effect::parametric_eq::create_parametric_eq;
 use crate::plugin::generator::karbeatzer_v2::create_karbeatzer;
+use crate::plugin::wrapper::PluginParameter;
 
 /// A function pointer type that creates a new Generator instance
 type GeneratorFactory = Box<dyn Fn() -> Box<dyn KarbeatGenerator + Send + Sync> + Send + Sync>;
@@ -16,12 +17,14 @@ type EffectFactory = Box<dyn Fn() -> Box<dyn KarbeatEffect + Send + Sync> + Send
 struct RegisteredGenerator {
     name: String,
     factory: GeneratorFactory,
+    parameter_specs: Vec<PluginParameter>,
 }
 
 /// Metadata stored for each registered effect
 struct RegisteredEffect {
     name: String,
     factory: EffectFactory,
+    parameter_specs: Vec<PluginParameter>,
 }
 
 /// Information about a registered plugin (for UI display)
@@ -78,11 +81,15 @@ impl PluginRegistry {
         let id = self.generator_id_counter;
         self.generator_id_counter += 1;
 
+        let temp_plugin = factory();
+        let parameter_specs = temp_plugin.get_parameter_specs();
+
         self.generators.insert(
             id,
             RegisteredGenerator {
                 name: name.to_string(),
                 factory: Box::new(factory),
+                parameter_specs,
             },
         );
         id
@@ -97,11 +104,15 @@ impl PluginRegistry {
         let id = self.effect_id_counter;
         self.effect_id_counter += 1;
 
+        let temp_plugin = factory();
+        let parameter_specs = temp_plugin.get_parameter_specs();
+
         self.effects.insert(
             id,
             RegisteredEffect {
                 name: name.to_string(),
                 factory: Box::new(factory),
+                parameter_specs,
             },
         );
         id
@@ -131,6 +142,22 @@ impl PluginRegistry {
             let plugin = (reg.factory)();
             (plugin, reg.name.clone())
         })
+    }
+
+    // =========================================================================
+    // Cached Parameter Specs
+    // =========================================================================
+
+    /// Get cached parameter specs for a generator by registry ID
+    pub fn get_generator_parameter_specs_by_id(&self, id: u32) -> Option<Vec<PluginParameter>> {
+        self.generators
+            .get(&id)
+            .map(|reg| reg.parameter_specs.clone())
+    }
+
+    /// Get cached parameter specs for an effect by registry ID
+    pub fn get_effect_parameter_specs_by_id(&self, id: u32) -> Option<Vec<PluginParameter>> {
+        self.effects.get(&id).map(|reg| reg.parameter_specs.clone())
     }
 
     // =========================================================================

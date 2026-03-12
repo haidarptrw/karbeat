@@ -196,21 +196,18 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
         .map_err(|e| format!("Failed to read generator lock: {}", e))?;
 
     if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
-        // Create a temporary plugin instance to get static parameter specs.
-        // Use registry_id if available (preferred), otherwise fall back to name lookup.
         let registry = ctx().plugin_registry.read().unwrap();
 
         // Try ID-based lookup first (preferred), then fall back to name
-        let temp_plugin = if plugin_instance.registry_id > 0 {
-            registry
-                .create_generator_by_id(plugin_instance.registry_id)
-                .map(|(plugin, _)| plugin)
+        let specs = if plugin_instance.registry_id > 0 {
+            registry.get_generator_parameter_specs_by_id(plugin_instance.registry_id)
         } else {
-            registry.create_generator(&plugin_instance.name)
+            registry
+                .get_generator_id_by_name(&plugin_instance.name)
+                .and_then(|id| registry.get_generator_parameter_specs_by_id(id))
         };
 
-        if let Some(temp_plugin) = temp_plugin {
-            let specs = temp_plugin.get_parameter_specs();
+        if let Some(specs) = specs {
             let ui_specs: Vec<UiPluginParameter> = specs
                 .into_iter()
                 .map(|p| {
@@ -633,16 +630,15 @@ pub fn get_effect_parameter_specs(
     // Create a temporary plugin instance to get static parameter specs
     let registry = ctx().plugin_registry.read().unwrap();
 
-    let temp_plugin = if plugin_registry_id > 0 {
-        registry
-            .create_effect_by_id(plugin_registry_id)
-            .map(|(plugin, _)| plugin)
+    let specs = if plugin_registry_id > 0 {
+        registry.get_effect_parameter_specs_by_id(plugin_registry_id)
     } else {
-        registry.create_effect(&plugin_name)
+        registry
+            .get_effect_id_by_name(&plugin_name)
+            .and_then(|id| registry.get_effect_parameter_specs_by_id(id))
     };
 
-    if let Some(temp_plugin) = temp_plugin {
-        let specs = temp_plugin.get_parameter_specs();
+    if let Some(specs) = specs {
         let ui_specs: Vec<UiPluginParameter> = specs
             .into_iter()
             .map(|p| {
