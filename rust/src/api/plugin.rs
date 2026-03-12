@@ -5,7 +5,9 @@ use crate::{
     broadcast_state_change,
     commands::{AudioCommand, AudioFeedback, EffectTarget},
     core::project::{
-        TrackId, generator::{GeneratorId, GeneratorInstanceType}, mixer::{BusId, EffectId}
+        generator::{GeneratorId, GeneratorInstanceType},
+        mixer::{BusId, EffectId},
+        TrackId,
     },
     ctx,
     plugin::wrapper::ParameterValueType,
@@ -55,11 +57,16 @@ pub struct UiPluginParameter {
 // PLUGIN API FUNCTIONS
 // ============================================================================
 
-/// Plugin info with ID for UI display
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum KarbeatPluginType {
+    Generator,
+    Effect,
+}
 #[derive(Clone, Debug)]
 pub struct UiPluginInfo {
     pub id: u32,
     pub name: String,
+    pub plugin_type: KarbeatPluginType,
 }
 
 /// Get all available generators in Plugin Registry (names only, backwards compatible)
@@ -83,6 +90,7 @@ pub fn get_available_generators_with_ids() -> Result<Vec<UiPluginInfo>, String> 
         .map(|p| UiPluginInfo {
             id: p.id,
             name: p.name,
+            plugin_type: KarbeatPluginType::Generator,
         })
         .collect())
 }
@@ -96,6 +104,7 @@ pub fn get_available_effects_with_ids() -> Result<Vec<UiPluginInfo>, String> {
         .map(|p| UiPluginInfo {
             id: p.id,
             name: p.name,
+            plugin_type: KarbeatPluginType::Effect,
         })
         .collect())
 }
@@ -131,6 +140,37 @@ pub fn get_effect(track_id: u32, effect_id: u32) -> Result<UiEffectInstance, Str
         .find(|e| e.id.to_u32() == effect_id)
         .ok_or("Effect instance not found".to_owned())?;
     Ok(effect.into())
+}
+
+pub fn get_effect_from_master(effect_id: u32) -> Result<UiEffectInstance, String> {
+    let app = get_app_read();
+    let mixer_state = &app.mixer;
+    let channel = mixer_state.master_bus.as_ref();
+    let effect = channel
+        .effects
+        .iter()
+        .find(|e| e.id.to_u32() == effect_id)
+        .ok_or("Effect instance not found".to_owned())?;
+    Ok(effect.into())
+}
+
+pub fn get_effects_from_track(track_id: u32) -> Result<Vec<UiEffectInstance>, String> {
+    let app = get_app_read();
+    let mixer_state = &app.mixer;
+    let channel = mixer_state
+        .channels
+        .get(&track_id.into())
+        .ok_or("Channel not found".to_owned())?;
+    let effects = channel.effects.iter().map(|e| e.into()).collect();
+    Ok(effects)
+}
+
+pub fn get_master_effects() -> Result<Vec<UiEffectInstance>, String> {
+    let app = get_app_read();
+    let mixer_state = &app.mixer;
+    let master_channel = mixer_state.master_bus.as_ref();
+    let effects = master_channel.effects.iter().map(|e| e.into()).collect();
+    Ok(effects)
 }
 
 /// Get parameter specifications for a generator plugin.
@@ -305,7 +345,7 @@ impl From<EffectTarget> for UiEffectTarget {
             EffectTarget::Bus(bus_id) => UiEffectTarget::Bus(bus_id.into()),
         }
     }
-}   
+}
 
 #[derive(Clone, Debug)]
 pub struct UiEffectParameterSnapshot {
@@ -501,4 +541,216 @@ pub fn sync_effect_parameters_from_audio(snapshots: &[UiEffectParameterSnapshot]
             }
         }
     }
+}
+
+// ============================================================================
+// EFFECT PARAMETER API (mirrors Generator Parameter API)
+// ============================================================================
+
+/// Get parameter specifications for a track effect plugin.
+///
+/// Creates a temporary plugin instance from the registry to query static parameter
+/// specs, then overlays the current stored parameter values.
+pub fn get_effect_parameter_specs(
+    track_id: u32,
+    effect_id: u32,
+) -> Result<Vec<UiPluginParameter>, String> {
+    let app = get_app_read();
+    let track_id_typed = TrackId::from(track_id);
+    let effect_id_typed = EffectId::from(effect_id);
+
+    let channel = app
+        .mixer
+        .channels
+        .get(&track_id_typed)
+        .ok_or_else(|| format!("Track channel {} not found", track_id))?;
+
+    let effect = channel
+        .effects
+        .iter()
+        .find(|e| e.id == effect_id_typed)
+        .ok_or_else(|| format!("Effect {} not found on track {}", effect_id, track_id))?;
+
+    let plugin_instance = &*effect.instance;
+
+    // Create a temporary plugin instance to get static parameter specs
+    let registry = ctx().plugin_registry.read().unwrap();
+
+    let temp_plugin = if plugin_instance.registry_id > 0 {
+        registry
+            .create_effect_by_id(plugin_instance.registry_id)
+            .map(|(plugin, _)| plugin)
+    } else {
+        registry.create_effect(&plugin_instance.name)
+    };
+
+    if let Some(temp_plugin) = temp_plugin {
+        let specs = temp_plugin.get_parameter_specs();
+        let ui_specs: Vec<UiPluginParameter> = specs
+            .into_iter()
+            .map(|p| {
+                // Use stored parameter value if available, otherwise default
+                let value = plugin_instance
+                    .parameters
+                    .get(&p.id)
+                    .copied()
+                    .unwrap_or(p.default_value);
+
+                UiPluginParameter {
+                    id: p.id,
+                    name: p.name,
+                    group: p.group,
+                    value,
+                    min: p.min,
+                    max: p.max,
+                    default_value: p.default_value,
+                    step: p.step,
+                    param_type: UiParameterType::from(p.value_type),
+                    choices: p.choices,
+                }
+            })
+            .collect();
+
+        Ok(ui_specs)
+    } else {
+        Err(format!(
+            "Effect '{}' (registry_id={}) not found in registry",
+            plugin_instance.name, plugin_instance.registry_id
+        ))
+    }
+}
+
+/// Set a parameter on a track effect plugin.
+///
+/// Sends a command to the audio thread to update the parameter and also
+/// persists the value in the stored PluginInstance parameters.
+pub fn set_effect_parameter(
+    track_id: u32,
+    effect_id: u32,
+    param_id: u32,
+    value: f32,
+) -> Result<(), String> {
+    let track_id_typed = TrackId::from(track_id);
+    let effect_id_typed = EffectId::from(effect_id);
+
+    // Send command to audio thread (lock-free)
+    if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+        let _ = sender.push(AudioCommand::SetTrackEffectParameter {
+            track_id: track_id_typed,
+            effect_id: effect_id_typed,
+            param_id,
+            value,
+        });
+    }
+
+    // Also update the stored parameter value for persistence
+    {
+        let mut app = get_app_write();
+
+        if let Some(channel_arc) = app.mixer.channels.get_mut(&track_id_typed) {
+            let channel = Arc::make_mut(channel_arc);
+            if let Some(effect) = channel.effects.iter_mut().find(|e| e.id == effect_id_typed) {
+                let plugin = Arc::make_mut(&mut effect.instance);
+                plugin.parameters.insert(param_id, value);
+            }
+        }
+    }
+
+    broadcast_state_change();
+    Ok(())
+}
+
+/// Request a parameter snapshot from the audio thread for a track effect.
+///
+/// The audio thread will respond via AudioFeedback::EffectParameterSnapshot,
+/// which can be polled using `poll_effect_parameter_feedback`.
+pub fn query_effect_parameters(track_id: u32, effect_id: u32) -> Result<(), String> {
+    let track_id_typed = TrackId::from(track_id);
+    let effect_id_typed = EffectId::from(effect_id);
+
+    if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+        sender
+            .push(AudioCommand::QueryTrackEffectParameters {
+                track_id: track_id_typed,
+                effect_id: effect_id_typed,
+            })
+            .map_err(|_| "Command queue full".to_string())?;
+        Ok(())
+    } else {
+        Err("Audio stream not initialized".to_string())
+    }
+}
+
+// ============================================================================
+// EQ RESPONSE CURVE API
+// ============================================================================
+
+/// A point on the EQ response curve (DTO for FRB)
+#[derive(Clone, Debug)]
+pub struct UiResponseCurvePoint {
+    pub frequency: f32,
+    pub magnitude_db: f32,
+}
+
+/// Compute the magnitude response curve for a parametric EQ effect on a track.
+///
+/// Creates a temporary plugin instance, applies stored parameters, and evaluates
+/// the exact biquad transfer function at log-spaced frequency points.
+pub fn get_eq_response_curve(
+    track_id: u32,
+    effect_id: u32,
+    num_points: u32,
+) -> Result<Vec<UiResponseCurvePoint>, String> {
+    let app = get_app_read();
+    let track_id_typed = TrackId::from(track_id);
+    let effect_id_typed = EffectId::from(effect_id);
+
+    let channel = app
+        .mixer
+        .channels
+        .get(&track_id_typed)
+        .ok_or_else(|| format!("Track channel {} not found", track_id))?;
+
+    let effect = channel
+        .effects
+        .iter()
+        .find(|e| e.id == effect_id_typed)
+        .ok_or_else(|| format!("Effect {} not found on track {}", effect_id, track_id))?;
+
+    let plugin_instance = &*effect.instance;
+
+    // Create a temporary plugin from registry
+    let registry = ctx().plugin_registry.read().unwrap();
+    let temp_plugin = if plugin_instance.registry_id > 0 {
+        registry
+            .create_effect_by_id(plugin_instance.registry_id)
+            .map(|(plugin, _)| plugin)
+    } else {
+        registry.create_effect(&plugin_instance.name)
+    };
+
+    let mut temp_plugin = temp_plugin
+        .ok_or_else(|| format!("Effect '{}' not found in registry", plugin_instance.name))?;
+
+    // Apply stored parameters to the temp plugin
+    for (&param_id, &value) in &plugin_instance.parameters {
+        temp_plugin.set_parameter(param_id, value);
+    }
+
+    // Downcast to KarbeatParametricEQ to access compute_magnitude_response
+    use crate::plugin::effect::parametric_eq::KarbeatParametricEQ;
+    let eq = temp_plugin
+        .as_any()
+        .downcast_ref::<KarbeatParametricEQ>()
+        .ok_or_else(|| "Effect is not a Parametric EQ".to_string())?;
+
+    let response = eq.engine.compute_magnitude_response(num_points as usize);
+
+    Ok(response
+        .into_iter()
+        .map(|(freq, mag_db)| UiResponseCurvePoint {
+            frequency: freq,
+            magnitude_db: mag_db,
+        })
+        .collect())
 }

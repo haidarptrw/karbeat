@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use flutter_rust_bridge::frb;
+
 use crate::{
     broadcast_state_change,
     commands::AudioCommand,
@@ -12,9 +14,9 @@ use crate::{
     utils::lock::{get_app_read, get_app_write},
 };
 
-/// ======================================
-/// Type Definitions
-/// ======================================
+// ======================================
+// Type Definitions
+// ======================================
 
 /// Lightweight event pushed to Flutter when a mixer param changes
 /// from the backend (automation, undo, or any non-UI source).
@@ -83,35 +85,47 @@ impl From<&MixerBus> for UiBus {
 
 /// UI representation of a routing connection.
 pub struct UiRoutingConnection {
-    /// 0=Track, 1=Bus, 2=Master
-    pub source_type: u32,
-    pub source_id: u32,
-    /// 0=Track, 1=Bus, 2=Master
-    pub dest_type: u32,
-    pub dest_id: u32,
+    pub source: UiRoutingNode,
+    pub destination: UiRoutingNode,
     pub send_level: f32,
     pub is_send: bool,
 }
 
 impl From<&RoutingConnection> for UiRoutingConnection {
     fn from(value: &RoutingConnection) -> Self {
-        let (source_type, source_id) = match value.source {
-            RoutingNode::Track(id) => (0, id.to_u32()),
-            RoutingNode::Bus(id) => (1, id.to_u32()),
-            RoutingNode::Master => (2, 0),
-        };
-        let (dest_type, dest_id) = match value.destination {
-            RoutingNode::Track(id) => (0, id.to_u32()),
-            RoutingNode::Bus(id) => (1, id.to_u32()),
-            RoutingNode::Master => (2, 0),
-        };
         Self {
-            source_type,
-            source_id,
-            dest_type,
-            dest_id,
+            source: (&value.source).into(),
+            destination: (&value.destination).into(),
             send_level: value.send_level,
             is_send: value.is_send,
+        }
+    }
+}
+
+/// UI DTO describing a routing node (Track, Bus, Master).
+#[frb]
+pub enum UiRoutingNode {
+    Track(u32),
+    Bus(u32),
+    Master,
+}
+
+impl From<&RoutingNode> for UiRoutingNode {
+    fn from(value: &RoutingNode) -> Self {
+        match value {
+            RoutingNode::Track(id) => UiRoutingNode::Track(id.to_u32()),
+            RoutingNode::Bus(id) => UiRoutingNode::Bus(id.to_u32()),
+            RoutingNode::Master => UiRoutingNode::Master,
+        }
+    }
+}
+
+impl Into<RoutingNode> for &UiRoutingNode {
+    fn into(self) -> RoutingNode {
+        match self {
+            UiRoutingNode::Track(id) => RoutingNode::Track((*id).into()),
+            UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(*id)),
+            UiRoutingNode::Master => RoutingNode::Master,
         }
     }
 }
@@ -120,7 +134,7 @@ impl From<&RoutingConnection> for UiRoutingConnection {
 pub struct UiMixerState {
     pub channels: HashMap<u32, UiMixerChannel>,
     pub master_bus: UiMixerChannel,
-    pub buses: Vec<UiBus>,
+    pub buses: HashMap<u32, UiBus>,
     pub routing: Vec<UiRoutingConnection>,
 }
 
@@ -133,7 +147,11 @@ impl From<&MixerState> for UiMixerState {
                 .map(|(id, channel)| (id.to_u32(), channel.as_ref().into()))
                 .collect(),
             master_bus: value.master_bus.as_ref().into(),
-            buses: value.buses.values().map(|b| b.as_ref().into()).collect(),
+            buses: value
+                .buses
+                .iter()
+                .map(|(id, bus)| (id.to_u32(), bus.as_ref().into()))
+                .collect(),
             routing: value.routing.iter().map(|c| c.into()).collect(),
         }
     }
@@ -151,6 +169,28 @@ impl From<&EffectInstance> for UiEffectInstance {
             id: value.id.to_u32(),
             name: value.instance.name.clone(),
             parameters: value.instance.parameters.clone(),
+        }
+    }
+}
+
+impl UiMixerState {
+    #[frb(sync)]
+    pub fn new() -> Self {
+        Self::from(&MixerState::default())
+    }
+
+    #[frb(sync)]
+    pub fn new_with_param(
+        channels: HashMap<u32, UiMixerChannel>,
+        master_bus: UiMixerChannel,
+        buses: HashMap<u32, UiBus>,
+        routing: Vec<UiRoutingConnection>,
+    ) -> Self {
+        Self {
+            channels,
+            master_bus,
+            buses,
+            routing,
         }
     }
 }
@@ -233,7 +273,9 @@ pub fn get_mixer_channel(track_id: u32) -> Result<UiMixerChannel, String> {
         .map(|c| c.as_ref().into())
 }
 
-pub fn get_mixer_channel_populated(track_id: u32) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
+pub fn get_mixer_channel_populated(
+    track_id: u32,
+) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
     let app = get_app_read();
     let mixer_state = &app.mixer;
     let channel = mixer_state.channels.get(&track_id.into());
@@ -262,12 +304,12 @@ pub fn get_master_bus_populated() -> Vec<UiEffectInstance> {
 }
 
 /// **GETTER: Fetch all buses**
-pub fn get_buses() -> Vec<UiBus> {
+pub fn get_buses() -> HashMap<u32, UiBus> {
     let app = get_app_read();
     app.mixer
         .buses
-        .values()
-        .map(|b| b.as_ref().into())
+        .iter()
+        .map(|(i, b)| (i.to_u32(), b.as_ref().into()))
         .collect()
 }
 
@@ -360,20 +402,28 @@ pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Res
         mixer_state
             .add_effect_descriptor_by_id(&track_id.into(), registry_id)
             .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Added effect with registry ID {} to track {}",
+            registry_id,
+            track_id
+        );
     }
     broadcast_state_change();
     Ok(())
 }
 
-/// Add an effect to a mixer channel by name (backwards compatible).
-pub fn add_effect_to_mixer_channel(track_id: u32, effect_name: String) -> Result<(), String> {
+pub fn remove_effect_from_mixer_channel(track_id: u32, effect_instance_id: u32) -> Result<(), String> {
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
-        #[allow(deprecated)]
         mixer_state
-            .add_effect_descriptor(&track_id.into(), &effect_name, "")
+            .remove_effect_by_id(&track_id.into(), effect_instance_id.into())
             .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Removed effect instance ID {} from track {}",
+            effect_instance_id,
+            track_id
+        );
     }
     broadcast_state_change();
     Ok(())
@@ -385,6 +435,25 @@ pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
         app.mixer
             .add_effect_to_master_bus(registry_id)
             .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Added effect with registry ID {} to master bus",
+            registry_id,
+        );
+    }
+    broadcast_state_change();
+    Ok(())
+}
+
+pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.mixer
+            .remove_effect_from_master_bus(effect_instance_id.into())
+            .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Removed effect instance ID {} from master bus",
+            effect_instance_id,
+        );
     }
     broadcast_state_change();
     Ok(())
@@ -443,34 +512,53 @@ pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<
 }
 
 // ======================================
+// BUS EFFECT MANAGEMENT APIs
+// ======================================
+
+/// Add an effect to a bus by its registry ID.
+pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.mixer
+            .add_effect_to_bus(bus_id.into(), registry_id)
+            .map_err(|e| format!("{}", e))?;
+        log::info!(
+            "Added effect with registry ID {} to bus {}",
+            registry_id,
+            bus_id
+        );
+    }
+    broadcast_state_change();
+    Ok(())
+}
+
+pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
+    {
+        let mut app = get_app_write();
+        app.mixer.rename_bus(bus_id.into(), &new_name)?;
+    }
+    broadcast_state_change();
+    Ok(())
+}
+
+// TODO: Implement remove_effect_from_bus when the Audio Engine already
+// handled the RemoveEffectFromBus command
+
+// ======================================
 // ROUTING APIs
 // ======================================
 
 /// Set routing: source → destination with send level.
-/// source_type: 0=Track, 1=Bus
-/// dest_type: 1=Bus, 2=Master
 pub fn set_routing(
-    source_type: u32,
-    source_id: u32,
-    dest_type: u32,
-    dest_id: u32,
+    source: UiRoutingNode,
+    destination: UiRoutingNode,
     send_level: f32,
     is_send: bool,
 ) -> Result<(), String> {
     {
         let mut app = get_app_write();
-
-        let source = match source_type {
-            0 => RoutingNode::Track(source_id.into()),
-            1 => RoutingNode::Bus(BusId::from(source_id)),
-            _ => return Err("Invalid source type".to_string()),
-        };
-
-        let destination = match dest_type {
-            1 => RoutingNode::Bus(BusId::from(dest_id)),
-            2 => RoutingNode::Master,
-            _ => return Err("Invalid destination type".to_string()),
-        };
+        let source: RoutingNode = (&source).into();
+        let destination: RoutingNode = (&destination).into();
 
         let conn = RoutingConnection {
             source,
@@ -494,26 +582,14 @@ pub fn set_routing(
 
 /// Remove a routing connection.
 pub fn remove_routing(
-    source_type: u32,
-    source_id: u32,
-    dest_type: u32,
-    dest_id: u32,
+    source: UiRoutingNode,
+    destination: UiRoutingNode,
     is_send: bool,
 ) -> Result<(), String> {
     {
         let mut app = get_app_write();
-
-        let source = match source_type {
-            0 => RoutingNode::Track(source_id.into()),
-            1 => RoutingNode::Bus(BusId::from(source_id)),
-            _ => return Err("Invalid source type".to_string()),
-        };
-
-        let destination = match dest_type {
-            1 => RoutingNode::Bus(BusId::from(dest_id)),
-            2 => RoutingNode::Master,
-            _ => return Err("Invalid destination type".to_string()),
-        };
+        let source: RoutingNode = (&source).into();
+        let destination: RoutingNode = (&destination).into();
 
         app.mixer.remove_routing(source, destination, is_send)?;
 

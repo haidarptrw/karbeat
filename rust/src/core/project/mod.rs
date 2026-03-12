@@ -1,5 +1,6 @@
 // src/core/project/mod.rs
 
+pub mod automation;
 pub mod clip;
 pub mod clipboard;
 pub mod generator;
@@ -29,7 +30,13 @@ pub use track::{
 };
 pub use transport::TransportState;
 
-use crate::{core::project::mixer::MixerState, define_id};
+use crate::{
+    core::project::{
+        automation::{AutomationId, AutomationLane, AutomationPoint, AutomationTarget},
+        mixer::MixerState,
+    },
+    define_id,
+};
 
 define_id!(SourceId);
 define_id!(NoteId);
@@ -60,6 +67,10 @@ pub struct ApplicationState {
     // Tracks contain Clips, but Clips are just "Containers"
     pub tracks: HashMap<TrackId, Arc<KarbeatTrack>>,
     pub track_counter: u32,
+
+    // Automation lanes pool (lives at the same level as tracks/patterns/generators)
+    pub automation_pool: HashMap<AutomationId, Arc<AutomationLane>>,
+    pub automation_counter: u32,
 
     // Counter for clips
     pub clip_counter: u32,
@@ -233,5 +244,118 @@ impl ApplicationState {
         self.update_max_sample_index();
 
         Ok(source_id)
+    }
+
+    // =========================================================================
+    // Automation Pool Management
+    // =========================================================================
+
+    /// Add an automation lane to the pool.
+    pub fn add_automation_lane(
+        &mut self,
+        target: AutomationTarget,
+        label: impl Into<String>,
+        min: f32,
+        max: f32,
+        default_value: f32,
+    ) -> anyhow::Result<AutomationId> {
+        // Prevent duplicate lanes for the same target
+        if self.automation_pool.values().any(|l| l.target == target) {
+            return Err(anyhow!("Automation lane for this target already exists"));
+        }
+
+        let lane_id = AutomationId::next(&mut self.automation_counter);
+        let lane = AutomationLane::new(lane_id, target, label, min, max, default_value);
+        self.automation_pool.insert(lane_id, Arc::new(lane));
+
+        log::info!("Added automation lane {:?}", lane_id);
+        Ok(lane_id)
+    }
+
+    /// Remove an automation lane from the pool by its ID.
+    pub fn remove_automation_lane(&mut self, lane_id: AutomationId) -> anyhow::Result<()> {
+        if self.automation_pool.remove(&lane_id).is_none() {
+            return Err(anyhow!("Automation lane {:?} not found", lane_id));
+        }
+
+        log::info!("Removed automation lane {:?}", lane_id);
+        Ok(())
+    }
+
+    /// Add an automation point to a lane.
+    pub fn add_automation_point(
+        &mut self,
+        lane_id: AutomationId,
+        point: AutomationPoint,
+    ) -> anyhow::Result<()> {
+        let lane_arc = self
+            .automation_pool
+            .get_mut(&lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+
+        let lane = Arc::make_mut(lane_arc);
+        lane.add_point(point);
+        Ok(())
+    }
+
+    /// Remove an automation point from a lane by its index.
+    pub fn remove_automation_point(
+        &mut self,
+        lane_id: AutomationId,
+        point_index: usize,
+    ) -> anyhow::Result<AutomationPoint> {
+        let lane_arc = self
+            .automation_pool
+            .get_mut(&lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+
+        let lane = Arc::make_mut(lane_arc);
+        lane.remove_point(point_index).ok_or_else(|| {
+            anyhow!(
+                "Point index {} out of bounds (lane has {} points)",
+                point_index,
+                lane.points.len()
+            )
+        })
+    }
+
+    /// Update an automation point (move in time and/or value).
+    pub fn update_automation_point(
+        &mut self,
+        lane_id: AutomationId,
+        point_index: usize,
+        time_ticks: u32,
+        value: f32,
+    ) -> anyhow::Result<()> {
+        let lane_arc = self
+            .automation_pool
+            .get_mut(&lane_id)
+            .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
+
+        let lane = Arc::make_mut(lane_arc);
+        if !lane.update_point(point_index, time_ticks, value) {
+            return Err(anyhow!(
+                "Point index {} out of bounds (lane has {} points)",
+                point_index,
+                lane.points.len()
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Get all automation lanes that reference a specific track.
+    pub fn get_automation_lanes_for_track(&self, track_id: TrackId) -> Vec<Arc<AutomationLane>> {
+        self.automation_pool
+            .values()
+            .filter(|l| l.target.references_track(track_id))
+            .cloned()
+            .collect()
+    }
+
+    /// Remove all automation lanes that reference a track (used when deleting tracks).
+    pub fn remove_automation_lanes_for_track(&mut self, track_id: TrackId) {
+        self.automation_pool
+            .retain(|_, lane| !lane.target.references_track(track_id));
     }
 }

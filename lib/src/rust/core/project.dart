@@ -13,13 +13,30 @@ class AudioHardwareConfig {
   final int bufferSize;
   final double cpuLoad;
 
-  const AudioHardwareConfig({
+  const AudioHardwareConfig.raw({
     required this.selectedInputDevice,
     required this.selectedOutputDevice,
     required this.sampleRate,
     required this.bufferSize,
     required this.cpuLoad,
   });
+
+  factory AudioHardwareConfig() =>
+      RustLib.instance.api.crateCoreProjectAudioHardwareConfigNew();
+
+  static AudioHardwareConfig newWithParam({
+    required String selectedInputDevice,
+    required String selectedOutputDevice,
+    required int sampleRate,
+    required int bufferSize,
+    required double cpuLoad,
+  }) => RustLib.instance.api.crateCoreProjectAudioHardwareConfigNewWithParam(
+    selectedInputDevice: selectedInputDevice,
+    selectedOutputDevice: selectedOutputDevice,
+    sampleRate: sampleRate,
+    bufferSize: bufferSize,
+    cpuLoad: cpuLoad,
+  );
 
   @override
   int get hashCode =>
@@ -47,12 +64,15 @@ class ProjectMetadata {
   final String version;
   final int createdAt;
 
-  const ProjectMetadata({
+  const ProjectMetadata.raw({
     required this.name,
     required this.author,
     required this.version,
     required this.createdAt,
   });
+
+  factory ProjectMetadata() =>
+      RustLib.instance.api.crateCoreProjectProjectMetadataNew();
 
   @override
   int get hashCode =>

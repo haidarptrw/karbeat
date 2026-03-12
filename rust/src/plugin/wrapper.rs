@@ -9,9 +9,9 @@ use std::collections::HashMap;
 
 use crate::core::project::plugin::{KarbeatEffect, KarbeatGenerator, MidiEvent};
 
-use super::automation::AutomationManager;
 use super::effect_base::EffectBase;
 use super::synth_base::SynthBase;
+use crate::core::project::automation::AutomationManager;
 
 // ============================================================================
 // PARAMETER API
@@ -211,9 +211,9 @@ impl<T: RawSynthEngine + Clone> SynthWrapper<T> {
         }
     }
 
-    /// Apply automation values at the given time in beats
-    pub fn apply_automation(&mut self, time_beats: f64) {
-        for (param_id, value) in self.automation.get_values_at(time_beats) {
+    /// Apply automation values at the given time in ticks
+    pub fn apply_automation(&mut self, time_ticks: u32) {
+        for (param_id, value) in self.automation.get_values_at(time_ticks) {
             self.set_parameter_internal(param_id, value);
         }
     }
@@ -307,9 +307,9 @@ impl<T: RawEffectEngine + Clone> EffectWrapper<T> {
         }
     }
 
-    /// Apply automation values at the given time in beats
-    pub fn apply_automation(&mut self, time_beats: f64) {
-        for (param_id, value) in self.automation.get_values_at(time_beats) {
+    /// Apply automation values at the given time in ticks
+    pub fn apply_automation(&mut self, time_ticks: u32) {
+        for (param_id, value) in self.automation.get_values_at(time_ticks) {
             self.set_parameter_internal(param_id, value);
         }
     }

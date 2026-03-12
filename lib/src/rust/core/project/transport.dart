@@ -19,7 +19,7 @@ class TransportState {
   final int beatTracker;
   final int barTracker;
 
-  const TransportState({
+  const TransportState.raw({
     required this.isPlaying,
     required this.isPatternPlaying,
     required this.isRecording,
@@ -32,6 +32,36 @@ class TransportState {
     required this.beatTracker,
     required this.barTracker,
   });
+
+  factory TransportState() =>
+      RustLib.instance.api.crateCoreProjectTransportTransportStateNew();
+
+  static TransportState newWithParam({
+    required bool isPlaying,
+    required bool isPatternPlaying,
+    required bool isRecording,
+    required bool isLooping,
+    required int playheadPositionSamples,
+    required int loopStartSamples,
+    required int loopEndSamples,
+    required double bpm,
+    required (int, int) timeSignature,
+    required int barTracker,
+    required int beatTracker,
+  }) =>
+      RustLib.instance.api.crateCoreProjectTransportTransportStateNewWithParam(
+        isPlaying: isPlaying,
+        isPatternPlaying: isPatternPlaying,
+        isRecording: isRecording,
+        isLooping: isLooping,
+        playheadPositionSamples: playheadPositionSamples,
+        loopStartSamples: loopStartSamples,
+        loopEndSamples: loopEndSamples,
+        bpm: bpm,
+        timeSignature: timeSignature,
+        barTracker: barTracker,
+        beatTracker: beatTracker,
+      );
 
   @override
   int get hashCode =>

@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `hash`
 
 /// Get all available generators in Plugin Registry (names only, backwards compatible)
 Future<List<String>> getAvailableGenerators() =>
@@ -39,6 +39,15 @@ Future<UiEffectInstance> getEffect({
   trackId: trackId,
   effectId: effectId,
 );
+
+Future<UiEffectInstance> getEffectFromMaster({required int effectId}) =>
+    RustLib.instance.api.crateApiPluginGetEffectFromMaster(effectId: effectId);
+
+Future<List<UiEffectInstance>> getEffectsFromTrack({required int trackId}) =>
+    RustLib.instance.api.crateApiPluginGetEffectsFromTrack(trackId: trackId);
+
+Future<List<UiEffectInstance>> getMasterEffects() =>
+    RustLib.instance.api.crateApiPluginGetMasterEffects();
 
 /// Get parameter specifications for a generator plugin.
 ///
@@ -124,6 +133,62 @@ Future<void> syncEffectParametersFromAudio({
   snapshots: snapshots,
 );
 
+/// Get parameter specifications for a track effect plugin.
+///
+/// Creates a temporary plugin instance from the registry to query static parameter
+/// specs, then overlays the current stored parameter values.
+Future<List<UiPluginParameter>> getEffectParameterSpecs({
+  required int trackId,
+  required int effectId,
+}) => RustLib.instance.api.crateApiPluginGetEffectParameterSpecs(
+  trackId: trackId,
+  effectId: effectId,
+);
+
+/// Set a parameter on a track effect plugin.
+///
+/// Sends a command to the audio thread to update the parameter and also
+/// persists the value in the stored PluginInstance parameters.
+Future<void> setEffectParameter({
+  required int trackId,
+  required int effectId,
+  required int paramId,
+  required double value,
+}) => RustLib.instance.api.crateApiPluginSetEffectParameter(
+  trackId: trackId,
+  effectId: effectId,
+  paramId: paramId,
+  value: value,
+);
+
+/// Request a parameter snapshot from the audio thread for a track effect.
+///
+/// The audio thread will respond via AudioFeedback::EffectParameterSnapshot,
+/// which can be polled using `poll_effect_parameter_feedback`.
+Future<void> queryEffectParameters({
+  required int trackId,
+  required int effectId,
+}) => RustLib.instance.api.crateApiPluginQueryEffectParameters(
+  trackId: trackId,
+  effectId: effectId,
+);
+
+/// Compute the magnitude response curve for a parametric EQ effect on a track.
+///
+/// Creates a temporary plugin instance, applies stored parameters, and evaluates
+/// the exact biquad transfer function at log-spaced frequency points.
+Future<List<UiResponseCurvePoint>> getEqResponseCurve({
+  required int trackId,
+  required int effectId,
+  required int numPoints,
+}) => RustLib.instance.api.crateApiPluginGetEqResponseCurve(
+  trackId: trackId,
+  effectId: effectId,
+  numPoints: numPoints,
+);
+
+enum KarbeatPluginType { generator, effect }
+
 class UiEffectParameterSnapshot {
   final UiEffectTarget target;
   final int effectId;
@@ -201,15 +266,19 @@ class UiParameterValue {
           value == other.value;
 }
 
-/// Plugin info with ID for UI display
 class UiPluginInfo {
   final int id;
   final String name;
+  final KarbeatPluginType pluginType;
 
-  const UiPluginInfo({required this.id, required this.name});
+  const UiPluginInfo({
+    required this.id,
+    required this.name,
+    required this.pluginType,
+  });
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ pluginType.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -217,7 +286,8 @@ class UiPluginInfo {
       other is UiPluginInfo &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          name == other.name;
+          name == other.name &&
+          pluginType == other.pluginType;
 }
 
 /// Plugin parameter description for UI generation
@@ -274,4 +344,26 @@ class UiPluginParameter {
           step == other.step &&
           paramType == other.paramType &&
           choices == other.choices;
+}
+
+/// A point on the EQ response curve (DTO for FRB)
+class UiResponseCurvePoint {
+  final double frequency;
+  final double magnitudeDb;
+
+  const UiResponseCurvePoint({
+    required this.frequency,
+    required this.magnitudeDb,
+  });
+
+  @override
+  int get hashCode => frequency.hashCode ^ magnitudeDb.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiResponseCurvePoint &&
+          runtimeType == other.runtimeType &&
+          frequency == other.frequency &&
+          magnitudeDb == other.magnitudeDb;
 }

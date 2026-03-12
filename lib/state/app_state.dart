@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
+import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/pattern.dart';
@@ -43,7 +44,7 @@ enum ProjectEvent {
   metadataChanged,
   sourceListChanged,
   generatorListChanged,
-
+  effectListChanged,
   configChanged,
   patternChanged,
   mixerChanged,
@@ -51,48 +52,19 @@ enum ProjectEvent {
 
 class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
-  TransportState _transportState = TransportState(
-    isPlaying: false,
-    isPatternPlaying: false,
-    isRecording: false,
-    isLooping: false,
-    playheadPositionSamples: 0,
-    loopStartSamples: 0,
-    loopEndSamples: 0,
-    bpm: 67.0,
-    timeSignature: (4, 4),
-    barTracker: 0,
-    beatTracker: 0,
-  );
+  TransportState _transportState = TransportState();
 
-  ProjectMetadata _metadata = ProjectMetadata(
-    name: "Untitled",
-    author: "User",
-    version: "1.0.0",
-    createdAt: 0, // Assuming u64
-  );
+  // ProjectMetadata _metadata = ProjectMetadata(
+  //   name: "Untitled",
+  //   author: "User",
+  //   version: "1.0.0",
+  //   createdAt: 0, // Assuming u64
+  // );
+  ProjectMetadata _metadata = ProjectMetadata();
 
-  AudioHardwareConfig _hardwareConfig = AudioHardwareConfig(
-    selectedInputDevice: '',
-    selectedOutputDevice: '',
-    sampleRate: 48000,
-    bufferSize: 256,
-    cpuLoad: 0,
-  );
+  AudioHardwareConfig _hardwareConfig = AudioHardwareConfig();
 
-  mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState(
-    channels: {},
-    masterBus: mixer_api.UiMixerChannel(
-      volume: 1.0,
-      pan: 0.0,
-      mute: false,
-      solo: false,
-      invertedPhase: false,
-      effects: [],
-    ),
-    buses: [],
-    routing: [],
-  );
+  mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState();
   // List<Clipboard>
 
   // =================== STORES ==========================
@@ -103,6 +75,9 @@ class KarbeatState extends ChangeNotifier {
 
   List<UiPluginInfo> _availableGenerators = [];
   List<UiPluginInfo> get availableGenerators => _availableGenerators;
+
+  List<UiPluginInfo> _availableEffects = [];
+  List<UiPluginInfo> get availableEffects => _availableEffects;
 
   static final List<KarbeatToolbarMenuGroup> menuGroups = [
     KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
@@ -116,6 +91,10 @@ class KarbeatState extends ChangeNotifier {
 
   // STRATEGY: Internal Event Bus for State Synchronization
   final StreamController<ProjectEvent> _stateEventController =
+      StreamController.broadcast();
+
+  // A custom defined internal event bus for state synchronization
+  final StreamController<Future<void> Function()> _customStateEventController =
       StreamController.broadcast();
 
   // ignore:unused_field
@@ -195,13 +174,38 @@ class KarbeatState extends ChangeNotifier {
     syncGeneratorList();
     syncAudioHardwareConfigState();
 
-    // fetch available generators
+    // fetch available generators and effects
     fetchAvailableGenerators();
+    fetchAvailableEffects();
 
     // Start mixer event stream
     _initMixerEventStream();
   }
 
+  @override
+  void dispose() {
+    // Cancel active stream subscriptions from the Rust backend and internal event bus
+    _stateSubscription?.cancel();
+    _mixerEventSubscription?.cancel();
+
+    // Close the internal event bus controllers
+    if (!_stateEventController.isClosed) {
+      _stateEventController.close();
+    }
+
+    if (!_customStateEventController.isClosed) {
+      _customStateEventController.close();
+    }
+
+    // Always call super.dispose() last to properly tear down the ChangeNotifier
+    super.dispose();
+  }
+
+  // =========================================================
+  // ============= Available Plugins API =====================
+  // =========================================================
+
+  /// Fetch available generators from system's registry
   Future<void> fetchAvailableGenerators() async {
     try {
       // Use the ID-based API that returns UiPluginInfo with id and name
@@ -210,6 +214,17 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       log("Error fetching plugins: $e");
+    }
+  }
+
+  /// Fetch available effects from system's registry
+  Future<void> fetchAvailableEffects() async {
+    try {
+      final list = await getAvailableEffectsWithIds();
+      _availableEffects = list;
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Error fetching effect plugins: $e");
     }
   }
 
@@ -242,6 +257,19 @@ class KarbeatState extends ChangeNotifier {
         case ProjectEvent.mixerChanged:
           await syncMixerState();
           break;
+        case ProjectEvent.effectListChanged:
+          // TODO: Handle this case.
+          // throw UnimplementedError();
+          break;
+      }
+    });
+
+    // Listen and execute caller-defined custom sync actions
+    _customStateEventController.stream.listen((action) async {
+      try {
+        await action();
+      } catch (e) {
+        KarbeatLogger.error("Error executing custom backend change: $e");
       }
     });
   }
@@ -449,6 +477,13 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  /// Triggers a state refresh. Call this after any Rust API action.
+  void notifyCustomBackendChange(Future<void> Function() action) {
+    if (!_customStateEventController.isClosed) {
+      _customStateEventController.add(action);
+    }
+  }
+
   Future<void> syncMixerState() async {
     try {
       final newState = await mixer_api.getMixerState();
@@ -459,46 +494,150 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> syncBuses() async {
+    try {
+      final newBuses = await mixer_api.getBuses();
+      _mixerState = _mixerState.copyWith(buses: newBuses);
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Failedto sync mixer bus: $e");
+    }
+  }
+
+  Future<void> syncMixerChannel(int trackId) async {
+    try {
+      final updatedChannel = await mixer_api.getMixerChannel(trackId: trackId);
+      final newChannels = Map<int, mixer_api.UiMixerChannel>.from(
+        _mixerState.channels,
+      );
+      newChannels[trackId] = updatedChannel;
+      _mixerState = _mixerState.copyWith(channels: newChannels);
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Error syncing mixer channel $trackId: $e");
+    }
+  }
+
+  Future<void> syncMasterBus() async {
+    try {
+      final updatedMaster = await mixer_api.getMasterBus();
+      _mixerState = _mixerState.copyWith(masterBus: updatedMaster);
+      notifyListeners();
+    } catch (e) {
+      KarbeatLogger.error("Failed to sync master bus: $e");
+    }
+  }
+
   // =============== ACTIONS ===============
 
   /// Loads an audio file and refreshes the source list
-  Future<void> addAudioFile(String path) async {
-    await addAudioSource(filePath: path);
-    notifyBackendChange(ProjectEvent.sourceListChanged);
+  Future<Result<void>> addAudioFile(String path) async {
+    try {
+      await addAudioSource(filePath: path);
+      notifyBackendChange(ProjectEvent.sourceListChanged);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to add audio file: $e");
+      return Result.error(Exception("$e"));
+    }
   }
 
-  Future<void> addTrack(TrackType type) async {
+  Future<Result<void>> addTrack(TrackType type) async {
     try {
       await addNewTrack(trackType: type);
       notifyBackendChange(ProjectEvent.tracksChanged);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to add track: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
   /// Add a MIDI track with a generator by its registry ID (preferred method).
-  Future<void> addMidiTrackWithGeneratorId(int registryId) async {
+  Future<Result<void>> addMidiTrackWithGeneratorId(int registryId) async {
     try {
       await track_api.addMidiTrackWithGeneratorId(registryId: registryId);
       notifyBackendChange(ProjectEvent.tracksChanged);
       notifyBackendChange(ProjectEvent.generatorListChanged);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to add midi track: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
   /// Add a MIDI track with a generator by name (backwards compatible).
-  Future<void> addMidiTrackWithGenerator(String generatorName) async {
+  Future<Result<void>> addMidiTrackWithGenerator(String generatorName) async {
     try {
       await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
-      notifyBackendChange(ProjectEvent.tracksChanged);
-      notifyBackendChange(ProjectEvent.generatorListChanged);
+      notifyCustomBackendChange(() async {
+        await syncTrackState();
+        await syncGeneratorList();
+      });
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to add midi track: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> togglePlay() async {
+  Future<Result<void>> addEffectToMixerChannel(
+    int channelId,
+    int registryId,
+  ) async {
+    try {
+      if (channelId == -1) {
+        KarbeatLogger.info("Adding effect to master channel");
+        await mixer_api.addEffectToMasterBus(registryId: registryId);
+        notifyCustomBackendChange(() async {
+          await syncMasterBus();
+        });
+      } else {
+        KarbeatLogger.info("Adding effect to track channel $channelId");
+        await mixer_api.addEffectToMixerChannelById(
+          trackId: channelId,
+          registryId: registryId,
+        );
+        notifyCustomBackendChange(() async {
+          await syncMixerChannel(channelId);
+        });
+      }
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to add effect to channel: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addEffectToBusChannel(int busId, int registryId) async {
+    try {
+      KarbeatLogger.info("Adding effect to bus channel $busId");
+      await mixer_api.addEffectToBus(busId: busId, registryId: registryId);
+      notifyCustomBackendChange(() async {
+        await syncBuses();
+      });
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to add effect to bus channel: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> addEffectToMasterBus(int registryId) async {
+    try {
+      await mixer_api.addEffectToMasterBus(registryId: registryId);
+      notifyCustomBackendChange(() async {
+        await syncMasterBus();
+        KarbeatLogger.info("Adding effect to master channel");
+      });
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to add effect to master bus: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> togglePlay() async {
     try {
       // If pattern is playing, the user's intent is to switch to song playback.
       // Since pattern mode sets isPlaying=true, !isPlaying would be false (stop),
@@ -516,43 +655,60 @@ class KarbeatState extends ChangeNotifier {
 
       await transport_api.setPlaying(val: newPlaying);
       notifyBackendChange(ProjectEvent.transportChanged);
+      return Result.ok(null);
     } catch (e) {
       log("Failed to toggle play: $e");
       // Reset flag on error
       _pendingPlayRequest = false;
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> stop() async {
+  Future<Result<void>> stop() async {
     try {
       await transport_api.stopSongPlayback();
       notifyBackendChange(ProjectEvent.transportChanged);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to stop play: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> toggleLoop() async {
+  Future<Result<void>> toggleLoop() async {
     try {
       final newLooping = !_transportState.isLooping;
       await transport_api.setLooping(val: newLooping);
       await syncTransportState();
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to toggle loop: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
   /// Sets the BPM.
   /// Updates local state optimistically and calls the backend API.
-  Future<void> setBpm(double value) async {
+  /// Auto-scales horizontalZoomLevel so that grid lines remain visually fixed.
+  Future<Result<void>> setBpm(double value) async {
     try {
+      final oldBpm = _transportState.bpm;
       _transportState = _transportState.copyWith(bpm: value);
+
+      // Scale zoom so that (samplesPerBeat / zoomLevel) stays constant,
+      // keeping grid lines at the same pixel positions.
+      if (oldBpm > 0 && value > 0) {
+        horizontalZoomLevel = _horizontalZoomLevel * (oldBpm / value);
+      }
+
       notifyListeners();
 
       await transport_api.setBpm(val: value);
       notifyBackendChange(ProjectEvent.transportChanged);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to set bpm: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
@@ -650,19 +806,21 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<void> seekTo(int samples) async {
+  Future<Result<void>> seekTo(int samples) async {
     try {
       // Call the Rust API
       await transport_api.setPlayhead(val: samples);
 
       // Optimistic update (optional, since Rust pushes the update back immediately)
       notifyListeners();
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error seeking: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> deleteClip(int trackId, int clipId) async {
+  Future<Result<void>> deleteClip(int trackId, int clipId) async {
     if (_tracks.containsKey(trackId)) {
       final track = _tracks[trackId]!;
       final updatedClips = track.clips.where((c) => c.id != clipId).toList();
@@ -676,13 +834,15 @@ class KarbeatState extends ChangeNotifier {
       await track_api.deleteClip(trackId: trackId, clipId: clipId);
       // notifyBackendChange(ProjectEvent.tracksChanged);
       await syncTrack(trackId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error deleting clip: $e");
       // await syncTrackState();
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> resizeClip(
+  Future<Result<void>> resizeClip(
     int trackId,
     int clipId,
     ResizeEdge edge,
@@ -697,13 +857,15 @@ class KarbeatState extends ChangeNotifier {
         newTimeVal: newTime,
       );
       await syncTrack(trackId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error resizing clip: $e");
       // await syncTrackState();
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> moveClip(
+  Future<Result<void>> moveClip(
     int trackId,
     int clipId,
     int newStartTime, {
@@ -723,13 +885,15 @@ class KarbeatState extends ChangeNotifier {
       if (newTrackId != null && newTrackId != trackId) {
         await syncTrack(newTrackId);
       }
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error moving clip: $e");
       // await syncTrackState();
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> createEmptyPatternClip({
+  Future<Result<void>> createEmptyPatternClip({
     required int trackId,
     required int startTime,
   }) async {
@@ -742,15 +906,17 @@ class KarbeatState extends ChangeNotifier {
       KarbeatLogger.info("New empty pattern clip is successfully created");
       // notifyBackendChange(ProjectEvent.tracksChanged);
       await syncTrack(trackId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error when creating new empty pattern clip: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
   // ===================== BATCH CLIP OPERATIONS ==========================
 
   /// Move multiple clips by a delta amount (in samples)
-  Future<void> moveClipBatch(
+  Future<Result<void>> moveClipBatch(
     int trackId,
     List<int> clipIds,
     int deltaSamples, {
@@ -767,13 +933,15 @@ class KarbeatState extends ChangeNotifier {
       if (newTrackId != null && newTrackId != trackId) {
         await syncTrack(newTrackId);
       }
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error moving clips in batch: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
   /// Resize multiple clips by a delta amount (in samples)
-  Future<void> resizeClipBatch(
+  Future<Result<void>> resizeClipBatch(
     int trackId,
     List<int> clipIds,
     ResizeEdge edge,
@@ -787,13 +955,15 @@ class KarbeatState extends ChangeNotifier {
         deltaSamples: deltaSamples,
       );
       await syncTrack(trackId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error resizing clips in batch: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
   /// Delete multiple clips at once
-  Future<void> deleteClipBatch(int trackId, List<int> clipIds) async {
+  Future<Result<void>> deleteClipBatch(int trackId, List<int> clipIds) async {
     // Optimistic update
     if (_tracks.containsKey(trackId)) {
       final track = _tracks[trackId]!;
@@ -810,24 +980,27 @@ class KarbeatState extends ChangeNotifier {
     try {
       await track_api.deleteClipBatch(trackId: trackId, clipIds: clipIds);
       await syncTrack(trackId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error deleting clips in batch: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
   /// Convenience method to delete all currently selected clips
-  Future<void> deleteSelectedClips() async {
+  Future<Result<void>> deleteSelectedClips() async {
     final trackId = _selectedTrackId;
     final clipIds = _selectedClipIds;
 
-    if (trackId == null || clipIds.isEmpty) return;
+    if (trackId == null || clipIds.isEmpty) return Result.ok(null);
 
-    await deleteClipBatch(trackId, clipIds);
+    final result = await deleteClipBatch(trackId, clipIds);
     deselectAllClips();
+    return result;
   }
 
   // ===================== NOTE CHANGE API'S ==========================
-  Future<void> previewNote({
+  Future<Result<void>> previewNote({
     required int trackId,
     required int noteKey,
     required bool isOn,
@@ -843,12 +1016,14 @@ class KarbeatState extends ChangeNotifier {
       KarbeatLogger.info(
         "Play ${numToMidiKey(noteKey)} with generator from $trackId",
       );
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error previewing note: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> addPatternNote({
+  Future<Result<void>> addPatternNote({
     required int patternId,
     required int key,
     required int startTick,
@@ -863,12 +1038,14 @@ class KarbeatState extends ChangeNotifier {
       );
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error adding note: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> deletePatternNote({
+  Future<Result<void>> deletePatternNote({
     required int patternId,
     required int noteId,
   }) async {
@@ -877,13 +1054,15 @@ class KarbeatState extends ChangeNotifier {
       await deleteNote(patternId: patternId, noteId: noteId);
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error deleting note: $e");
       await syncPattern(patternId);
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> movePatternNote({
+  Future<Result<void>> movePatternNote({
     required int patternId,
     required int noteId,
     required int newStartTick,
@@ -898,12 +1077,14 @@ class KarbeatState extends ChangeNotifier {
       );
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error moving note: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> resizePatternNote({
+  Future<Result<void>> resizePatternNote({
     required int patternId,
     required int noteId,
     required int newDuration,
@@ -916,8 +1097,10 @@ class KarbeatState extends ChangeNotifier {
       );
       // notifyBackendChange(ProjectEvent.patternChanged);
       await syncPattern(patternId);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error resizing note: $e");
+      return Result.error(Exception("$e"));
     }
   }
 
@@ -1023,7 +1206,7 @@ class KarbeatState extends ChangeNotifier {
     _placementTimeSamples = timeSamples;
   }
 
-  Future<void> confirmPlacement() async {
+  Future<Result<void>> confirmPlacement() async {
     KarbeatLogger.info("CONFIRM Placement");
     if (_placingSourceId != null &&
         _placingSourceType != null &&
@@ -1042,10 +1225,13 @@ class KarbeatState extends ChangeNotifier {
         _placementTrackId = -1;
 
         notifyBackendChange(ProjectEvent.tracksChanged);
+        return Result.ok(null);
       } catch (e) {
         KarbeatLogger.error("Error creating clip: $e");
+        return Result.error(Exception("$e"));
       }
     }
+    return Result.ok(null);
   }
 
   void cancelPlacement() {
@@ -1196,7 +1382,7 @@ class KarbeatState extends ChangeNotifier {
     );
 
     if (isMaster) {
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: _mixerState.channels,
         masterBus: updatedChannel,
         buses: _mixerState.buses,
@@ -1207,7 +1393,7 @@ class KarbeatState extends ChangeNotifier {
         _mixerState.channels,
       );
       newChannels[trackId] = updatedChannel;
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: newChannels,
         masterBus: _mixerState.masterBus,
         buses: _mixerState.buses,
@@ -1230,7 +1416,7 @@ class KarbeatState extends ChangeNotifier {
     _touchedParams.remove((trackId, paramName));
   }
 
-  Future<void> setMixerChannelParams({
+  Future<Result<void>> setMixerChannelParams({
     required int trackId,
     required List<mixer_api.UiMixerChannelParams> params,
   }) async {
@@ -1241,14 +1427,16 @@ class KarbeatState extends ChangeNotifier {
       await mixer_api.setMixerChannelParams(trackId: trackId, params: params);
       // No need for notifyBackendChange here — the optimistic update already
       // notified listeners, and the event stream will keep us in sync.
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error('Error setting mixer channel params: $e');
       // On error, re-sync from the backend to undo the optimistic update
       syncMixerState();
+      return Result.error(Exception("$e"));
     }
   }
 
-  Future<void> setMasterBusParams({
+  Future<Result<void>> setMasterBusParams({
     required List<mixer_api.UiMixerChannelParams> params,
   }) async {
     // Optimistic local update so the controlled Slider doesn't snap back
@@ -1256,9 +1444,42 @@ class KarbeatState extends ChangeNotifier {
 
     try {
       await mixer_api.setMasterBusParams(params: params);
+      return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error('Error setting master bus params: $e');
       syncMixerState();
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> setBusChannelParams({
+    required int busId,
+    required List<mixer_api.UiMixerChannelParams> params,
+  }) async {
+    // Optimistic local update so the controlled Slider doesn't snap back
+    _applyParamsToBusChannel(busId, params);
+
+    try {
+      await mixer_api.setBusParams(busId: busId, params: params);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error('Error setting bus channel params: $e');
+      syncMixerState();
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> createNewBusChannel({String name = "Untitled"}) async {
+    try {
+      await mixer_api.createBus(name: name);
+      notifyCustomBackendChange(() async {
+        await syncBuses();
+      });
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error('Error when trying to add a new bus channel: $e');
+      syncBuses();
+      return Result.error(Exception("$e"));
     }
   }
 
@@ -1304,7 +1525,7 @@ class KarbeatState extends ChangeNotifier {
     );
 
     if (isMaster) {
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: _mixerState.channels,
         masterBus: updated,
         buses: _mixerState.buses,
@@ -1315,7 +1536,7 @@ class KarbeatState extends ChangeNotifier {
         _mixerState.channels,
       );
       newChannels[trackId] = updated;
-      _mixerState = mixer_api.UiMixerState(
+      _mixerState = mixer_api.UiMixerState.newWithParam(
         channels: newChannels,
         masterBus: _mixerState.masterBus,
         buses: _mixerState.buses,
@@ -1324,6 +1545,79 @@ class KarbeatState extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  /// Immediately apply param changes to a bus in local _mixerState and notify listeners.
+  void _applyParamsToBusChannel(
+    int busId,
+    List<mixer_api.UiMixerChannelParams> params,
+  ) {
+    final bus = _mixerState.buses[busId];
+    if (bus == null) return;
+
+    final channel = bus.channel;
+    double volume = channel.volume;
+    double pan = channel.pan;
+    bool mute = channel.mute;
+    bool solo = channel.solo;
+    bool invertedPhase = channel.invertedPhase;
+
+    for (final p in params) {
+      switch (p) {
+        case mixer_api.UiMixerChannelParams_Volume():
+          volume = p.field0;
+        case mixer_api.UiMixerChannelParams_Pan():
+          pan = p.field0;
+        case mixer_api.UiMixerChannelParams_Mute():
+          mute = p.field0;
+        case mixer_api.UiMixerChannelParams_Solo():
+          solo = p.field0;
+        case mixer_api.UiMixerChannelParams_InvertedPhase():
+          invertedPhase = p.field0;
+      }
+    }
+
+    final updatedChannel = mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: invertedPhase,
+      effects: channel.effects,
+    );
+
+    final updatedBus = mixer_api.UiBus(
+      id: bus.id,
+      name: bus.name,
+      channel: updatedChannel,
+    );
+
+    final newBuses = Map<int, mixer_api.UiBus>.from(_mixerState.buses);
+    newBuses[busId] = updatedBus;
+    _mixerState = mixer_api.UiMixerState.newWithParam(
+      channels: _mixerState.channels,
+      masterBus: _mixerState.masterBus,
+      buses: newBuses,
+      routing: _mixerState.routing,
+    );
+
+    notifyListeners();
+  }
+}
+
+extension on mixer_api.UiMixerState {
+  mixer_api.UiMixerState copyWith({
+    Map<int, mixer_api.UiMixerChannel>? channels,
+    mixer_api.UiMixerChannel? masterBus,
+    Map<int, mixer_api.UiBus>? buses,
+    List<mixer_api.UiRoutingConnection>? routing,
+  }) {
+    return mixer_api.UiMixerState.newWithParam(
+      channels: channels ?? this.channels,
+      masterBus: masterBus ?? this.masterBus,
+      buses: buses ?? this.buses,
+      routing: routing ?? this.routing,
+    );
   }
 }
 
@@ -1341,7 +1635,7 @@ extension TransportStateCopyWith on TransportState {
     int? barTracker,
     int? beatTracker,
   }) {
-    return TransportState(
+    return TransportState.newWithParam(
       isPlaying: isPlaying ?? this.isPlaying,
       isPatternPlaying: isPatternPlaying ?? this.isPatternPlaying,
       isRecording: isRecording ?? this.isRecording,

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// Context action for an context menu available component
+/// 
+/// This is related to [ContextMenuWrapper].
 class KarbeatContextAction {
   final String title;
   final IconData? icon;
@@ -14,6 +17,7 @@ class KarbeatContextAction {
   });
 }
 
+/// A wrapper for a interactable widget that will display Context Menu
 class ContextMenuWrapper extends StatelessWidget {
   final Widget child;
   final String? title;

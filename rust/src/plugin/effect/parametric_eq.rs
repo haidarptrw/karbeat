@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+/// Maximum number of cascaded biquad stages per band (order 0..3 = 1..4 stages)
+const MAX_ORDER: usize = 4;
+
 use crate::{
     core::project::PluginInstance,
     plugin::wrapper::{EffectWrapper, RawEffectEngine},
@@ -38,8 +41,8 @@ pub struct KarbeatParametricEQFilterNode {
     /// Q value of this filter node
     pub q: f32,
 
-    /// Order of the filter
-    pub order: u16, // starts from order 0
+    /// Order of the filter (0 = 1 stage/12dB, 1 = 2 stages/24dB, 2 = 3/36dB, 3 = 4/48dB)
+    pub order: u16,
 
     /// Indicates whether this node is effective or not
     pub active: bool,
@@ -57,12 +60,11 @@ pub struct KarbeatParametricEQFilterNode {
     a1: f32,
     a2: f32,
 
-    // x[n-1], x[n-2] for L/R
-    x1: [f32; 2],
-    x2: [f32; 2],
-    // y[n-1], y[n-2] for L/R
-    y1: [f32; 2],
-    y2: [f32; 2],
+    // Cascaded biquad state: [stage][channel(L/R)]
+    x1: [[f32; 2]; MAX_ORDER],
+    x2: [[f32; 2]; MAX_ORDER],
+    y1: [[f32; 2]; MAX_ORDER],
+    y2: [[f32; 2]; MAX_ORDER],
 }
 
 impl KarbeatParametricEQFilterNode {
@@ -79,10 +81,10 @@ impl KarbeatParametricEQFilterNode {
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
-            x1: [0.0; 2],
-            x2: [0.0; 2],
-            y1: [0.0; 2],
-            y2: [0.0; 2],
+            x1: [[0.0; 2]; MAX_ORDER],
+            x2: [[0.0; 2]; MAX_ORDER],
+            y1: [[0.0; 2]; MAX_ORDER],
+            y2: [[0.0; 2]; MAX_ORDER],
         };
         // Initial calc assuming 48k, will be updated in process
         node.update_coefficients(48000.0);
@@ -90,6 +92,13 @@ impl KarbeatParametricEQFilterNode {
     }
 
     /// Calculate Biquad Coefficients for Peaking EQ
+    /// 
+    /// The calculation of biquad coefficients is based on the standard formulas for digital biquad filters,
+    /// which depend on the filter type, frequency, Q factor, and gain. 
+    /// The coefficients are normalized by a0 to ensure stability and consistent gain across different filter types and parameters.
+    /// 
+    /// The calculation algorithm is adapted from the Audio EQ Cookbook by Robert Bristow-Johnson, 
+    /// which provides a comprehensive set of formulas for various biquad filter types.
     pub fn update_coefficients(&mut self, sample_rate: f32) {
         if sample_rate <= 0.0 {
             return;
@@ -177,33 +186,76 @@ impl KarbeatParametricEQFilterNode {
     }
 
     /// Process a single sample for a specific channel (0=Left, 1=Right)
+    /// Cascades through (order + 1) identical biquad stages for steeper slopes.
     #[inline]
     pub fn process_sample(&mut self, sample: f32, channel: usize) -> f32 {
         if !self.active {
             return sample;
         }
 
-        // Direct Form I
-        // y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
-        let x0 = sample;
-        let y0 = self.b0 * x0 + self.b1 * self.x1[channel] + self.b2 * self.x2[channel]
-            - self.a1 * self.y1[channel]
-            - self.a2 * self.y2[channel];
+        let num_stages = (self.order as usize + 1).min(MAX_ORDER);
+        let mut signal = sample;
 
-        // Shift state
-        self.x2[channel] = self.x1[channel];
-        self.x1[channel] = x0;
-        self.y2[channel] = self.y1[channel];
-        self.y1[channel] = y0;
+        for stage in 0..num_stages {
+            // Direct Form I per stage
+            let x0 = signal;
+            let y0 = self.b0 * x0
+                + self.b1 * self.x1[stage][channel]
+                + self.b2 * self.x2[stage][channel]
+                - self.a1 * self.y1[stage][channel]
+                - self.a2 * self.y2[stage][channel];
 
-        y0
+            // Shift state for this stage
+            self.x2[stage][channel] = self.x1[stage][channel];
+            self.x1[stage][channel] = x0;
+            self.y2[stage][channel] = self.y1[stage][channel];
+            self.y1[stage][channel] = y0;
+
+            signal = y0;
+        }
+
+        signal
     }
 
     pub fn reset_state(&mut self) {
-        self.x1 = [0.0; 2];
-        self.x2 = [0.0; 2];
-        self.y1 = [0.0; 2];
-        self.y2 = [0.0; 2];
+        self.x1 = [[0.0; 2]; MAX_ORDER];
+        self.x2 = [[0.0; 2]; MAX_ORDER];
+        self.y1 = [[0.0; 2]; MAX_ORDER];
+        self.y2 = [[0.0; 2]; MAX_ORDER];
+    }
+
+    /// Compute the magnitude response in dB at a given frequency.
+    /// Uses the biquad transfer function: H(z) = (b0 + b1·z⁻¹ + b2·z⁻²) / (1 + a1·z⁻¹ + a2·z⁻²)
+    /// where z = e^(jω), ω = 2π·f/sample_rate
+    pub fn magnitude_db_at(&self, freq: f32, sample_rate: f32) -> f32 {
+        if !self.active {
+            return 0.0;
+        }
+
+        let w = 2.0 * std::f32::consts::PI * freq / sample_rate;
+        let cos_w = w.cos();
+        let cos_2w = (2.0 * w).cos();
+        let sin_w = w.sin();
+        let sin_2w = (2.0 * w).sin();
+
+        // Numerator: b0 + b1·e^(-jω) + b2·e^(-j2ω)
+        let num_re = self.b0 + self.b1 * cos_w + self.b2 * cos_2w;
+        let num_im = -(self.b1 * sin_w + self.b2 * sin_2w);
+        let num_mag_sq = num_re * num_re + num_im * num_im;
+
+        // Denominator: 1 + a1·e^(-jω) + a2·e^(-j2ω)
+        let den_re = 1.0 + self.a1 * cos_w + self.a2 * cos_2w;
+        let den_im = -(self.a1 * sin_w + self.a2 * sin_2w);
+        let den_mag_sq = den_re * den_re + den_im * den_im;
+
+        if den_mag_sq < 1e-20 {
+            return 0.0;
+        }
+
+        let single_stage_db = 10.0 * (num_mag_sq / den_mag_sq).max(1e-20).log10();
+        // Cascading N identical biquads = N × single-stage dB
+        let num_stages = (self.order as f32) + 1.0;
+        single_stage_db * num_stages
     }
 }
 
@@ -237,6 +289,33 @@ impl KarbeatParametricEQEngine {
         for node in &mut self.nodes {
             node.update_coefficients(self.last_sample_rate);
         }
+    }
+
+    /// Compute the composite magnitude response curve at log-spaced frequency points.
+    /// Returns Vec<(frequency_hz, magnitude_db)> pairs.
+    pub fn compute_magnitude_response(&self, num_points: usize) -> Vec<(f32, f32)> {
+        let min_freq: f32 = 20.0;
+        let max_freq: f32 = 20000.0;
+        let log_min = min_freq.log10();
+        let log_max = max_freq.log10();
+
+        let mut result = Vec::with_capacity(num_points);
+
+        for i in 0..num_points {
+            let t = i as f32 / (num_points - 1).max(1) as f32;
+            let freq = 10.0_f32.powf(log_min + t * (log_max - log_min));
+
+            // Composite magnitude: sum of dB contributions from all bands
+            // (multiplication of linear magnitudes = addition of dB values)
+            let mut total_db: f32 = self.base_gain;
+            for node in &self.nodes {
+                total_db += node.magnitude_db_at(freq, self.last_sample_rate);
+            }
+
+            result.push((freq, total_db));
+        }
+
+        result
     }
 }
 
@@ -285,8 +364,8 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
                     return;
                 }
                 let relative_id = id - 3;
-                let band_idx = (relative_id / 5) as usize;
-                let param_type = relative_id % 5;
+                let band_idx = (relative_id / 6) as usize;
+                let param_type = relative_id % 6;
 
                 if let Some(node) = self.nodes.get_mut(band_idx) {
                     match param_type {
@@ -295,6 +374,10 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
                         2 => node.q = value.clamp(0.1, 20.0),
                         3 => node.active = value > 0.5,
                         4 => node.filter_type = FilterType::from(value),
+                        5 => {
+                            node.order = (value.round() as u16).min((MAX_ORDER - 1) as u16);
+                            node.reset_state(); // Reset state when order changes
+                        }
                         _ => {}
                     }
                     node.update_coefficients(self.last_sample_rate);
@@ -311,8 +394,8 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
                     return None;
                 }
                 let relative_id = id - 3;
-                let band_idx = (relative_id / 5) as usize;
-                let param_type = relative_id % 5;
+                let band_idx = (relative_id / 6) as usize;
+                let param_type = relative_id % 6;
 
                 self.nodes.get(band_idx).map(|node| match param_type {
                     0 => node.freq,
@@ -326,6 +409,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
                         }
                     }
                     4 => node.filter_type as i32 as f32,
+                    5 => node.order as f32,
                     _ => 0.0,
                 })
             }
@@ -342,7 +426,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
         let default_freqs = [60.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0];
 
         for (i, &freq) in default_freqs.iter().enumerate() {
-            let base = 3 + (i as u32) * 5;
+            let base = 3 + (i as u32) * 6;
 
             let default_type = if i == 0 {
                 FilterType::LowShelf
@@ -357,6 +441,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
             params.insert(base + 2, 0.707); // Q
             params.insert(base + 3, 1.0); // Active
             params.insert(base + 4, default_type as i32 as f32);
+            params.insert(base + 5, 0.0); // Order (0 = 12dB/oct)
         }
 
         params
@@ -394,8 +479,15 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
             0.0,
         )];
 
+        let order_choices = vec![
+            "12 dB/oct".into(),
+            "24 dB/oct".into(),
+            "36 dB/oct".into(),
+            "48 dB/oct".into(),
+        ];
+
         for (i, node) in self.nodes.iter().enumerate() {
-            let base_id = 3 + (i as u32) * 5;
+            let base_id = 3 + (i as u32) * 6;
             let group = format!("Band {}", i + 1);
 
             let default_type = if i == 0 {
@@ -447,6 +539,14 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
                 node.filter_type as u32,
                 filter_type_choices.clone(),
                 default_type as u32,
+            ));
+            params.push(PluginParameter::new_choice(
+                base_id + 5,
+                "Slope",
+                &group,
+                node.order as u32,
+                order_choices.clone(),
+                0, // Default: 12 dB/oct
             ));
         }
 

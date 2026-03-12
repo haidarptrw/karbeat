@@ -12,9 +12,11 @@ use serde::{Deserialize, Serialize};
 use crate::{
     commands::AudioCommand,
     core::project::{
-        ApplicationState, Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource, PluginInstance, clip::ClipId, generator::GeneratorId, mixer::MixerChannel
+        clip::ClipId, generator::GeneratorId, mixer::MixerChannel, ApplicationState, Clip,
+        GeneratorInstance, GeneratorInstanceType, KarbeatSource, PluginInstance,
     },
-    ctx, define_id, utils::color::Color,
+    ctx, define_id,
+    utils::color::Color,
 };
 
 define_id!(TrackId);
@@ -294,7 +296,7 @@ impl ApplicationState {
         self.add_new_midi_track_with_generator_id(registry_id)
     }
 
-    /// Remove a track and clean up its mixer channel, routing, and generator.
+    /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
     pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<()> {
         // Get the generator ID before removing the track
         let generator_id = self
@@ -317,6 +319,9 @@ impl ApplicationState {
         if let Some(gen_id) = generator_id {
             self.generator_pool.remove(&gen_id);
         }
+
+        // Remove all automation lanes for this track
+        self.remove_automation_lanes_for_track(track_id);
 
         self.update_max_sample_index();
 
