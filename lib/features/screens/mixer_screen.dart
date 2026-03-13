@@ -40,7 +40,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
     // Channel entries: pair each track ID with its mixer channel data
     final channelEntries = <_ChannelEntry>[];
-    for (final trackId in mixerState.channels.keys) {
+
+    final sortedTrackIds = mixerState.channels.keys.toList()..sort();
+    for (final trackId in sortedTrackIds) {
       final channel = mixerState.channels[trackId]!;
       final trackName = tracks[trackId]?.name ?? 'Track $trackId';
       channelEntries.add(
@@ -107,62 +109,65 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                         itemCount: channelEntries.length,
                         itemBuilder: (context, index) {
                           final entry = channelEntries[index];
-                          return _ChannelStrip(
-                            entry: entry,
-                            onVolumeChanged: (value) {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [UiMixerChannelParams.volume(value)],
-                              );
-                            },
-                            onVolumeChangeStart: () {
-                              state.markParamTouched(entry.id, 'volume');
-                            },
-                            onVolumeChangeEnd: () {
-                              state.markParamReleased(entry.id, 'volume');
-                            },
-                            onPanChanged: (value) {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [UiMixerChannelParams.pan(value)],
-                              );
-                            },
-                            onPanChangeStart: () {
-                              state.markParamTouched(entry.id, 'pan');
-                            },
-                            onPanChangeEnd: () {
-                              state.markParamReleased(entry.id, 'pan');
-                            },
-                            onMuteToggled: () {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [
-                                  UiMixerChannelParams.mute(
-                                    !entry.channel.mute,
-                                  ),
-                                ],
-                              );
-                            },
-                            onSoloToggled: () {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [
-                                  UiMixerChannelParams.solo(
-                                    !entry.channel.solo,
-                                  ),
-                                ],
-                              );
-                            },
-                            isSelected:
-                                _selectedChannelId == entry.id &&
-                                !_isSelectedBus &&
-                                !entry.isMaster,
-                            onTap: () {
-                              setState(() {
-                                _selectedChannelId = entry.id;
-                                _isSelectedBus = false;
-                              });
-                            },
+                          return KeyedSubtree(
+                            key: ValueKey('mixer_track_${entry.id}'),
+                            child: _ChannelStrip(
+                              entry: entry,
+                              onVolumeChanged: (value) {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [UiMixerChannelParams.volume(value)],
+                                );
+                              },
+                              onVolumeChangeStart: () {
+                                state.markParamTouched(entry.id, 'volume');
+                              },
+                              onVolumeChangeEnd: () {
+                                state.markParamReleased(entry.id, 'volume');
+                              },
+                              onPanChanged: (value) {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [UiMixerChannelParams.pan(value)],
+                                );
+                              },
+                              onPanChangeStart: () {
+                                state.markParamTouched(entry.id, 'pan');
+                              },
+                              onPanChangeEnd: () {
+                                state.markParamReleased(entry.id, 'pan');
+                              },
+                              onMuteToggled: () {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [
+                                    UiMixerChannelParams.mute(
+                                      !entry.channel.mute,
+                                    ),
+                                  ],
+                                );
+                              },
+                              onSoloToggled: () {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [
+                                    UiMixerChannelParams.solo(
+                                      !entry.channel.solo,
+                                    ),
+                                  ],
+                                );
+                              },
+                              isSelected:
+                                  _selectedChannelId == entry.id &&
+                                  !_isSelectedBus &&
+                                  !entry.isMaster,
+                              onTap: () {
+                                setState(() {
+                                  _selectedChannelId = entry.id;
+                                  _isSelectedBus = false;
+                                });
+                              },
+                            ),
                           );
                         },
                       ),
@@ -249,56 +254,59 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     }
 
                     final entry = busEntries[index];
-                    return _ChannelStrip(
-                      entry: entry,
-                      onVolumeChanged: (value) {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [UiMixerChannelParams.volume(value)],
-                        );
-                      },
-                      onVolumeChangeStart: () {
-                        state.markParamTouched(entry.id, 'volume');
-                      },
-                      onVolumeChangeEnd: () {
-                        state.markParamReleased(entry.id, 'volume');
-                      },
-                      onPanChanged: (value) {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [UiMixerChannelParams.pan(value)],
-                        );
-                      },
-                      onPanChangeStart: () {
-                        state.markParamTouched(entry.id, 'pan');
-                      },
-                      onPanChangeEnd: () {
-                        state.markParamReleased(entry.id, 'pan');
-                      },
-                      onMuteToggled: () {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [
-                            UiMixerChannelParams.mute(!entry.channel.mute),
-                          ],
-                        );
-                      },
-                      onSoloToggled: () {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [
-                            UiMixerChannelParams.solo(!entry.channel.solo),
-                          ],
-                        );
-                      },
-                      isSelected:
-                          _selectedChannelId == entry.id && _isSelectedBus,
-                      onTap: () {
-                        setState(() {
-                          _selectedChannelId = entry.id;
-                          _isSelectedBus = true;
-                        });
-                      },
+                    return KeyedSubtree(
+                      key: ValueKey('mixer_bus_${entry.id}'),
+                      child: _ChannelStrip(
+                        entry: entry,
+                        onVolumeChanged: (value) {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [UiMixerChannelParams.volume(value)],
+                          );
+                        },
+                        onVolumeChangeStart: () {
+                          state.markParamTouched(entry.id, 'volume');
+                        },
+                        onVolumeChangeEnd: () {
+                          state.markParamReleased(entry.id, 'volume');
+                        },
+                        onPanChanged: (value) {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [UiMixerChannelParams.pan(value)],
+                          );
+                        },
+                        onPanChangeStart: () {
+                          state.markParamTouched(entry.id, 'pan');
+                        },
+                        onPanChangeEnd: () {
+                          state.markParamReleased(entry.id, 'pan');
+                        },
+                        onMuteToggled: () {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [
+                              UiMixerChannelParams.mute(!entry.channel.mute),
+                            ],
+                          );
+                        },
+                        onSoloToggled: () {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [
+                              UiMixerChannelParams.solo(!entry.channel.solo),
+                            ],
+                          );
+                        },
+                        isSelected:
+                            _selectedChannelId == entry.id && _isSelectedBus,
+                        onTap: () {
+                          setState(() {
+                            _selectedChannelId = entry.id;
+                            _isSelectedBus = true;
+                          });
+                        },
+                      ),
                     );
                   },
                 ),

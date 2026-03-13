@@ -929,6 +929,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     return overlays;
   }
 
+  final Map<Color, Color> _contrastColorCache = {};
+
+  // 2. Create a helper function that checks the cache first
+  Color _getContrastColor(Color backgroundColor) {
+    // putIfAbsent checks if the key exists. If it does, it returns the cached value instantly.
+    // If it doesn't, it runs the expensive computeLuminance() exactly once, caches it, and returns it.
+    return _contrastColorCache.putIfAbsent(backgroundColor, () {
+      return backgroundColor.computeLuminance() > 0.5
+          ? Colors.black
+          : Colors.white;
+    });
+  }
+
   Widget _buildAddButton() {
     return SizedBox(
       height: 60,
@@ -1027,7 +1040,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           margin: const EdgeInsets.only(bottom: 2),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: Colors.grey.shade300,
+            color: Color(int.parse(track.color.substring(1), radix: 16)),
             border: Border(
               bottom: BorderSide(color: Colors.grey.shade400, width: 1),
               right: BorderSide(color: Colors.grey.shade400, width: 1),
@@ -1054,7 +1067,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     Text(
                       "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: _getContrastColor(
+                          Color(int.parse(track.color.substring(1), radix: 16)),
+                        ),
+                        // color: Colors.grey.shade600, // use inverse color of track color for better contrast
                         fontSize: 10,
                       ),
                     ),
