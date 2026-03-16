@@ -190,7 +190,7 @@ class _DynamicPluginScreenState extends ConsumerState<DynamicPluginScreen> {
             onNoteOn: _handleNoteOn,
             onNoteOff: _handleNoteOff,
             activeNotes: _activeNotes,
-            initialCenterNote: 60,
+            initialCenterNote: 72,
           ),
         ],
       ),

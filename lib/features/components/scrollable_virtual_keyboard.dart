@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/models/piano_key.dart';
+import 'package:karbeat/utils/formatter.dart';
 
 /// A horizontally scrollable virtual piano keyboard that supports all 128 MIDI notes.
 /// Used for playing notes live in plugin screens and piano roll.
@@ -34,7 +35,8 @@ class ScrollableVirtualKeyboard extends StatefulWidget {
 class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
   late ScrollController _scrollController;
   static const double _whiteKeyWidth = 40.0;
-  static const int _totalNotes = 128; // MIDI notes 0-127
+  static const int _minNote = 21; // A0
+  static const int _maxNote = 120; // C9
 
   // Track notes triggered by PC keyboard
   final Set<int> _keyboardActiveNotes = {};
@@ -68,7 +70,7 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
     // Calculate approximate scroll position for the given note
     // Count white keys up to this note
     int whiteKeysBefore = 0;
-    for (int i = 0; i < midiNote; i++) {
+    for (int i = _minNote; i < midiNote; i++) {
       if (!_isBlack(i)) whiteKeysBefore++;
     }
 
@@ -91,8 +93,9 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
     int noteIndex = note % 12;
     // Only show C notes with octave number
     if (noteIndex == 0) {
-      int octave = note ~/ 12;
-      return 'C$octave';
+      // int octave = note ~/ 12;
+      // return 'C$octave';
+      return numToMidiKey(note);
     }
     return '';
   }
@@ -152,7 +155,7 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
               builder: (context, constraints) {
                 // Count total white keys
                 int whiteKeyCount = 0;
-                for (int i = 0; i < _totalNotes; i++) {
+                for (int i = _minNote; i <= _maxNote; i++) {
                   if (!_isBlack(i)) whiteKeyCount++;
                 }
 
@@ -194,7 +197,7 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
 
   List<Widget> _buildWhiteKeys(double keyHeight, Set<int> activeNotes) {
     List<Widget> keys = [];
-    for (int note = 0; note < _totalNotes; note++) {
+    for (int note = _minNote; note <= _maxNote; note++) {
       if (!_isBlack(note)) {
         final isPressed = activeNotes.contains(note);
         keys.add(
@@ -222,7 +225,7 @@ class _ScrollableVirtualKeyboardState extends State<ScrollableVirtualKeyboard> {
     List<Widget> keys = [];
     int whiteIndex = 0;
 
-    for (int note = 0; note < _totalNotes; note++) {
+    for (int note = _minNote; note <= _maxNote; note++) {
       if (_isBlack(note)) {
         final isPressed = activeNotes.contains(note);
         double left = (whiteIndex * _whiteKeyWidth) - (blackKeyWidth / 2);

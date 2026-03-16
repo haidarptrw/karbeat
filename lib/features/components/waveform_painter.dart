@@ -251,9 +251,9 @@ class StereoWaveformClipPainter extends CustomPainter {
   final double offsetSamples;
   final double ratio;
 
-  /// Visible pixel range (in the painter's local coords) from the scroll controller.
-  final double visibleStartPx;
-  final double visibleEndPx;
+  /// Scroll controller used for repainting
+  final ScrollController scrollController;
+  final double clipLeftOffset;
 
   StereoWaveformClipPainter({
     required this.samples,
@@ -262,9 +262,9 @@ class StereoWaveformClipPainter extends CustomPainter {
     required this.zoomLevel,
     required this.offsetSamples,
     this.ratio = 1.0,
-    required this.visibleStartPx,
-    required this.visibleEndPx,
-  });
+    required this.scrollController,
+    required this.clipLeftOffset,
+  }) : super(repaint: scrollController);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -279,9 +279,25 @@ class StereoWaveformClipPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
+    double scrollOffset = 0;
+    double viewportWidth = 2000; // fallback
+    if (scrollController.hasClients) {
+      scrollOffset = scrollController.offset;
+      if (scrollController.position.hasViewportDimension) {
+        viewportWidth = scrollController.position.viewportDimension;
+      }
+    }
+    const double pad = 50;
+    final double vLeft = (scrollOffset - clipLeftOffset - pad).clamp(
+      0,
+      size.width,
+    );
+    final double vRight = (scrollOffset - clipLeftOffset + viewportWidth + pad)
+        .clamp(0, size.width);
+
     // Center divider — only draw within visible range
-    final double divLeft = visibleStartPx.clamp(0, size.width);
-    final double divRight = visibleEndPx.clamp(0, size.width);
+    final double divLeft = vLeft.clamp(0, size.width);
+    final double divRight = vRight.clamp(0, size.width);
     final dividerPaint = Paint()
       ..color = Colors.white.withAlpha(50)
       ..strokeWidth = 1.0;
@@ -292,9 +308,17 @@ class StereoWaveformClipPainter extends CustomPainter {
     );
 
     if (framesPerPixel < 1.0) {
-      _paintConnectedLines(canvas, size, paint, totalFrames);
+      _paintConnectedLines(canvas, size, paint, totalFrames, vLeft, vRight);
     } else {
-      _paintVerticalBars(canvas, size, paint, totalFrames, framesPerPixel);
+      _paintVerticalBars(
+        canvas,
+        size,
+        paint,
+        totalFrames,
+        framesPerPixel,
+        vLeft,
+        vRight,
+      );
     }
   }
 
@@ -304,10 +328,9 @@ class StereoWaveformClipPainter extends CustomPainter {
     Size size,
     Paint paint,
     int totalFrames,
+    double vLeft,
+    double vRight,
   ) {
-    final double vLeft = visibleStartPx.clamp(0, size.width);
-    final double vRight = visibleEndPx.clamp(0, size.width);
-
     // Convert visible pixel range → frame range
     final double startFrameFloat =
         (offsetSamples + (vLeft * zoomLevel)) * ratio;
@@ -358,10 +381,9 @@ class StereoWaveformClipPainter extends CustomPainter {
     Paint paint,
     int totalFrames,
     double framesPerPixel,
+    double vLeft,
+    double vRight,
   ) {
-    final double vLeft = visibleStartPx.clamp(0, size.width);
-    final double vRight = visibleEndPx.clamp(0, size.width);
-
     // Intersect data bounds with viewport bounds
     final double dataFirstPixel = -offsetSamples / zoomLevel;
     final double dataLastPixel =
@@ -471,8 +493,8 @@ class StereoWaveformClipPainter extends CustomPainter {
     return oldDelegate.offsetSamples != offsetSamples ||
         oldDelegate.zoomLevel != zoomLevel ||
         oldDelegate.ratio != ratio ||
-        oldDelegate.visibleStartPx != visibleStartPx ||
-        oldDelegate.visibleEndPx != visibleEndPx ||
+        oldDelegate.scrollController != scrollController ||
+        oldDelegate.clipLeftOffset != clipLeftOffset ||
         !identical(oldDelegate.samples, samples) ||
         oldDelegate.color != color;
   }
@@ -488,8 +510,8 @@ class MonoWaveformClipPainter extends CustomPainter {
   final double zoomLevel;
   final double offsetSamples;
   final double ratio;
-  final double visibleStartPx;
-  final double visibleEndPx;
+  final ScrollController scrollController;
+  final double clipLeftOffset;
 
   MonoWaveformClipPainter({
     required this.samples,
@@ -498,9 +520,9 @@ class MonoWaveformClipPainter extends CustomPainter {
     required this.zoomLevel,
     required this.offsetSamples,
     this.ratio = 1.0,
-    required this.visibleStartPx,
-    required this.visibleEndPx,
-  });
+    required this.scrollController,
+    required this.clipLeftOffset,
+  }) : super(repaint: scrollController);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -515,10 +537,34 @@ class MonoWaveformClipPainter extends CustomPainter {
     final int totalFrames = samples.length ~/ 2;
     final double framesPerPixel = zoomLevel * ratio;
 
+    double scrollOffset = 0;
+    double viewportWidth = 2000;
+    if (scrollController.hasClients) {
+      scrollOffset = scrollController.offset;
+      if (scrollController.position.hasViewportDimension) {
+        viewportWidth = scrollController.position.viewportDimension;
+      }
+    }
+    const double pad = 50;
+    final double vLeft = (scrollOffset - clipLeftOffset - pad).clamp(
+      0,
+      size.width,
+    );
+    final double vRight = (scrollOffset - clipLeftOffset + viewportWidth + pad)
+        .clamp(0, size.width);
+
     if (framesPerPixel < 1.0) {
-      _paintConnectedLines(canvas, size, paint, totalFrames);
+      _paintConnectedLines(canvas, size, paint, totalFrames, vLeft, vRight);
     } else {
-      _paintVerticalBars(canvas, size, paint, totalFrames, framesPerPixel);
+      _paintVerticalBars(
+        canvas,
+        size,
+        paint,
+        totalFrames,
+        framesPerPixel,
+        vLeft,
+        vRight,
+      );
     }
   }
 
@@ -527,10 +573,9 @@ class MonoWaveformClipPainter extends CustomPainter {
     Size size,
     Paint paint,
     int totalFrames,
+    double vLeft,
+    double vRight,
   ) {
-    final double vLeft = visibleStartPx.clamp(0, size.width);
-    final double vRight = visibleEndPx.clamp(0, size.width);
-
     final double startFrameFloat =
         (offsetSamples + (vLeft * zoomLevel)) * ratio;
     final double endFrameFloat = (offsetSamples + (vRight * zoomLevel)) * ratio;
@@ -570,10 +615,9 @@ class MonoWaveformClipPainter extends CustomPainter {
     Paint paint,
     int totalFrames,
     double framesPerPixel,
+    double vLeft,
+    double vRight,
   ) {
-    final double vLeft = visibleStartPx.clamp(0, size.width);
-    final double vRight = visibleEndPx.clamp(0, size.width);
-
     final double dataFirstPixel = -offsetSamples / zoomLevel;
     final double dataLastPixel =
         ((totalFrames / ratio) - offsetSamples) / zoomLevel;
@@ -657,8 +701,8 @@ class MonoWaveformClipPainter extends CustomPainter {
     return oldDelegate.offsetSamples != offsetSamples ||
         oldDelegate.zoomLevel != zoomLevel ||
         oldDelegate.ratio != ratio ||
-        oldDelegate.visibleStartPx != visibleStartPx ||
-        oldDelegate.visibleEndPx != visibleEndPx ||
+        oldDelegate.scrollController != scrollController ||
+        oldDelegate.clipLeftOffset != clipLeftOffset ||
         !identical(oldDelegate.samples, samples) ||
         oldDelegate.color != color;
   }

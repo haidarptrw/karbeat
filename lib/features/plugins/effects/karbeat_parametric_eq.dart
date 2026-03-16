@@ -36,8 +36,7 @@ double _xToFreq(double x, double width) {
 
 double _gainToY(double gain, double height) {
   // Y is inverted (0 at top, height at bottom)
-  final normalized =
-      (gain.clamp(minGain, maxGain) - minGain) / (maxGain - minGain);
+  final normalized = (gain - minGain) / (maxGain - minGain);
   return height - (normalized * height);
 }
 

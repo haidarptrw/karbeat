@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/utils/formatter.dart';
 
 class VirtualKeyboard extends StatefulWidget {
   final int startOctave;
   final int octaveCount;
   final Function(int note) onNoteOn;
   final Function(int note) onNoteOff;
-  final Set<int> activeNotes; // External active notes (e.g. from laptop keyboard)
+  final Set<int>
+  activeNotes; // External active notes (e.g. from laptop keyboard)
 
   const VirtualKeyboard({
     super.key,
-    this.startOctave = 4, // Start at C3 (MIDI 48)
+    this.startOctave = 5, // Start at C4 (MIDI 60)
     this.octaveCount = 2,
     required this.onNoteOn,
     required this.onNoteOff,
@@ -28,7 +30,7 @@ class _VirtualKeyboardState extends State<VirtualKeyboard> {
   @override
   void initState() {
     super.initState();
-    _startNote = (widget.startOctave) * 12; // MIDI 48 for C3
+    _startNote = (widget.startOctave) * 12 - 1; // MIDI 48 for C3
     _totalKeys = widget.octaveCount * 12;
   }
 
@@ -43,7 +45,7 @@ class _VirtualKeyboardState extends State<VirtualKeyboard> {
       builder: (context, constraints) {
         // Calculate white key width
         // 7 white keys per octave
-        int whiteKeyCount = widget.octaveCount * 7; 
+        int whiteKeyCount = widget.octaveCount * 7;
         double whiteKeyWidth = constraints.maxWidth / whiteKeyCount;
 
         List<Widget> whiteKeys = [];
@@ -74,8 +76,10 @@ class _VirtualKeyboardState extends State<VirtualKeyboard> {
             // BLACK KEY
             // Positioned relative to the previous white key
             // Black keys are usually centered on the line between white keys
-            double left = (whiteIndex * whiteKeyWidth) - (whiteKeyWidth * 0.35); // Slight offset
-            
+            double left =
+                (whiteIndex * whiteKeyWidth) -
+                (whiteKeyWidth * 0.35); // Slight offset
+
             blackKeys.add(
               Positioned(
                 left: left,
@@ -170,9 +174,9 @@ class _PianoKeyState extends State<_PianoKey> {
             child: Text(
               _getNoteLabel(widget.note),
               style: TextStyle(
-                color: isActive 
-                  ? Colors.black 
-                  : (widget.isBlack ? Colors.white54 : Colors.black54),
+                color: isActive
+                    ? Colors.black
+                    : (widget.isBlack ? Colors.white54 : Colors.black54),
                 fontSize: 8,
               ),
             ),
@@ -184,7 +188,7 @@ class _PianoKeyState extends State<_PianoKey> {
 
   String _getNoteLabel(int note) {
     // Only show C notes label to reduce clutter
-    if (note % 12 == 0) return "C${(note / 12).floor()}";
+    if (note % 12 == 0) return numToMidiKey(note);
     return "";
   }
 }
