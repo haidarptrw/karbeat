@@ -93,8 +93,8 @@ pub struct AudioEngine {
     // =========================
     // Automation Event Queue
     // =========================
-    track_automation_events: HashMap<TrackId, Vec<TrackAutomationEvent>>,
-    bus_automation_events: HashMap<BusId, Vec<BusAutomationEvent>>,
+    track_automation_events: Vec<(TrackId, Vec<TrackAutomationEvent>)>,
+    bus_automation_events: Vec<(BusId, Vec<BusAutomationEvent>)>,
     master_automation_events: Vec<MasterAutomationEvent>,
 }
 
@@ -186,8 +186,8 @@ impl AudioEngine {
             bus_temp_buffer: Vec::with_capacity(2048),
             cached_routing_order: Vec::new(),
             playback_mode: PlaybackMode::Song,
-            track_automation_events: HashMap::new(),
-            bus_automation_events: HashMap::new(),
+            track_automation_events: Vec::new(),
+            bus_automation_events: Vec::new(),
             master_automation_events: Vec::new(),
         }
     }
@@ -613,7 +613,6 @@ impl AudioEngine {
                         .push(AudioFeedback::GeneratorParameterSnapshot(snapshot));
                 }
             }
-            #[allow(unused_variables)]
             AudioCommand::AddMasterEffect {
                 effect_id,
                 mut effect,
@@ -625,7 +624,6 @@ impl AudioEngine {
                     plugin: effect,
                 });
             }
-            #[allow(unused_variables)]
             AudioCommand::RemoveMasterEffect { effect_id } => {
                 if let Some(effects) = self
                     .plugin_state
@@ -636,7 +634,6 @@ impl AudioEngine {
                     self.plugin_state.master_effects.remove(effects);
                 }
             }
-            #[allow(unused_variables)]
             AudioCommand::SetMasterEffectParameter {
                 effect_id,
                 param_id,
@@ -896,7 +893,16 @@ impl AudioEngine {
         self.active_generators.retain(|g| g.active);
         for gen in self.active_generators.iter_mut() {
             gen.midi_events.clear();
+            gen.automation_events.clear();
         }
+
+        self.track_automation_events
+            .iter_mut()
+            .for_each(|(_, v)| v.clear());
+        self.bus_automation_events
+            .iter_mut()
+            .for_each(|(_, v)| v.clear());
+        self.master_automation_events.clear();
 
         // Audio voices are One-Shot per buffer (cleared every frame)
         self.active_oneshots.clear();
@@ -1165,7 +1171,11 @@ impl AudioEngine {
                 let mut bus_pan = bus_settings.pan;
 
                 // CONSUME BUS AUTOMATION
-                if let Some(auto_events) = self.bus_automation_events.get(bus_id) {
+                if let Some((_, auto_events)) = self
+                    .bus_automation_events
+                    .iter()
+                    .find(|(id, _)| *id == *bus_id)
+                {
                     for event in auto_events {
                         match event {
                             BusAutomationEvent::Volume(v) => bus_volume = *v,
@@ -1336,7 +1346,7 @@ impl AudioEngine {
     fn apply_mixer_channel_with_effects(
         mixer_channel: &MixerChannel,
         track_effects: &mut HashMap<TrackId, Vec<AudioEffectInstance>>,
-        track_automation_events: &HashMap<TrackId, Vec<TrackAutomationEvent>>,
+        track_automation_events: &[(TrackId, Vec<TrackAutomationEvent>)],
         track_id: TrackId,
         buffer: &mut [f32],
         channels: usize,
@@ -1346,7 +1356,10 @@ impl AudioEngine {
         let mut track_pan = mixer_channel.pan;
 
         // CONSUME TRACK AUTOMATION
-        if let Some(auto_events) = track_automation_events.get(&track_id) {
+        if let Some((_, auto_events)) = track_automation_events
+            .iter()
+            .find(|(id, _)| *id == track_id)
+        {
             for event in auto_events {
                 match event {
                     TrackAutomationEvent::Volume(v) => track_volume = *v,
@@ -1840,49 +1853,85 @@ impl AudioEngine {
                     }
                 }
                 AutomationTarget::TrackVolume(track_id) => {
-                    self.track_automation_events
-                        .entry(*track_id)
-                        .or_default()
-                        .push(TrackAutomationEvent::Volume(value));
+                    let events = if let Some(pos) = self
+                        .track_automation_events
+                        .iter()
+                        .position(|(id, _)| id == track_id)
+                    {
+                        &mut self.track_automation_events[pos].1
+                    } else {
+                        self.track_automation_events.push((*track_id, Vec::new()));
+                        &mut self.track_automation_events.last_mut().unwrap().1
+                    };
+                    events.push(TrackAutomationEvent::Volume(value));
                 }
                 AutomationTarget::TrackPan(track_id) => {
-                    self.track_automation_events
-                        .entry(*track_id)
-                        .or_default()
-                        .push(TrackAutomationEvent::Pan(value));
+                    let events = if let Some(pos) = self
+                        .track_automation_events
+                        .iter()
+                        .position(|(id, _)| id == track_id)
+                    {
+                        &mut self.track_automation_events[pos].1
+                    } else {
+                        self.track_automation_events.push((*track_id, Vec::new()));
+                        &mut self.track_automation_events.last_mut().unwrap().1
+                    };
+                    events.push(TrackAutomationEvent::Pan(value));
                 }
                 AutomationTarget::TrackPluginParam {
                     track_id,
                     effect_id,
                     param_id,
                 } => {
-                    self.track_automation_events
-                        .entry(*track_id)
-                        .or_default()
-                        .push(TrackAutomationEvent::PluginParam {
-                            effect_id: *effect_id,
-                            param_id: *param_id,
-                            value,
-                        });
+                    let events = if let Some(pos) = self
+                        .track_automation_events
+                        .iter()
+                        .position(|(id, _)| id == track_id)
+                    {
+                        &mut self.track_automation_events[pos].1
+                    } else {
+                        self.track_automation_events.push((*track_id, Vec::new()));
+                        &mut self.track_automation_events.last_mut().unwrap().1
+                    };
+                    events.push(TrackAutomationEvent::PluginParam {
+                        effect_id: *effect_id,
+                        param_id: *param_id,
+                        value,
+                    });
                 }
                 AutomationTarget::BusVolume(bus_id) => {
-                    self.bus_automation_events
-                        .entry(*bus_id)
-                        .or_default()
-                        .push(BusAutomationEvent::Volume(value));
+                    let events = if let Some(pos) = self
+                        .bus_automation_events
+                        .iter()
+                        .position(|(id, _)| id == bus_id)
+                    {
+                        &mut self.bus_automation_events[pos].1
+                    } else {
+                        self.bus_automation_events.push((*bus_id, Vec::new()));
+                        &mut self.bus_automation_events.last_mut().unwrap().1
+                    };
+                    events.push(BusAutomationEvent::Volume(value));
                 }
                 AutomationTarget::BusPluginParam {
                     bus_id,
                     effect_id,
                     param_id,
                 } => {
-                    self.bus_automation_events.entry(*bus_id).or_default().push(
-                        BusAutomationEvent::PluginParam {
-                            effect_id: *effect_id,
-                            param_id: *param_id,
-                            value,
-                        },
-                    );
+                    let events = if let Some(pos) = self
+                        .bus_automation_events
+                        .iter()
+                        .position(|(id, _)| id == bus_id)
+                    {
+                        &mut self.bus_automation_events[pos].1
+                    } else {
+                        self.bus_automation_events.push((*bus_id, Vec::new()));
+                        &mut self.bus_automation_events.last_mut().unwrap().1
+                    };
+                    events.push(BusAutomationEvent::PluginParam {
+                        effect_id: *effect_id,
+                        param_id: *param_id,
+                        value,
+                    });
                 }
                 AutomationTarget::MasterVolume => {
                     self.master_automation_events

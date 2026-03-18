@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/features/plugins/effects/karbeat_parametric_eq.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -915,27 +916,35 @@ class _PanKnob extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        SizedBox(
-          width: 56,
-          height: 20,
-          child: SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 3,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-              activeTrackColor: accentColor,
-              inactiveTrackColor: Colors.white12,
-              thumbColor: accentColor,
-              overlayShape: SliderComponentShape.noOverlay,
-            ),
-            child: Slider(
-              value: value,
-              min: -1.0,
-              max: 1.0,
-              onChanged: onChanged,
-              onChangeStart: onChangeStart != null
-                  ? (_) => onChangeStart!()
-                  : null,
-              onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+        FineGrainedInputWrapper(
+          value: value,
+          onChanged: onChanged,
+          step: 0.01,
+          min: -1.0,
+          max: 1.0,
+          child: SizedBox(
+            width: 56,
+            height: 20,
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                activeTrackColor: accentColor,
+                inactiveTrackColor: Colors.white12,
+                thumbColor: accentColor,
+                overlayShape: SliderComponentShape.noOverlay,
+              ),
+              child: Slider(
+                value: value,
+                min: -1.0,
+                max: 1.0,
+                onChanged: onChanged,
+                allowedInteraction: SliderInteraction.slideThumb,
+                onChangeStart: onChangeStart != null
+                    ? (_) => onChangeStart!()
+                    : null,
+                onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+              ),
             ),
           ),
         ),
@@ -973,28 +982,42 @@ class _VolumeFader extends StatelessWidget {
         final sliderWidth = constraints.maxHeight;
         return RotatedBox(
           quarterTurns: 3,
-          child: SizedBox(
-            width: sliderWidth,
-            height: constraints.maxWidth,
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 4,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                activeTrackColor: accentColor,
-                inactiveTrackColor: Colors.white10,
-                thumbColor: accentColor,
-                overlayColor: accentColor.withValues(alpha: 0.15),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-              ),
-              child: Slider(
-                value: value.clamp(-60.0, 6.0),
-                min: -60.0,
-                max: 6.0,
-                onChanged: onChanged,
-                onChangeStart: onChangeStart != null
-                    ? (_) => onChangeStart!()
-                    : null,
-                onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+          child: FineGrainedInputWrapper(
+            value: value,
+            onChanged: onChanged,
+            step: 0.1,
+            min: -60.0,
+            max: 6.0,
+            child: SizedBox(
+              width: sliderWidth,
+              height: constraints.maxWidth,
+              child: SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 4,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 7,
+                  ),
+                  activeTrackColor: accentColor,
+                  inactiveTrackColor: Colors.white10,
+                  thumbColor: accentColor,
+                  overlayColor: accentColor.withValues(alpha: 0.15),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 12,
+                  ),
+                ),
+                child: Slider(
+                  value: value.clamp(-60.0, 6.0),
+                  min: -60.0,
+                  max: 6.0,
+                  onChanged: onChanged,
+                  allowedInteraction: SliderInteraction.slideThumb,
+                  onChangeStart: onChangeStart != null
+                      ? (_) => onChangeStart!()
+                      : null,
+                  onChangeEnd: onChangeEnd != null
+                      ? (_) => onChangeEnd!()
+                      : null,
+                ),
               ),
             ),
           ),
