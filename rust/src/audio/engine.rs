@@ -355,7 +355,11 @@ impl AudioEngine {
         };
 
         // Verify the generator exists in plugin_state
-        if !self.plugin_state.generators.contains_key(&generator_id) {
+        if self
+            .plugin_state
+            .get_generator(generator_id.to_u32() as usize)
+            .is_none()
+        {
             log::warn!("Pattern preview: Generator {:?} not found", generator_id);
             self.stop_playback();
             return;
@@ -393,8 +397,7 @@ impl AudioEngine {
                 // Get the track_id from plugin_state if available
                 let track_id = self
                     .plugin_state
-                    .generators
-                    .get(&generator_id)
+                    .get_generator(generator_id.to_u32() as usize)
                     .map(|g| g.track_id)
                     .unwrap_or(TrackId::from(0));
 
@@ -436,7 +439,7 @@ impl AudioEngine {
     ) {
         for voice in active_generators.iter_mut() {
             // Reset the plugin via plugin_state (no lock needed)
-            if let Some(gen_instance) = plugin_state.generators.get_mut(&voice.id) {
+            if let Some(gen_instance) = plugin_state.get_generator_mut(voice.id.to_u32() as usize) {
                 gen_instance.plugin.reset();
             }
             // Clear any pending MIDI events that might have been queued
@@ -509,8 +512,10 @@ impl AudioEngine {
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 plugin.prepare(self.sample_rate as f32, buf_size);
 
-                self.plugin_state.generators.insert(
-                    generator_id,
+                let id_index = generator_id.to_u32() as usize;
+
+                self.plugin_state.insert_generator(
+                    id_index,
                     AudioGeneratorInstance {
                         id: generator_id,
                         track_id,
@@ -524,7 +529,8 @@ impl AudioEngine {
                 );
             }
             AudioCommand::RemoveGenerator { generator_id } => {
-                self.plugin_state.generators.remove(&generator_id);
+                let id_index = generator_id.to_u32() as usize;
+                self.plugin_state.remove_generator(id_index);
                 // Also remove any active voice referencing it
                 self.active_generators.retain(|v| v.id != generator_id);
                 log::info!("[AudioEngine] Removed generator {:?}", generator_id);
@@ -534,7 +540,10 @@ impl AudioEngine {
                 param_id,
                 value,
             } => {
-                if let Some(gen_instance) = self.plugin_state.generators.get_mut(&generator_id) {
+                if let Some(gen_instance) = self
+                    .plugin_state
+                    .get_generator_mut(generator_id.to_u32() as usize)
+                {
                     gen_instance.plugin.set_parameter(param_id, value);
                 }
             }
@@ -542,7 +551,10 @@ impl AudioEngine {
                 generator_id,
                 track_id,
             } => {
-                if let Some(gen_instance) = self.plugin_state.generators.get_mut(&generator_id) {
+                if let Some(gen_instance) = self
+                    .plugin_state
+                    .get_generator_mut(generator_id.to_u32() as usize)
+                {
                     gen_instance.track_id = track_id;
                 }
                 // Update active voice track association
@@ -561,21 +573,23 @@ impl AudioEngine {
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 effect.prepare(self.sample_rate as f32, buf_size);
 
-                self.plugin_state
-                    .track_effects
-                    .entry(track_id)
-                    .or_default()
-                    .push(AudioEffectInstance {
+                self.plugin_state.add_track_effect(
+                    track_id.to_u32() as usize,
+                    AudioEffectInstance {
                         id: effect_id,
                         plugin: effect,
-                    });
+                    },
+                );
                 log::info!("[AudioEngine] Added effect to track {:?}", track_id);
             }
             AudioCommand::RemoveTrackEffect {
                 track_id,
                 effect_id,
             } => {
-                if let Some(effects) = self.plugin_state.track_effects.get_mut(&track_id) {
+                if let Some(effects) = self
+                    .plugin_state
+                    .get_track_effects_mut(track_id.to_u32() as usize)
+                {
                     if let Some(effect) = effects.iter().position(|e| e.id == effect_id) {
                         effects.remove(effect);
                     }
@@ -587,7 +601,10 @@ impl AudioEngine {
                 param_id,
                 value,
             } => {
-                if let Some(effects) = self.plugin_state.track_effects.get_mut(&track_id) {
+                if let Some(effects) = self
+                    .plugin_state
+                    .get_track_effects_mut(track_id.to_u32() as usize)
+                {
                     if let Some(effect) = effects.iter().position(|e| e.id == effect_id) {
                         effects[effect].plugin.set_parameter(param_id, value);
                     }
@@ -595,7 +612,10 @@ impl AudioEngine {
             }
             AudioCommand::QueryGeneratorParameters { generator_id } => {
                 // Get all parameter values from the generator and send back
-                if let Some(gen_instance) = self.plugin_state.generators.get(&generator_id) {
+                if let Some(gen_instance) = self
+                    .plugin_state
+                    .get_generator(generator_id.to_u32() as usize)
+                {
                     let specs = gen_instance.plugin.get_parameter_specs();
                     let parameters: Vec<(u32, f32)> = specs
                         .iter()
@@ -652,12 +672,14 @@ impl AudioEngine {
             }
             AudioCommand::AddBus { bus_id, name } => {
                 // Initialize bus buffer and effects chain
-                self.plugin_state.bus_effects.insert(bus_id, Vec::new());
+                let id_index = bus_id.to_u32() as usize;
+                self.plugin_state.add_bus(id_index);
                 self.bus_buffers.insert(bus_id, Vec::new());
                 log::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
             }
             AudioCommand::RemoveBus { bus_id } => {
-                self.plugin_state.bus_effects.remove(&bus_id);
+                let id_index = bus_id.to_u32() as usize;
+                self.plugin_state.remove_bus(id_index);
                 self.bus_buffers.remove(&bus_id);
                 log::info!("[AudioEngine] Removed bus {:?}", bus_id);
             }
@@ -686,14 +708,13 @@ impl AudioEngine {
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 effect.prepare(self.sample_rate as f32, buf_size);
 
-                self.plugin_state
-                    .bus_effects
-                    .entry(bus_id)
-                    .or_default()
-                    .push(AudioEffectInstance {
+                self.plugin_state.add_bus_effect(
+                    bus_id.to_u32() as usize,
+                    AudioEffectInstance {
                         id: effect_id,
                         plugin: effect,
-                    });
+                    },
+                );
                 log::info!(
                     "[AudioEngine] Added effect {:?} to bus {:?}",
                     effect_id,
@@ -701,7 +722,10 @@ impl AudioEngine {
                 );
             }
             AudioCommand::RemoveBusEffect { bus_id, effect_id } => {
-                if let Some(effects) = self.plugin_state.bus_effects.get_mut(&bus_id) {
+                if let Some(effects) = self
+                    .plugin_state
+                    .get_bus_effects_mut(bus_id.to_u32() as usize)
+                {
                     if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
                         effects.remove(pos);
                     }
@@ -713,7 +737,10 @@ impl AudioEngine {
                 param_id,
                 value,
             } => {
-                if let Some(effects) = self.plugin_state.bus_effects.get_mut(&bus_id) {
+                if let Some(effects) = self
+                    .plugin_state
+                    .get_bus_effects_mut(bus_id.to_u32() as usize)
+                {
                     if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
                         effect.plugin.set_parameter(param_id, value);
                     }
@@ -731,7 +758,10 @@ impl AudioEngine {
                 track_id,
                 effect_id,
             } => {
-                if let Some(effects) = self.plugin_state.track_effects.get(&track_id) {
+                if let Some(effects) = self
+                    .plugin_state
+                    .get_track_effects(track_id.to_u32() as usize)
+                {
                     if let Some(effect_instance) = effects.iter().find(|e| e.id == effect_id) {
                         let specs = effect_instance.plugin.get_parameter_specs();
                         let parameters: Vec<(u32, f32)> = specs
@@ -776,7 +806,7 @@ impl AudioEngine {
                 }
             }
             AudioCommand::QueryBusEffectParameters { bus_id, effect_id } => {
-                if let Some(effects) = self.plugin_state.bus_effects.get(&bus_id) {
+                if let Some(effects) = self.plugin_state.get_bus_effects(bus_id.to_u32() as usize) {
                     if let Some(effect_instance) = effects.iter().find(|e| e.id == effect_id) {
                         let specs = effect_instance.plugin.get_parameter_specs();
                         let parameters: Vec<(u32, f32)> = specs
@@ -946,7 +976,10 @@ impl AudioEngine {
         // Fallback: If triple buffer hasn't synced yet, check plugin_state directly
         // This handles the case where AudioCommand::AddGenerator was received but
         // the UI hasn't updated current_state via triple buffer yet
-        if let Some(gen_instance) = self.plugin_state.generators.get(&generator_id) {
+        if let Some(gen_instance) = self
+            .plugin_state
+            .get_generator(generator_id.to_u32() as usize)
+        {
             let track_id = gen_instance.track_id;
 
             // Find or create voice
@@ -1051,7 +1084,10 @@ impl AudioEngine {
                 let events = &gen_voice.midi_events;
                 let param_events = &gen_voice.automation_events;
 
-                if let Some(gen_instance) = self.plugin_state.generators.get_mut(&gen_id) {
+                if let Some(gen_instance) = self
+                    .plugin_state
+                    .get_generator_mut(gen_id.to_u32() as usize)
+                {
                     // CONSUME AUTOMATION
                     for ev in param_events {
                         #[allow(irrefutable_let_patterns)]
@@ -1185,7 +1221,9 @@ impl AudioEngine {
                                 param_id,
                                 value,
                             } => {
-                                if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id)
+                                if let Some(effects) = self
+                                    .plugin_state
+                                    .get_bus_effects_mut(bus_id.to_u32() as usize)
                                 {
                                     if let Some(effect) =
                                         effects.iter_mut().find(|e| e.id == *effect_id)
@@ -1199,7 +1237,10 @@ impl AudioEngine {
                 }
 
                 // Apply bus effects
-                if let Some(effects) = self.plugin_state.bus_effects.get_mut(bus_id) {
+                if let Some(effects) = self
+                    .plugin_state
+                    .get_bus_effects_mut(bus_id.to_u32() as usize)
+                {
                     for effect in effects.iter_mut() {
                         effect.plugin.process(&mut self.mix_buffer);
                     }
@@ -1345,7 +1386,7 @@ impl AudioEngine {
     /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
     fn apply_mixer_channel_with_effects(
         mixer_channel: &MixerChannel,
-        track_effects: &mut HashMap<TrackId, Vec<AudioEffectInstance>>,
+        track_effects: &mut Vec<Vec<AudioEffectInstance>>,
         track_automation_events: &[(TrackId, Vec<TrackAutomationEvent>)],
         track_id: TrackId,
         buffer: &mut [f32],
@@ -1369,7 +1410,7 @@ impl AudioEngine {
                         param_id,
                         value,
                     } => {
-                        if let Some(effects) = track_effects.get_mut(&track_id) {
+                        if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
                             if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
                                 effect.plugin.set_parameter(*param_id, *value);
                             }
@@ -1387,7 +1428,7 @@ impl AudioEngine {
         }
 
         // Effects chain from plugin_state
-        if let Some(effects) = track_effects.get_mut(&track_id) {
+        if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
             for effect in effects.iter_mut() {
                 effect.plugin.process(buffer);
             }
@@ -1581,7 +1622,10 @@ impl AudioEngine {
         }
 
         // Check if the plugin exists in our owned state
-        if plugin_state.generators.contains_key(&gen_instance.id) {
+        if plugin_state
+            .get_generator(gen_instance.id.to_u32() as usize)
+            .is_some()
+        {
             // Create lightweight voice reference (actual plugin is in plugin_state)
             active_generators.push(GeneratorVoice::new(gen_instance.id, track_id, true));
             return Some(active_generators.len() - 1);

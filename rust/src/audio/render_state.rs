@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::{
     core::project::{
         automation::{AutomationId, AutomationPoint, AutomationTarget, CurveType},
-        mixer::{BusId, EffectId, MixerState},
+        mixer::{EffectId, MixerState},
         plugin::{KarbeatEffect, KarbeatGenerator},
         track::{
             midi::{Pattern, PatternId},
@@ -35,14 +35,115 @@ pub struct AudioEffectInstance {
 /// This is managed via AudioCommand, NOT cloned from ApplicationState
 #[derive(Default)]
 pub struct AudioPluginState {
-    /// Generator plugins keyed by GeneratorId
-    pub generators: HashMap<GeneratorId, AudioGeneratorInstance>,
-    /// Effect chain per track (owned by audio thread)
-    pub track_effects: HashMap<TrackId, Vec<AudioEffectInstance>>,
-    /// Master effect chain (owned by audio thread)
+    /// Generator plugins stored as an arena. Index = GeneratorId as usize.
+    /// `Option` allows us to "remove" generators without shifting the indices of others.
+    pub generators: Vec<Option<AudioGeneratorInstance>>,
+
+    /// Effect chain per track. Index = TrackId as usize.
+    /// Empty tracks simply hold an empty Vec, avoiding `Option` overhead.
+    pub track_effects: Vec<Vec<AudioEffectInstance>>,
+
+    /// Master effect chain
     pub master_effects: Vec<AudioEffectInstance>,
-    /// Bus effect chains (owned by audio thread)
-    pub bus_effects: HashMap<BusId, Vec<AudioEffectInstance>>,
+
+    /// Bus effect chains. Index = BusId as usize.
+    pub bus_effects: Vec<Vec<AudioEffectInstance>>,
+}
+
+impl AudioPluginState {
+    // ==========================================
+    // Generators
+    // ==========================================
+
+    /// Safely insert a generator, expanding the vector if the ID is out of bounds
+    pub fn insert_generator(&mut self, id_index: usize, instance: AudioGeneratorInstance) {
+        if id_index >= self.generators.len() {
+            self.generators.resize_with(id_index + 1, || None);
+        }
+        self.generators[id_index] = Some(instance);
+    }
+
+    /// Remove a generator without shifting other elements
+    pub fn remove_generator(&mut self, id_index: usize) {
+        if let Some(slot) = self.generators.get_mut(id_index) {
+            *slot = None;
+        }
+    }
+
+    /// Get a mutable reference to a specific generator
+    #[inline]
+    pub fn get_generator_mut(&mut self, id_index: usize) -> Option<&mut AudioGeneratorInstance> {
+        self.generators.get_mut(id_index).and_then(|g| g.as_mut())
+    }
+
+    /// Get an immutable reference to a specific generator
+    #[inline]
+    pub fn get_generator(&self, id_index: usize) -> Option<&AudioGeneratorInstance> {
+        self.generators.get(id_index).and_then(|g| g.as_ref())
+    }
+
+    // ==========================================
+    // Track Effects
+    // ==========================================
+
+    /// Add an effect to a track's chain, resizing the tracks array if needed
+    pub fn add_track_effect(&mut self, track_id_index: usize, effect: AudioEffectInstance) {
+        if track_id_index >= self.track_effects.len() {
+            self.track_effects.resize_with(track_id_index + 1, Vec::new);
+        }
+        self.track_effects[track_id_index].push(effect);
+    }
+
+    #[inline]
+    pub fn get_track_effects_mut(
+        &mut self,
+        track_id_index: usize,
+    ) -> Option<&mut Vec<AudioEffectInstance>> {
+        self.track_effects.get_mut(track_id_index)
+    }
+
+    #[inline]
+    pub fn get_track_effects(&self, track_id_index: usize) -> Option<&Vec<AudioEffectInstance>> {
+        self.track_effects.get(track_id_index)
+    }
+
+    // ==========================================
+    // Bus Effects
+    // ==========================================
+
+    /// Add an effect to a bus's chain, resizing the buses array if needed
+    pub fn add_bus_effect(&mut self, bus_id_index: usize, effect: AudioEffectInstance) {
+        if bus_id_index >= self.bus_effects.len() {
+            self.bus_effects.resize_with(bus_id_index + 1, Vec::new);
+        }
+        self.bus_effects[bus_id_index].push(effect);
+    }
+
+    pub fn add_bus(&mut self, bus_id_index: usize) {
+        if bus_id_index >= self.bus_effects.len() {
+            self.bus_effects.resize_with(bus_id_index + 1, Vec::new);
+        }
+        self.bus_effects[bus_id_index] = Vec::new();
+    }
+
+    pub fn remove_bus(&mut self, bus_id_index: usize) {
+        if let Some(bus) = self.bus_effects.get_mut(bus_id_index) {
+            bus.clear();
+        }
+    }
+
+    #[inline]
+    pub fn get_bus_effects_mut(
+        &mut self,
+        bus_id_index: usize,
+    ) -> Option<&mut Vec<AudioEffectInstance>> {
+        self.bus_effects.get_mut(bus_id_index)
+    }
+
+    #[inline]
+    pub fn get_bus_effects(&self, bus_id_index: usize) -> Option<&Vec<AudioEffectInstance>> {
+        self.bus_effects.get(bus_id_index)
+    }
 }
 
 // =============================================================================
