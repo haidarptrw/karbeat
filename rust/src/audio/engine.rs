@@ -437,6 +437,9 @@ impl AudioEngine {
     }
 
     fn stop_playback(&mut self) {
+        self.is_playing = false;
+        self.is_pattern_playing = false;
+        self.stop_all_active_generators();
         self.reset_playhead();
     }
 
@@ -478,10 +481,7 @@ impl AudioEngine {
                 self.emit_current_playback_position();
             }
             AudioCommand::StopAndReset => {
-                self.stop_all_active_generators();
-                self.is_playing = false;
-                self.is_pattern_playing = false;
-                self.reset_playhead();
+                self.stop_playback();
             }
             AudioCommand::SetPlayhead(samples) => {
                 log::info!("[AudioEngine] Seek: {}", samples);
