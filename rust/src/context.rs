@@ -11,7 +11,7 @@ use triple_buffer::Input;
 
 use crate::{
     api::mixer::MixerParamEvent,
-    audio::{event::PlaybackPosition, render_state::AudioRenderState},
+    audio::{event::TransportFeedback, render_state::AudioRenderState},
     commands::{AudioCommand, AudioFeedback},
     core::{history::HistoryManager, project::ApplicationState},
     frb_generated::StreamSink,
@@ -44,7 +44,7 @@ pub struct KarbeatContext {
     pub stream_guard: Mutex<Option<cpal::Stream>>,
 
     /// Playback position ring buffer consumer
-    pub position_consumer: Mutex<Option<rtrb::Consumer<PlaybackPosition>>>,
+    pub position_consumer: Mutex<Option<rtrb::Consumer<TransportFeedback>>>,
 
     /// Plugin factory registry
     pub plugin_registry: RwLock<PluginRegistry>,

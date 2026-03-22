@@ -323,43 +323,30 @@ pub fn play_pattern_preview(pattern_id: u32, generator_id: u32) -> Result<(), St
         }
     }
 
-    // Send command to switch to Pattern mode
+    // Send commands to switch to Pattern mode and start playing
     if let Ok(mut guard) = ctx().command_sender.lock() {
         if let Some(cmd_producer) = guard.as_mut() {
             let _ = cmd_producer.push(AudioCommand::SetPlaybackMode(PlaybackMode::Pattern {
                 pattern_id,
                 generator_id,
             }));
+            let _ = cmd_producer.push(AudioCommand::SetPlaying(true));
         }
     }
 
-    // Start playing
-    {
-        let mut app = get_app_write();
-        app.transport.is_playing = true;
-        app.transport.is_pattern_playing = true;
-    }
-
-    broadcast_state_change();
     Ok(())
 }
 
 /// Stop pattern preview and return to Song mode.
 pub fn stop_pattern_preview() -> Result<(), String> {
-    // Stop playback
-    {
-        let mut app = get_app_write();
-        app.transport.is_playing = false;
-        app.transport.is_pattern_playing = false;
-    }
-
-    // Switch back to Song mode
+    // Send commands to stop playing and switch back to Song mode
     if let Ok(mut guard) = ctx().command_sender.lock() {
         if let Some(cmd_producer) = guard.as_mut() {
+            let _ = cmd_producer.push(AudioCommand::SetPlaying(false));
             let _ = cmd_producer.push(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
         }
     }
 
-    broadcast_state_change();
     Ok(())
 }
+

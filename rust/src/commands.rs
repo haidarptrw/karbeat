@@ -11,7 +11,12 @@ use crate::{
 pub enum AudioCommand {
     PlayOneShot(AudioWaveform),
     StopAllPreviews,
-    ResetPlayhead,
+    /// Set playback state (play/pause)
+    SetPlaying(bool),
+    /// Set loop mode
+    SetLooping(bool),
+    /// Stop playback and reset playhead to 0
+    StopAndReset,
     SetPlayhead(u32),
     PlayPreviewNote {
         note_key: u8,

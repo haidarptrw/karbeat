@@ -54,6 +54,11 @@ class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
   TransportState _transportState = TransportState();
 
+  // Runtime transport state (derived from TransportFeedback stream)
+  bool _isPlaying = false;
+  bool _isLooping = false;
+  bool _isPatternPlaying = false;
+
   // ProjectMetadata _metadata = ProjectMetadata(
   //   name: "Untitled",
   //   author: "User",
@@ -87,7 +92,7 @@ class KarbeatState extends ChangeNotifier {
 
   int maxSamplesIndex = 2000;
 
-  late final Stream<PlaybackPosition> _positionBroadcastStream;
+  late final Stream<TransportFeedback> _positionBroadcastStream;
 
   // STRATEGY: Internal Event Bus for State Synchronization
   final StreamController<ProjectEvent> _stateEventController =
@@ -142,27 +147,38 @@ class KarbeatState extends ChangeNotifier {
         _pendingPlayRequest = false;
       }
 
-      // Track pattern mode state from transport
-      if (pos.isPatternMode != _transportState.isPatternPlaying) {
-        _transportState = _transportState.copyWith(
-          isPatternPlaying: pos.isPatternMode,
-        );
-        notifyListeners();
+      // Update runtime transport state from audio thread feedback
+      bool changed = false;
+
+      if (pos.isPatternPlaying != _isPatternPlaying) {
+        _isPatternPlaying = pos.isPatternPlaying;
+        changed = true;
       }
 
-      // Only react if the state has actually changed
-      if (pos.isPlaying != _transportState.isPlaying) {
+      if (pos.isLooping != _isLooping) {
+        _isLooping = pos.isLooping;
+        changed = true;
+      }
+
+      if (pos.isPlaying != _isPlaying) {
         if (_pendingPlayRequest && !pos.isPlaying) {
           return;
         }
+        _isPlaying = pos.isPlaying;
+        changed = true;
+      }
 
-        // Update UI
-        _transportState = _transportState.copyWith(isPlaying: pos.isPlaying);
+      // Update BPM from audio thread (e.g. tempo automation)
+      if ((pos.tempo - _transportState.bpm).abs() > 0.01) {
+        _transportState = TransportState.newWithParam(
+          bpm: pos.tempo,
+          timeSignature: _transportState.timeSignature,
+        );
+        changed = true;
+      }
+
+      if (changed) {
         notifyListeners();
-
-        if (!pos.isPlaying) {
-          transport_api.setPlaying(val: false);
-        }
       }
     });
     syncTrackState();
@@ -277,11 +293,10 @@ class KarbeatState extends ChangeNotifier {
   // ============== GETTERS =================
   TransportState get transport => _transportState;
   ProjectMetadata get metadata => _metadata;
-  bool get isPlaying => _transportState.isPlaying;
-  bool get isPatternPlaying => _transportState.isPatternPlaying;
-  bool get isSongPlaying =>
-      _transportState.isPlaying && !_transportState.isPatternPlaying;
-  bool get isLooping => _transportState.isLooping;
+  bool get isPlaying => _isPlaying;
+  bool get isPatternPlaying => _isPatternPlaying;
+  bool get isSongPlaying => _isPlaying && !_isPatternPlaying;
+  bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
   Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
@@ -290,7 +305,7 @@ class KarbeatState extends ChangeNotifier {
   WorkspaceView get currentView => _currentView;
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
   AudioHardwareConfig get hardwareConfig => _hardwareConfig;
-  Stream<PlaybackPosition> get positionStream => _positionBroadcastStream;
+  Stream<TransportFeedback> get positionStream => _positionBroadcastStream;
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
@@ -354,12 +369,11 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  /// Syncs only the transport (Playhead, Play state)
-  /// Call this inside a Ticker (e.g. 60Hz)
+  /// Syncs only the transport settings (BPM, time signature) from the backend.
+  /// Runtime transport state (is_playing, etc.) comes from the TransportFeedback stream.
   Future<void> syncTransportState() async {
     try {
       final newState = await getTransportState();
-      // Optimization: Only notify if changed significantly (optional)
       _transportState = newState;
       notifyListeners();
     } catch (e) {
@@ -639,26 +653,18 @@ class KarbeatState extends ChangeNotifier {
 
   Future<Result<void>> togglePlay() async {
     try {
-      // If pattern is playing, the user's intent is to switch to song playback.
-      // Since pattern mode sets isPlaying=true, !isPlaying would be false (stop),
-      // so we force newPlaying=true to start song mode instead.
-      KarbeatLogger.info(
-        "Toggle play, is playing: ${_transportState.isPlaying}, is pattern playing: ${_transportState.isPatternPlaying}",
-      );
-      final newPlaying = _transportState.isPatternPlaying
-          ? true
-          : !_transportState.isPlaying;
+      final newPlaying = _isPatternPlaying
+          ? !_isPatternPlaying
+          : !_isPlaying;
 
       if (newPlaying) {
         _pendingPlayRequest = true;
       }
 
       await transport_api.setPlaying(val: newPlaying);
-      notifyBackendChange(ProjectEvent.transportChanged);
       return Result.ok(null);
     } catch (e) {
       log("Failed to toggle play: $e");
-      // Reset flag on error
       _pendingPlayRequest = false;
       return Result.error(Exception("$e"));
     }
@@ -667,7 +673,6 @@ class KarbeatState extends ChangeNotifier {
   Future<Result<void>> stop() async {
     try {
       await transport_api.stopSongPlayback();
-      notifyBackendChange(ProjectEvent.transportChanged);
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to stop play: $e");
@@ -677,9 +682,8 @@ class KarbeatState extends ChangeNotifier {
 
   Future<Result<void>> toggleLoop() async {
     try {
-      final newLooping = !_transportState.isLooping;
+      final newLooping = !_isLooping;
       await transport_api.setLooping(val: newLooping);
-      await syncTransportState();
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to toggle loop: $e");
@@ -693,7 +697,10 @@ class KarbeatState extends ChangeNotifier {
   Future<Result<void>> setBpm(double value) async {
     try {
       final oldBpm = _transportState.bpm;
-      _transportState = _transportState.copyWith(bpm: value);
+      _transportState = TransportState.newWithParam(
+        bpm: value,
+        timeSignature: _transportState.timeSignature,
+      );
 
       // Scale zoom so that (samplesPerBeat / zoomLevel) stays constant,
       // keeping grid lines at the same pixel positions.
@@ -704,7 +711,6 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
 
       await transport_api.setBpm(val: value);
-      notifyBackendChange(ProjectEvent.transportChanged);
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to set bpm: $e");
@@ -1623,31 +1629,12 @@ extension on mixer_api.UiMixerState {
 
 extension TransportStateCopyWith on TransportState {
   TransportState copyWith({
-    bool? isPlaying,
-    bool? isPatternPlaying,
-    bool? isRecording,
-    bool? isLooping,
-    int? playheadPositionSamples,
-    int? loopStartSamples,
-    int? loopEndSamples,
     double? bpm,
     (int, int)? timeSignature,
-    int? barTracker,
-    int? beatTracker,
   }) {
     return TransportState.newWithParam(
-      isPlaying: isPlaying ?? this.isPlaying,
-      isPatternPlaying: isPatternPlaying ?? this.isPatternPlaying,
-      isRecording: isRecording ?? this.isRecording,
-      isLooping: isLooping ?? this.isLooping,
-      playheadPositionSamples:
-          playheadPositionSamples ?? this.playheadPositionSamples,
-      loopStartSamples: loopStartSamples ?? this.loopStartSamples,
-      loopEndSamples: loopEndSamples ?? this.loopEndSamples,
       bpm: bpm ?? this.bpm,
       timeSignature: timeSignature ?? this.timeSignature,
-      barTracker: barTracker ?? this.barTracker,
-      beatTracker: beatTracker ?? this.beatTracker,
     );
   }
 }

@@ -6,26 +6,33 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// Event struct for playback position that will be sent to Frontend side
-class PlaybackPosition {
+/// Transport feedback struct sent from the audio thread to Flutter.
+/// This is the single source of truth for all runtime transport state.
+class TransportFeedback {
   final int samples;
   final int beat;
   final int bar;
   final double tempo;
   final int sampleRate;
   final bool isPlaying;
+  final bool isLooping;
+  final bool isRecording;
+  final bool isPatternPlaying;
   final bool isPatternMode;
   final int patternSamples;
   final int patternBeat;
   final int patternBar;
 
-  const PlaybackPosition({
+  const TransportFeedback({
     required this.samples,
     required this.beat,
     required this.bar,
     required this.tempo,
     required this.sampleRate,
     required this.isPlaying,
+    required this.isLooping,
+    required this.isRecording,
+    required this.isPatternPlaying,
     required this.isPatternMode,
     required this.patternSamples,
     required this.patternBeat,
@@ -40,6 +47,9 @@ class PlaybackPosition {
       tempo.hashCode ^
       sampleRate.hashCode ^
       isPlaying.hashCode ^
+      isLooping.hashCode ^
+      isRecording.hashCode ^
+      isPatternPlaying.hashCode ^
       isPatternMode.hashCode ^
       patternSamples.hashCode ^
       patternBeat.hashCode ^
@@ -48,7 +58,7 @@ class PlaybackPosition {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PlaybackPosition &&
+      other is TransportFeedback &&
           runtimeType == other.runtimeType &&
           samples == other.samples &&
           beat == other.beat &&
@@ -56,6 +66,9 @@ class PlaybackPosition {
           tempo == other.tempo &&
           sampleRate == other.sampleRate &&
           isPlaying == other.isPlaying &&
+          isLooping == other.isLooping &&
+          isRecording == other.isRecording &&
+          isPatternPlaying == other.isPatternPlaying &&
           isPatternMode == other.isPatternMode &&
           patternSamples == other.patternSamples &&
           patternBeat == other.patternBeat &&

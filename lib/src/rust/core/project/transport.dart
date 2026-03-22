@@ -6,91 +6,34 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// Serializable project transport settings.
+/// Runtime transport state (is_playing, playhead, etc.) lives in the AudioEngine.
 class TransportState {
-  final bool isPlaying;
-  final bool isPatternPlaying;
-  final bool isRecording;
-  final bool isLooping;
-  final int playheadPositionSamples;
-  final int loopStartSamples;
-  final int loopEndSamples;
   final double bpm;
   final (int, int) timeSignature;
-  final int beatTracker;
-  final int barTracker;
 
-  const TransportState.raw({
-    required this.isPlaying,
-    required this.isPatternPlaying,
-    required this.isRecording,
-    required this.isLooping,
-    required this.playheadPositionSamples,
-    required this.loopStartSamples,
-    required this.loopEndSamples,
-    required this.bpm,
-    required this.timeSignature,
-    required this.beatTracker,
-    required this.barTracker,
-  });
+  const TransportState.raw({required this.bpm, required this.timeSignature});
 
   factory TransportState() =>
       RustLib.instance.api.crateCoreProjectTransportTransportStateNew();
 
   static TransportState newWithParam({
-    required bool isPlaying,
-    required bool isPatternPlaying,
-    required bool isRecording,
-    required bool isLooping,
-    required int playheadPositionSamples,
-    required int loopStartSamples,
-    required int loopEndSamples,
     required double bpm,
     required (int, int) timeSignature,
-    required int barTracker,
-    required int beatTracker,
   }) =>
       RustLib.instance.api.crateCoreProjectTransportTransportStateNewWithParam(
-        isPlaying: isPlaying,
-        isPatternPlaying: isPatternPlaying,
-        isRecording: isRecording,
-        isLooping: isLooping,
-        playheadPositionSamples: playheadPositionSamples,
-        loopStartSamples: loopStartSamples,
-        loopEndSamples: loopEndSamples,
         bpm: bpm,
         timeSignature: timeSignature,
-        barTracker: barTracker,
-        beatTracker: beatTracker,
       );
 
   @override
-  int get hashCode =>
-      isPlaying.hashCode ^
-      isPatternPlaying.hashCode ^
-      isRecording.hashCode ^
-      isLooping.hashCode ^
-      playheadPositionSamples.hashCode ^
-      loopStartSamples.hashCode ^
-      loopEndSamples.hashCode ^
-      bpm.hashCode ^
-      timeSignature.hashCode ^
-      beatTracker.hashCode ^
-      barTracker.hashCode;
+  int get hashCode => bpm.hashCode ^ timeSignature.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is TransportState &&
           runtimeType == other.runtimeType &&
-          isPlaying == other.isPlaying &&
-          isPatternPlaying == other.isPatternPlaying &&
-          isRecording == other.isRecording &&
-          isLooping == other.isLooping &&
-          playheadPositionSamples == other.playheadPositionSamples &&
-          loopStartSamples == other.loopStartSamples &&
-          loopEndSamples == other.loopEndSamples &&
           bpm == other.bpm &&
-          timeSignature == other.timeSignature &&
-          beatTracker == other.beatTracker &&
-          barTracker == other.barTracker;
+          timeSignature == other.timeSignature;
 }

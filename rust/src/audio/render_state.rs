@@ -9,7 +9,6 @@ use crate::{
             midi::{Pattern, PatternId},
             KarbeatTrack,
         },
-        transport::TransportState,
         ApplicationState, AssetLibrary, GeneratorId, TrackId,
     },
     utils::math::is_power_of_two,
@@ -280,32 +279,18 @@ impl From<&ApplicationState> for AudioGraphState {
     }
 }
 
-/// Consolidated State wrapper for the Audio Thread
-#[derive(Clone)]
+/// Consolidated State wrapper for the Audio Thread.
+/// Contains only structural/graph data. Runtime transport state
+/// is owned directly by AudioEngine.
+#[derive(Clone, Default)]
 pub struct AudioRenderState {
     pub graph: AudioGraphState,
-    // Transport is now separate to allow fast updates without full graph clone
-    // However, for backward compatibility with your TripleBuffer setup,
-    // we can keep a unified struct if your architecture requires a single atomic update.
-    // If you implemented the split buffers (graph_in, transport_in), this struct is not needed as a monolith.
-    // Assuming we stick to the monolithic struct for `state_consumer` in `AudioEngine`:
-    pub transport: TransportState,
-}
-
-impl Default for AudioRenderState {
-    fn default() -> Self {
-        Self {
-            graph: AudioGraphState::default(),
-            transport: TransportState::default(),
-        }
-    }
 }
 
 impl From<&ApplicationState> for AudioRenderState {
     fn from(app: &ApplicationState) -> Self {
         Self {
             graph: AudioGraphState::from(app),
-            transport: app.transport.clone(),
         }
     }
 }

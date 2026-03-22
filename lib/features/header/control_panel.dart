@@ -305,7 +305,7 @@ class DefaultControlPanel extends ConsumerWidget {
         border: Border.all(color: Colors.grey.shade700),
       ),
       child: IntrinsicHeight(
-        child: StreamBuilder<PlaybackPosition>(
+        child: StreamBuilder<TransportFeedback>( 
           stream: ref.read(karbeatStateProvider).positionStream,
           builder: (context, asyncSnapshot) {
             final pos = asyncSnapshot.data;

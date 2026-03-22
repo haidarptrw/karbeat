@@ -170,7 +170,7 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<MixerParamEvent> crateApiMixerCreateMixerEventStream();
 
-  Stream<PlaybackPosition> crateApiAudioCreatePositionStream();
+  Stream<TransportFeedback> crateApiAudioCreatePositionStream();
 
   Future<void> crateApiSessionCutClips({
     required int trackId,
@@ -491,17 +491,8 @@ abstract class RustLibApi extends BaseApi {
   TransportState crateCoreProjectTransportTransportStateNew();
 
   TransportState crateCoreProjectTransportTransportStateNewWithParam({
-    required bool isPlaying,
-    required bool isPatternPlaying,
-    required bool isRecording,
-    required bool isLooping,
-    required int playheadPositionSamples,
-    required int loopStartSamples,
-    required int loopEndSamples,
     required double bpm,
     required (int, int) timeSignature,
-    required int barTracker,
-    required int beatTracker,
   });
 
   Future<UiClipboardContent> crateApiSessionUiClipboardContentDefault();
@@ -1158,14 +1149,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Stream<PlaybackPosition> crateApiAudioCreatePositionStream() {
-    final sink = RustStreamSink<PlaybackPosition>();
+  Stream<TransportFeedback> crateApiAudioCreatePositionStream() {
+    final sink = RustStreamSink<TransportFeedback>();
     unawaited(
       handler.executeNormal(
         NormalTask(
           callFfi: (port_) {
             final serializer = SseSerializer(generalizedFrbRustBinding);
-            sse_encode_StreamSink_playback_position_Sse(sink, serializer);
+            sse_encode_StreamSink_transport_feedback_Sse(sink, serializer);
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
@@ -3825,33 +3816,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   TransportState crateCoreProjectTransportTransportStateNewWithParam({
-    required bool isPlaying,
-    required bool isPatternPlaying,
-    required bool isRecording,
-    required bool isLooping,
-    required int playheadPositionSamples,
-    required int loopStartSamples,
-    required int loopEndSamples,
     required double bpm,
     required (int, int) timeSignature,
-    required int barTracker,
-    required int beatTracker,
   }) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_bool(isPlaying, serializer);
-          sse_encode_bool(isPatternPlaying, serializer);
-          sse_encode_bool(isRecording, serializer);
-          sse_encode_bool(isLooping, serializer);
-          sse_encode_CastedPrimitive_u_64(playheadPositionSamples, serializer);
-          sse_encode_CastedPrimitive_u_64(loopStartSamples, serializer);
-          sse_encode_CastedPrimitive_u_64(loopEndSamples, serializer);
           sse_encode_f_32(bpm, serializer);
           sse_encode_box_autoadd_record_u_8_u_8(timeSignature, serializer);
-          sse_encode_CastedPrimitive_usize(barTracker, serializer);
-          sse_encode_CastedPrimitive_usize(beatTracker, serializer);
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3864,19 +3837,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         ),
         constMeta:
             kCrateCoreProjectTransportTransportStateNewWithParamConstMeta,
-        argValues: [
-          isPlaying,
-          isPatternPlaying,
-          isRecording,
-          isLooping,
-          playheadPositionSamples,
-          loopStartSamples,
-          loopEndSamples,
-          bpm,
-          timeSignature,
-          barTracker,
-          beatTracker,
-        ],
+        argValues: [bpm, timeSignature],
         apiImpl: this,
       ),
     );
@@ -3886,19 +3847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   get kCrateCoreProjectTransportTransportStateNewWithParamConstMeta =>
       const TaskConstMeta(
         debugName: "transport_state_new_with_param",
-        argNames: [
-          "isPlaying",
-          "isPatternPlaying",
-          "isRecording",
-          "isLooping",
-          "playheadPositionSamples",
-          "loopStartSamples",
-          "loopEndSamples",
-          "bpm",
-          "timeSignature",
-          "barTracker",
-          "beatTracker",
-        ],
+        argNames: ["bpm", "timeSignature"],
       );
 
   @override
@@ -4132,9 +4081,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RustStreamSink<PlaybackPosition> dco_decode_StreamSink_playback_position_Sse(
-    dynamic raw,
-  ) {
+  RustStreamSink<TransportFeedback>
+  dco_decode_StreamSink_transport_feedback_Sse(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     throw UnimplementedError();
   }
@@ -4524,26 +4472,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PlaybackPosition dco_decode_playback_position(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-    return PlaybackPosition(
-      samples: dco_decode_u_32(arr[0]),
-      beat: dco_decode_CastedPrimitive_usize(arr[1]),
-      bar: dco_decode_CastedPrimitive_usize(arr[2]),
-      tempo: dco_decode_f_32(arr[3]),
-      sampleRate: dco_decode_u_32(arr[4]),
-      isPlaying: dco_decode_bool(arr[5]),
-      isPatternMode: dco_decode_bool(arr[6]),
-      patternSamples: dco_decode_u_32(arr[7]),
-      patternBeat: dco_decode_CastedPrimitive_usize(arr[8]),
-      patternBar: dco_decode_CastedPrimitive_usize(arr[9]),
-    );
-  }
-
-  @protected
   ProjectMetadata dco_decode_project_metadata(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -4670,23 +4598,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TransportFeedback dco_decode_transport_feedback(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    return TransportFeedback(
+      samples: dco_decode_u_32(arr[0]),
+      beat: dco_decode_CastedPrimitive_usize(arr[1]),
+      bar: dco_decode_CastedPrimitive_usize(arr[2]),
+      tempo: dco_decode_f_32(arr[3]),
+      sampleRate: dco_decode_u_32(arr[4]),
+      isPlaying: dco_decode_bool(arr[5]),
+      isLooping: dco_decode_bool(arr[6]),
+      isRecording: dco_decode_bool(arr[7]),
+      isPatternPlaying: dco_decode_bool(arr[8]),
+      isPatternMode: dco_decode_bool(arr[9]),
+      patternSamples: dco_decode_u_32(arr[10]),
+      patternBeat: dco_decode_CastedPrimitive_usize(arr[11]),
+      patternBar: dco_decode_CastedPrimitive_usize(arr[12]),
+    );
+  }
+
+  @protected
   TransportState dco_decode_transport_state(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return TransportState.raw(
-      isPlaying: dco_decode_bool(arr[0]),
-      isPatternPlaying: dco_decode_bool(arr[1]),
-      isRecording: dco_decode_bool(arr[2]),
-      isLooping: dco_decode_bool(arr[3]),
-      playheadPositionSamples: dco_decode_CastedPrimitive_u_64(arr[4]),
-      loopStartSamples: dco_decode_CastedPrimitive_u_64(arr[5]),
-      loopEndSamples: dco_decode_CastedPrimitive_u_64(arr[6]),
-      bpm: dco_decode_f_32(arr[7]),
-      timeSignature: dco_decode_record_u_8_u_8(arr[8]),
-      beatTracker: dco_decode_CastedPrimitive_usize(arr[9]),
-      barTracker: dco_decode_CastedPrimitive_usize(arr[10]),
+      bpm: dco_decode_f_32(arr[0]),
+      timeSignature: dco_decode_record_u_8_u_8(arr[1]),
     );
   }
 
@@ -5164,9 +5106,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RustStreamSink<PlaybackPosition> sse_decode_StreamSink_playback_position_Sse(
-    SseDeserializer deserializer,
-  ) {
+  RustStreamSink<TransportFeedback>
+  sse_decode_StreamSink_transport_feedback_Sse(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     throw UnimplementedError('Unreachable ()');
   }
@@ -5757,33 +5698,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PlaybackPosition sse_decode_playback_position(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_samples = sse_decode_u_32(deserializer);
-    var var_beat = sse_decode_CastedPrimitive_usize(deserializer);
-    var var_bar = sse_decode_CastedPrimitive_usize(deserializer);
-    var var_tempo = sse_decode_f_32(deserializer);
-    var var_sampleRate = sse_decode_u_32(deserializer);
-    var var_isPlaying = sse_decode_bool(deserializer);
-    var var_isPatternMode = sse_decode_bool(deserializer);
-    var var_patternSamples = sse_decode_u_32(deserializer);
-    var var_patternBeat = sse_decode_CastedPrimitive_usize(deserializer);
-    var var_patternBar = sse_decode_CastedPrimitive_usize(deserializer);
-    return PlaybackPosition(
-      samples: var_samples,
-      beat: var_beat,
-      bar: var_bar,
-      tempo: var_tempo,
-      sampleRate: var_sampleRate,
-      isPlaying: var_isPlaying,
-      isPatternMode: var_isPatternMode,
-      patternSamples: var_patternSamples,
-      patternBeat: var_patternBeat,
-      patternBar: var_patternBar,
-    );
-  }
-
-  @protected
   ProjectMetadata sse_decode_project_metadata(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
@@ -5899,34 +5813,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TransportFeedback sse_decode_transport_feedback(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_samples = sse_decode_u_32(deserializer);
+    var var_beat = sse_decode_CastedPrimitive_usize(deserializer);
+    var var_bar = sse_decode_CastedPrimitive_usize(deserializer);
+    var var_tempo = sse_decode_f_32(deserializer);
+    var var_sampleRate = sse_decode_u_32(deserializer);
+    var var_isPlaying = sse_decode_bool(deserializer);
+    var var_isLooping = sse_decode_bool(deserializer);
+    var var_isRecording = sse_decode_bool(deserializer);
+    var var_isPatternPlaying = sse_decode_bool(deserializer);
+    var var_isPatternMode = sse_decode_bool(deserializer);
+    var var_patternSamples = sse_decode_u_32(deserializer);
+    var var_patternBeat = sse_decode_CastedPrimitive_usize(deserializer);
+    var var_patternBar = sse_decode_CastedPrimitive_usize(deserializer);
+    return TransportFeedback(
+      samples: var_samples,
+      beat: var_beat,
+      bar: var_bar,
+      tempo: var_tempo,
+      sampleRate: var_sampleRate,
+      isPlaying: var_isPlaying,
+      isLooping: var_isLooping,
+      isRecording: var_isRecording,
+      isPatternPlaying: var_isPatternPlaying,
+      isPatternMode: var_isPatternMode,
+      patternSamples: var_patternSamples,
+      patternBeat: var_patternBeat,
+      patternBar: var_patternBar,
+    );
+  }
+
+  @protected
   TransportState sse_decode_transport_state(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_isPlaying = sse_decode_bool(deserializer);
-    var var_isPatternPlaying = sse_decode_bool(deserializer);
-    var var_isRecording = sse_decode_bool(deserializer);
-    var var_isLooping = sse_decode_bool(deserializer);
-    var var_playheadPositionSamples = sse_decode_CastedPrimitive_u_64(
-      deserializer,
-    );
-    var var_loopStartSamples = sse_decode_CastedPrimitive_u_64(deserializer);
-    var var_loopEndSamples = sse_decode_CastedPrimitive_u_64(deserializer);
     var var_bpm = sse_decode_f_32(deserializer);
     var var_timeSignature = sse_decode_record_u_8_u_8(deserializer);
-    var var_beatTracker = sse_decode_CastedPrimitive_usize(deserializer);
-    var var_barTracker = sse_decode_CastedPrimitive_usize(deserializer);
-    return TransportState.raw(
-      isPlaying: var_isPlaying,
-      isPatternPlaying: var_isPatternPlaying,
-      isRecording: var_isRecording,
-      isLooping: var_isLooping,
-      playheadPositionSamples: var_playheadPositionSamples,
-      loopStartSamples: var_loopStartSamples,
-      loopEndSamples: var_loopEndSamples,
-      bpm: var_bpm,
-      timeSignature: var_timeSignature,
-      beatTracker: var_beatTracker,
-      barTracker: var_barTracker,
-    );
+    return TransportState.raw(bpm: var_bpm, timeSignature: var_timeSignature);
   }
 
   @protected
@@ -6472,15 +6398,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_StreamSink_playback_position_Sse(
-    RustStreamSink<PlaybackPosition> self,
+  void sse_encode_StreamSink_transport_feedback_Sse(
+    RustStreamSink<TransportFeedback> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(
       self.setupAndSerialize(
         codec: SseCodec(
-          decodeSuccessData: sse_decode_playback_position,
+          decodeSuccessData: sse_decode_transport_feedback,
           decodeErrorData: sse_decode_AnyhowException,
         ),
       ),
@@ -7020,24 +6946,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_playback_position(
-    PlaybackPosition self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.samples, serializer);
-    sse_encode_CastedPrimitive_usize(self.beat, serializer);
-    sse_encode_CastedPrimitive_usize(self.bar, serializer);
-    sse_encode_f_32(self.tempo, serializer);
-    sse_encode_u_32(self.sampleRate, serializer);
-    sse_encode_bool(self.isPlaying, serializer);
-    sse_encode_bool(self.isPatternMode, serializer);
-    sse_encode_u_32(self.patternSamples, serializer);
-    sse_encode_CastedPrimitive_usize(self.patternBeat, serializer);
-    sse_encode_CastedPrimitive_usize(self.patternBar, serializer);
-  }
-
-  @protected
   void sse_encode_project_metadata(
     ProjectMetadata self,
     SseSerializer serializer,
@@ -7149,22 +7057,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_transport_feedback(
+    TransportFeedback self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.samples, serializer);
+    sse_encode_CastedPrimitive_usize(self.beat, serializer);
+    sse_encode_CastedPrimitive_usize(self.bar, serializer);
+    sse_encode_f_32(self.tempo, serializer);
+    sse_encode_u_32(self.sampleRate, serializer);
+    sse_encode_bool(self.isPlaying, serializer);
+    sse_encode_bool(self.isLooping, serializer);
+    sse_encode_bool(self.isRecording, serializer);
+    sse_encode_bool(self.isPatternPlaying, serializer);
+    sse_encode_bool(self.isPatternMode, serializer);
+    sse_encode_u_32(self.patternSamples, serializer);
+    sse_encode_CastedPrimitive_usize(self.patternBeat, serializer);
+    sse_encode_CastedPrimitive_usize(self.patternBar, serializer);
+  }
+
+  @protected
   void sse_encode_transport_state(
     TransportState self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_bool(self.isPlaying, serializer);
-    sse_encode_bool(self.isPatternPlaying, serializer);
-    sse_encode_bool(self.isRecording, serializer);
-    sse_encode_bool(self.isLooping, serializer);
-    sse_encode_CastedPrimitive_u_64(self.playheadPositionSamples, serializer);
-    sse_encode_CastedPrimitive_u_64(self.loopStartSamples, serializer);
-    sse_encode_CastedPrimitive_u_64(self.loopEndSamples, serializer);
     sse_encode_f_32(self.bpm, serializer);
     sse_encode_record_u_8_u_8(self.timeSignature, serializer);
-    sse_encode_CastedPrimitive_usize(self.beatTracker, serializer);
-    sse_encode_CastedPrimitive_usize(self.barTracker, serializer);
   }
 
   @protected

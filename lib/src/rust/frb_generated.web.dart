@@ -76,9 +76,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<PlaybackPosition> dco_decode_StreamSink_playback_position_Sse(
-    dynamic raw,
-  );
+  RustStreamSink<TransportFeedback>
+  dco_decode_StreamSink_transport_feedback_Sse(dynamic raw);
 
   @protected
   String dco_decode_String(dynamic raw);
@@ -255,9 +254,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
-  PlaybackPosition dco_decode_playback_position(dynamic raw);
-
-  @protected
   ProjectMetadata dco_decode_project_metadata(dynamic raw);
 
   @protected
@@ -296,6 +292,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrackType dco_decode_track_type(dynamic raw);
+
+  @protected
+  TransportFeedback dco_decode_transport_feedback(dynamic raw);
 
   @protected
   TransportState dco_decode_transport_state(dynamic raw);
@@ -444,9 +443,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<PlaybackPosition> sse_decode_StreamSink_playback_position_Sse(
-    SseDeserializer deserializer,
-  );
+  RustStreamSink<TransportFeedback>
+  sse_decode_StreamSink_transport_feedback_Sse(SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -661,9 +659,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
-  PlaybackPosition sse_decode_playback_position(SseDeserializer deserializer);
-
-  @protected
   ProjectMetadata sse_decode_project_metadata(SseDeserializer deserializer);
 
   @protected
@@ -710,6 +705,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TrackType sse_decode_track_type(SseDeserializer deserializer);
+
+  @protected
+  TransportFeedback sse_decode_transport_feedback(SseDeserializer deserializer);
 
   @protected
   TransportState sse_decode_transport_state(SseDeserializer deserializer);
@@ -884,8 +882,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_StreamSink_playback_position_Sse(
-    RustStreamSink<PlaybackPosition> self,
+  void sse_encode_StreamSink_transport_feedback_Sse(
+    RustStreamSink<TransportFeedback> self,
     SseSerializer serializer,
   );
 
@@ -1136,12 +1134,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_playback_position(
-    PlaybackPosition self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_project_metadata(
     ProjectMetadata self,
     SseSerializer serializer,
@@ -1203,6 +1195,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_track_type(TrackType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_transport_feedback(
+    TransportFeedback self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_transport_state(

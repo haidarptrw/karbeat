@@ -1,15 +1,21 @@
 use crate::core::project::mixer::EffectId;
 
-/// Event struct for playback position that will be sent to Frontend side
+/// Transport feedback struct sent from the audio thread to Flutter.
+/// This is the single source of truth for all runtime transport state.
 #[derive(Clone, Copy, Debug)]
-pub struct PlaybackPosition {
+pub struct TransportFeedback {
     // Song playback position
     pub samples: u32,
     pub beat: usize,
     pub bar: usize,
     pub tempo: f32, // Useful for Flutter to interpolate movement
     pub sample_rate: u32,
+
+    // Transport state
     pub is_playing: bool,
+    pub is_looping: bool,
+    pub is_recording: bool,
+    pub is_pattern_playing: bool,
 
     // Pattern playback (independent from song)
     pub is_pattern_mode: bool,
@@ -19,8 +25,6 @@ pub struct PlaybackPosition {
 }
 
 // Automation event for event-driven automation system
-
-// src/audio/event.rs (or wherever you define these)
 
 pub enum GeneratorAutomationEvent {
     PluginParam { param_id: u32, value: f32 },

@@ -13,7 +13,7 @@ use triple_buffer::Output;
 use crate::{
     audio::{
         event::{
-            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent, PlaybackPosition,
+            BusAutomationEvent, GeneratorAutomationEvent, MasterAutomationEvent, TransportFeedback,
             TrackAutomationEvent,
         },
         render_state::{
@@ -46,9 +46,18 @@ pub enum PlaybackMode {
 pub struct AudioEngine {
     // Comms
     state_consumer: Output<AudioRenderState>,
-    position_producer: Producer<PlaybackPosition>,
+    position_producer: Producer<TransportFeedback>,
     feedback_producer: Producer<AudioFeedback>,
     current_state: AudioRenderState,
+
+    // ======================================
+    // Transport State (owned by audio thread)
+    // ======================================
+    is_playing: bool,
+    is_looping: bool,
+    is_recording: bool,
+    is_pattern_playing: bool,
+    bpm: f32,
 
     // Timeline (Song mode)
     sample_rate: u32,
@@ -156,9 +165,10 @@ impl AudioEngine {
     pub fn new(
         state_consumer: Output<AudioRenderState>,
         command_consumer: Consumer<AudioCommand>,
-        position_producer: Producer<PlaybackPosition>,
+        position_producer: Producer<TransportFeedback>,
         feedback_producer: Producer<AudioFeedback>,
         sample_rate: u32,
+        initial_bpm: f32,
         initial_state: AudioRenderState,
     ) -> Self {
         let mix_buffer = Vec::with_capacity(2048);
@@ -168,6 +178,12 @@ impl AudioEngine {
             position_producer,
             feedback_producer,
             current_state: initial_state,
+            // Transport state
+            is_playing: false,
+            is_looping: false,
+            is_recording: false,
+            is_pattern_playing: false,
+            bpm: initial_bpm,
             sample_rate,
             playhead_samples: 0,
             active_generators: Vec::with_capacity(32),
@@ -193,14 +209,9 @@ impl AudioEngine {
     }
 
     pub fn process(&mut self, output_buffer: &mut [f32]) {
-        // Sync State
+        // Sync graph state (transport no longer comes via triple buffer)
         if self.state_consumer.update() {
             let new_state = self.state_consumer.read().clone();
-
-            // Check if we switched from Playing -> Stopped via heavy update
-            if self.current_state.transport.is_playing && !new_state.transport.is_playing {
-                self.stop_all_active_generators();
-            }
 
             // Update cached routing order only when state changes (not every callback)
             self.cached_routing_order = new_state.graph.mixer_state.get_routing_order();
@@ -219,7 +230,7 @@ impl AudioEngine {
         let frame_count = output_buffer.len() / channels;
 
         // Transport Logic
-        if self.current_state.transport.is_playing {
+        if self.is_playing {
             match self.playback_mode {
                 PlaybackMode::Song => {
                     // log::info!("Song mode");
@@ -270,7 +281,7 @@ impl AudioEngine {
 
     /// Recalculates pattern beat/bar based on pattern_playhead_samples
     fn recalculate_pattern_beat_bar(&mut self) {
-        let tempo = self.current_state.transport.bpm;
+        let tempo = self.bpm;
         if tempo <= 0.0 {
             return;
         }
@@ -292,7 +303,7 @@ impl AudioEngine {
         channels: usize,
     ) {
         if self.playhead_samples > self.current_state.graph.max_sample_index {
-            if self.current_state.transport.is_looping {
+            if self.is_looping {
                 // Reset playhead back to 0 without changing `is_playing` state
                 self.playhead_samples = 0;
                 self.recalculate_beat_bar();
@@ -365,7 +376,7 @@ impl AudioEngine {
             return;
         }
 
-        let tempo = self.current_state.transport.bpm;
+        let tempo = self.bpm;
         let sample_rate = self.sample_rate as f32;
 
         let samples_per_beat = (60.0 / tempo) * sample_rate;
@@ -454,7 +465,24 @@ impl AudioEngine {
                 self.preview_voices.push(PreviewVoice::new(waveform, 1.0));
             }
             AudioCommand::StopAllPreviews => self.preview_voices.clear(),
-            AudioCommand::ResetPlayhead => self.reset_playhead(),
+            AudioCommand::SetPlaying(val) => {
+                if self.is_playing && !val {
+                    // Stopping: silence all active generators
+                    self.stop_all_active_generators();
+                }
+                self.is_playing = val;
+                self.emit_current_playback_position();
+            }
+            AudioCommand::SetLooping(val) => {
+                self.is_looping = val;
+                self.emit_current_playback_position();
+            }
+            AudioCommand::StopAndReset => {
+                self.stop_all_active_generators();
+                self.is_playing = false;
+                self.is_pattern_playing = false;
+                self.reset_playhead();
+            }
             AudioCommand::SetPlayhead(samples) => {
                 log::info!("[AudioEngine] Seek: {}", samples);
                 self.playhead_samples = samples as u32;
@@ -475,7 +503,7 @@ impl AudioEngine {
                 self.trigger_live_note(generator_id.into(), note_key, velocity, is_note_on);
             }
             AudioCommand::SetBPM(bpm) => {
-                self.current_state.transport.bpm = bpm;
+                self.bpm = bpm;
                 self.emit_current_playback_position();
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
@@ -485,14 +513,16 @@ impl AudioEngine {
                 // Reset the specific playhead for the new mode
                 match (self.playback_mode, playback_mode) {
                     (PlaybackMode::Song, PlaybackMode::Pattern { .. }) => {
-                        self.playhead_samples = 0;
-                        self.recalculate_beat_bar();
-                        self.last_emitted_samples = 0;
+                        self.pattern_playhead_samples = 0;
+                        self.last_emitted_pattern_samples = 0;
+                        self.recalculate_pattern_beat_bar();
+                        self.is_pattern_playing = true;
                     }
                     (PlaybackMode::Pattern { .. }, PlaybackMode::Song) => {
                         self.pattern_playhead_samples = 0;
                         self.last_emitted_pattern_samples = 0;
                         self.recalculate_pattern_beat_bar();
+                        self.is_pattern_playing = false;
                     }
                     _ => {} // Same mode, do nothing
                 }
@@ -832,7 +862,7 @@ impl AudioEngine {
     /// Recalculates current Beat and Bar based on playhead_samples
     /// Uses 1-based indexing for musical time.
     fn recalculate_beat_bar(&mut self) {
-        let tempo = self.current_state.transport.bpm;
+        let tempo = self.bpm;
         if tempo <= 0.0 {
             return;
         }
@@ -852,7 +882,6 @@ impl AudioEngine {
         self.current_beat = 1;
         self.current_bar = 1;
         self.last_emitted_samples = 0;
-        self.current_state.transport.is_playing = false;
         self.emit_static_position();
     }
 
@@ -890,18 +919,22 @@ impl AudioEngine {
         }
     }
 
-    fn build_position_struct(&self, is_playing: Option<bool>) -> PlaybackPosition {
-        let is_playing = is_playing.unwrap_or(self.current_state.transport.is_playing);
+    fn build_position_struct(&self, is_playing: Option<bool>) -> TransportFeedback {
+        let is_playing = is_playing.unwrap_or(self.is_playing);
         let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
 
-        PlaybackPosition {
+        TransportFeedback {
             // Song position
             samples: self.playhead_samples,
             beat: self.current_beat,
             bar: self.current_bar,
-            tempo: self.current_state.transport.bpm,
+            tempo: self.bpm,
             sample_rate: self.current_state.graph.sample_rate,
+            // Transport state
             is_playing,
+            is_looping: self.is_looping,
+            is_recording: self.is_recording,
+            is_pattern_playing: self.is_pattern_playing,
             // Pattern position (independent)
             is_pattern_mode,
             pattern_samples: self.pattern_playhead_samples,
@@ -1592,7 +1625,7 @@ impl AudioEngine {
                             Self::schedule_midi_events(
                                 &mut gen_voice.midi_events,
                                 self.sample_rate,
-                                self.current_state.transport.bpm,
+                                self.bpm,
                                 clip,
                                 pattern,
                                 start_time,
@@ -1868,7 +1901,7 @@ impl AudioEngine {
     }
 
     fn evaluate_automation_lanes(&mut self) {
-        let tempo = self.current_state.transport.bpm;
+        let tempo = self.bpm;
         if tempo <= 0.0 {
             return;
         }
@@ -1983,7 +2016,7 @@ impl AudioEngine {
                 }
                 AutomationTarget::TempoBpm => {
                     // Global target handled immediately since transport is owned by AudioEngine
-                    self.current_state.transport.bpm = value;
+                    self.bpm = value;
                 }
                 _ => {}
             }

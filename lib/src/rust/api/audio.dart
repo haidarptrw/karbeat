@@ -24,7 +24,7 @@ Future<void> stopAllPreviews() =>
 Future<AudioHardwareConfig> getAudioConfig() =>
     RustLib.instance.api.crateApiAudioGetAudioConfig();
 
-Stream<PlaybackPosition> createPositionStream() =>
+Stream<TransportFeedback> createPositionStream() =>
     RustLib.instance.api.crateApiAudioCreatePositionStream();
 
 /// play preview sound when drawing note or pressing the piano tile on the UI

@@ -87,30 +87,12 @@ impl TransportState {
 
     #[frb(sync)]
     pub fn new_with_param(
-        is_playing: bool,
-        is_pattern_playing: bool,
-        is_recording: bool,
-        is_looping: bool,
-        playhead_position_samples: u64,
-        loop_start_samples: u64,
-        loop_end_samples: u64,
         bpm: f32,
         time_signature: (u8, u8),
-        bar_tracker: usize,
-        beat_tracker: usize,
     ) -> Self {
         Self {
-            is_playing,
-            is_pattern_playing,
-            is_recording,
-            is_looping,
-            playhead_position_samples,
-            loop_start_samples,
-            loop_end_samples,
             bpm,
             time_signature,
-            bar_tracker,
-            beat_tracker,
         }
     }
 }

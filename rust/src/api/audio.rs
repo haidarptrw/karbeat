@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    api::project::AudioWaveformUiForAudioProperties, audio::event::PlaybackPosition,
+    api::project::AudioWaveformUiForAudioProperties, audio::event::TransportFeedback,
     commands::AudioCommand, core::project::AudioHardwareConfig, ctx, frb_generated::StreamSink,
     utils::lock::get_app_read,
 };
@@ -43,7 +43,7 @@ pub fn get_audio_config() -> Result<AudioHardwareConfig, String> {
     Ok(app_state.audio_config.clone())
 }
 
-pub fn create_position_stream(sink: StreamSink<PlaybackPosition>) -> Result<(), String> {
+pub fn create_position_stream(sink: StreamSink<TransportFeedback>) -> Result<(), String> {
     // Spawn a thread to poll the ring buffer
     std::thread::spawn(move || {
         loop {

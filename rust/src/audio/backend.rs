@@ -4,7 +4,7 @@ use rtrb::{ Consumer, RingBuffer };
 use triple_buffer::Output;
 
 use crate::{
-    audio::{ engine::AudioEngine, event::PlaybackPosition, render_state::AudioRenderState },
+    audio::{ engine::AudioEngine, event::TransportFeedback, render_state::AudioRenderState },
     commands::AudioCommand,
     ctx,
 };
@@ -212,7 +212,7 @@ pub fn start_audio_stream(
 
     state_consumer.update();
 
-    let (pos_producer, pos_consumer) = RingBuffer::<PlaybackPosition>::new(100);
+    let (pos_producer, pos_consumer) = RingBuffer::<TransportFeedback>::new(100);
 
     // 2. Store Consumer in context
     *ctx().position_consumer.lock().unwrap() = Some(pos_consumer);
@@ -223,12 +223,19 @@ pub fn start_audio_stream(
     );
     *ctx().feedback_consumer.lock().unwrap() = Some(feedback_consumer);
 
+    // Read initial BPM from app state for the audio engine
+    let initial_bpm = {
+        let app = ctx().app_state.read().unwrap();
+        app.transport.bpm
+    };
+
     let engine = AudioEngine::new(
         state_consumer,
         command_consumer,
         pos_producer,
         feedback_producer,
         sample_rate,
+        initial_bpm,
         initial_state
     );
 

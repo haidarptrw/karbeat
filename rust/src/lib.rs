@@ -11,7 +11,7 @@ use rtrb::RingBuffer;
 use crate::{
     audio::{
         backend::start_audio_stream,
-        render_state::{AudioGraphState, AudioRenderState},
+        render_state::AudioRenderState,
     },
     commands::AudioCommand,
     core::project::AudioWaveform,
@@ -54,45 +54,6 @@ pub fn broadcast_state_change() {
     }
 }
 
-/// Broadcast Structural Changes (Tracks, Plugins, Samples).
-/// This is "Heavy". Call this only when tracks/plugins are added/removed.
-pub fn sync_audio_graph() {
-    let Ok(app) = ctx().app_state.read() else {
-        return;
-    };
-
-    // Expensive operation: Rebuilds the graph structure from AppState
-    let new_graph = AudioGraphState::from(&*app);
-    drop(app); // Drop lock early
-
-    let mut shadow = ctx().current_render_state.lock().unwrap();
-    shadow.graph = new_graph; // Update only the graph part
-
-    // Push the composite state to the audio thread
-    publish_to_audio_thread(&shadow);
-}
-
-/// Broadcast Transport Changes (Play/Stop, BPM).
-/// This is "Light". Call this frequently.
-pub fn sync_transport() {
-    let Ok(app) = ctx().app_state.read() else {
-        return;
-    };
-
-    let new_transport = app.transport.clone();
-    drop(app);
-
-    let mut shadow = ctx().current_render_state.lock().unwrap();
-
-    // Don't write if nothing changed
-    if shadow.transport == new_transport {
-        return;
-    }
-
-    shadow.transport = new_transport;
-
-    publish_to_audio_thread(&shadow);
-}
 
 /// Helper to push state to TripleBuffer
 fn publish_to_audio_thread(state: &AudioRenderState) {

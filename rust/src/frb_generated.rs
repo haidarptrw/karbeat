@@ -717,7 +717,7 @@ fn wire__crate__api__audio__create_position_stream_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_sink = <StreamSink<
-                crate::audio::event::PlaybackPosition,
+                crate::audio::event::TransportFeedback,
                 flutter_rust_bridge::for_generated::SseCodec,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -3632,32 +3632,14 @@ fn wire__crate__core__project__transport__transport_state_new_with_param_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_is_playing = <bool>::sse_decode(&mut deserializer);
-            let api_is_pattern_playing = <bool>::sse_decode(&mut deserializer);
-            let api_is_recording = <bool>::sse_decode(&mut deserializer);
-            let api_is_looping = <bool>::sse_decode(&mut deserializer);
-            let api_playhead_position_samples = <u64>::sse_decode(&mut deserializer);
-            let api_loop_start_samples = <u64>::sse_decode(&mut deserializer);
-            let api_loop_end_samples = <u64>::sse_decode(&mut deserializer);
             let api_bpm = <f32>::sse_decode(&mut deserializer);
             let api_time_signature = <(u8, u8)>::sse_decode(&mut deserializer);
-            let api_bar_tracker = <usize>::sse_decode(&mut deserializer);
-            let api_beat_tracker = <usize>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::core::project::transport::TransportState::new_with_param(
-                        api_is_playing,
-                        api_is_pattern_playing,
-                        api_is_recording,
-                        api_is_looping,
-                        api_playhead_position_samples,
-                        api_loop_start_samples,
-                        api_loop_end_samples,
                         api_bpm,
                         api_time_signature,
-                        api_bar_tracker,
-                        api_beat_tracker,
                     ),
                 )?;
                 Ok(output_ok)
@@ -3889,7 +3871,7 @@ impl SseDecode
 
 impl SseDecode
     for StreamSink<
-        crate::audio::event::PlaybackPosition,
+        crate::audio::event::TransportFeedback,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -4426,34 +4408,6 @@ impl SseDecode for Option<u32> {
     }
 }
 
-impl SseDecode for crate::audio::event::PlaybackPosition {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_samples = <u32>::sse_decode(deserializer);
-        let mut var_beat = <usize>::sse_decode(deserializer);
-        let mut var_bar = <usize>::sse_decode(deserializer);
-        let mut var_tempo = <f32>::sse_decode(deserializer);
-        let mut var_sampleRate = <u32>::sse_decode(deserializer);
-        let mut var_isPlaying = <bool>::sse_decode(deserializer);
-        let mut var_isPatternMode = <bool>::sse_decode(deserializer);
-        let mut var_patternSamples = <u32>::sse_decode(deserializer);
-        let mut var_patternBeat = <usize>::sse_decode(deserializer);
-        let mut var_patternBar = <usize>::sse_decode(deserializer);
-        return crate::audio::event::PlaybackPosition {
-            samples: var_samples,
-            beat: var_beat,
-            bar: var_bar,
-            tempo: var_tempo,
-            sample_rate: var_sampleRate,
-            is_playing: var_isPlaying,
-            is_pattern_mode: var_isPatternMode,
-            pattern_samples: var_patternSamples,
-            pattern_beat: var_patternBeat,
-            pattern_bar: var_patternBar,
-        };
-    }
-}
-
 impl SseDecode for crate::core::project::ProjectMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4582,32 +4536,48 @@ impl SseDecode for crate::core::project::track::TrackType {
     }
 }
 
+impl SseDecode for crate::audio::event::TransportFeedback {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_samples = <u32>::sse_decode(deserializer);
+        let mut var_beat = <usize>::sse_decode(deserializer);
+        let mut var_bar = <usize>::sse_decode(deserializer);
+        let mut var_tempo = <f32>::sse_decode(deserializer);
+        let mut var_sampleRate = <u32>::sse_decode(deserializer);
+        let mut var_isPlaying = <bool>::sse_decode(deserializer);
+        let mut var_isLooping = <bool>::sse_decode(deserializer);
+        let mut var_isRecording = <bool>::sse_decode(deserializer);
+        let mut var_isPatternPlaying = <bool>::sse_decode(deserializer);
+        let mut var_isPatternMode = <bool>::sse_decode(deserializer);
+        let mut var_patternSamples = <u32>::sse_decode(deserializer);
+        let mut var_patternBeat = <usize>::sse_decode(deserializer);
+        let mut var_patternBar = <usize>::sse_decode(deserializer);
+        return crate::audio::event::TransportFeedback {
+            samples: var_samples,
+            beat: var_beat,
+            bar: var_bar,
+            tempo: var_tempo,
+            sample_rate: var_sampleRate,
+            is_playing: var_isPlaying,
+            is_looping: var_isLooping,
+            is_recording: var_isRecording,
+            is_pattern_playing: var_isPatternPlaying,
+            is_pattern_mode: var_isPatternMode,
+            pattern_samples: var_patternSamples,
+            pattern_beat: var_patternBeat,
+            pattern_bar: var_patternBar,
+        };
+    }
+}
+
 impl SseDecode for crate::core::project::transport::TransportState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_isPlaying = <bool>::sse_decode(deserializer);
-        let mut var_isPatternPlaying = <bool>::sse_decode(deserializer);
-        let mut var_isRecording = <bool>::sse_decode(deserializer);
-        let mut var_isLooping = <bool>::sse_decode(deserializer);
-        let mut var_playheadPositionSamples = <u64>::sse_decode(deserializer);
-        let mut var_loopStartSamples = <u64>::sse_decode(deserializer);
-        let mut var_loopEndSamples = <u64>::sse_decode(deserializer);
         let mut var_bpm = <f32>::sse_decode(deserializer);
         let mut var_timeSignature = <(u8, u8)>::sse_decode(deserializer);
-        let mut var_beatTracker = <usize>::sse_decode(deserializer);
-        let mut var_barTracker = <usize>::sse_decode(deserializer);
         return crate::core::project::transport::TransportState {
-            is_playing: var_isPlaying,
-            is_pattern_playing: var_isPatternPlaying,
-            is_recording: var_isRecording,
-            is_looping: var_isLooping,
-            playhead_position_samples: var_playheadPositionSamples,
-            loop_start_samples: var_loopStartSamples,
-            loop_end_samples: var_loopEndSamples,
             bpm: var_bpm,
             time_signature: var_timeSignature,
-            beat_tracker: var_beatTracker,
-            bar_tracker: var_barTracker,
         };
     }
 }
@@ -5505,35 +5475,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mixer::MixerParamEvent>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::audio::event::PlaybackPosition {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.samples.into_into_dart().into_dart(),
-            self.beat.into_into_dart().into_dart(),
-            self.bar.into_into_dart().into_dart(),
-            self.tempo.into_into_dart().into_dart(),
-            self.sample_rate.into_into_dart().into_dart(),
-            self.is_playing.into_into_dart().into_dart(),
-            self.is_pattern_mode.into_into_dart().into_dart(),
-            self.pattern_samples.into_into_dart().into_dart(),
-            self.pattern_beat.into_into_dart().into_dart(),
-            self.pattern_bar.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::audio::event::PlaybackPosition
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::audio::event::PlaybackPosition>
-    for crate::audio::event::PlaybackPosition
-{
-    fn into_into_dart(self) -> crate::audio::event::PlaybackPosition {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::core::project::ProjectMetadata {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -5597,20 +5538,43 @@ impl flutter_rust_bridge::IntoIntoDart<crate::core::project::track::TrackType>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::audio::event::TransportFeedback {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.samples.into_into_dart().into_dart(),
+            self.beat.into_into_dart().into_dart(),
+            self.bar.into_into_dart().into_dart(),
+            self.tempo.into_into_dart().into_dart(),
+            self.sample_rate.into_into_dart().into_dart(),
+            self.is_playing.into_into_dart().into_dart(),
+            self.is_looping.into_into_dart().into_dart(),
+            self.is_recording.into_into_dart().into_dart(),
+            self.is_pattern_playing.into_into_dart().into_dart(),
+            self.is_pattern_mode.into_into_dart().into_dart(),
+            self.pattern_samples.into_into_dart().into_dart(),
+            self.pattern_beat.into_into_dart().into_dart(),
+            self.pattern_bar.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::audio::event::TransportFeedback
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::audio::event::TransportFeedback>
+    for crate::audio::event::TransportFeedback
+{
+    fn into_into_dart(self) -> crate::audio::event::TransportFeedback {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::core::project::transport::TransportState {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.is_playing.into_into_dart().into_dart(),
-            self.is_pattern_playing.into_into_dart().into_dart(),
-            self.is_recording.into_into_dart().into_dart(),
-            self.is_looping.into_into_dart().into_dart(),
-            self.playhead_position_samples.into_into_dart().into_dart(),
-            self.loop_start_samples.into_into_dart().into_dart(),
-            self.loop_end_samples.into_into_dart().into_dart(),
             self.bpm.into_into_dart().into_dart(),
             self.time_signature.into_into_dart().into_dart(),
-            self.beat_tracker.into_into_dart().into_dart(),
-            self.bar_tracker.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6283,7 +6247,7 @@ impl SseEncode
 
 impl SseEncode
     for StreamSink<
-        crate::audio::event::PlaybackPosition,
+        crate::audio::event::TransportFeedback,
         flutter_rust_bridge::for_generated::SseCodec,
     >
 {
@@ -6712,22 +6676,6 @@ impl SseEncode for Option<u32> {
     }
 }
 
-impl SseEncode for crate::audio::event::PlaybackPosition {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u32>::sse_encode(self.samples, serializer);
-        <usize>::sse_encode(self.beat, serializer);
-        <usize>::sse_encode(self.bar, serializer);
-        <f32>::sse_encode(self.tempo, serializer);
-        <u32>::sse_encode(self.sample_rate, serializer);
-        <bool>::sse_encode(self.is_playing, serializer);
-        <bool>::sse_encode(self.is_pattern_mode, serializer);
-        <u32>::sse_encode(self.pattern_samples, serializer);
-        <usize>::sse_encode(self.pattern_beat, serializer);
-        <usize>::sse_encode(self.pattern_bar, serializer);
-    }
-}
-
 impl SseEncode for crate::core::project::ProjectMetadata {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6848,20 +6796,30 @@ impl SseEncode for crate::core::project::track::TrackType {
     }
 }
 
+impl SseEncode for crate::audio::event::TransportFeedback {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.samples, serializer);
+        <usize>::sse_encode(self.beat, serializer);
+        <usize>::sse_encode(self.bar, serializer);
+        <f32>::sse_encode(self.tempo, serializer);
+        <u32>::sse_encode(self.sample_rate, serializer);
+        <bool>::sse_encode(self.is_playing, serializer);
+        <bool>::sse_encode(self.is_looping, serializer);
+        <bool>::sse_encode(self.is_recording, serializer);
+        <bool>::sse_encode(self.is_pattern_playing, serializer);
+        <bool>::sse_encode(self.is_pattern_mode, serializer);
+        <u32>::sse_encode(self.pattern_samples, serializer);
+        <usize>::sse_encode(self.pattern_beat, serializer);
+        <usize>::sse_encode(self.pattern_bar, serializer);
+    }
+}
+
 impl SseEncode for crate::core::project::transport::TransportState {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_playing, serializer);
-        <bool>::sse_encode(self.is_pattern_playing, serializer);
-        <bool>::sse_encode(self.is_recording, serializer);
-        <bool>::sse_encode(self.is_looping, serializer);
-        <u64>::sse_encode(self.playhead_position_samples, serializer);
-        <u64>::sse_encode(self.loop_start_samples, serializer);
-        <u64>::sse_encode(self.loop_end_samples, serializer);
         <f32>::sse_encode(self.bpm, serializer);
         <(u8, u8)>::sse_encode(self.time_signature, serializer);
-        <usize>::sse_encode(self.beat_tracker, serializer);
-        <usize>::sse_encode(self.bar_tracker, serializer);
     }
 }
 

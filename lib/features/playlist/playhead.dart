@@ -34,7 +34,7 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
   final double zoomLevel;
 
   /// Logic to determine which sample count to display (Song vs Pattern)
-  final int Function(PlaybackPosition) sampleSelector;
+  final int Function(TransportFeedback) sampleSelector;
 
   const PlayheadOverlay({
     super.key,
@@ -50,7 +50,7 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
 }
 
 class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
-  late Stream<PlaybackPosition> _positionStream;
+  late Stream<TransportFeedback> _positionStream;
 
   @override
   void initState() {
@@ -67,7 +67,7 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            StreamBuilder<PlaybackPosition>(
+            StreamBuilder<TransportFeedback>(
               stream: _positionStream,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox();
