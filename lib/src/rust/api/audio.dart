@@ -3,11 +3,11 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
-import '../audio/event.dart';
-import '../core/project.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
+
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
 /// GETTER: Fetch details + Downsampled Buffer for UI
 Future<AudioWaveformUiForAudioProperties?> getAudioProperties({
@@ -21,10 +21,10 @@ Future<void> playSourcePreview({required int id}) =>
 Future<void> stopAllPreviews() =>
     RustLib.instance.api.crateApiAudioStopAllPreviews();
 
-Future<AudioHardwareConfig> getAudioConfig() =>
+Future<UiAudioHardwareConfig> getAudioConfig() =>
     RustLib.instance.api.crateApiAudioGetAudioConfig();
 
-Stream<PlaybackPosition> createPositionStream() =>
+Stream<UiTransportFeedback> createPositionStream() =>
     RustLib.instance.api.crateApiAudioCreatePositionStream();
 
 /// play preview sound when drawing note or pressing the piano tile on the UI
@@ -53,3 +53,70 @@ Future<void> playPreviewNoteGenerator({
   velocity: velocity,
   isOn: isOn,
 );
+
+class UiTransportFeedback {
+  final int samples;
+  final int beat;
+  final int bar;
+  final double tempo;
+  final int sampleRate;
+  final bool isPlaying;
+  final bool isLooping;
+  final bool isRecording;
+  final bool isPatternPlaying;
+  final bool isPatternMode;
+  final int patternSamples;
+  final int patternBeat;
+  final int patternBar;
+
+  const UiTransportFeedback({
+    required this.samples,
+    required this.beat,
+    required this.bar,
+    required this.tempo,
+    required this.sampleRate,
+    required this.isPlaying,
+    required this.isLooping,
+    required this.isRecording,
+    required this.isPatternPlaying,
+    required this.isPatternMode,
+    required this.patternSamples,
+    required this.patternBeat,
+    required this.patternBar,
+  });
+
+  @override
+  int get hashCode =>
+      samples.hashCode ^
+      beat.hashCode ^
+      bar.hashCode ^
+      tempo.hashCode ^
+      sampleRate.hashCode ^
+      isPlaying.hashCode ^
+      isLooping.hashCode ^
+      isRecording.hashCode ^
+      isPatternPlaying.hashCode ^
+      isPatternMode.hashCode ^
+      patternSamples.hashCode ^
+      patternBeat.hashCode ^
+      patternBar.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiTransportFeedback &&
+          runtimeType == other.runtimeType &&
+          samples == other.samples &&
+          beat == other.beat &&
+          bar == other.bar &&
+          tempo == other.tempo &&
+          sampleRate == other.sampleRate &&
+          isPlaying == other.isPlaying &&
+          isLooping == other.isLooping &&
+          isRecording == other.isRecording &&
+          isPatternPlaying == other.isPatternPlaying &&
+          isPatternMode == other.isPatternMode &&
+          patternSamples == other.patternSamples &&
+          patternBeat == other.patternBeat &&
+          patternBar == other.patternBar;
+}

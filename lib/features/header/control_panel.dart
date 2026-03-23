@@ -1,7 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/src/rust/audio/event.dart';
+import 'package:karbeat/features/components/fine_grained_input.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
@@ -304,7 +305,7 @@ class DefaultControlPanel extends ConsumerWidget {
         border: Border.all(color: Colors.grey.shade700),
       ),
       child: IntrinsicHeight(
-        child: StreamBuilder<PlaybackPosition>(
+        child: StreamBuilder<UiTransportFeedback>(
           stream: ref.read(karbeatStateProvider).positionStream,
           builder: (context, asyncSnapshot) {
             final pos = asyncSnapshot.data;
@@ -365,44 +366,61 @@ class BpmControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the BPM state
     final bpm = ref.watch(karbeatStateProvider.select((s) => s.tempo));
 
-    return Listener(
-      onPointerSignal: (event) {
-        if (event is PointerScrollEvent) {
-          final dy = event.scrollDelta.dy;
-          final change = dy < 0 ? 0.1 : -0.1;
-          _updateBpm(ref, bpm + change);
-        }
+    // 1. Wrap the entire control with the FineGrainedInputWrapper
+    return FineGrainedInputWrapper<double>(
+      value: bpm,
+      min: 10.0,
+      max: 999.0,
+      step: 1.0, // For precise typing, jumping by 1.0 is standard
+      onChanged: (newBpm) {
+        // 2. Delegate the dialog's result directly to your state manager
+        _updateBpm(ref, newBpm);
       },
-      child: GestureDetector(
-        onVerticalDragUpdate: (details) {
-          final change = details.primaryDelta! * -0.5;
-          _updateBpm(ref, bpm + change);
+      child: Listener(
+        onPointerSignal: (event) {
+          if (event is PointerScrollEvent) {
+            final dy = event.scrollDelta.dy;
+            final change = dy < 0 ? 0.1 : -0.1;
+            _updateBpm(ref, bpm + change);
+          }
         },
-        child: MouseRegion(
-          cursor: SystemMouseCursors.resizeUpDown,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "BPM",
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 8,
-                  fontWeight: FontWeight.bold,
-                ),
+        child: GestureDetector(
+          // Vertical drag does not conflict with the wrapper's longPress/secondaryTap
+          onVerticalDragUpdate: (details) {
+            final change = details.primaryDelta! * -0.5;
+            _updateBpm(ref, bpm + change);
+          },
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeUpDown,
+            // 3. Add a transparent container to ensure the entire region is clickable/draggable
+            child: Container(
+              color: Colors.transparent,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "BPM",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    bpm.toStringAsFixed(1),
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                bpm.toStringAsFixed(1),
-                style: const TextStyle(
-                  color: Colors.orangeAccent,
-                  fontSize: 14,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

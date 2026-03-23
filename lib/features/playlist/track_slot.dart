@@ -5,7 +5,6 @@ import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -151,7 +150,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
 class _InteractiveClip extends ConsumerStatefulWidget {
   final UiClip clip;
   final int trackId;
-  final TrackType trackType;
+  final UiTrackType trackType;
   final double zoomLevel;
   final double height;
   final ToolSelection selectedTool;
@@ -209,18 +208,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     _syncModel();
     // Listen to batch drag updates for follower visual sync
     widget.clipDragController.addListener(_onBatchDragUpdate);
-    // Listen to scroll to update visible pixel range for painter
-    widget.horizontalScrollController.addListener(_onScroll);
-  }
-
-  void _onScroll() {
-    // Trigger rebuild so visibleStartPx/visibleEndPx are recalculated
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    widget.horizontalScrollController.removeListener(_onScroll);
     widget.clipDragController.removeListener(_onBatchDragUpdate);
     super.dispose();
   }
@@ -232,11 +223,6 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     if (oldWidget.clipDragController != widget.clipDragController) {
       oldWidget.clipDragController.removeListener(_onBatchDragUpdate);
       widget.clipDragController.addListener(_onBatchDragUpdate);
-    }
-    if (oldWidget.horizontalScrollController !=
-        widget.horizontalScrollController) {
-      oldWidget.horizontalScrollController.removeListener(_onScroll);
-      widget.horizontalScrollController.addListener(_onScroll);
     }
     // Only overwrite local state from backend if we are NOT currently dragging
     // and not in a batch drag as a follower
@@ -337,9 +323,8 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       .sampleRate,
                   overrideOffset: _visualOffset.toDouble(),
                   isSelected: widget.isSelected,
-                  // Overlay can appear anywhere, draw all
-                  visibleStartPx: 0,
-                  visibleEndPx: double.infinity,
+                  scrollController: widget.horizontalScrollController,
+                  clipLeftOffset: _visualStartTime / widget.zoomLevel,
                 ),
               ),
             );
@@ -388,29 +373,6 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     // Check if this is a follower in a batch move (should be semi-transparent)
     final isFollowerInBatchMove =
         _isFollower && widget.clipDragController.action == BatchDragAction.move;
-
-    // --- VIEWPORT BOUNDS (for painter optimization) ---
-    // Compute the visible pixel range in the Positioned widget's local coords.
-    // This tells the painter which pixels are actually visible on screen,
-    // so it can skip drawing the ~200,000 off-screen pixel columns.
-    double scrollOffset = 0;
-    double viewportWidth = 2000; // fallback
-    if (widget.horizontalScrollController.hasClients) {
-      scrollOffset = widget.horizontalScrollController.offset;
-      if (widget.horizontalScrollController.position.hasViewportDimension) {
-        viewportWidth =
-            widget.horizontalScrollController.position.viewportDimension;
-      }
-    }
-    // In the Positioned's local coords: x=0 is at `left` in scroll content.
-    // So scrollOffset maps to local x = scrollOffset - left.
-    const double pad = 50; // small padding to avoid pop-in
-    final double localVisStart = (scrollOffset - left - pad).clamp(
-      0,
-      safeWidth,
-    );
-    final double localVisEnd = (scrollOffset - left + viewportWidth + pad)
-        .clamp(0, safeWidth);
 
     return Positioned(
       left: left,
@@ -630,7 +592,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   state.resizeClipBatch(
                     widget.trackId,
                     widget.selectedClipIds,
-                    ResizeEdge.right,
+                    UiResizeEdge.right,
                     controller.deltaSamples,
                   );
                 } else {
@@ -638,7 +600,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   state.resizeClip(
                     widget.trackId,
                     widget.clip.id,
-                    ResizeEdge.right,
+                    UiResizeEdge.right,
                     newEndTime,
                   );
                 }
@@ -647,14 +609,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   state.resizeClipBatch(
                     widget.trackId,
                     widget.selectedClipIds,
-                    ResizeEdge.left,
+                    UiResizeEdge.left,
                     controller.deltaSamples,
                   );
                 } else {
                   state.resizeClip(
                     widget.trackId,
                     widget.clip.id,
-                    ResizeEdge.left,
+                    UiResizeEdge.left,
                     _visualStartTime,
                   );
                 }
@@ -684,8 +646,8 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   .sampleRate,
               overrideOffset: _visualOffset.toDouble(),
               isSelected: widget.isSelected,
-              visibleStartPx: localVisStart,
-              visibleEndPx: localVisEnd,
+              scrollController: widget.horizontalScrollController,
+              clipLeftOffset: left,
             ),
           ),
         ),
@@ -700,14 +662,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
 class _ClipRenderer extends ConsumerWidget {
   final UiClip clip;
-  final TrackType trackType;
+  final UiTrackType trackType;
   final Color color;
   final double zoomLevel;
   final int projectSampleRate;
   final double? overrideOffset;
   final bool isSelected;
-  final double visibleStartPx;
-  final double visibleEndPx;
+  final ScrollController scrollController;
+  final double clipLeftOffset;
 
   const _ClipRenderer({
     required this.clip,
@@ -717,8 +679,8 @@ class _ClipRenderer extends ConsumerWidget {
     required this.projectSampleRate,
     this.overrideOffset,
     required this.isSelected,
-    required this.visibleStartPx,
-    required this.visibleEndPx,
+    required this.scrollController,
+    required this.clipLeftOffset,
   });
 
   @override
@@ -793,8 +755,8 @@ class _ClipRenderer extends ConsumerWidget {
               offsetSamples: effectiveOffset,
               strokeWidth: 1.0,
               ratio: ratio,
-              visibleStartPx: visibleStartPx,
-              visibleEndPx: visibleEndPx,
+              scrollController: scrollController,
+              clipLeftOffset: clipLeftOffset,
             ),
           ),
         );
@@ -820,6 +782,8 @@ class _ClipRenderer extends ConsumerWidget {
               zoomLevel: zoomLevel,
               sampleRate: projectSampleRate,
               bpm: state.transport.bpm,
+              scrollController: scrollController,
+              clipLeftOffset: clipLeftOffset,
             ),
           ),
         );

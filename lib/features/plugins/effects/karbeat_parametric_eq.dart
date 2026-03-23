@@ -13,6 +13,7 @@ import 'dart:math';
 
 import 'package:karbeat/features/plugins/effects/abstract_effect_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
+import 'package:karbeat/features/components/fine_grained_input.dart';
 
 /// Math helpers for Logarithmic Frequency Mapping
 const double minFreq = 20.0;
@@ -36,8 +37,7 @@ double _xToFreq(double x, double width) {
 
 double _gainToY(double gain, double height) {
   // Y is inverted (0 at top, height at bottom)
-  final normalized =
-      (gain.clamp(minGain, maxGain) - minGain) / (maxGain - minGain);
+  final normalized = (gain - minGain) / (maxGain - minGain);
   return height - (normalized * height);
 }
 
@@ -68,7 +68,7 @@ class EqBand {
 class KarbeatParametricEq extends AbstractEffectScreen {
   const KarbeatParametricEq({
     Key? key,
-    required super.trackId,
+    required super.target,
     required super.effectIdx,
   }) : super(key: key);
 
@@ -128,7 +128,7 @@ class KarbeatParametricEqState
   Future<void> _fetchResponseCurve() async {
     try {
       final curve = await plugin_api.getEqResponseCurve(
-        trackId: widget.trackId,
+        target: widget.target,
         effectId: widget.effectIdx,
         numPoints: 200,
       );
@@ -138,6 +138,50 @@ class KarbeatParametricEqState
     } catch (e) {
       debugPrint('Error fetching EQ response curve: $e');
     }
+  }
+
+  @override
+  void onParametersUpdated() {
+    if (parameters.isEmpty) return;
+
+    setState(() {
+      for (final p in parameters) {
+        if (p.group == 'Master' && p.name == 'Base Gain') {
+          masterGain = p.value;
+          continue;
+        }
+
+        final match = RegExp(r'Band (\d+)').firstMatch(p.group);
+        if (match != null) {
+          final bandIndex = int.parse(match.group(1)!) - 1;
+          if (bandIndex >= 0 && bandIndex < bands.length) {
+            final band = bands[bandIndex];
+            switch (p.name) {
+              case 'Active':
+                band.active = p.value > 0.5;
+                break;
+              case 'Type':
+                band.filterType = p.value.toInt();
+                break;
+              case 'Frequency':
+                band.freq = p.value;
+                break;
+              case 'Q':
+                band.q = p.value;
+                break;
+              case 'Gain':
+                band.gain = p.value;
+                break;
+              case 'Slope':
+                band.order = p.value.toInt();
+                break;
+            }
+          }
+        }
+      }
+    });
+
+    _fetchResponseCurve();
   }
 
   void _initDefaultBands() {
@@ -349,12 +393,20 @@ class KarbeatParametricEqState
                     enabledThumbRadius: 8,
                   ),
                 ),
-                child: Slider(
+                child: FineGrainedInputWrapper<double>(
                   value: masterGain,
                   min: minGain,
                   max: maxGain,
-                  activeColor: Colors.white,
+                  step: 0.1,
                   onChanged: _updateMasterGain,
+                  child: Slider(
+                    value: masterGain,
+                    min: minGain,
+                    max: maxGain,
+                    activeColor: Colors.white,
+                    onChanged: _updateMasterGain,
+                    allowedInteraction: SliderInteraction.slideThumb,
+                  ),
                 ),
               ),
             ),
@@ -444,12 +496,15 @@ class KarbeatParametricEqState
                 underline: const SizedBox(),
                 isDense: true,
                 onChanged: (val) => _updateBandParam(i, 4, val!.toDouble()),
-                items: List.generate(_filterTypes.length, (idx) {
-                  return DropdownMenuItem(
-                    value: idx,
-                    child: Text(_filterTypes[idx]),
-                  );
-                }),
+                items: List<DropdownMenuItem<int>>.generate(
+                  _filterTypes.length,
+                  (idx) {
+                    return DropdownMenuItem<int>(
+                      value: idx,
+                      child: Text(_filterTypes[idx]),
+                    );
+                  },
+                ),
               ),
             ),
 
@@ -494,12 +549,15 @@ class KarbeatParametricEqState
                 underline: const SizedBox(),
                 isDense: true,
                 onChanged: (val) => _updateBandParam(i, 5, val!.toDouble()),
-                items: List.generate(_slopeChoices.length, (idx) {
-                  return DropdownMenuItem(
-                    value: idx,
-                    child: Text(_slopeChoices[idx]),
-                  );
-                }),
+                items: List<DropdownMenuItem<int>>.generate(
+                  _slopeChoices.length,
+                  (idx) {
+                    return DropdownMenuItem<int>(
+                      value: idx,
+                      child: Text(_slopeChoices[idx]),
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -513,7 +571,7 @@ class KarbeatParametricEqState
     double val,
     double min,
     double max,
-    Function(double) onChanged, {
+    ValueChanged<double> onChanged, {
     bool isLog = false,
     String suffix = "",
   }) {
@@ -526,15 +584,23 @@ class KarbeatParametricEqState
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
           ),
-          child: Slider(
-            value: (isLog ? log(val) / ln10 : val).clamp(
-              isLog ? log(min) / ln10 : min,
-              isLog ? log(max) / ln10 : max,
+          child: FineGrainedInputWrapper<double>(
+            value: val,
+            min: min,
+            max: max,
+            step: isLog ? 1.0 : 0.1,
+            onChanged: onChanged,
+            child: Slider(
+              value: (isLog ? log(val) / ln10 : val).clamp(
+                isLog ? log(min) / ln10 : min,
+                isLog ? log(max) / ln10 : max,
+              ),
+              min: isLog ? log(min) / ln10 : min,
+              max: isLog ? log(max) / ln10 : max,
+              onChanged: (newVal) =>
+                  onChanged(isLog ? pow(10, newVal).toDouble() : newVal),
+              allowedInteraction: SliderInteraction.slideThumb,
             ),
-            min: isLog ? log(min) / ln10 : min,
-            max: isLog ? log(max) / ln10 : max,
-            onChanged: (newVal) =>
-                onChanged(isLog ? pow(10, newVal).toDouble() : newVal),
           ),
         ),
         Text(

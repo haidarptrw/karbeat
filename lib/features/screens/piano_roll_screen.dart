@@ -51,9 +51,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _gridVerticalController = _verticalControllers.addAndGet();
     _gridHorizontalController = ScrollController();
 
-    // Jump to Middle C (MIDI 60)
+    // Jump to Middle C (MIDI 72)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _verticalControllers.jumpTo((127 - 60) * _keyHeight - 100);
+      _verticalControllers.jumpTo((127 - 72) * _keyHeight - 100);
     });
   }
 
@@ -401,7 +401,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
             onNoteOn: _handleNoteOn,
             onNoteOff: _handleNoteOff,
             activeNotes: _activeKeyboardNotes,
-            initialCenterNote: 60,
+            initialCenterNote: 72,
           ),
         ],
       ),

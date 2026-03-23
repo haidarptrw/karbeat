@@ -1,0 +1,14 @@
+[package]
+name = "karbeat-plugins"
+version = "0.1.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+karbeat-dsp.workspace = true
+karbeat-plugin-api.workspace = true
+karbeat-utils.workspace = true
+
+log.workspace = true
+serde.workspace = true
+dasp.workspace = true
+fastrand.workspace = true

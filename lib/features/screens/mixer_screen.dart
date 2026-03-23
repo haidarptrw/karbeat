@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/features/plugins/effects/karbeat_parametric_eq.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
@@ -39,7 +41,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
     // Channel entries: pair each track ID with its mixer channel data
     final channelEntries = <_ChannelEntry>[];
-    for (final trackId in mixerState.channels.keys) {
+
+    final sortedTrackIds = mixerState.channels.keys.toList()..sort();
+    for (final trackId in sortedTrackIds) {
       final channel = mixerState.channels[trackId]!;
       final trackName = tracks[trackId]?.name ?? 'Track $trackId';
       channelEntries.add(
@@ -106,62 +110,65 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                         itemCount: channelEntries.length,
                         itemBuilder: (context, index) {
                           final entry = channelEntries[index];
-                          return _ChannelStrip(
-                            entry: entry,
-                            onVolumeChanged: (value) {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [UiMixerChannelParams.volume(value)],
-                              );
-                            },
-                            onVolumeChangeStart: () {
-                              state.markParamTouched(entry.id, 'volume');
-                            },
-                            onVolumeChangeEnd: () {
-                              state.markParamReleased(entry.id, 'volume');
-                            },
-                            onPanChanged: (value) {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [UiMixerChannelParams.pan(value)],
-                              );
-                            },
-                            onPanChangeStart: () {
-                              state.markParamTouched(entry.id, 'pan');
-                            },
-                            onPanChangeEnd: () {
-                              state.markParamReleased(entry.id, 'pan');
-                            },
-                            onMuteToggled: () {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [
-                                  UiMixerChannelParams.mute(
-                                    !entry.channel.mute,
-                                  ),
-                                ],
-                              );
-                            },
-                            onSoloToggled: () {
-                              state.setMixerChannelParams(
-                                trackId: entry.id,
-                                params: [
-                                  UiMixerChannelParams.solo(
-                                    !entry.channel.solo,
-                                  ),
-                                ],
-                              );
-                            },
-                            isSelected:
-                                _selectedChannelId == entry.id &&
-                                !_isSelectedBus &&
-                                !entry.isMaster,
-                            onTap: () {
-                              setState(() {
-                                _selectedChannelId = entry.id;
-                                _isSelectedBus = false;
-                              });
-                            },
+                          return KeyedSubtree(
+                            key: ValueKey('mixer_track_${entry.id}'),
+                            child: _ChannelStrip(
+                              entry: entry,
+                              onVolumeChanged: (value) {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [UiMixerChannelParams.volume(value)],
+                                );
+                              },
+                              onVolumeChangeStart: () {
+                                state.markParamTouched(entry.id, 'volume');
+                              },
+                              onVolumeChangeEnd: () {
+                                state.markParamReleased(entry.id, 'volume');
+                              },
+                              onPanChanged: (value) {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [UiMixerChannelParams.pan(value)],
+                                );
+                              },
+                              onPanChangeStart: () {
+                                state.markParamTouched(entry.id, 'pan');
+                              },
+                              onPanChangeEnd: () {
+                                state.markParamReleased(entry.id, 'pan');
+                              },
+                              onMuteToggled: () {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [
+                                    UiMixerChannelParams.mute(
+                                      !entry.channel.mute,
+                                    ),
+                                  ],
+                                );
+                              },
+                              onSoloToggled: () {
+                                state.setMixerChannelParams(
+                                  trackId: entry.id,
+                                  params: [
+                                    UiMixerChannelParams.solo(
+                                      !entry.channel.solo,
+                                    ),
+                                  ],
+                                );
+                              },
+                              isSelected:
+                                  _selectedChannelId == entry.id &&
+                                  !_isSelectedBus &&
+                                  !entry.isMaster,
+                              onTap: () {
+                                setState(() {
+                                  _selectedChannelId = entry.id;
+                                  _isSelectedBus = false;
+                                });
+                              },
+                            ),
                           );
                         },
                       ),
@@ -248,56 +255,59 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     }
 
                     final entry = busEntries[index];
-                    return _ChannelStrip(
-                      entry: entry,
-                      onVolumeChanged: (value) {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [UiMixerChannelParams.volume(value)],
-                        );
-                      },
-                      onVolumeChangeStart: () {
-                        state.markParamTouched(entry.id, 'volume');
-                      },
-                      onVolumeChangeEnd: () {
-                        state.markParamReleased(entry.id, 'volume');
-                      },
-                      onPanChanged: (value) {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [UiMixerChannelParams.pan(value)],
-                        );
-                      },
-                      onPanChangeStart: () {
-                        state.markParamTouched(entry.id, 'pan');
-                      },
-                      onPanChangeEnd: () {
-                        state.markParamReleased(entry.id, 'pan');
-                      },
-                      onMuteToggled: () {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [
-                            UiMixerChannelParams.mute(!entry.channel.mute),
-                          ],
-                        );
-                      },
-                      onSoloToggled: () {
-                        state.setBusChannelParams(
-                          busId: entry.id,
-                          params: [
-                            UiMixerChannelParams.solo(!entry.channel.solo),
-                          ],
-                        );
-                      },
-                      isSelected:
-                          _selectedChannelId == entry.id && _isSelectedBus,
-                      onTap: () {
-                        setState(() {
-                          _selectedChannelId = entry.id;
-                          _isSelectedBus = true;
-                        });
-                      },
+                    return KeyedSubtree(
+                      key: ValueKey('mixer_bus_${entry.id}'),
+                      child: _ChannelStrip(
+                        entry: entry,
+                        onVolumeChanged: (value) {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [UiMixerChannelParams.volume(value)],
+                          );
+                        },
+                        onVolumeChangeStart: () {
+                          state.markParamTouched(entry.id, 'volume');
+                        },
+                        onVolumeChangeEnd: () {
+                          state.markParamReleased(entry.id, 'volume');
+                        },
+                        onPanChanged: (value) {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [UiMixerChannelParams.pan(value)],
+                          );
+                        },
+                        onPanChangeStart: () {
+                          state.markParamTouched(entry.id, 'pan');
+                        },
+                        onPanChangeEnd: () {
+                          state.markParamReleased(entry.id, 'pan');
+                        },
+                        onMuteToggled: () {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [
+                              UiMixerChannelParams.mute(!entry.channel.mute),
+                            ],
+                          );
+                        },
+                        onSoloToggled: () {
+                          state.setBusChannelParams(
+                            busId: entry.id,
+                            params: [
+                              UiMixerChannelParams.solo(!entry.channel.solo),
+                            ],
+                          );
+                        },
+                        isSelected:
+                            _selectedChannelId == entry.id && _isSelectedBus,
+                        onTap: () {
+                          setState(() {
+                            _selectedChannelId = entry.id;
+                            _isSelectedBus = true;
+                          });
+                        },
+                      ),
                     );
                   },
                 ),
@@ -485,8 +495,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => KarbeatParametricEq(
-                                    // Pass whatever your screen needs here
-                                    trackId: _selectedChannelId!,
+                                    target: isMaster
+                                        ? const plugin_api.UiEffectTarget.master()
+                                        : _isSelectedBus
+                                        ? plugin_api.UiEffectTarget.bus(
+                                            _selectedChannelId!,
+                                          )
+                                        : plugin_api.UiEffectTarget.track(
+                                            _selectedChannelId!,
+                                          ),
                                     effectIdx: effect.id,
                                   ),
                                 ),
@@ -899,27 +916,35 @@ class _PanKnob extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        SizedBox(
-          width: 56,
-          height: 20,
-          child: SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 3,
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-              activeTrackColor: accentColor,
-              inactiveTrackColor: Colors.white12,
-              thumbColor: accentColor,
-              overlayShape: SliderComponentShape.noOverlay,
-            ),
-            child: Slider(
-              value: value,
-              min: -1.0,
-              max: 1.0,
-              onChanged: onChanged,
-              onChangeStart: onChangeStart != null
-                  ? (_) => onChangeStart!()
-                  : null,
-              onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+        FineGrainedInputWrapper(
+          value: value,
+          onChanged: onChanged,
+          step: 0.01,
+          min: -1.0,
+          max: 1.0,
+          child: SizedBox(
+            width: 56,
+            height: 20,
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                activeTrackColor: accentColor,
+                inactiveTrackColor: Colors.white12,
+                thumbColor: accentColor,
+                overlayShape: SliderComponentShape.noOverlay,
+              ),
+              child: Slider(
+                value: value,
+                min: -1.0,
+                max: 1.0,
+                onChanged: onChanged,
+                allowedInteraction: SliderInteraction.slideThumb,
+                onChangeStart: onChangeStart != null
+                    ? (_) => onChangeStart!()
+                    : null,
+                onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+              ),
             ),
           ),
         ),
@@ -957,28 +982,42 @@ class _VolumeFader extends StatelessWidget {
         final sliderWidth = constraints.maxHeight;
         return RotatedBox(
           quarterTurns: 3,
-          child: SizedBox(
-            width: sliderWidth,
-            height: constraints.maxWidth,
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 4,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                activeTrackColor: accentColor,
-                inactiveTrackColor: Colors.white10,
-                thumbColor: accentColor,
-                overlayColor: accentColor.withValues(alpha: 0.15),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-              ),
-              child: Slider(
-                value: value.clamp(-60.0, 6.0),
-                min: -60.0,
-                max: 6.0,
-                onChanged: onChanged,
-                onChangeStart: onChangeStart != null
-                    ? (_) => onChangeStart!()
-                    : null,
-                onChangeEnd: onChangeEnd != null ? (_) => onChangeEnd!() : null,
+          child: FineGrainedInputWrapper(
+            value: value,
+            onChanged: onChanged,
+            step: 0.1,
+            min: -60.0,
+            max: 6.0,
+            child: SizedBox(
+              width: sliderWidth,
+              height: constraints.maxWidth,
+              child: SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 4,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 7,
+                  ),
+                  activeTrackColor: accentColor,
+                  inactiveTrackColor: Colors.white10,
+                  thumbColor: accentColor,
+                  overlayColor: accentColor.withValues(alpha: 0.15),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 12,
+                  ),
+                ),
+                child: Slider(
+                  value: value.clamp(-60.0, 6.0),
+                  min: -60.0,
+                  max: 6.0,
+                  onChanged: onChanged,
+                  allowedInteraction: SliderInteraction.slideThumb,
+                  onChangeStart: onChangeStart != null
+                      ? (_) => onChangeStart!()
+                      : null,
+                  onChangeEnd: onChangeEnd != null
+                      ? (_) => onChangeEnd!()
+                      : null,
+                ),
               ),
             ),
           ),

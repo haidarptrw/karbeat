@@ -9,7 +9,6 @@ import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/result_type.dart';
@@ -929,6 +928,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     return overlays;
   }
 
+  final Map<Color, Color> _contrastColorCache = {};
+
+  // 2. Create a helper function that checks the cache first
+  Color _getContrastColor(Color backgroundColor) {
+    // putIfAbsent checks if the key exists. If it does, it returns the cached value instantly.
+    // If it doesn't, it runs the expensive computeLuminance() exactly once, caches it, and returns it.
+    return _contrastColorCache.putIfAbsent(backgroundColor, () {
+      return backgroundColor.computeLuminance() > 0.5
+          ? Colors.black
+          : Colors.white;
+    });
+  }
+
   Widget _buildAddButton() {
     return SizedBox(
       height: 60,
@@ -1027,7 +1039,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           margin: const EdgeInsets.only(bottom: 2),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: Colors.grey.shade300,
+            color: Color(int.parse(track.color.substring(1), radix: 16)),
             border: Border(
               bottom: BorderSide(color: Colors.grey.shade400, width: 1),
               right: BorderSide(color: Colors.grey.shade400, width: 1),
@@ -1054,7 +1066,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     Text(
                       "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: _getContrastColor(
+                          Color(int.parse(track.color.substring(1), radix: 16)),
+                        ),
+                        // color: Colors.grey.shade600, // use inverse color of track color for better contrast
                         fontSize: 10,
                       ),
                     ),
@@ -1090,13 +1105,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  IconData _getTrackIcon(TrackType type) {
+  IconData _getTrackIcon(UiTrackType type) {
     switch (type) {
-      case TrackType.audio:
+      case UiTrackType.audio:
         return Icons.graphic_eq;
-      case TrackType.midi:
+      case UiTrackType.midi:
         return Icons.piano;
-      case TrackType.automation:
+      case UiTrackType.automation:
         return Icons.show_chart;
     }
   }
@@ -1110,7 +1125,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
-              ref.read(karbeatStateProvider).addTrack(TrackType.audio);
+              ref.read(karbeatStateProvider).addTrack(UiTrackType.audio);
             },
             child: const Row(
               children: [

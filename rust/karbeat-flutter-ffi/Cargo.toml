@@ -1,0 +1,25 @@
+[package]
+name = "karbeat_flutter_ffi"
+version = "0.1.0-alpha.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+karbeat-core.workspace = true
+karbeat-plugin-api.workspace = true
+karbeat-utils.workspace = true
+
+anyhow.workspace = true
+env_logger.workspace = true
+flutter_rust_bridge.workspace = true
+log.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+rtrb.workspace = true
+triple_buffer.workspace = true
+karbeat-plugins.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

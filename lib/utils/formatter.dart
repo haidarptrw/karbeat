@@ -29,6 +29,6 @@ String numToMidiKey(int key) {
     "A#",
     "B",
   ];
-  final octave = key ~/ 12;
+  final octave = key ~/ 12 - 1;
   return "${labels[key % 12]}$octave";
 }

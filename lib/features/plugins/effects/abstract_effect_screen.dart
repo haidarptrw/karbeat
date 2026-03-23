@@ -14,12 +14,12 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 ///
 /// Subclasses must implement [buildEffectBody] to define the custom effect UI.
 abstract class AbstractEffectScreen extends ConsumerStatefulWidget {
-  final int trackId;
+  final plugin_api.UiEffectTarget target;
   final int effectIdx;
 
   const AbstractEffectScreen({
     super.key,
-    required this.trackId,
+    required this.target,
     required this.effectIdx,
   });
 }
@@ -56,7 +56,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   void startParameterPolling() async {
     // Request initial parameter snapshot from audio thread
     await plugin_api.queryEffectParameters(
-      trackId: widget.trackId,
+      target: widget.target,
       effectId: widget.effectIdx,
     );
 
@@ -78,11 +78,15 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       // Sync to stored parameters (for persistence)
       await plugin_api.syncEffectParametersFromAudio(snapshots: snapshots);
 
+      bool updated = false;
+
       // Update local UI state
       setState(() {
         for (final snapshot in snapshots) {
-          // Only process snapshots for this effect
-          if (snapshot.effectId != widget.effectIdx) continue;
+          // Only process snapshots for this effect and target
+          if (snapshot.effectId != widget.effectIdx ||
+              snapshot.target != widget.target)
+            continue;
 
           for (final paramValue in snapshot.parameters) {
             final index = parameters.indexWhere(
@@ -101,10 +105,15 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
                 paramType: parameters[index].paramType,
                 choices: parameters[index].choices,
               );
+              updated = true;
             }
           }
         }
       });
+
+      if (updated) {
+        onParametersUpdated();
+      }
     } catch (e) {
       debugPrint('Error polling effect parameter feedback: $e');
     }
@@ -116,13 +125,14 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   Future<void> loadParameterSpecs() async {
     try {
       final specs = await plugin_api.getEffectParameterSpecs(
-        trackId: widget.trackId,
+        target: widget.target,
         effectId: widget.effectIdx,
       );
       setState(() {
         parameters = specs;
         isLoading = false;
       });
+      onParametersUpdated();
     } catch (e) {
       setState(() {
         errorMessage = 'Failed to load effect parameters: $e';
@@ -153,10 +163,12 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       }
     });
 
+    onParametersUpdated();
+
     // Send to backend
     try {
       await plugin_api.setEffectParameter(
-        trackId: widget.trackId,
+        target: widget.target,
         effectId: widget.effectIdx,
         paramId: paramId,
         value: value,
@@ -165,6 +177,11 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       debugPrint('Error setting effect parameter: $e');
     }
   }
+
+  /// Called when parameters are updated from backend or polling.
+  /// Subclasses can override to sync their custom UI state.
+  @protected
+  void onParametersUpdated() {}
 
   /// Subclasses must implement this to define the custom effect UI.
   Widget buildEffectBody(BuildContext context);

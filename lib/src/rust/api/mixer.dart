@@ -9,13 +9,13 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `push_mixer_event`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `into`, `into`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `into`, `into`, `into`, `into`
 
 /// ======================================
 /// STREAM
 /// ======================================
 /// Create the Rust → Flutter event stream for mixer param changes.
-Stream<MixerParamEvent> createMixerEventStream() =>
+Stream<UiMixerParamEvent> createMixerEventStream() =>
     RustLib.instance.api.crateApiMixerCreateMixerEventStream();
 
 /// ======================================
@@ -83,6 +83,11 @@ Future<void> addEffectToMasterBus({required int registryId}) => RustLib
     .api
     .crateApiMixerAddEffectToMasterBus(registryId: registryId);
 
+Future<void> removeEffectFromMasterBus({required int effectInstanceId}) =>
+    RustLib.instance.api.crateApiMixerRemoveEffectFromMasterBus(
+      effectInstanceId: effectInstanceId,
+    );
+
 /// Create a new mixer bus and return its ID.
 Future<int> createBus({required String name}) =>
     RustLib.instance.api.crateApiMixerCreateBus(name: name);
@@ -133,44 +138,6 @@ Future<void> removeRouting({
   destination: destination,
   isSend: isSend,
 );
-
-/// Lightweight event pushed to Flutter when a mixer param changes
-/// from the backend (automation, undo, or any non-UI source).
-class MixerParamEvent {
-  /// Track ID. `u32::MAX` means master bus.
-  final int trackId;
-  final double? volume;
-  final double? pan;
-  final bool? mute;
-  final bool? solo;
-
-  const MixerParamEvent({
-    required this.trackId,
-    this.volume,
-    this.pan,
-    this.mute,
-    this.solo,
-  });
-
-  @override
-  int get hashCode =>
-      trackId.hashCode ^
-      volume.hashCode ^
-      pan.hashCode ^
-      mute.hashCode ^
-      solo.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is MixerParamEvent &&
-          runtimeType == other.runtimeType &&
-          trackId == other.trackId &&
-          volume == other.volume &&
-          pan == other.pan &&
-          mute == other.mute &&
-          solo == other.solo;
-}
 
 /// UI representation of a mixer bus.
 class UiBus {
@@ -291,6 +258,41 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
       UiMixerChannelParams_InvertedPhase;
   const factory UiMixerChannelParams.solo(bool field0) =
       UiMixerChannelParams_Solo;
+}
+
+class UiMixerParamEvent {
+  final int trackId;
+  final double? volume;
+  final double? pan;
+  final bool? mute;
+  final bool? solo;
+
+  const UiMixerParamEvent({
+    required this.trackId,
+    this.volume,
+    this.pan,
+    this.mute,
+    this.solo,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      volume.hashCode ^
+      pan.hashCode ^
+      mute.hashCode ^
+      solo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiMixerParamEvent &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          volume == other.volume &&
+          pan == other.pan &&
+          mute == other.mute &&
+          solo == other.solo;
 }
 
 /// UI representation of the mixer state.

@@ -1,0 +1,11 @@
+[package]
+name = "karbeat-dsp"
+version = "0.1.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+dasp.workspace = true
+rustfft.workspace = true
+num-complex.workspace = true
+log.workspace = true
+serde.workspace = true
