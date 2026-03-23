@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/src/rust/audio/event.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/state/app_state.dart';
 
 class _PlayheadHandlePainter extends CustomPainter {
@@ -34,7 +34,7 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
   final double zoomLevel;
 
   /// Logic to determine which sample count to display (Song vs Pattern)
-  final int Function(TransportFeedback) sampleSelector;
+  final int Function(UiTransportFeedback) sampleSelector;
 
   const PlayheadOverlay({
     super.key,
@@ -50,7 +50,7 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
 }
 
 class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
-  late Stream<TransportFeedback> _positionStream;
+  late Stream<UiTransportFeedback> _positionStream;
 
   @override
   void initState() {
@@ -67,7 +67,7 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            StreamBuilder<TransportFeedback>(
+            StreamBuilder<UiTransportFeedback>(
               stream: _positionStream,
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox();

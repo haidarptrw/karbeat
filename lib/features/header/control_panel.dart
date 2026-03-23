@@ -2,7 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
-import 'package:karbeat/src/rust/audio/event.dart';
+import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
@@ -305,7 +305,7 @@ class DefaultControlPanel extends ConsumerWidget {
         border: Border.all(color: Colors.grey.shade700),
       ),
       child: IntrinsicHeight(
-        child: StreamBuilder<TransportFeedback>( 
+        child: StreamBuilder<UiTransportFeedback>(
           stream: ref.read(karbeatStateProvider).positionStream,
           builder: (context, asyncSnapshot) {
             final pos = asyncSnapshot.data;

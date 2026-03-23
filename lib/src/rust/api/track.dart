@@ -3,10 +3,11 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
-import '../core/project/track.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
+
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `into`
 
 Future<void> createClip({
   int? sourceId,
@@ -30,7 +31,7 @@ Future<void> deleteClip({required int trackId, required int clipId}) => RustLib
 Future<void> resizeClip({
   required int trackId,
   required int clipId,
-  required ResizeEdge edge,
+  required UiResizeEdge edge,
   required int newTimeVal,
 }) => RustLib.instance.api.crateApiTrackResizeClip(
   trackId: trackId,
@@ -86,7 +87,7 @@ Future<void> moveClipBatch({
 Future<void> resizeClipBatch({
   required int trackId,
   required List<int> clipIds,
-  required ResizeEdge edge,
+  required UiResizeEdge edge,
   required int deltaSamples,
 }) => RustLib.instance.api.crateApiTrackResizeClipBatch(
   trackId: trackId,
@@ -119,6 +120,6 @@ Future<void> changeTrackColor({
   newColor: newColor,
 );
 
-enum ResizeEdge { left, right }
+enum UiResizeEdge { left, right }
 
 enum UiSourceType { audio, midi }

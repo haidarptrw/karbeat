@@ -9,7 +9,6 @@ import 'package:karbeat/features/playlist/track_slot.dart';
 import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/result_type.dart';
@@ -1106,13 +1105,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  IconData _getTrackIcon(TrackType type) {
+  IconData _getTrackIcon(UiTrackType type) {
     switch (type) {
-      case TrackType.audio:
+      case UiTrackType.audio:
         return Icons.graphic_eq;
-      case TrackType.midi:
+      case UiTrackType.midi:
         return Icons.piano;
-      case TrackType.automation:
+      case UiTrackType.automation:
         return Icons.show_chart;
     }
   }
@@ -1126,7 +1125,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
-              ref.read(karbeatStateProvider).addTrack(TrackType.audio);
+              ref.read(karbeatStateProvider).addTrack(UiTrackType.audio);
             },
             child: const Row(
               children: [
