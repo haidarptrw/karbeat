@@ -1,0 +1,9 @@
+[package]
+name = "karbeat-utils"
+version = "0.1.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+log.workspace = true
+serde.workspace = true
+thiserror.workspace = true

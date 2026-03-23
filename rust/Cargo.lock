@@ -813,9 +813,9 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "139ef39800118c7683f2fd3c98c1b23c09ae076556b435f8e9064ae108aaeeec"
+checksum = "0de51e6874e94e7bf76d726fc5d13ba782deca734ff60d5bb2fb2607c7406555"
 dependencies = [
  "cfg-if",
  "libc",
@@ -916,9 +916,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
+checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jack"
@@ -1001,6 +1001,103 @@ checksum = "b49715b7073f385ba4bc528e5747d02e66cb39c6146efb66b781f131f0fb399c"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "karbeat-core"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "cpal",
+ "dasp",
+ "fastrand",
+ "flutter_rust_bridge",
+ "hashbrown 0.16.1",
+ "karbeat-dsp",
+ "karbeat-plugin-api",
+ "karbeat-plugins",
+ "karbeat-utils",
+ "log",
+ "minimp3",
+ "once_cell",
+ "rodio",
+ "rtrb",
+ "serde",
+ "smallvec",
+ "symphonia",
+ "thiserror 2.0.18",
+ "triple_buffer",
+]
+
+[[package]]
+name = "karbeat-dsp"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "dasp",
+ "log",
+ "num-complex",
+ "rustfft",
+ "serde",
+]
+
+[[package]]
+name = "karbeat-host"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "karbeat-core",
+ "karbeat-plugin-api",
+ "log",
+]
+
+[[package]]
+name = "karbeat-plugin-api"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "karbeat-dsp",
+ "karbeat-utils",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "karbeat-plugins"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "dasp",
+ "fastrand",
+ "karbeat-dsp",
+ "karbeat-plugin-api",
+ "karbeat-utils",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "karbeat-utils"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "log",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "karbeat_flutter_ffi"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "flutter_rust_bridge",
+ "karbeat-core",
+ "karbeat-plugin-api",
+ "karbeat-plugins",
+ "karbeat-utils",
+ "log",
+ "rtrb",
+ "serde",
+ "thiserror 2.0.18",
+ "triple_buffer",
 ]
 
 [[package]]
@@ -1480,9 +1577,9 @@ dependencies = [
 
 [[package]]
 name = "r-efi"
-version = "5.3.0"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
+checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rand"
@@ -1551,9 +1648,9 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "rodio"
-version = "0.22.1"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0e2319f90472c9934314a93df9f7cf81d48cebb6e8b8536a1da7f4dc4a15125"
+checksum = "d0a536bb79db59098ef71a4dd4246c02eb87b316deceb1b68e0cde7167ec01eb"
 dependencies = [
  "cpal",
  "dasp_sample",
@@ -1570,31 +1667,6 @@ name = "rtrb"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7204ed6420f698836b76d4d5c2ec5dec7585fd5c3a788fd1cde855d1de598239"
-
-[[package]]
-name = "rust_lib_karbeat"
-version = "0.1.0-alpha.1"
-dependencies = [
- "anyhow",
- "cpal",
- "dasp",
- "env_logger",
- "fastrand",
- "flutter_rust_bridge",
- "hashbrown 0.16.1",
- "log",
- "minimp3",
- "num-complex",
- "once_cell",
- "rodio",
- "rtrb",
- "rustfft",
- "serde",
- "smallvec",
- "symphonia",
- "thiserror 2.0.18",
- "triple_buffer",
-]
 
 [[package]]
 name = "rustc-demangle"

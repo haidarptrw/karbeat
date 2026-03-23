@@ -1,0 +1,27 @@
+[package]
+name = "karbeat-core"
+version = "0.1.0-alpha.1"
+edition = "2021"
+
+[dependencies]
+karbeat-dsp.workspace = true
+karbeat-plugin-api.workspace = true
+karbeat-plugins.workspace = true
+karbeat-utils.workspace = true
+
+anyhow.workspace = true
+cpal.workspace = true
+fastrand.workspace = true
+log.workspace = true
+minimp3.workspace = true
+once_cell.workspace = true
+rtrb.workspace = true
+serde.workspace = true
+symphonia.workspace = true
+triple_buffer.workspace = true
+thiserror.workspace = true
+smallvec.workspace = true
+hashbrown.workspace = true
+rodio.workspace = true
+flutter_rust_bridge.workspace = true
+dasp.workspace = true

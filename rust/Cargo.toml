@@ -1,13 +1,23 @@
-[package]
-name = "rust_lib_karbeat"
-version = "0.1.0-alpha.1"
-edition = "2021"
+[workspace]
+resolver = "2"
+members = [
+    "karbeat-core",
+    "karbeat-dsp",
+    "karbeat-host",
+    "karbeat-flutter-ffi",
+    "karbeat-plugins",
+    "karbeat-plugin-api",
+    "karbeat-utils",
+]
 
-[lib]
-path = "src/lib.rs"
-crate-type = ["cdylib", "staticlib"]
-
-[dependencies]
+[workspace.dependencies]
+karbeat-core = { path = "karbeat-core" }
+karbeat-dsp = { path = "karbeat-dsp" }
+karbeat_flutter_ffi = { path = "karbeat-flutter-ffi" }
+karbeat-host = { path = "karbeat-host" }
+karbeat-plugin-api = { path = "karbeat-plugin-api" }
+karbeat-plugins = { path = "karbeat-plugins" }
+karbeat-utils = { path = "karbeat-utils" }
 anyhow = "1.0.100"
 cpal = { version = "0.17.3", features = ["jack", "asio"] }
 env_logger = "0.11.8"
@@ -19,13 +29,7 @@ once_cell = "1.21.3"
 rodio = "0.22.1"
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
-symphonia = { version = "0.5.5", default-features = false, features = [
-    "aac",
-    "mp3",
-    "flac",
-    "wav",
-    "ogg",
-] }
+symphonia = { version = "0.5.5", default-features = false, features = ["aac", "mp3", "flac", "wav", "ogg"] }
 triple_buffer = "9.0.0"
 rustfft = "6.4.1"
 thiserror = "2.0.17"
@@ -33,9 +37,6 @@ dasp = { version = "0.11.0", features = ["all"] }
 smallvec = "1.15.1"
 hashbrown = "0.16.1"
 num-complex = "0.4.6"
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
 
 [profile.dev]
 opt-level = 3
@@ -45,7 +46,6 @@ debug = true
 opt-level = 3
 
 [profile.release]
-# Optimize for ARM with f64
 codegen-units = 1
 lto = true
 opt-level = 3

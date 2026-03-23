@@ -15,11 +15,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/src/rust/api/track.dart' as track_api;
 import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
-import 'package:karbeat/src/rust/audio/event.dart';
-import 'package:karbeat/src/rust/core/project.dart';
 
-import 'package:karbeat/src/rust/core/project/track.dart';
-import 'package:karbeat/src/rust/core/project/transport.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
 
@@ -52,7 +48,7 @@ enum ProjectEvent {
 
 class KarbeatState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
-  TransportState _transportState = TransportState();
+  UiTransportState _transportState = transportStateNew();
 
   // Runtime transport state (derived from TransportFeedback stream)
   bool _isPlaying = false;
@@ -65,9 +61,9 @@ class KarbeatState extends ChangeNotifier {
   //   version: "1.0.0",
   //   createdAt: 0, // Assuming u64
   // );
-  ProjectMetadata _metadata = ProjectMetadata();
+  UiProjectMetadata _metadata = projectMetadataNew();
 
-  AudioHardwareConfig _hardwareConfig = AudioHardwareConfig();
+  UiAudioHardwareConfig _hardwareConfig = audioHardwareConfigNew();
 
   mixer_api.UiMixerState _mixerState = mixer_api.UiMixerState();
   // List<Clipboard>
@@ -92,7 +88,7 @@ class KarbeatState extends ChangeNotifier {
 
   int maxSamplesIndex = 2000;
 
-  late final Stream<TransportFeedback> _positionBroadcastStream;
+  late final Stream<UiTransportFeedback> _positionBroadcastStream;
 
   // STRATEGY: Internal Event Bus for State Synchronization
   final StreamController<ProjectEvent> _stateEventController =
@@ -106,7 +102,7 @@ class KarbeatState extends ChangeNotifier {
   StreamSubscription<ProjectEvent>? _stateSubscription;
 
   // Mixer event stream from Rust for automation/backend-initiated changes
-  StreamSubscription<mixer_api.MixerParamEvent>? _mixerEventSubscription;
+  StreamSubscription<mixer_api.UiMixerParamEvent>? _mixerEventSubscription;
 
   /// Params currently being touched by the user (trackId, paramName).
   /// Automation events for these params are ignored while touched.
@@ -140,7 +136,8 @@ class KarbeatState extends ChangeNotifier {
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
-    _positionBroadcastStream = createPositionStream().asBroadcastStream();
+    _positionBroadcastStream =
+        createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
       if (pos.isPlaying) {
@@ -170,7 +167,7 @@ class KarbeatState extends ChangeNotifier {
 
       // Update BPM from audio thread (e.g. tempo automation)
       if ((pos.tempo - _transportState.bpm).abs() > 0.01) {
-        _transportState = TransportState.newWithParam(
+        _transportState = transportStateNewWithParam(
           bpm: pos.tempo,
           timeSignature: _transportState.timeSignature,
         );
@@ -291,8 +288,8 @@ class KarbeatState extends ChangeNotifier {
   }
 
   // ============== GETTERS =================
-  TransportState get transport => _transportState;
-  ProjectMetadata get metadata => _metadata;
+  UiTransportState get transport => _transportState;
+  UiProjectMetadata get metadata => _metadata;
   bool get isPlaying => _isPlaying;
   bool get isPatternPlaying => _isPatternPlaying;
   bool get isSongPlaying => _isPlaying && !_isPatternPlaying;
@@ -304,8 +301,8 @@ class KarbeatState extends ChangeNotifier {
   ToolSelection get selectedTool => _selectedTool;
   WorkspaceView get currentView => _currentView;
   ToolbarMenuContextGroup get currentToolbarContext => _currentToolbarContext;
-  AudioHardwareConfig get hardwareConfig => _hardwareConfig;
-  Stream<TransportFeedback> get positionStream => _positionBroadcastStream;
+  UiAudioHardwareConfig get hardwareConfig => _hardwareConfig;
+  Stream<UiTransportFeedback> get positionStream => _positionBroadcastStream;
   Map<int, UiPattern> get patterns => _patterns;
   int get pianoRollGridDenom => _piannoRollGridDenom;
   int? get editingPatternId => _editingPatternId;
@@ -556,7 +553,7 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> addTrack(TrackType type) async {
+  Future<Result<void>> addTrack(UiTrackType type) async {
     try {
       await addNewTrack(trackType: type);
       notifyBackendChange(ProjectEvent.tracksChanged);
@@ -653,9 +650,7 @@ class KarbeatState extends ChangeNotifier {
 
   Future<Result<void>> togglePlay() async {
     try {
-      final newPlaying = _isPatternPlaying
-          ? !_isPatternPlaying
-          : !_isPlaying;
+      final newPlaying = _isPatternPlaying ? !_isPatternPlaying : !_isPlaying;
 
       if (newPlaying) {
         _pendingPlayRequest = true;
@@ -697,7 +692,7 @@ class KarbeatState extends ChangeNotifier {
   Future<Result<void>> setBpm(double value) async {
     try {
       final oldBpm = _transportState.bpm;
-      _transportState = TransportState.newWithParam(
+      _transportState = transportStateNewWithParam(
         bpm: value,
         timeSignature: _transportState.timeSignature,
       );
@@ -851,7 +846,7 @@ class KarbeatState extends ChangeNotifier {
   Future<Result<void>> resizeClip(
     int trackId,
     int clipId,
-    ResizeEdge edge,
+    UiResizeEdge edge,
     int newTime,
   ) async {
     _applyOptimisticResize(trackId, clipId, edge, newTime);
@@ -950,7 +945,7 @@ class KarbeatState extends ChangeNotifier {
   Future<Result<void>> resizeClipBatch(
     int trackId,
     List<int> clipIds,
-    ResizeEdge edge,
+    UiResizeEdge edge,
     int deltaSamples,
   ) async {
     try {
@@ -1115,7 +1110,7 @@ class KarbeatState extends ChangeNotifier {
   void _applyOptimisticResize(
     int trackId,
     int clipId,
-    ResizeEdge edge,
+    UiResizeEdge edge,
     int newTime,
   ) {
     final track = _tracks[trackId];
@@ -1130,7 +1125,7 @@ class KarbeatState extends ChangeNotifier {
     int newLength = clip.loopLength.toInt();
     int newOffset = clip.offsetStart.toInt();
 
-    if (edge == ResizeEdge.right) {
+    if (edge == UiResizeEdge.right) {
       // Dragging Right Edge: newTime is the END time
       if (newTime > clip.startTime) {
         newLength = newTime - clip.startTime;
@@ -1340,7 +1335,7 @@ class KarbeatState extends ChangeNotifier {
   }
 
   /// Apply a single mixer param event to local state, skipping touched params.
-  void _applyMixerParamLocally(mixer_api.MixerParamEvent event) {
+  void _applyMixerParamLocally(mixer_api.UiMixerParamEvent event) {
     final int trackId = event.trackId;
     final bool isMaster = (trackId == 4294967295); // u32::MAX
 
@@ -1627,12 +1622,9 @@ extension on mixer_api.UiMixerState {
   }
 }
 
-extension TransportStateCopyWith on TransportState {
-  TransportState copyWith({
-    double? bpm,
-    (int, int)? timeSignature,
-  }) {
-    return TransportState.newWithParam(
+extension TransportStateCopyWith on UiTransportState {
+  UiTransportState copyWith({double? bpm, (int, int)? timeSignature}) {
+    return transportStateNewWithParam(
       bpm: bpm ?? this.bpm,
       timeSignature: timeSignature ?? this.timeSignature,
     );

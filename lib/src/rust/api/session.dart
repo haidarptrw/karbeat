@@ -107,7 +107,7 @@ Future<void> moveClip({
 Future<void> resizeClip({
   required int trackId,
   required int clipId,
-  required ResizeEdge edge,
+  required UiResizeEdge edge,
   required int newTimeVal,
 }) => RustLib.instance.api.crateApiSessionResizeClip(
   trackId: trackId,

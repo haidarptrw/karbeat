@@ -3,23 +3,51 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
-import '../core/project.dart';
-import '../core/project/track.dart';
-import '../core/project/transport.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'project.freezed.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
+
+UiProjectMetadata projectMetadataNew() =>
+    RustLib.instance.api.crateApiProjectProjectMetadataNew();
+
+UiAudioHardwareConfig audioHardwareConfigNew() =>
+    RustLib.instance.api.crateApiProjectAudioHardwareConfigNew();
+
+UiAudioHardwareConfig audioHardwareConfigNewWithParam({
+  required String selectedInputDevice,
+  required String selectedOutputDevice,
+  required int sampleRate,
+  required int bufferSize,
+  required double cpuLoad,
+}) => RustLib.instance.api.crateApiProjectAudioHardwareConfigNewWithParam(
+  selectedInputDevice: selectedInputDevice,
+  selectedOutputDevice: selectedOutputDevice,
+  sampleRate: sampleRate,
+  bufferSize: bufferSize,
+  cpuLoad: cpuLoad,
+);
+
+UiTransportState transportStateNew() =>
+    RustLib.instance.api.crateApiProjectTransportStateNew();
+
+UiTransportState transportStateNewWithParam({
+  required double bpm,
+  required (int, int) timeSignature,
+}) => RustLib.instance.api.crateApiProjectTransportStateNewWithParam(
+  bpm: bpm,
+  timeSignature: timeSignature,
+);
 
 /// Get the current project metadata state from the backend
-Future<ProjectMetadata> getProjectMetadata() =>
+Future<UiProjectMetadata> getProjectMetadata() =>
     RustLib.instance.api.crateApiProjectGetProjectMetadata();
 
 /// Get the transport state from the backend
-Future<TransportState> getTransportState() =>
+Future<UiTransportState> getTransportState() =>
     RustLib.instance.api.crateApiProjectGetTransportState();
 
 /// Get all audio waveform source list from the backend
@@ -38,7 +66,7 @@ Future<void> addAudioSource({required String filePath}) =>
     RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-Future<void> addNewTrack({required TrackType trackType}) =>
+Future<void> addNewTrack({required UiTrackType trackType}) =>
     RustLib.instance.api.crateApiProjectAddNewTrack(trackType: trackType);
 
 /// Get all tracks on the session/project.
@@ -118,6 +146,41 @@ class AudioWaveformUiForAudioProperties {
           muted == other.muted;
 }
 
+class UiAudioHardwareConfig {
+  final String selectedInputDevice;
+  final String selectedOutputDevice;
+  final int sampleRate;
+  final int bufferSize;
+  final double cpuLoad;
+
+  const UiAudioHardwareConfig({
+    required this.selectedInputDevice,
+    required this.selectedOutputDevice,
+    required this.sampleRate,
+    required this.bufferSize,
+    required this.cpuLoad,
+  });
+
+  @override
+  int get hashCode =>
+      selectedInputDevice.hashCode ^
+      selectedOutputDevice.hashCode ^
+      sampleRate.hashCode ^
+      bufferSize.hashCode ^
+      cpuLoad.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiAudioHardwareConfig &&
+          runtimeType == other.runtimeType &&
+          selectedInputDevice == other.selectedInputDevice &&
+          selectedOutputDevice == other.selectedOutputDevice &&
+          sampleRate == other.sampleRate &&
+          bufferSize == other.bufferSize &&
+          cpuLoad == other.cpuLoad;
+}
+
 class UiClip {
   final String name;
   final int id;
@@ -191,11 +254,42 @@ class UiGeneratorInstance {
           parameters == other.parameters;
 }
 
+class UiProjectMetadata {
+  final String name;
+  final String author;
+  final String version;
+  final int createdAt;
+
+  const UiProjectMetadata({
+    required this.name,
+    required this.author,
+    required this.version,
+    required this.createdAt,
+  });
+
+  static Future<UiProjectMetadata> default_() =>
+      RustLib.instance.api.crateApiProjectUiProjectMetadataDefault();
+
+  @override
+  int get hashCode =>
+      name.hashCode ^ author.hashCode ^ version.hashCode ^ createdAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiProjectMetadata &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          author == other.author &&
+          version == other.version &&
+          createdAt == other.createdAt;
+}
+
 class UiTrack {
   final int id;
   final String name;
   final String color;
-  final TrackType trackType;
+  final UiTrackType trackType;
   final List<UiClip> clips;
   final int? generatorId;
 
@@ -228,4 +322,27 @@ class UiTrack {
           trackType == other.trackType &&
           clips == other.clips &&
           generatorId == other.generatorId;
+}
+
+enum UiTrackType { audio, midi, automation }
+
+class UiTransportState {
+  final double bpm;
+  final (int, int) timeSignature;
+
+  const UiTransportState({required this.bpm, required this.timeSignature});
+
+  static Future<UiTransportState> default_() =>
+      RustLib.instance.api.crateApiProjectUiTransportStateDefault();
+
+  @override
+  int get hashCode => bpm.hashCode ^ timeSignature.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiTransportState &&
+          runtimeType == other.runtimeType &&
+          bpm == other.bpm &&
+          timeSignature == other.timeSignature;
 }

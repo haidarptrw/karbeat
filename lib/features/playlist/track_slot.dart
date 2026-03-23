@@ -5,7 +5,6 @@ import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
-import 'package:karbeat/src/rust/core/project/track.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -151,7 +150,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
 class _InteractiveClip extends ConsumerStatefulWidget {
   final UiClip clip;
   final int trackId;
-  final TrackType trackType;
+  final UiTrackType trackType;
   final double zoomLevel;
   final double height;
   final ToolSelection selectedTool;
@@ -593,7 +592,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   state.resizeClipBatch(
                     widget.trackId,
                     widget.selectedClipIds,
-                    ResizeEdge.right,
+                    UiResizeEdge.right,
                     controller.deltaSamples,
                   );
                 } else {
@@ -601,7 +600,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   state.resizeClip(
                     widget.trackId,
                     widget.clip.id,
-                    ResizeEdge.right,
+                    UiResizeEdge.right,
                     newEndTime,
                   );
                 }
@@ -610,14 +609,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   state.resizeClipBatch(
                     widget.trackId,
                     widget.selectedClipIds,
-                    ResizeEdge.left,
+                    UiResizeEdge.left,
                     controller.deltaSamples,
                   );
                 } else {
                   state.resizeClip(
                     widget.trackId,
                     widget.clip.id,
-                    ResizeEdge.left,
+                    UiResizeEdge.left,
                     _visualStartTime,
                   );
                 }
@@ -663,7 +662,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
 class _ClipRenderer extends ConsumerWidget {
   final UiClip clip;
-  final TrackType trackType;
+  final UiTrackType trackType;
   final Color color;
   final double zoomLevel;
   final int projectSampleRate;
