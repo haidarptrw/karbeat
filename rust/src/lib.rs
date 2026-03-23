@@ -55,6 +55,7 @@ pub fn broadcast_state_change() {
 }
 
 
+#[allow(dead_code)]
 /// Helper to push state to TripleBuffer
 fn publish_to_audio_thread(state: &AudioRenderState) {
     if let Ok(mut guard) = ctx().render_state_producer.lock() {

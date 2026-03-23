@@ -7,6 +7,7 @@
 
 use dasp::slice;
 use rtrb::{Consumer, Producer};
+use smallvec::SmallVec;
 use std::{collections::HashMap, sync::Arc};
 use triple_buffer::Output;
 
@@ -102,9 +103,9 @@ pub struct AudioEngine {
     // =========================
     // Automation Event Queue
     // =========================
-    track_automation_events: Vec<(TrackId, Vec<TrackAutomationEvent>)>,
-    bus_automation_events: Vec<(BusId, Vec<BusAutomationEvent>)>,
-    master_automation_events: Vec<MasterAutomationEvent>,
+    track_automation_events: SmallVec<[(TrackId, Vec<TrackAutomationEvent>); 4]>,
+    bus_automation_events: SmallVec<[(BusId, Vec<BusAutomationEvent>);4]>,
+    master_automation_events: SmallVec<[MasterAutomationEvent;4]>,
 }
 
 /// Lightweight voice reference - the actual plugin lives in AudioPluginState
@@ -112,8 +113,8 @@ pub struct GeneratorVoice {
     pub id: GeneratorId,
     pub track_id: TrackId,
     // Events queued for the CURRENT buffer block only
-    pub midi_events: Vec<MidiEvent>,
-    pub automation_events: Vec<GeneratorAutomationEvent>,
+    pub midi_events: SmallVec<[MidiEvent; 4]>,
+    pub automation_events: SmallVec<[GeneratorAutomationEvent;4]>,
     // Track if this generator is persistent or temporary
     pub active: bool,
 }
@@ -123,8 +124,8 @@ impl GeneratorVoice {
         Self {
             id,
             track_id,
-            midi_events: Vec::new(),
-            automation_events: Vec::new(),
+            midi_events: SmallVec::new(),
+            automation_events: SmallVec::new(),
             active,
         }
     }
@@ -186,8 +187,8 @@ impl AudioEngine {
             bpm: initial_bpm,
             sample_rate,
             playhead_samples: 0,
-            active_generators: Vec::with_capacity(32),
-            active_oneshots: Vec::with_capacity(32),
+            active_generators: Vec::with_capacity(40), // 64 is a reasonable number
+            active_oneshots: Vec::with_capacity(40), // 64 is a reasonable number
             preview_voices: Vec::with_capacity(4),
             plugin_state: AudioPluginState::default(),
             current_beat: 1,
@@ -202,9 +203,9 @@ impl AudioEngine {
             bus_temp_buffer: Vec::with_capacity(2048),
             cached_routing_order: Vec::new(),
             playback_mode: PlaybackMode::Song,
-            track_automation_events: Vec::new(),
-            bus_automation_events: Vec::new(),
-            master_automation_events: Vec::new(),
+            track_automation_events: SmallVec::new(),
+            bus_automation_events: SmallVec::new(),
+            master_automation_events: SmallVec::new(),
         }
     }
 
@@ -1788,7 +1789,7 @@ impl AudioEngine {
     }
 
     fn schedule_midi_events(
-        events: &mut Vec<MidiEvent>,
+        events: &mut SmallVec<[MidiEvent; 4]>,
         sample_rate: u32,
         tempo: f32,
         clip: &Clip,
@@ -1868,7 +1869,7 @@ impl AudioEngine {
 
     // Helper to schedule notes without a Clip wrapper
     fn schedule_pattern_notes_raw(
-        events: &mut Vec<MidiEvent>,
+        events: &mut SmallVec<[MidiEvent; 4]>,
         notes: &[crate::core::project::Note],
         sample_rate: u32,
         tempo: f32,

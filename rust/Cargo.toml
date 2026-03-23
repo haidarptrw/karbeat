@@ -9,7 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 anyhow = "1.0.100"
-cpal = { version = "0.17.3", features = ["jack"] }
+cpal = { version = "0.17.3", features = ["jack", "asio"] }
 env_logger = "0.11.8"
 fastrand = "2.3.0"
 flutter_rust_bridge = "=2.11.1"
@@ -27,10 +27,12 @@ symphonia = { version = "0.5.5", default-features = false, features = [
     "ogg",
 ] }
 triple_buffer = "9.0.0"
-karbeat_macros = { path = "../karbeat-macros" }
 rustfft = "6.4.1"
 thiserror = "2.0.17"
 dasp = { version = "0.11.0", features = ["all"] }
+smallvec = "1.15.1"
+hashbrown = "0.16.1"
+num-complex = "0.4.6"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
