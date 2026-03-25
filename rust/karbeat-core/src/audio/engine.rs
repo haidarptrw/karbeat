@@ -1619,7 +1619,7 @@ impl AudioEngine {
                 }
                 KarbeatSource::Midi(id) => {
                     // Look up the FRESH pattern from the pool using the ID.
-                    let fresh_pattern = self.current_state.graph.patterns.get(&id);
+                    let fresh_pattern = self.current_state.graph.patterns.get(id);
 
                     if let Some(pattern) = fresh_pattern {
                         if let Some(idx) = gen_voice_idx {

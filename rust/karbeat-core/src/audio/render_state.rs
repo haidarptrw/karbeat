@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::{
     core::project::{
@@ -12,6 +12,7 @@ use crate::{
         ApplicationState, AssetLibrary, GeneratorId, TrackId,
     },
 };
+use indexmap::IndexMap;
 use karbeat_dsp::is_power_of_two;
 
 // =============================================================================
@@ -227,11 +228,11 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
     pub tracks: Arc<[Arc<KarbeatTrack>]>,
-    pub patterns: HashMap<PatternId, Arc<Pattern>>,
+    pub patterns: IndexMap<PatternId, Arc<Pattern>>,
     pub mixer_state: MixerState,
     pub asset_library: Arc<AssetLibrary>,
     /// Automation lanes for real-time parameter modulation
-    pub automation_lanes: HashMap<AutomationId, AudioAutomationLane>,
+    pub automation_lanes: IndexMap<AutomationId, AudioAutomationLane>,
     pub max_sample_index: u32,
     pub sample_rate: u32,
     pub buffer_size: usize,
@@ -243,7 +244,7 @@ impl From<&ApplicationState> for AudioGraphState {
         tracks_vec.sort_by_key(|t| t.id);
 
         // Convert automation pool to lightweight audio-thread snapshots
-        let automation_lanes: HashMap<AutomationId, AudioAutomationLane> = app
+        let automation_lanes: IndexMap<AutomationId, AudioAutomationLane> = app
             .automation_pool
             .iter()
             .filter(|(_, lane)| lane.enabled && !lane.points.is_empty())

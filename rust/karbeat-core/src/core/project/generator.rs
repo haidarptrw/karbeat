@@ -1,22 +1,15 @@
 use karbeat_utils::define_id;
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    core::project::{mixer::EffectId, plugin::instance::PluginInstance, ApplicationState},
-    
-};
+use crate::core::project::{plugin::instance::PluginInstance, ApplicationState};
 
 define_id!(GeneratorId);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GeneratorInstance {
     pub id: GeneratorId,
-    pub effects: HashMap<EffectId, Arc<PluginInstance>>,
     pub instance_type: GeneratorInstanceType,
 }
 
@@ -42,7 +35,6 @@ impl ApplicationState {
         let instance = GeneratorInstance {
             id,
             instance_type,
-            effects: HashMap::new(),
         };
 
         self.generator_pool
@@ -52,7 +44,7 @@ impl ApplicationState {
 
     /// Deletes a generator source and removes all clips referencing it.
     pub fn remove_generator(&mut self, generator_id: GeneratorId) -> Option<GeneratorId> {
-        if self.generator_pool.remove(&generator_id).is_none() {
+        if self.generator_pool.shift_remove(&generator_id).is_none() {
             return None;
         }
 

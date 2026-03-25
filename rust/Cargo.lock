@@ -871,6 +871,8 @@ dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.2.0",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -1024,6 +1026,7 @@ dependencies = [
  "fastrand",
  "flutter_rust_bridge",
  "hashbrown 0.16.1",
+ "indexmap",
  "karbeat-dsp",
  "karbeat-plugin-api",
  "karbeat-plugins",
@@ -1094,6 +1097,8 @@ name = "karbeat-utils"
 version = "0.1.0-alpha.1"
 dependencies = [
  "dasp",
+ "hashbrown 0.16.1",
+ "indexmap",
  "log",
  "serde",
  "thiserror 2.0.18",

@@ -429,7 +429,7 @@ pub fn add_audio_source(file_path: &str) {
     {
         let mut app = get_app_write();
         // Add audio source
-        match app.load_audio(file_path.to_string(), None) {
+        match app.load_audio(file_path, None) {
             Ok(id) => {
                 let Some(audio) = app.asset_library.source_map.get(&id.into()) else {
                     log::error!("[error] can't get the audiowave");

@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use karbeat_utils::define_id;
 // src/core/project/mod.rs
 
@@ -58,19 +59,19 @@ pub struct ApplicationState {
     pub asset_library: Arc<AssetLibrary>,
 
     // All musical data lives here. The timeline just references these.
-    pub pattern_pool: HashMap<PatternId, Arc<Pattern>>,
+    pub pattern_pool: IndexMap<PatternId, Arc<Pattern>>,
     pub pattern_counter: u32,
 
     // Generator sources
-    pub generator_pool: HashMap<GeneratorId, Arc<RwLock<GeneratorInstance>>>,
+    pub generator_pool: IndexMap<GeneratorId, Arc<RwLock<GeneratorInstance>>>,
     pub generator_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
-    pub tracks: HashMap<TrackId, Arc<KarbeatTrack>>,
+    pub tracks: IndexMap<TrackId, Arc<KarbeatTrack>>,
     pub track_counter: u32,
 
     // Automation lanes pool (lives at the same level as tracks/patterns/generators)
-    pub automation_pool: HashMap<AutomationId, Arc<AutomationLane>>,
+    pub automation_pool: IndexMap<AutomationId, Arc<AutomationLane>>,
     pub automation_counter: u32,
 
     // Counter for clips
@@ -275,7 +276,7 @@ impl ApplicationState {
 
     /// Remove an automation lane from the pool by its ID.
     pub fn remove_automation_lane(&mut self, lane_id: AutomationId) -> anyhow::Result<()> {
-        if self.automation_pool.remove(&lane_id).is_none() {
+        if self.automation_pool.shift_remove(&lane_id).is_none() {
             return Err(anyhow!("Automation lane {:?} not found", lane_id));
         }
 

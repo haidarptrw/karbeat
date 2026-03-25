@@ -4,7 +4,7 @@ pub mod audio_waveform;
 pub mod midi;
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::BTreeSet,
     sync::{Arc, RwLock},
 };
 
@@ -241,7 +241,6 @@ impl ApplicationState {
 
         let generator = GeneratorInstance {
             id: gen_id,
-            effects: HashMap::new(),
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
         };
         self.generator_pool
@@ -304,7 +303,7 @@ impl ApplicationState {
             .and_then(|t| t.generator.as_ref().map(|g| g.id));
 
         // Remove the track
-        if self.tracks.remove(&track_id).is_none() {
+        if self.tracks.shift_remove(&track_id).is_none() {
             return Err(anyhow::anyhow!("Track {:?} not found", track_id));
         }
 
@@ -316,7 +315,7 @@ impl ApplicationState {
 
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
-            self.generator_pool.remove(&gen_id);
+            self.generator_pool.shift_remove(&gen_id);
         }
 
         // Remove all automation lanes for this track

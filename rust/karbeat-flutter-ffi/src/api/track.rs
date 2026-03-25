@@ -330,7 +330,7 @@ pub fn move_clip(
             new_clip.start_time = new_start_time;
 
             // get target track. this is already checked at the beginning, so it will never throws error
-            let target_track = Arc::make_mut(app.tracks.get_mut(&target_track_id.into()).unwrap());
+            let target_track = Arc::make_mut(app.tracks.get_mut(&target_track_id).unwrap());
             let _ = target_track.add_clip(new_clip).map_err(|e| format!("{}", e));
         }
         app.update_max_sample_index();

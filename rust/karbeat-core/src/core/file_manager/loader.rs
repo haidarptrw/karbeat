@@ -37,10 +37,10 @@ mod err {
 }
 
 /// Main entry point for loading audio.
-pub fn load_audio_file(path_string: String, name: Option<String>) -> Result<AudioWaveform> {
-    let path = Path::new(&path_string);
+pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWaveform> {
+    let path = Path::new(path_str);
     let file = File::open(path).with_context(||
-        format!("Failed to open audio file: {}", path_string)
+        format!("Failed to open audio file: {}", path_str)
     )?;
     let reader = BufReader::new(file);
 
@@ -105,11 +105,15 @@ pub fn load_audio_file(path_string: String, name: Option<String>) -> Result<Audi
         0.0
     };
 
-    let final_name = name.unwrap_or_else(|| path.file_name_string());
+    let final_name = if let Some(name_str) = name {
+        name_str.to_string()
+    } else {
+        path.file_name_string()
+    };
 
     Ok(AudioWaveform {
         buffer: Some(Arc::new(mmap)),
-        file_path: path_string,
+        file_path: path_str.to_string(),
         name: final_name,
         sample_rate: sample_rate.get(),
         channels: channels.get(),
@@ -121,15 +125,15 @@ pub fn load_audio_file(path_string: String, name: Option<String>) -> Result<Audi
 
 // Trait AudioLoader
 pub trait AudioLoader {
-    fn load_audio(&mut self, path: String, name: Option<String>) -> Result<u32>;
+    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<u32>;
     fn get_audio_source(&self, id: u32) -> Option<Arc<AudioWaveform>>;
 }
 
 impl AudioLoader for ApplicationState {
-    fn load_audio(&mut self, path: String, name: Option<String>) -> Result<u32> {
+    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<u32> {
         // Load the actual audio data (Heavy I/O operation)
         // This parses the file into f32 samples
-        let waveform = match load_audio_file(path.clone(), name) {
+        let waveform = match load_audio_file(path, name) {
             Ok(waveform) => waveform,
             Err(e) => {
                 let error_msg = format!("Cannot decode audio file: {}", e);

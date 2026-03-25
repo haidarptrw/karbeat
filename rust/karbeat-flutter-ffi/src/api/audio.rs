@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use karbeat_core::context::utils::send_audio_command;
+use karbeat_core::core::project::TrackId;
 use karbeat_core::{ audio::event::TransportFeedback, commands::AudioCommand, context::ctx };
 use crate::api::project::{ AudioWaveformUiForAudioProperties, UiAudioHardwareConfig };
 use crate::frb_generated::StreamSink;
@@ -47,6 +48,10 @@ impl From<TransportFeedback> for UiTransportFeedback {
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
     let app = get_app_read();
     let waveform = app.asset_library.source_map.get(&id.into())?;
+
+    //TODO:Add dyanamic downsampling to send this to the frontend side
+    // downsample(waveform.buffer)
+
     Some(AudioWaveformUiForAudioProperties::from(waveform.as_ref()))
 }
 
@@ -117,7 +122,7 @@ pub fn play_preview_note(
 
     let generator_id = {
         let app = get_app_read();
-        let track = app.tracks.get(&track_id.into()).ok_or("Can't find requested track")?;
+        let track = app.tracks.get(&TrackId::from(track_id)).ok_or("Can't find requested track")?;
         track.generator.as_ref().ok_or("Track has no generator")?.id
     };
 

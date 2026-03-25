@@ -9,3 +9,5 @@ log.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 dasp.workspace = true
+hashbrown.workspace = true
+indexmap.workspace = true
