@@ -1,8 +1,8 @@
 // src/core/plugin/registry.rs
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
-use crate::effect::compressor::create_compressor;
+// use crate::effect::compressor::create_compressor;
 use crate::effect::parametric_eq::create_parametric_eq;
 use crate::generator::karbeatzer_v2::create_karbeatzer;
 use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};

@@ -6,9 +6,8 @@ use thiserror::Error;
 
 use crate::{
     commands::AudioCommand,
-    core::project::{ plugin::KarbeatEffect, ApplicationState, PluginInstance, TrackId },
-    context::ctx,
-    
+    context::{ ctx, utils::send_audio_command },
+    core::project::{ ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect },
 };
 
 define_id!(EffectId);
@@ -206,7 +205,7 @@ impl MixerChannel {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
         let (effect_plugin, effect_name, default_params) = {
-            let registry = ctx().plugin_registry.read().unwrap();
+            let registry = ctx().plugin_registry.read();
             if let Some((effect_box, name)) = registry.create_effect_by_id(effect_registry_id) {
                 let default_params = effect_box.default_parameters();
                 (effect_box, name, default_params)
@@ -328,13 +327,11 @@ impl MixerState {
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
         // Push to the audio thread
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddTrackEffect {
-                track_id: track_id.clone(),
-                effect_id,
-                effect: effect_plugin,
-            });
-        }
+        send_audio_command(AudioCommand::AddTrackEffect {
+            track_id: track_id.clone(),
+            effect_id,
+            effect: effect_plugin,
+        });
 
         log::info!(
             "Effect {} (registry_id={}) added to track {:?}",
@@ -361,11 +358,9 @@ impl MixerState {
         // Clone and modify the channel
         let channel = Arc::make_mut(mixer_channel_arc);
         channel.remove_effect(effect_id)?;
-        
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::RemoveTrackEffect { track_id: track_id.clone(), effect_id });
-        }
-        
+
+        send_audio_command(AudioCommand::RemoveTrackEffect { track_id: track_id.clone(), effect_id });
+
         Ok(())
     }
 
@@ -390,12 +385,10 @@ impl MixerState {
         let channel = Arc::make_mut(&mut self.master_bus);
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddMasterEffect {
-                effect_id,
-                effect: effect_plugin,
-            });
-        }
+        send_audio_command(AudioCommand::AddMasterEffect {
+            effect_id,
+            effect: effect_plugin,
+        });
 
         log::info!("Effect {} (registry_id={}) added to master bus", effect_name, registry_id);
         Ok(())
@@ -406,9 +399,7 @@ impl MixerState {
         channel.remove_effect(effect_id)?;
 
         // Send master effect removal command to audio thread
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::RemoveMasterEffect { effect_id });
-        }
+        send_audio_command(AudioCommand::RemoveMasterEffect { effect_id });
 
         Ok(())
     }
@@ -427,12 +418,10 @@ impl MixerState {
         self.routing.push(RoutingConnection::new(RoutingNode::Bus(bus_id), RoutingNode::Master));
 
         // send signal to audio thread that the BUSSSS is created
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddBus {
-                bus_id,
-                name,
-            });
-        }
+        send_audio_command(AudioCommand::AddBus {
+            bus_id,
+            name,
+        });
 
         bus_id
     }
@@ -452,9 +441,7 @@ impl MixerState {
         });
 
         // send signal to audio thread that the BUSSSS is deleted
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::RemoveBus { bus_id });
-        }
+        send_audio_command(AudioCommand::RemoveBus { bus_id });
 
         Ok(())
     }
@@ -523,13 +510,11 @@ impl MixerState {
         let bus = Arc::make_mut(bus_arc);
         let (effect_plugin, effect_name, effect_id) = bus.channel.add_effect(registry_id)?;
 
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddBusEffect {
-                bus_id,
-                effect_id,
-                effect: effect_plugin,
-            });
-        }
+        send_audio_command(AudioCommand::AddBusEffect {
+            bus_id,
+            effect_id,
+            effect: effect_plugin,
+        });
 
         log::info!(
             "Effect {} (registry_id={}) added to bus {:?}",

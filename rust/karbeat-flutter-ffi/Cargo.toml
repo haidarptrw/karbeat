@@ -20,6 +20,8 @@ thiserror.workspace = true
 rtrb.workspace = true
 triple_buffer.workspace = true
 karbeat-plugins.workspace = true
+smallvec.workspace = true
+mimalloc.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

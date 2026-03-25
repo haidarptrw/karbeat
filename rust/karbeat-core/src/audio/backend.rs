@@ -90,7 +90,7 @@ fn set_host() -> cpal::Host {
     let mut host = cpal::default_host();
 
     #[cfg(target_os = "windows")]
-    {   
+    {
         if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
             host = asio_host;
             log::info!("Connected to ASIO Host");
@@ -149,7 +149,7 @@ pub fn start_audio_stream(
     initial_state: AudioRenderState
 ) -> Result<()> {
     {
-        let mut guard = ctx().stream_guard.lock().unwrap();
+        let mut guard = ctx().stream_guard.lock();
         if guard.is_some() {
             log::info!("Stopping previous audio stream...");
             *guard = None; // This drops the stream, stopping the audio thread
@@ -201,31 +201,31 @@ pub fn start_audio_stream(
     log::info!("Stream Config: {:?} Hz, {} Channels", sample_rate, channels);
     log::info!("Sample format: {}", sample_format);
 
-    if let Ok(mut state) = ctx().app_state.write() {
+    {
+        let mut state = ctx().app_state.write();
         state.audio_config.sample_rate = sample_rate;
-        state.audio_config.selected_output_device = match device.description()
-        {
+        state.audio_config.selected_output_device = match device.description() {
             Ok(desc) => desc.to_string(),
             Err(_) => "Unknown".into(),
-        }
+        };
     }
 
     state_consumer.update();
 
     let (pos_producer, pos_consumer) = RingBuffer::<TransportFeedback>::new(100);
 
-    // 2. Store Consumer in context
-    *ctx().position_consumer.lock().unwrap() = Some(pos_consumer);
+    // Store Consumer in context
+    *ctx().position_consumer.lock() = Some(pos_consumer);
 
     // Create feedback ring buffer (Audio → UI for parameter updates)
     let (feedback_producer, feedback_consumer) = RingBuffer::<crate::commands::AudioFeedback>::new(
         256
     );
-    *ctx().feedback_consumer.lock().unwrap() = Some(feedback_consumer);
+    *ctx().feedback_consumer.lock() = Some(feedback_consumer);
 
     // Read initial BPM from app state for the audio engine
     let initial_bpm = {
-        let app = ctx().app_state.read().unwrap();
+        let app = ctx().app_state.read();
         app.transport.bpm
     };
 
@@ -239,10 +239,9 @@ pub fn start_audio_stream(
         initial_state
     );
 
-    
     let ring_buffer_capacity = 4096;
     let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
-    
+
     let engine_block_size = 512;
     let staging_buffer = vec![0.0; engine_block_size * channels];
 
@@ -301,8 +300,9 @@ pub fn start_audio_stream(
     stream.play().context("Failed to play stream")?;
 
     // store the stream in context so it does not get dropped
-    let mut guard = ctx().stream_guard.lock().unwrap();
+    let mut guard = ctx().stream_guard.lock();
     *guard = Some(stream);
 
+    log::info!("Successfully initialize Audio backend");
     Ok(())
 }

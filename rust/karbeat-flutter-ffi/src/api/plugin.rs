@@ -71,19 +71,19 @@ pub struct UiPluginInfo {
 
 /// Get all available generators in Plugin Registry (names only, backwards compatible)
 pub fn get_available_generators() -> Result<Vec<String>, String> {
-    let registry = ctx().plugin_registry.read().unwrap();
+    let registry = ctx().plugin_registry.read();
     Ok(registry.list_generators())
 }
 
 /// Get all available effects in Plugin Registry (names only, backwards compatible)
 pub fn get_available_effects() -> Result<Vec<String>, String> {
-    let registry = ctx().plugin_registry.read().unwrap();
+    let registry = ctx().plugin_registry.read();
     Ok(registry.list_effects())
 }
 
 /// Get all available generators with their registry IDs (preferred for UI)
 pub fn get_available_generators_with_ids() -> Result<Vec<UiPluginInfo>, String> {
-    let registry = ctx().plugin_registry.read().unwrap();
+    let registry = ctx().plugin_registry.read();
     Ok(registry
         .list_generators_with_ids()
         .into_iter()
@@ -97,7 +97,7 @@ pub fn get_available_generators_with_ids() -> Result<Vec<UiPluginInfo>, String> 
 
 /// Get all available effects with their registry IDs (preferred for UI)
 pub fn get_available_effects_with_ids() -> Result<Vec<UiPluginInfo>, String> {
-    let registry = ctx().plugin_registry.read().unwrap();
+    let registry = ctx().plugin_registry.read();
     Ok(registry
         .list_effects_with_ids()
         .into_iter()
@@ -196,7 +196,7 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
         .map_err(|e| format!("Failed to read generator lock: {}", e))?;
 
     if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
-        let registry = ctx().plugin_registry.read().unwrap();
+        let registry = ctx().plugin_registry.read();
 
         // Try ID-based lookup first (preferred), then fall back to name
         let specs = if plugin_instance.registry_id > 0 {
@@ -258,7 +258,7 @@ pub fn set_generator_parameter(generator_id: u32, param_id: u32, value: f32) -> 
     let gen_id = GeneratorId::from(generator_id);
 
     // Send command to audio thread (lock-free)
-    if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
         let _ = sender.push(AudioCommand::SetGeneratorParameter {
             generator_id: gen_id,
             param_id,
@@ -368,7 +368,7 @@ pub struct UiParameterValue {
 pub fn query_generator_parameters(generator_id: u32) -> Result<(), String> {
     let gen_id = GeneratorId::from(generator_id);
 
-    if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
         sender
             .push(AudioCommand::QueryGeneratorParameters {
                 generator_id: gen_id,
@@ -390,7 +390,7 @@ pub fn poll_generator_parameter_feedback() -> Vec<UiGeneratorParameterSnapshot> 
 
     let mut pending = PENDING_FEEDBACK.lock().unwrap();
 
-    if let Some(consumer) = ctx().feedback_consumer.lock().unwrap().as_mut() {
+    if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
         // Drain all pending feedback messages
         while let Ok(feedback) = consumer.pop() {
             pending.push(feedback);
@@ -464,7 +464,7 @@ pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
 
     let mut pending = PENDING_FEEDBACK.lock().unwrap();
 
-    if let Some(consumer) = ctx().feedback_consumer.lock().unwrap().as_mut() {
+    if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
         // Drain all pending feedback messages
         while let Ok(feedback) = consumer.pop() {
             pending.push(feedback);
@@ -628,7 +628,7 @@ pub fn get_effect_parameter_specs(
     };
 
     // Create a temporary plugin instance to get static parameter specs
-    let registry = ctx().plugin_registry.read().unwrap();
+    let registry = ctx().plugin_registry.read();
 
     let specs = if plugin_registry_id > 0 {
         registry.get_effect_parameter_specs_by_id(plugin_registry_id)
@@ -685,7 +685,7 @@ pub fn set_effect_parameter(
     let effect_id_typed = EffectId::from(effect_id);
 
     // Send command to audio thread (lock-free)
-    if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
         match target {
             UiEffectTarget::Track(track_id) => {
                 let _ = sender.push(AudioCommand::SetTrackEffectParameter {
@@ -764,7 +764,7 @@ pub fn set_effect_parameter(
 pub fn query_effect_parameters(target: UiEffectTarget, effect_id: u32) -> Result<(), String> {
     let effect_id_typed = EffectId::from(effect_id);
 
-    if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
         match target {
             UiEffectTarget::Track(track_id) => {
                 let _ = sender.push(AudioCommand::QueryTrackEffectParameters {
@@ -866,7 +866,7 @@ pub fn get_eq_response_curve(
     };
 
     // Create a temporary plugin from registry
-    let registry = ctx().plugin_registry.read().unwrap();
+    let registry = ctx().plugin_registry.read();
     let temp_plugin = if plugin_registry_id > 0 {
         registry
             .create_effect_by_id(plugin_registry_id)

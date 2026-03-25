@@ -3,16 +3,17 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
-use std::sync::{Arc, Mutex, Once, RwLock};
+use std::sync::{ Arc, Once };
 
 use once_cell::sync::Lazy;
+use parking_lot::{ Mutex, RwLock };
 use rtrb::Producer;
 use triple_buffer::Input;
 
 use crate::{
-    audio::{event::TransportFeedback, render_state::AudioRenderState},
-    commands::{AudioCommand, AudioFeedback},
-    core::{history::HistoryManager, project::ApplicationState},
+    audio::{ event::TransportFeedback, render_state::AudioRenderState },
+    commands::{ AudioCommand, AudioFeedback },
+    core::{ history::HistoryManager, project::ApplicationState },
 };
 use karbeat_plugins::registry::PluginRegistry;
 
@@ -94,4 +95,25 @@ static CONTEXT: Lazy<KarbeatContext> = Lazy::new(KarbeatContext::new);
 #[inline]
 pub fn ctx() -> &'static KarbeatContext {
     &CONTEXT
+}
+
+pub mod utils {
+    use smallvec::SmallVec;
+
+    use crate::{ commands::AudioCommand, context::ctx };
+
+    /// Helper function to send AudioCommand to context's command sender
+    pub fn send_audio_command(command: AudioCommand) {
+        if let Some(sender) = ctx().command_sender.lock().as_mut() {
+            let _ = sender.push(command);
+        }
+    }
+
+    pub fn try_send_audio_command_chain(commands: SmallVec<[AudioCommand; 4]>) -> anyhow::Result<()> {
+        if let Some(sender) = ctx().command_sender.lock().as_mut() {
+            commands.into_iter().try_for_each(|command| sender.push(command))?;
+        }
+
+        Ok(())
+    }
 }

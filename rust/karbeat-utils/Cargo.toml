@@ -2,6 +2,7 @@
 name = "karbeat-utils"
 version = "0.1.0-alpha.1"
 edition = "2021"
+description = "Auxiliary utilities for Karbeat"
 
 [dependencies]
 log.workspace = true

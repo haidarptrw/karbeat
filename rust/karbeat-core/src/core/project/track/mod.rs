@@ -210,8 +210,7 @@ impl ApplicationState {
         let (generator_plugin, generator_name, default_params) = {
             let registry = ctx()
                 .plugin_registry
-                .read()
-                .expect("Failed to lock registry");
+                .read();
 
             if let Some((generator_box, name)) = registry.create_generator_by_id(registry_id) {
                 // Get default parameters BEFORE sending to audio thread
@@ -228,7 +227,7 @@ impl ApplicationState {
         };
 
         // Send the plugin to the audio thread (lock-free)
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+        if let Some(sender) = ctx().command_sender.lock().as_mut() {
             let _ = sender.push(AudioCommand::AddGenerator {
                 generator_id: gen_id,
                 track_id,
@@ -283,8 +282,7 @@ impl ApplicationState {
         let registry_id = {
             let registry = ctx()
                 .plugin_registry
-                .read()
-                .expect("Failed to lock registry");
+                .read();
 
             registry
                 .get_generator_id_by_name(generator_name)
