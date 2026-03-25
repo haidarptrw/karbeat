@@ -38,6 +38,10 @@ smallvec = "1.15.1"
 hashbrown = "0.16.1"
 num-complex = "0.4.6"
 parking_lot = "0.12.5"
+uuid = { version = "1.22.0", features = ["v4", "serde"] } 
+memmap2 = "0.9.10"
+bytemuck = "1.25.0"
+tempfile = "3.27.0"
 
 [profile.dev]
 opt-level = 3
