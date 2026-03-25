@@ -1,4 +1,5 @@
 use karbeat_utils::define_id;
+use memmap2::Mmap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,7 @@ define_id!(AudioSourceId);
 pub struct AudioWaveform {
     /// Audio buffer of samples
     #[serde(skip)]
-    pub buffer: Arc<Vec<f32>>,  // future update: replace this with Arc<[f32]> for better performance
+    pub buffer: Option<Arc<Mmap>>,  // future update: replace this with Arc<[f32]> for better performance
     /// path to the audio source file
     pub file_path: String,
     /// name of the audio waveform
@@ -47,7 +48,7 @@ pub struct AudioWaveform {
 impl Default for AudioWaveform {
     fn default() -> Self {
         Self {
-            buffer: Arc::new(Vec::new()),
+            buffer: None,
             file_path: String::new(),
             name: "Sample".to_string(),
             sample_rate: 44100,

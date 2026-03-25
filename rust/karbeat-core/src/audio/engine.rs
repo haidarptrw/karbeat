@@ -26,12 +26,8 @@ use crate::{
         GeneratorParameterSnapshot,
     },
     core::project::{
-        automation::AutomationTarget,
-        mixer::{BusId, MixerChannel, RoutingNode},
-        plugin::{MidiEvent, MidiMessage},
-        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern,
-        PatternId, TrackId,
-    },
+        AudioWaveform, Clip, GeneratorId, GeneratorInstance, KarbeatSource, KarbeatTrack, Pattern, PatternId, TrackId, automation::AutomationTarget, mixer::{BusId, MixerChannel, RoutingNode}, plugin::{MidiEvent, MidiMessage}
+    }, utils::get_waveform_buffer,
 };
 use karbeat_utils::audio::db_to_linear;
 
@@ -1359,9 +1355,14 @@ impl AudioEngine {
             did_render = true;
             let src_channels = voice.waveform.channels as usize;
             let step = (voice.waveform.sample_rate as f64) / (sample_rate as f64);
+            
+            let Some(buffer) = get_waveform_buffer(&voice.waveform.buffer) else {
+                return false;
+            };
+
 
             // Pre-calculate Loop Bounds to hoist out of the loop
-            let max_len = (voice.waveform.buffer.len() / src_channels) as f64;
+            let max_len = (buffer.len() / src_channels) as f64;
             let trim_end = if voice.end_boundary > 0.0 && voice.end_boundary < max_len {
                 voice.end_boundary
             } else {
@@ -1678,7 +1679,12 @@ impl AudioEngine {
             }
 
             let src_channels = voice.waveform.channels as usize;
-            let buffer_len = voice.waveform.buffer.len();
+
+            let Some(buffer) = get_waveform_buffer(&voice.waveform.buffer) else {
+                break
+            };
+
+            let buffer_len = buffer.len();
             let step = (voice.waveform.sample_rate as f64) / (self.sample_rate as f64);
 
             if channels == 2 {
@@ -1764,7 +1770,12 @@ impl AudioEngine {
         let trim_end = if waveform.trim_end > 0 {
             waveform.trim_end as f64
         } else {
-            (waveform.buffer.len() / (waveform.channels as usize)) as f64
+            let Some(buffer) = get_waveform_buffer(&waveform.buffer) else {
+                return;
+            };
+
+            // Get bytes from memory-mapped buffer and convert to f32 frmames
+            (buffer.len() / (waveform.channels as usize)) as f64
         };
         let loop_len = trim_end - trim_start;
 
@@ -2032,8 +2043,12 @@ fn sample_waveform_dasp(waveform: &AudioWaveform, pos: f64, src_channels: usize)
     let idx = pos as usize;
     let alpha = (pos - (idx as f64)) as f32;
 
+    let Some(buffer) = get_waveform_buffer(&waveform.buffer) else {
+        return [0f32, 0f32];
+    };
+
     if src_channels == 2 {
-        let frames: &[[f32; 2]] = slice::from_sample_slice(&waveform.buffer).unwrap_or(&[]);
+        let frames: &[[f32; 2]] = slice::from_sample_slice(buffer).unwrap_or(&[]);
         if idx >= frames.len() {
             return [0.0, 0.0];
         }
@@ -2050,7 +2065,7 @@ fn sample_waveform_dasp(waveform: &AudioWaveform, pos: f64, src_channels: usize)
             curr[1] + (next[1] - curr[1]) * alpha,
         ]
     } else {
-        let frames: &[[f32; 1]] = slice::from_sample_slice(&waveform.buffer).unwrap_or(&[]);
+        let frames: &[[f32; 1]] = slice::from_sample_slice(buffer).unwrap_or(&[]);
         if idx >= frames.len() {
             return [0.0, 0.0];
         }

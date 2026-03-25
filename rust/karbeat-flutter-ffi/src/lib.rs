@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use memmap2::MmapOptions;
 use rtrb::RingBuffer;
 
 pub(crate) use karbeat_core::{
@@ -62,8 +63,18 @@ fn generate_startup_beep() -> AudioWaveform {
         buffer.push(final_sample); // Right
     }
 
+    let byte_slice: &[u8] = bytemuck::cast_slice(&buffer);
+    let mut mmap_mut = MmapOptions::new()
+        .len(byte_slice.len())
+        .map_anon()
+        .expect("Failed to create anonymous mmap for beep");
+    mmap_mut.copy_from_slice(byte_slice);
+    let mmap = mmap_mut
+        .make_read_only()
+        .expect("Failed to make mmap read-only");
+
     AudioWaveform {
-        buffer: Arc::new(buffer),
+        buffer: Some(Arc::new(mmap)),
         file_path: "internal_beep".to_string(),
         sample_rate,
         channels: 2,
