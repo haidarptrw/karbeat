@@ -7,6 +7,8 @@
 use std::any::Any;
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
+
 use crate::effect_base::EffectBase;
 use crate::traits::{KarbeatEffect, KarbeatGenerator, MidiEvent};
 
@@ -262,7 +264,7 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for RawSynthWrapper<T
             .unwrap_or(0.0)
     }
 
-    fn default_parameters(&self) -> HashMap<u32, f32> {
+    fn default_parameters(&self) -> IndexMap<u32, f32> {
         let mut params = StandardSynthBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
@@ -360,7 +362,7 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for RawEffectWrapper<T>
             .unwrap_or(0.0)
     }
 
-    fn default_parameters(&self) -> HashMap<u32, f32> {
+    fn default_parameters(&self) -> IndexMap<u32, f32> {
         let mut params = StandardEffectBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
@@ -464,7 +466,7 @@ where
             .unwrap_or(0.0)
     }
 
-    fn default_parameters(&self) -> HashMap<u32, f32> {
+    fn default_parameters(&self) -> IndexMap<u32, f32> {
         let mut map = B::default_parameters();
         map.extend(self.engine.default_parameters());
         map

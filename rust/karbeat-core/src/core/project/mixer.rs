@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use karbeat_utils::define_id;
 use std::{ collections::{ HashMap, HashSet }, sync::Arc };
 
@@ -158,11 +159,11 @@ impl EffectInstance {
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct MixerState {
     /// Per-track mixer channels (volume, pan, effects)
-    pub channels: HashMap<TrackId, Arc<MixerChannel>>,
+    pub channels: IndexMap<TrackId, Arc<MixerChannel>>,
     /// Master bus channel
     pub master_bus: Arc<MixerChannel>,
     /// Named buses for grouping/submixing
-    pub buses: HashMap<BusId, Arc<MixerBus>>,
+    pub buses: IndexMap<BusId, Arc<MixerBus>>,
     /// All routing connections in the matrix
     pub routing: Vec<RoutingConnection>,
     /// Counter for generating bus IDs
@@ -433,7 +434,7 @@ impl MixerState {
         }
 
         // Remove the bus
-        self.buses.remove(&bus_id);
+        self.buses.shift_remove(&bus_id);
 
         // Remove all routing connections involving this bus
         self.routing.retain(|conn| {

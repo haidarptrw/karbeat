@@ -2,14 +2,23 @@
 
 // Source code of file loader
 
-use std::{ fs::File, io::{ BufReader, BufWriter, Write }, path::{ Path, PathBuf }, sync::Arc };
+use hashbrown::HashMap;
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter, Write},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tempfile::tempfile;
 
-use anyhow::{ anyhow, Context, Result };
+use anyhow::{anyhow, Context, Result};
 use memmap2::MmapOptions;
 use rodio::Source;
 
-use crate::core::{ project::ApplicationState, project::track::audio_waveform::AudioWaveform };
+use crate::core::project::{
+    track::audio_waveform::AudioWaveform,
+    ApplicationState, AudioSourceId,
+};
 
 trait FileNameExt {
     fn file_name_string(&self) -> String;
@@ -39,14 +48,12 @@ mod err {
 /// Main entry point for loading audio.
 pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWaveform> {
     let path = Path::new(path_str);
-    let file = File::open(path).with_context(||
-        format!("Failed to open audio file: {}", path_str)
-    )?;
+    let file =
+        File::open(path).with_context(|| format!("Failed to open audio file: {}", path_str))?;
     let reader = BufReader::new(file);
 
-    let decoder = rodio::Decoder
-        ::new(reader)
-        .context("Failed to decode audio file (unsupported format)")?;
+    let decoder =
+        rodio::Decoder::new(reader).context("Failed to decode audio file (unsupported format)")?;
     let sample_rate = decoder.sample_rate();
     let channels = decoder.channels();
 
@@ -90,7 +97,11 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
         total_samples
     };
 
-    let total_frames = if channels.get() > 0 { total_samples / (channels.get() as u32) } else { 0 };
+    let total_frames = if channels.get() > 0 {
+        total_samples / (channels.get() as u32)
+    } else {
+        0
+    };
 
     // Write the raw f32 bytes directly to the disk cache
     // bytemuck safely casts &[f32] into &[u8] for writing
@@ -111,8 +122,10 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
         path.file_name_string()
     };
 
+    let buffer = Some(Arc::new(mmap));
+
     Ok(AudioWaveform {
-        buffer: Some(Arc::new(mmap)),
+        buffer,
         file_path: path_str.to_string(),
         name: final_name,
         sample_rate: sample_rate.get(),
@@ -127,6 +140,7 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
 pub trait AudioLoader {
     fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<u32>;
     fn get_audio_source(&self, id: u32) -> Option<Arc<AudioWaveform>>;
+    fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>>;
 }
 
 impl AudioLoader for ApplicationState {
@@ -145,8 +159,14 @@ impl AudioLoader for ApplicationState {
         let asset_library = Arc::make_mut(&mut self.asset_library);
         asset_library.next_id += 1;
 
-        asset_library.sample_paths.insert(id.into(), PathBuf::from(&path));
-        asset_library.source_map.insert(id.into(), Arc::new(waveform));
+        // set mipmap
+
+        asset_library
+            .sample_paths
+            .insert(id.into(), PathBuf::from(&path));
+        asset_library
+            .source_map
+            .insert(id.into(), Arc::new(waveform));
 
         log::info!("Successfully loaded audio: {} (ID: {})", path, id);
 
@@ -154,6 +174,13 @@ impl AudioLoader for ApplicationState {
     }
 
     fn get_audio_source(&self, id: u32) -> Option<Arc<AudioWaveform>> {
-        self.asset_library.source_map.get(&id.into()).cloned()
+        self.asset_library
+            .source_map
+            .get(&AudioSourceId::from(id))
+            .cloned()
+    }
+
+    fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>> {
+        self.asset_library.source_map.clone()
     }
 }

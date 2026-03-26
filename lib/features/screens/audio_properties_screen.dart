@@ -3,25 +3,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:karbeat/state/app_state.dart';
 
 class AudioPropertiesScreen extends ConsumerWidget {
   final int sourceId;
   final String sourceName;
 
-  const AudioPropertiesScreen({
+  AudioPropertiesScreen({
     super.key,
     required this.sourceId,
     required this.sourceName,
   });
 
+  final audioPropertiesProvider = FutureProvider.autoDispose
+      .family<AudioWaveformUiForAudioProperties, int>((ref, sourceId) async {
+        final result = await getAudioProperties(id: sourceId);
+
+        if (result == null) {
+          throw Exception("Failed to load audio properties");
+        }
+
+        return result;
+      });
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Synchronously retrieve data from State
-    // We use .select() so this widget rebuilds if this specific source updates
-    final props = ref.watch(
-      karbeatStateProvider.select((s) => s.audioSources[sourceId]),
-    );
+    final propsAsync = ref.watch(audioPropertiesProvider(sourceId));
 
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
@@ -30,77 +36,80 @@ class AudioPropertiesScreen extends ConsumerWidget {
         backgroundColor: const Color.fromARGB(255, 9, 7, 7),
         elevation: 0,
       ),
-      body: props == null
-          ? const Center(
-              child: Text(
-                "Source data not found in state.",
-                style: TextStyle(color: Colors.grey),
-              ),
-            )
-          : Column(
-              children: [
-                // ========== HEADER INFO ==================
-                _buildInfoSection(props),
+      body: propsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
 
-                const Divider(color: Colors.grey),
+        error: (err, _) => Center(
+          child: Text("Error: $err", style: const TextStyle(color: Colors.red)),
+        ),
 
-                // ========== WAVEFORM DISPLAY ===============
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        border: Border.all(color: Colors.grey.shade700),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: CustomPaint(
-                          painter: StereoWaveformPainter(
-                            samples: props.previewBuffer,
-                            color: Colors.cyanAccent,
-                          ),
+        data: (props) {
+          return Column(
+            children: [
+              // HEADER
+              _buildInfoSection(props),
+
+              const Divider(color: Colors.grey),
+
+              // WAVEFORM
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      border: Border.all(color: Colors.grey.shade700),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CustomPaint(
+                        painter: StereoWaveformPainter(
+                          samples: props.previewBuffer,
+                          color: Colors.cyanAccent,
                         ),
                       ),
                     ),
                   ),
                 ),
+              ),
 
-                // ============ CONTROLS ===============
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  color: Colors.grey.shade800,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FloatingActionButton.extended(
-                        heroTag: 'play_source_fab',
-                        onPressed: () {
-                          playSourcePreview(id: sourceId);
-                        },
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text("Preview"),
-                        backgroundColor: Colors.cyanAccent,
-                        foregroundColor: Colors.black,
-                      ),
-                      const SizedBox(width: 10),
-                      FloatingActionButton.extended(
-                        heroTag: 'stop_source_fab',
-                        onPressed: () {
-                          stopAllPreviews();
-                        },
-                        label: const Text("Stop"),
-                        icon: const Icon(Icons.stop),
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.black,
-                      ),
-                    ],
-                  ),
+              // CONTROLS
+              Container(
+                padding: const EdgeInsets.all(24),
+                color: Colors.grey.shade800,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FloatingActionButton.extended(
+                      heroTag: 'play_source_fab',
+                      onPressed: () {
+                        playSourcePreview(id: sourceId);
+                      },
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text("Preview"),
+                      backgroundColor: Colors.cyanAccent,
+                      foregroundColor: Colors.black,
+                    ),
+                    const SizedBox(width: 10),
+                    FloatingActionButton.extended(
+                      heroTag: 'stop_source_fab',
+                      onPressed: () {
+                        stopAllPreviews();
+                      },
+                      label: const Text("Stop"),
+                      icon: const Icon(Icons.stop),
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.black,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 

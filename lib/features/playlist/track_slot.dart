@@ -58,6 +58,8 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
 
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
+    final waveformMapAsync = ref.watch(trackWaveformProvider((trackId: widget.trackId)));
+
     final selectedTool = ref.watch(
       karbeatStateProvider.select((s) => s.selectedTool),
     );
@@ -115,28 +117,50 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
               ),
             ),
           ),
-          ...track.clips.map((clip) {
-            final isSelected =
-                (selectedTrackId != null) &&
-                (widget.trackId == selectedTrackId &&
-                    selectedClipIds.contains(clip.id));
-            return _InteractiveClip(
-              key: ValueKey(
-                // Important for performance/state retention
-                clip.id,
+          ...waveformMapAsync.when(
+            loading: () => [
+              const Positioned.fill(
+                child: Center(child: CircularProgressIndicator()),
               ),
-              clip: clip,
-              trackId: widget.trackId,
-              trackType: track.trackType,
-              zoomLevel: zoomLevel,
-              height: widget.height,
-              selectedTool: selectedTool,
-              isSelected: isSelected,
-              selectedClipIds: selectedClipIds,
-              clipDragController: widget.clipDragController,
-              horizontalScrollController: widget.horizontalScrollController,
-            );
-          }),
+            ],
+
+            error: (err, _) => [
+              Positioned.fill(
+                child: Center(
+                  child: Text(
+                    "Error loading waveforms",
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ),
+            ],
+
+            data: (waveformMap) {
+              return track.clips.map((clip) {
+                final isSelected =
+                    (selectedTrackId != null) &&
+                    (widget.trackId == selectedTrackId &&
+                        selectedClipIds.contains(clip.id));
+
+                return _InteractiveClip(
+                  key: ValueKey(clip.id),
+                  clip: clip,
+                  trackId: widget.trackId,
+                  trackType: track.trackType,
+                  zoomLevel: zoomLevel,
+                  height: widget.height,
+                  selectedTool: selectedTool,
+                  isSelected: isSelected,
+                  selectedClipIds: selectedClipIds,
+                  clipDragController: widget.clipDragController,
+                  horizontalScrollController: widget.horizontalScrollController,
+
+                  // ✅ NEW
+                  waveformMap: waveformMap,
+                );
+              }).toList();
+            },
+          ),
         ],
       ),
     );
@@ -158,6 +182,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final List<int> selectedClipIds;
   final ClipDragController clipDragController;
   final ScrollController horizontalScrollController;
+  final Map<int, AudioWaveformUiForClip> waveformMap;
 
   const _InteractiveClip({
     super.key,
@@ -171,6 +196,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
     required this.selectedClipIds,
     required this.clipDragController,
     required this.horizontalScrollController,
+    required this.waveformMap,
   });
 
   @override
@@ -325,6 +351,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   isSelected: widget.isSelected,
                   scrollController: widget.horizontalScrollController,
                   clipLeftOffset: _visualStartTime / widget.zoomLevel,
+                  waveformMap: widget.waveformMap,
                 ),
               ),
             );
@@ -648,6 +675,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               isSelected: widget.isSelected,
               scrollController: widget.horizontalScrollController,
               clipLeftOffset: left,
+              waveformMap: widget.waveformMap,
             ),
           ),
         ),
@@ -670,6 +698,7 @@ class _ClipRenderer extends ConsumerWidget {
   final bool isSelected;
   final ScrollController scrollController;
   final double clipLeftOffset;
+  final Map<int, AudioWaveformUiForClip> waveformMap;
 
   const _ClipRenderer({
     required this.clip,
@@ -681,6 +710,7 @@ class _ClipRenderer extends ConsumerWidget {
     required this.isSelected,
     required this.scrollController,
     required this.clipLeftOffset,
+    required this.waveformMap,
   });
 
   @override
@@ -727,12 +757,13 @@ class _ClipRenderer extends ConsumerWidget {
   }
 
   Widget _buildContent(BuildContext context, WidgetRef ref) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.watch(karbeatStateProvider);
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
         double ratio = 1.0;
-        final audioData = state.audioSources[sourceId];
+
+        final audioData = waveformMap[sourceId];
         if (audioData == null) {
           return const Center(
             child: Text("Loading...", style: TextStyle(fontSize: 8)),
@@ -887,4 +918,35 @@ class _GridPainter extends CustomPainter {
         oldDelegate.sampleRate != sampleRate ||
         oldDelegate.scrollController != scrollController;
   }
+}
+
+final trackWaveformProvider =
+    FutureProvider.family<
+      Map<int, AudioWaveformUiForClip>,
+      ({int trackId})
+    >((
+      ref,
+      arg, // Access fields via the record variable
+    ) async {
+      final trackId = arg.trackId;
+      
+      ref.watch(karbeatStateProvider.select((s) => s.tracks[trackId]));
+
+      final result = await getAudioWaveformForClipOnlyInSpecificTrack(
+        trackId: trackId
+      );
+
+      return result;
+    });
+
+int computeTargetBin(double zoomLevel) {
+  if (zoomLevel <= 1) return 1;
+
+  const levels = [1, 4, 16, 64, 256, 1024];
+
+  for (final l in levels) {
+    if (l >= zoomLevel) return l;
+  }
+
+  return levels.last; // fallback (max zoomed out)
 }

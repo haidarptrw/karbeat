@@ -10,6 +10,7 @@ import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/state/clip_placement_state.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
@@ -250,7 +251,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         setState(() {
           _mousePos = localPosition;
         });
-        _updatePlacementTarget(state);
+        _updatePlacementTarget();
         break;
       case ToolSelection.pointer:
       case ToolSelection.cut:
@@ -376,7 +377,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final int itemCount = widget.tracks.length + 1;
     final state = ref.read(karbeatStateProvider);
     final isPlacing = ref.watch(
-      karbeatStateProvider.select((s) => s.isPlacing),
+      clipPlacementProvider.select((s) => s.isPlacing),
     );
     final selectedTool = ref.watch(
       karbeatStateProvider.select((s) => s.selectedTool),
@@ -481,7 +482,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     }
                     if (selectedTool == ToolSelection.draw || isPlacing) {
                       setState(() => _mousePos = details.localPosition);
-                      _updatePlacementTarget(state);
+                      _updatePlacementTarget();
                     }
                   },
                   onPanEnd: (details) {
@@ -547,14 +548,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                     setState(() {
                                       _mousePos = details.localPosition;
                                     });
-                                    _updatePlacementTarget(state);
+                                    _updatePlacementTarget();
                                   }
                                 : null,
                             child: ScrollConfiguration(
                               // Only allow Mouse Drag scrolling when using Pointer or Move tool
-                              behavior:
-                                  (selectedTool == ToolSelection.pointer ||
-                                      selectedTool == ToolSelection.move)
+                              behavior: (selectedTool == ToolSelection.pointer)
                                   ? DragScrollBehavior()
                                   : ScrollConfiguration.of(context).copyWith(
                                       dragDevices: {
@@ -646,23 +645,28 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   label: const Text("Cancel"),
                   icon: const Icon(Icons.close),
                   backgroundColor: Colors.redAccent,
-                  onPressed: () => state.cancelPlacement(),
+                  onPressed: () => ref
+                      .read(clipPlacementProvider.notifier)
+                      .cancelPlacement(),
                 ),
                 const SizedBox(width: 16),
                 FloatingActionButton.extended(
                   onPressed: () {
                     final messenger = ScaffoldMessenger.of(context);
-                    state.confirmPlacement().then((value) {
-                      if (!mounted) return;
-                      switch (value) {
-                        case Ok<void>():
-                          break;
-                        case Error<void>():
-                          messenger.showSnackBar(
-                            SnackBar(content: Text(value.toErrorMessage())),
-                          );
-                      }
-                    });
+                    ref
+                        .read(clipPlacementProvider.notifier)
+                        .confirmPlacement()
+                        .then((value) {
+                          if (!mounted) return;
+                          switch (value) {
+                            case Ok<void>():
+                              break;
+                            case Error<void>():
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(value.toErrorMessage())),
+                              );
+                          }
+                        });
                   },
                   label: const Text('Confirm'),
                   heroTag: 'confirm_place',
@@ -676,7 +680,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  void _updatePlacementTarget(KarbeatState state) {
+  void _updatePlacementTarget() {
     if (_mousePos == null) return;
 
     // Calculate Absolute Y (Mouse + Scroll)
@@ -704,7 +708,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final zoomLevel = ref.read(karbeatStateProvider).horizontalZoomLevel;
     double samples = absoluteX * zoomLevel;
 
-    state.updatePlacementTarget(targetTrack.id, samples);
+    ref
+        .read(clipPlacementProvider.notifier)
+        .updatePlacementTarget(targetTrack.id, samples);
   }
 
   Widget _buildGhostClip(BuildContext context) {
@@ -747,8 +753,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             }
           });
           // Update the logic state
-          final state = ref.read(karbeatStateProvider);
-          _updatePlacementTarget(state);
+          _updatePlacementTarget();
         },
         child: Opacity(
           opacity: 0.7,

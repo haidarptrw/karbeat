@@ -70,7 +70,7 @@ class KarbeatState extends ChangeNotifier {
 
   // =================== STORES ==========================
   Map<int, UiTrack> _tracks = {};
-  Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
+  // Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
   Map<int, UiGeneratorInstance> _generators = {};
   Map<int, UiPattern> _patterns = {};
 
@@ -136,8 +136,7 @@ class KarbeatState extends ChangeNotifier {
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
-    _positionBroadcastStream =
-        createPositionStream().asBroadcastStream();
+    _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
       if (pos.isPlaying) {
@@ -182,7 +181,7 @@ class KarbeatState extends ChangeNotifier {
     syncMaxSampleIndex();
     syncTransportState();
     syncMetadataState();
-    syncAudioSourceList();
+    // syncAudioSourceList();
     syncPatternList();
     syncGeneratorList();
     syncAudioHardwareConfigState();
@@ -255,7 +254,7 @@ class KarbeatState extends ChangeNotifier {
           await syncMetadataState();
           break;
         case ProjectEvent.sourceListChanged:
-          await syncAudioSourceList();
+          // await syncAudioSourceList();
           break;
         case ProjectEvent.generatorListChanged:
           await syncGeneratorList();
@@ -296,7 +295,7 @@ class KarbeatState extends ChangeNotifier {
   bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
-  Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
+  // Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
   Map<int, UiGeneratorInstance> get generators => _generators;
   ToolSelection get selectedTool => _selectedTool;
   WorkspaceView get currentView => _currentView;
@@ -343,15 +342,7 @@ class KarbeatState extends ChangeNotifier {
   Map<int, int> trackIdHeightMap = {};
 
   // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
-  int? _placingSourceId;
-  UiSourceType? _placingSourceType;
-  int? get placingSourceId => _placingSourceId;
-
-  // Track where the user wants to drop it
-  double _placementTimeSamples = 0.0;
-  int _placementTrackId = -1;
-
-  bool get isPlacing => _placingSourceId != null;
+  // Placement mode state moved to local clipPlacementProvider in TrackListScreen
 
   // ================ SYNCHRONIZATION ======================
 
@@ -401,11 +392,40 @@ class KarbeatState extends ChangeNotifier {
 
   /// Syncs the list of loaded audio files
   /// Call this when: Adding a file, Removing a file
-  Future<void> syncAudioSourceList() async {
-    final sources = await getAudioSourceList();
-    if (sources != null) {
-      _audioSources = Map.from(sources);
-      notifyListeners();
+  // Future<void> syncAudioSourceList() async {
+  //   final sources = await getAudioSourceList();
+  //   if (sources != null) {
+  //     _audioSources = Map.from(sources);
+  //     notifyListeners();
+  //   }
+  // }
+
+  Future<Result<Map<int, AudioWaveformUiForSourceList>?>>
+  getLoadedAudioSources() async {
+    try {
+      final sources = await getAudioSourceList();
+      if (sources == null) {
+        return Result.error(Exception("Failed to fetch audio source data"));
+      }
+      return Result.ok(sources);
+    } catch (e) {
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<AudioWaveformUiForAudioProperties>> getAudioPropertiesHandle(
+    int id,
+  ) async {
+    try {
+      final audio = await getAudioProperties(id: id);
+      if (audio == null) {
+        return Result.error(
+          Exception("Failed to get audio properties of id $id"),
+        );
+      }
+      return Result.ok(audio);
+    } catch (e) {
+      return Result.error(Exception("$e"));
     }
   }
 
@@ -545,7 +565,7 @@ class KarbeatState extends ChangeNotifier {
   Future<Result<void>> addAudioFile(String path) async {
     try {
       await addAudioSource(filePath: path);
-      notifyBackendChange(ProjectEvent.sourceListChanged);
+      // notifyBackendChange(ProjectEvent.sourceListChanged);
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to add audio file: $e");
@@ -1191,56 +1211,7 @@ class KarbeatState extends ChangeNotifier {
   }
 
   // ============= PLACEMENT MODE LOGIC =================
-
-  void startPlacement(int sourceId, {required UiSourceType type}) {
-    _placingSourceId = sourceId;
-    _placingSourceType = type;
-    // Switch view to track list immediately so user can place it
-    navigateTo(WorkspaceView.trackList);
-    notifyListeners();
-  }
-
-  /// Updates the target location without notifying all listeners
-  /// (Use setState in the UI for visual feedback to avoid global rebuilds)
-  void updatePlacementTarget(int trackId, double timeSamples) {
-    _placementTrackId = trackId;
-    _placementTimeSamples = timeSamples;
-  }
-
-  Future<Result<void>> confirmPlacement() async {
-    KarbeatLogger.info("CONFIRM Placement");
-    if (_placingSourceId != null &&
-        _placingSourceType != null &&
-        _placementTrackId != -1) {
-      try {
-        await createClip(
-          sourceId: _placingSourceId!,
-          sourceType: _placingSourceType!,
-          trackId: _placementTrackId,
-          startTime: _placementTimeSamples.toInt(),
-        );
-
-        // Reset mode
-        _placingSourceId = null;
-        _placingSourceType = null;
-        _placementTrackId = -1;
-
-        notifyBackendChange(ProjectEvent.tracksChanged);
-        return Result.ok(null);
-      } catch (e) {
-        KarbeatLogger.error("Error creating clip: $e");
-        return Result.error(Exception("$e"));
-      }
-    }
-    return Result.ok(null);
-  }
-
-  void cancelPlacement() {
-    _placingSourceId = null;
-    _placingSourceType = null;
-    _placementTrackId = -1;
-    notifyListeners();
-  }
+  // Placement logic moved to ClipPlacementNotifier
 
   UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
     return UiTrack(

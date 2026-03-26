@@ -1,25 +1,24 @@
-use std::{ collections::HashMap, ops::Deref };
+use std::{collections::HashMap, ops::Deref};
 
 use flutter_rust_bridge::frb;
+use karbeat_utils::audio_utils::quantize_to_i8;
 use serde::Serialize;
 
+use crate::broadcast_state_change;
+use karbeat_core::lock::{get_app_read, get_app_write};
 use karbeat_core::{
     core::{
         file_manager::loader::AudioLoader,
         project::{
-            AudioHardwareConfig,
-            KarbeatSource,
-            ProjectMetadata,
             clip::Clip,
-            generator::{ GeneratorInstance, GeneratorInstanceType },
-            track::{ KarbeatTrack, TrackType, audio_waveform::AudioWaveform },
+            generator::{GeneratorInstance, GeneratorInstanceType},
+            track::{audio_waveform::AudioWaveform, KarbeatTrack, TrackType},
             transport::TransportState,
+            AudioHardwareConfig, AudioSourceId, KarbeatSource, ProjectMetadata,
         },
     },
     utils::get_waveform_buffer,
 };
-use crate::broadcast_state_change;
-use karbeat_core::lock::{ get_app_read, get_app_write };
 
 pub enum UiTrackType {
     Audio,
@@ -179,7 +178,7 @@ pub fn audio_hardware_config_new_with_param(
     selected_output_device: String,
     sample_rate: u32,
     buffer_size: u32,
-    cpu_load: f32
+    cpu_load: f32,
 ) -> UiAudioHardwareConfig {
     UiAudioHardwareConfig {
         selected_input_device,
@@ -215,12 +214,8 @@ pub struct UiClip {
 
 #[derive(Clone)]
 pub enum UiClipSource {
-    Audio {
-        source_id: u32,
-    },
-    Midi {
-        pattern_id: u32,
-    },
+    Audio { source_id: u32 },
+    Midi { pattern_id: u32 },
     None, // represent clip with empty source, this is placeholder, as this will be removed when I already implement MIDI Pattern and automation
 }
 
@@ -228,14 +223,12 @@ impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
         let source = match &value.source {
-            KarbeatSource::Audio(source_id) =>
-                UiClipSource::Audio {
-                    source_id: source_id.to_u32(),
-                },
-            KarbeatSource::Midi(pattern_id) =>
-                UiClipSource::Midi {
-                    pattern_id: pattern_id.to_u32(),
-                },
+            KarbeatSource::Audio(source_id) => UiClipSource::Audio {
+                source_id: source_id.to_u32(),
+            },
+            KarbeatSource::Midi(pattern_id) => UiClipSource::Midi {
+                pattern_id: pattern_id.to_u32(),
+            },
             _ => UiClipSource::None,
         };
         Self {
@@ -280,6 +273,8 @@ pub struct AudioWaveformUiForClip {
     pub name: String,
     pub preview_buffer: Vec<i8>,
     pub sample_rate: u32,
+    pub channels: u16,
+    pub duration: f64,
 }
 
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
@@ -334,7 +329,42 @@ impl From<&AudioWaveform> for AudioWaveformUiForClip {
             preview_buffer,
             name: value.name.clone(),
             sample_rate: value.sample_rate,
+            channels: value.channels,
+            duration: value.duration,
         }
+    }
+}
+
+#[frb(ignore)]
+impl AudioWaveformUiForClip {
+    pub fn try_from_audio_waveform_with_target_sample_bin(source_id: u32) -> Result<Self, String> {
+        let app = get_app_read();
+        Self::try_from_audio_waveform_with_target_sample_bin_internal(&app, source_id)
+    }
+
+    pub fn try_from_audio_waveform_with_target_sample_bin_internal(
+        app: &karbeat_core::core::project::ApplicationState,
+        source_id: u32,
+    ) -> Result<Self, String> {
+        let audio_waveform = app
+            .get_audio_source(source_id)
+            .ok_or("cannot find audio source")?;
+
+        let preview_buffer = get_waveform_buffer(&audio_waveform.buffer)
+            .map(|slice| quantize_to_i8(slice))
+            .unwrap_or_default();
+
+        log::debug!("The preview buffer: {:?}", preview_buffer);
+
+        let audio_waveform_ui = AudioWaveformUiForClip {
+            preview_buffer,
+            name: audio_waveform.name.clone(),
+            sample_rate: audio_waveform.sample_rate,
+            channels: audio_waveform.channels,
+            duration: audio_waveform.duration,
+        };
+
+        Ok(audio_waveform_ui)
     }
 }
 // ============================================================
@@ -349,12 +379,11 @@ pub struct UiGeneratorInstance {
 impl From<&GeneratorInstance> for UiGeneratorInstance {
     fn from(generator_instance: &GeneratorInstance) -> Self {
         match &generator_instance.instance_type {
-            GeneratorInstanceType::Plugin(plugin_instance) =>
-                Self {
-                    id: generator_instance.id.to_u32(),
-                    name: plugin_instance.name.clone(),
-                    parameters: plugin_instance.parameters.clone(),
-                },
+            GeneratorInstanceType::Plugin(plugin_instance) => Self {
+                id: generator_instance.id.to_u32(),
+                name: plugin_instance.name.clone(),
+                parameters: plugin_instance.parameters.clone().into_iter().collect(),
+            },
             GeneratorInstanceType::Sampler { .. } => {
                 Self {
                     id: generator_instance.id.to_u32(),
@@ -362,12 +391,11 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
                     parameters: HashMap::new(), // Add sampler params later if needed
                 }
             }
-            GeneratorInstanceType::AudioInput { .. } =>
-                Self {
-                    id: generator_instance.id.to_u32(),
-                    name: "Audio Input".to_string(),
-                    parameters: HashMap::new(),
-                },
+            GeneratorInstanceType::AudioInput { .. } => Self {
+                id: generator_instance.id.to_u32(),
+                name: "Audio Input".to_string(),
+                parameters: HashMap::new(),
+            },
         }
     }
 }
@@ -391,13 +419,15 @@ pub fn get_transport_state() -> Result<UiTransportState, String> {
 }
 
 /// Get all audio waveform source list from the backend
-pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioProperties>> {
+pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForSourceList>> {
     // Read from app state
     let app = get_app_read();
-    let map = app.asset_library.source_map
+    let map = app
+        .asset_library
+        .source_map
         .iter()
         .map(|(&id, arc_waveform)| {
-            let ui = AudioWaveformUiForAudioProperties::from(arc_waveform.as_ref());
+            let ui = AudioWaveformUiForSourceList::from(arc_waveform.as_ref());
             (id.to_u32(), ui)
         })
         .collect();
@@ -409,10 +439,13 @@ pub fn get_audio_source_list() -> Option<HashMap<u32, AudioWaveformUiForAudioPro
 pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String> {
     let app = get_app_read();
 
-    let generators = app.generator_pool
+    let generators = app
+        .generator_pool
         .iter()
         .map(|(&id, generator_guard)| {
-            let generator = generator_guard.read().expect("Failed to read generator lock");
+            let generator = generator_guard
+                .read()
+                .expect("Failed to read generator lock");
             let ui_gen = UiGeneratorInstance::from(&*generator);
             (id.to_u32(), ui_gen)
         })
@@ -431,7 +464,7 @@ pub fn add_audio_source(file_path: &str) {
         // Add audio source
         match app.load_audio(file_path, None) {
             Ok(id) => {
-                let Some(audio) = app.asset_library.source_map.get(&id.into()) else {
+                let Some(audio) = app.asset_library.source_map.get(&AudioSourceId::from(id)) else {
                     log::error!("[error] can't get the audiowave");
                     return;
                 };
@@ -465,7 +498,8 @@ pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
     let app = get_app_read();
 
     // convert the tracks into UI-Friendly type
-    let return_data = app.tracks
+    let return_data = app
+        .tracks
         .iter()
         .map(|(id, track_arc)| ((*id).to_u32(), UiTrack::from(track_arc.as_ref())))
         .collect();

@@ -1,21 +1,25 @@
 use karbeat_utils::define_id;
-use memmap2::Mmap;
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{core::project::PluginInstance, };
+use crate::core::project::PluginInstance;
 
 pub type AudioFrame = [f32; 2];
 
 define_id!(AudioSourceId);
 
+use memmap2::Mmap;
 /// Audio Waveform data of an audio sample
+use std::sync::Arc;
+
+// STATIC global variables for waveform mipmaps
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AudioWaveform {
+    pub id: Option<AudioSourceId>,
     /// Audio buffer of samples
     #[serde(skip)]
-    pub buffer: Option<Arc<Mmap>>,  // future update: replace this with Arc<[f32]> for better performance
+    pub buffer: Option<Arc<Mmap>>, // future update: replace this with Arc<[f32]> for better performance
     /// path to the audio source file
     pub file_path: String,
     /// name of the audio waveform
@@ -48,6 +52,7 @@ pub struct AudioWaveform {
 impl Default for AudioWaveform {
     fn default() -> Self {
         Self {
+            id: None,
             buffer: None,
             file_path: String::new(),
             name: "Sample".to_string(),
@@ -63,5 +68,15 @@ impl Default for AudioWaveform {
             muted: false,
             effects: Default::default(),
         }
+    }
+}
+
+impl AudioWaveform {
+    pub fn try_assign_id(&mut self, id: AudioSourceId) -> anyhow::Result<()> {
+        if self.id.is_some() {
+            return Err(anyhow::anyhow!("Audio waveform already has an ID"));
+        }
+        self.id = Some(id);
+        Ok(())
     }
 }

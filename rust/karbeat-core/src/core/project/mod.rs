@@ -13,10 +13,11 @@ pub mod transport;
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
     path::PathBuf,
     sync::{Arc, RwLock},
 };
+
+use hashbrown::HashMap;
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
@@ -127,7 +128,7 @@ pub struct Note {
     pub id: NoteId,
     pub start_tick: u64,
     pub duration: u64,
-    pub key: u8, // 0 - 127 MIDI key
+    pub key: u8, // 21 - 127 MIDI key (Keep LB at A0)
     pub velocity: u8,
 
     pub probability: f32,
@@ -181,7 +182,7 @@ impl Default for AssetLibrary {
     fn default() -> Self {
         Self {
             sample_paths: HashMap::new(),
-            next_id: 1, // Start IDs at 1 (0 can be null/empty)
+            next_id: 1,
             source_map: HashMap::new(),
         }
     }

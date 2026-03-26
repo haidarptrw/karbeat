@@ -42,7 +42,7 @@ pub fn downsample(buffer: &[f32], channels: usize, target_bins: usize) -> Vec<f3
                 if val > max_val { max_val = val; }
             }
             
-            if min_val > max_val { min_val = 0.0; max_val = 0.0; } // Fallback for empty chunks
+            if min_val > max_val { min_val = 0.0; max_val = 0.0; }
 
             // Duplicate mono signal to Left and Right
             out.push(min_val); out.push(max_val); 
@@ -90,4 +90,77 @@ pub fn downsample(buffer: &[f32], channels: usize, target_bins: usize) -> Vec<f3
     }
 
     out
+}
+
+/// Quantize f32 [-1.0, 1.0] → i8 [-127, 127]
+pub fn quantize_to_i8(input: &[f32]) -> Vec<i8> {
+    input
+        .iter()
+        .map(|&v| {
+            let clamped = v.clamp(-1.0, 1.0);
+            (clamped * 127.0) as i8
+        })
+        .collect()
+}
+
+/// Downsample using max absolute value (preserves peaks)
+pub fn downsample_max_abs(input: &[i8], chunk_size: usize) -> Vec<i8> {
+    input
+        .chunks(chunk_size)
+        .map(|chunk| {
+            chunk
+                .iter()
+                .copied()
+                .max_by_key(|v| v.abs())
+                .unwrap_or(0)
+        })
+        .collect()
+}
+
+
+/// Create mip maps for waveform buffer
+/// This includes 1 sample per bin, 4 samples per bin, 16 samples per bin, 
+/// 64 samples per bin, 256 samples per bin, 1024 samples per bin, each sample/bin
+/// mapped as HashMap key
+pub fn setup_mipmaps(buffer: &[f32], channels: usize) -> hashbrown::HashMap<u32, Vec<i8>> {
+    let mut mipmaps = hashbrown::HashMap::new();
+
+    if buffer.is_empty() || channels == 0 {
+        return mipmaps;
+    }
+
+    let total_frames = buffer.len() / channels;
+
+    // Mipmap levels (samples per bin)
+    let levels = [1, 4, 16, 64, 256, 1024];
+
+    for &samples_per_bin in &levels {
+        // Compute number of bins for this mip level
+        let target_bins = (total_frames / samples_per_bin).max(1);
+
+        // Step 1: downsample (min/max binning, f32)
+        let downsampled_f32 = downsample(buffer, channels, target_bins);
+
+        // Step 2: quantize → i8
+        let quantized = quantize_to_i8(&downsampled_f32);
+
+        mipmaps.insert(samples_per_bin as u32, quantized);
+    }
+
+    mipmaps
+}
+
+pub fn find_best_mipmap<'a>(
+    mipmaps: &'a hashbrown::HashMap<u32, Vec<i8>>,
+    target: u32,
+) -> Option<&'a Vec<i8>> {
+    mipmaps
+        .iter()
+        .filter(|(k, _)| **k >= target)
+        .min_by_key(|(k, _)| *k)
+        .or_else(|| {
+            // fallback to largest available
+            mipmaps.iter().max_by_key(|(k, _)| *k)
+        })
+        .map(|(_, v)| v)
 }

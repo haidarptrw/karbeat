@@ -1072,6 +1072,7 @@ name = "karbeat-plugin-api"
 version = "0.1.0-alpha.1"
 dependencies = [
  "anyhow",
+ "indexmap",
  "karbeat-dsp",
  "karbeat-utils",
  "log",

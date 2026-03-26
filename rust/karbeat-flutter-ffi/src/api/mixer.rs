@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
 use karbeat_core::context::utils::send_audio_command;
+use karbeat_core::core::project::TrackId;
 
 use crate::broadcast_state_change;
 use crate::frb_generated::StreamSink;
@@ -184,7 +185,7 @@ impl From<&EffectInstance> for UiEffectInstance {
         Self {
             id: value.id.to_u32(),
             name: value.instance.name.clone(),
-            parameters: value.instance.parameters.clone(),
+            parameters: value.instance.parameters.clone().into_iter().collect(),
         }
     }
 }
@@ -282,7 +283,7 @@ pub fn get_mixer_state() -> UiMixerState {
 pub fn get_mixer_channel(track_id: u32) -> Result<UiMixerChannel, String> {
     let app = get_app_read();
     let mixer_state = &app.mixer;
-    let channel = mixer_state.channels.get(&track_id.into());
+    let channel = mixer_state.channels.get(&TrackId::from(track_id));
     channel.ok_or("Channel not found".to_owned()).map(|c| c.as_ref().into())
 }
 
@@ -291,7 +292,7 @@ pub fn get_mixer_channel_populated(
 ) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
     let app = get_app_read();
     let mixer_state = &app.mixer;
-    let channel = mixer_state.channels.get(&track_id.into());
+    let channel = mixer_state.channels.get(&TrackId::from(track_id));
     let channel = channel.ok_or("Channel not found".to_owned())?;
     let ui_channel: UiMixerChannel = channel.as_ref().into();
     let effects = channel.effects

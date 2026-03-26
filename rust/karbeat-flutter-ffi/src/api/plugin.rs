@@ -13,6 +13,7 @@ use karbeat_core::{
     lock::{get_app_read, get_app_write},
 };
 use karbeat_plugin_api::wrapper::ParameterValueType;
+use karbeat_plugins::effect::parametric_eq::KarbeatParametricEQ;
 
 // ============================================================================
 // UI TYPES FOR FLUTTER RUST BRIDGE
@@ -132,7 +133,7 @@ pub fn get_effect(track_id: u32, effect_id: u32) -> Result<UiEffectInstance, Str
     let mixer_state = &app.mixer;
     let channel = mixer_state
         .channels
-        .get(&track_id.into())
+        .get(&TrackId::from(track_id))
         .ok_or("Channel not found".to_owned())?;
     let effect = channel
         .effects
@@ -159,7 +160,7 @@ pub fn get_effects_from_track(track_id: u32) -> Result<Vec<UiEffectInstance>, St
     let mixer_state = &app.mixer;
     let channel = mixer_state
         .channels
-        .get(&track_id.into())
+        .get(&TrackId::from(track_id))
         .ok_or("Channel not found".to_owned())?;
     let effects = channel.effects.iter().map(|e| e.into()).collect();
     Ok(effects)
@@ -176,8 +177,7 @@ pub fn get_master_effects() -> Result<Vec<UiEffectInstance>, String> {
 /// Get parameter specifications for a generator plugin.
 ///
 /// With the lock-free architecture, the live plugin instance runs on the audio thread
-/// and cannot be accessed directly. Instead, we use the registry factory to create
-/// a temporary plugin instance for querying its static parameter specifications.
+/// and cannot be accessed directly. Instead, we use the registry to query its static parameter specifications.
 /// This is safe because parameter specs are static metadata that don't depend on state.
 ///
 /// The returned specs include the current stored parameter values (from generator pool)
@@ -884,7 +884,6 @@ pub fn get_eq_response_curve(
     }
 
     // Downcast to KarbeatParametricEQ to access compute_magnitude_response
-    use karbeat_plugins::effect::parametric_eq::KarbeatParametricEQ;
     let eq = temp_plugin
         .as_any()
         .downcast_ref::<KarbeatParametricEQ>()

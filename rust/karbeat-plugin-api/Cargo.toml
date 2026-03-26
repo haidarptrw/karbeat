@@ -11,3 +11,4 @@ karbeat-utils.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 log.workspace = true
+indexmap.workspace = true

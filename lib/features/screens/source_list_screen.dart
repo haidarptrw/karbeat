@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/plugins/dynamic_plugin_screen.dart';
 import 'package:karbeat/features/screens/audio_properties_screen.dart';
+import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/state/clip_placement_state.dart';
 
 class SourceListScreen extends ConsumerWidget {
-  const SourceListScreen({super.key});
+  SourceListScreen({super.key});
 
   Future<void> _pickFile(WidgetRef ref) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -17,15 +19,29 @@ class SourceListScreen extends ConsumerWidget {
     if (result != null && result.files.single.path != null) {
       String path = result.files.single.path!;
       await ref.read(karbeatStateProvider).addAudioFile(path);
+      ref.invalidate(audioSourcesProvider);
     }
   }
+
+  final audioSourcesProvider =
+      FutureProvider.autoDispose<Map<int, AudioWaveformUiForSourceList>>((
+        ref,
+      ) async {
+        // Read the main state provider once to access the API
+        final appState = ref.read(karbeatStateProvider);
+        final result = await appState.getLoadedAudioSources();
+
+        if (result.isOk() && result.ok() != null) {
+          return result.ok()!;
+        }
+
+        return {};
+      });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Access the source map from state
-    final audioSources = ref.watch(
-      karbeatStateProvider.select((s) => s.audioSources),
-    );
+    final audioSourcesAsync = ref.watch(audioSourcesProvider);
 
     final generators = ref.watch(
       karbeatStateProvider.select((s) => s.generators),
@@ -42,7 +58,9 @@ class SourceListScreen extends ConsumerWidget {
       ),
       body: CustomScrollView(
         slivers: [
+          // ================================================
           // 1. GENERATORS SECTION
+          // ================================================
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -99,7 +117,9 @@ class SourceListScreen extends ConsumerWidget {
 
           const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
 
+          // ================================================
           // 2. AUDIO CLIPS SECTION
+          // ================================================
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -114,44 +134,67 @@ class SourceListScreen extends ConsumerWidget {
             ),
           ),
 
-          if (audioSources.isEmpty)
-            const SliverToBoxAdapter(
+          audioSourcesAsync.when(
+            data: (audioSources) {
+              if (audioSources.isEmpty) {
+                return const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text(
+                      "No Audio Files.",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final id = audioSources.keys.elementAt(index);
+                  final source = audioSources.values.elementAt(index);
+
+                  return _SourceTile(
+                    title: source.name,
+                    subtitle: "ID: $id | ${source.sampleRate} Hz",
+                    icon: Icons.audio_file,
+                    color: Colors.cyanAccent,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AudioPropertiesScreen(
+                            sourceId: id,
+                            sourceName: source.name,
+                          ),
+                        ),
+                      );
+                    },
+                    onPlace: () => ref
+                        .read(clipPlacementProvider.notifier)
+                        .startPlacement(id, type: UiSourceType.audio),
+                  );
+                }, childCount: audioSources.length),
+              );
+            },
+
+            loading: () => const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
-                child: Text(
-                  "No Audio Files.",
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
+                child: Center(child: CircularProgressIndicator()),
               ),
             ),
 
-          SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              final id = audioSources.keys.elementAt(index);
-              final source = audioSources.values.elementAt(index);
-              return _SourceTile(
-                title: source.name,
-                subtitle: "ID: $id | ${source.sampleRate} Hz",
-                icon: Icons.audio_file,
-                color: Colors.cyanAccent,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => AudioPropertiesScreen(
-                        sourceId: id,
-                        sourceName: source.name,
-                      ),
-                    ),
-                  );
-                },
-                onPlace: () => ref
-                    .read(karbeatStateProvider)
-                    .startPlacement(id, type: UiSourceType.audio),
-              );
-            }, childCount: audioSources.length),
+            error: (err, stack) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  "Error loading audio sources: $err",
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            ),
           ),
 
           const SliverToBoxAdapter(child: Divider(color: Colors.grey)),
@@ -198,7 +241,7 @@ class SourceListScreen extends ConsumerWidget {
                   ref.read(karbeatStateProvider).openPattern(id);
                 },
                 onPlace: () => ref
-                    .read(karbeatStateProvider)
+                    .read(clipPlacementProvider.notifier)
                     .startPlacement(id, type: UiSourceType.midi),
               );
             }, childCount: patterns.length),

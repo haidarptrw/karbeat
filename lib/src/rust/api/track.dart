@@ -9,6 +9,27 @@ import 'project.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `into`
 
+Future<Map<int, AudioWaveformUiForClip>> getAudioWaveformClipsData() =>
+    RustLib.instance.api.crateApiTrackGetAudioWaveformClipsData();
+
+Future<AudioWaveformUiForClip> getAudioWaveformForClip({
+  required int audioSourceId,
+}) => RustLib.instance.api.crateApiTrackGetAudioWaveformForClip(
+  audioSourceId: audioSourceId,
+);
+
+/// Getter for all audio waveform data for audio only for this specific track
+Future<Map<int, AudioWaveformUiForClip>>
+getAudioWaveformForClipOnlyInSpecificTrack({required int trackId}) => RustLib
+    .instance
+    .api
+    .crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack(trackId: trackId);
+
+/// Getter for all audio waveform data for audio in all audio tracks
+Future<Map<int, AudioWaveformUiForClip>>
+getAudioWaveformForClipAllAvailableInTracks() => RustLib.instance.api
+    .crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
+
 Future<void> createClip({
   int? sourceId,
   required UiSourceType sourceType,

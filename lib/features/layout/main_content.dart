@@ -45,7 +45,7 @@ class MainContent extends ConsumerWidget {
       case WorkspaceView.trackList:
         return const TrackListScreen();
       case WorkspaceView.source:
-        return const SourceListScreen();
+        return SourceListScreen();
       case WorkspaceView.pianoRoll:
         return _buildPianoRoll(ref);
       case WorkspaceView.mixer:

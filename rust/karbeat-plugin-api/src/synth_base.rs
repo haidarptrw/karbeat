@@ -3,7 +3,7 @@
 // Shared synthesizer infrastructure for all synth plugins.
 // Replaces procedural macro-generated code with simple composition.
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use crate::wrapper::PluginParameter;
 
@@ -410,8 +410,8 @@ impl StandardSynthBase {
     }
 
     /// Get default parameter values for base parameters (IDs 0-7)
-    pub fn default_parameters() -> HashMap<u32, f32> {
-        let mut map = HashMap::new();
+    pub fn default_parameters() -> IndexMap<u32, f32> {
+        let mut map = IndexMap::new();
         map.insert(0, 0.5); // gain
         map.insert(1, 2000.0); // filter_cutoff
         map.insert(2, 0.2); // filter_resonance

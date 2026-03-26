@@ -308,7 +308,7 @@ impl ApplicationState {
         }
 
         // Remove the mixer channel
-        self.mixer.channels.remove(&track_id);
+        self.mixer.channels.shift_remove(&track_id);
 
         // Remove all routing connections for this track
         self.mixer.remove_track_routing(track_id);

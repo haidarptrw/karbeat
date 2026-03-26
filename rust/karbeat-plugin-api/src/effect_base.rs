@@ -2,8 +2,7 @@
 //
 // Shared effect infrastructure for all effect plugins.
 // Use composition pattern: embed EffectBase in your effect struct.
-
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use crate::wrapper::PluginParameter;
 
@@ -17,7 +16,7 @@ pub trait EffectBase: Send + Sync + Clone {
     fn set_parameter(&mut self, id: u32, value: f32) -> bool;
     fn get_parameter(&self, id: u32) -> Option<f32>;
 
-    fn default_parameters() -> HashMap<u32, f32>;
+    fn default_parameters() -> IndexMap<u32, f32>;
     fn get_parameter_specs() -> Vec<PluginParameter>;
 }
 
@@ -119,8 +118,8 @@ impl StandardEffectBase {
     }
 
     /// Get default parameter values for base parameters (IDs 0-1)
-    pub fn default_parameters() -> HashMap<u32, f32> {
-        let mut map = HashMap::new();
+    pub fn default_parameters() -> IndexMap<u32, f32> {
+        let mut map = IndexMap::new();
         map.insert(0, 0.0); // bypass off
         map.insert(1, 1.0); // fully wet
         map

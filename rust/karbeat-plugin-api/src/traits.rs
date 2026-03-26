@@ -1,4 +1,6 @@
-use std::{any::Any, collections::HashMap, fmt::Debug};
+use std::{any::Any, fmt::Debug};
+
+use indexmap::IndexMap;
 
 use crate::wrapper::PluginParameter;
 
@@ -28,7 +30,7 @@ pub trait KarbeatEffect: Send + Sync {
     fn get_parameter(&self, id: u32) -> f32;
 
     /// Get the default values for all parameters supported by this plugin
-    fn default_parameters(&self) -> HashMap<u32, f32>;
+    fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
@@ -58,7 +60,7 @@ pub trait KarbeatGenerator: Send + Sync {
     fn get_parameter(&self, id: u32) -> f32;
 
     /// Get the default values for all parameters supported by this plugin
-    fn default_parameters(&self) -> HashMap<u32, f32>;
+    fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
@@ -102,7 +104,7 @@ impl KarbeatPlugin {
         }
     }
 
-    pub fn default_parameters(&self) -> std::collections::HashMap<u32, f32> {
+    pub fn default_parameters(&self) -> IndexMap<u32, f32> {
         match self {
             KarbeatPlugin::Effect(e) => e.default_parameters(),
             KarbeatPlugin::Generator(g) => g.default_parameters(),

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use karbeat_core::context::utils::send_audio_command;
+use karbeat_core::core::file_manager::loader::AudioLoader;
 use karbeat_core::core::project::TrackId;
 use karbeat_core::{ audio::event::TransportFeedback, commands::AudioCommand, context::ctx };
 use crate::api::project::{ AudioWaveformUiForAudioProperties, UiAudioHardwareConfig };
@@ -47,9 +48,9 @@ impl From<TransportFeedback> for UiTransportFeedback {
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
     let app = get_app_read();
-    let waveform = app.asset_library.source_map.get(&id.into())?;
+    let waveform = app.get_audio_source(id)?;
 
-    //TODO:Add dyanamic downsampling to send this to the frontend side
+    //TODO:Add dyanamic downsampling to send this to the frontend side for smaller memory footprint
     // downsample(waveform.buffer)
 
     Some(AudioWaveformUiForAudioProperties::from(waveform.as_ref()))
@@ -59,8 +60,8 @@ pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties
 pub fn play_source_preview(id: u32) {
     let app = get_app_read();
 
-    if let Some(waveform_arc) = app.asset_library.source_map.get(&id.into()) {
-        let waveform_to_play = (**waveform_arc).clone();
+    if let Some(waveform_arc) = app.get_audio_source(id) {
+        let waveform_to_play = (*waveform_arc).clone();
 
         send_audio_command(AudioCommand::PlayOneShot(waveform_to_play));
         log::info!("Preview command sent for ID: {}", id);
