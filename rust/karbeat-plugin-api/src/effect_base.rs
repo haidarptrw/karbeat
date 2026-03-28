@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use crate::wrapper::PluginParameter;
 
 pub trait EffectBase: Send + Sync + Clone {
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
     fn reset(&mut self);
     fn is_bypass(&self) -> bool;
     fn apply_mix(&self, dry_buffer: &[f32], wet_buffer: &mut [f32]);
@@ -15,6 +15,8 @@ pub trait EffectBase: Send + Sync + Clone {
     /// Returns true if the parameter was handled by the base
     fn set_parameter(&mut self, id: u32, value: f32) -> bool;
     fn get_parameter(&self, id: u32) -> Option<f32>;
+    fn channels(&self) -> usize;
+    fn sample_rate(&self) -> f32;
 
     fn default_parameters() -> IndexMap<u32, f32>;
     fn get_parameter_specs() -> Vec<PluginParameter>;
@@ -40,27 +42,30 @@ pub struct StandardEffectBase {
     pub sample_rate: f32,
     pub bypass: bool,
     pub mix: f32, // Dry/wet mix (0.0 = fully dry, 1.0 = fully wet)
+    pub channels: usize,
 }
 
 impl Default for StandardEffectBase {
     fn default() -> Self {
-        Self::new(48000.0)
+        Self::new(48000.0, 2)
     }
 }
 
 impl StandardEffectBase {
     /// Create a new EffectBase with the given sample rate
-    pub fn new(sample_rate: f32) -> Self {
+    pub fn new(sample_rate: f32, channels: usize) -> Self {
         Self {
             sample_rate,
             bypass: false,
             mix: 1.0,
+            channels,
         }
     }
 
     /// Prepare for playback
-    pub fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
+    pub fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
         self.sample_rate = sample_rate;
+        self.channels = channels;
     }
 
     /// Reset effect state

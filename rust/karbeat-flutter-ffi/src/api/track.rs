@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::api::project::{AudioWaveformUiForClip, UiClip, UiTrack};
 use crate::broadcast_state_change;
-use karbeat_core::core::file_manager::loader::AudioLoader;
+use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::core::{
     history::ProjectAction,

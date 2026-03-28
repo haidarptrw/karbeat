@@ -43,6 +43,8 @@ uuid = { version = "1.22.0", features = ["v4", "serde"] }
 memmap2 = "0.9.10"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
+zip = "8.4.0"
+toml = "1.1.0+spec-1.1.0"
 
 [profile.dev]
 opt-level = 3

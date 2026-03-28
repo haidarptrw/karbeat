@@ -235,6 +235,7 @@ pub fn start_audio_stream(
         pos_producer,
         feedback_producer,
         sample_rate,
+        channels as u16,
         initial_bpm,
         initial_state
     );

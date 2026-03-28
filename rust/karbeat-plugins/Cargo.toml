@@ -14,3 +14,4 @@ serde.workspace = true
 dasp.workspace = true
 fastrand.workspace = true
 hashbrown.workspace = true
+smallvec.workspace = true

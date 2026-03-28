@@ -3,7 +3,7 @@
 use std::{collections::HashMap, f32::consts::PI};
 
 use karbeat_plugin_api::traits::{MidiEvent, MidiMessage};
-use karbeat_plugin_api::synth_base::{AdsrSettings, StandardSynthBase, SynthVoice};
+use karbeat_plugin_api::synth_base::{EnvelopeSettings, StandardSynthBase, SynthVoice};
 use karbeat_plugin_api::wrapper::{RawSynthEngine, RawSynthWrapper};
 
 // ============================================================================
@@ -85,7 +85,7 @@ impl KarbeatzerEngine {
     fn generate_voice_block(
         oscillators: &[Oscillator; 3],
         sample_rate: f32,
-        amp_envelope: &AdsrSettings,
+        amp_envelope: &EnvelopeSettings,
         voice: &mut SynthVoice,
         buffer: &mut [f32],
     ) {
@@ -463,6 +463,6 @@ impl RawSynthEngine for KarbeatzerEngine {
 pub type KarbeatzerV2 = RawSynthWrapper<KarbeatzerEngine>;
 
 /// Helper to create a new Karbeatzer instance
-pub fn create_karbeatzer(sample_rate: Option<f32>) -> KarbeatzerV2 {
-    RawSynthWrapper::new(KarbeatzerEngine::default(), sample_rate.unwrap_or(48000.0))
+pub fn create_karbeatzer(sample_rate: Option<f32>, channels: usize) -> KarbeatzerV2 {
+    RawSynthWrapper::new(KarbeatzerEngine::default(), sample_rate.unwrap_or(48000.0), channels)
 }

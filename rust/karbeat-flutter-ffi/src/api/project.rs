@@ -8,7 +8,7 @@ use crate::broadcast_state_change;
 use karbeat_core::lock::{get_app_read, get_app_write};
 use karbeat_core::{
     core::{
-        file_manager::loader::AudioLoader,
+        file_manager::audio_loader::AudioLoader,
         project::{
             clip::Clip,
             generator::{GeneratorInstance, GeneratorInstanceType},
@@ -299,7 +299,7 @@ impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
             .unwrap_or_default();
         Self {
             preview_buffer,
-            file_path: value.file_path.clone(),
+            file_path: value.file_path.display().to_string(),
             name: value.name.clone(),
             sample_rate: value.sample_rate,
             channels: value.channels,

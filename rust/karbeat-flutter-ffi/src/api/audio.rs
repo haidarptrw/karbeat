@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use karbeat_core::context::utils::send_audio_command;
-use karbeat_core::core::file_manager::loader::AudioLoader;
+use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::TrackId;
 use karbeat_core::{ audio::event::TransportFeedback, commands::AudioCommand, context::ctx };
 use crate::api::project::{ AudioWaveformUiForAudioProperties, UiAudioHardwareConfig };

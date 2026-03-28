@@ -6,7 +6,7 @@ use hashbrown::HashMap;
 use std::{
     fs::File,
     io::{BufReader, BufWriter, Write},
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
 };
 use tempfile::tempfile;
@@ -126,7 +126,7 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
 
     Ok(AudioWaveform {
         buffer,
-        file_path: path_str.to_string(),
+        file_path: path.to_path_buf(),
         name: final_name,
         sample_rate: sample_rate.get(),
         channels: channels.get(),
@@ -161,9 +161,6 @@ impl AudioLoader for ApplicationState {
 
         // set mipmap
 
-        asset_library
-            .sample_paths
-            .insert(id.into(), PathBuf::from(&path));
         asset_library
             .source_map
             .insert(id.into(), Arc::new(waveform));

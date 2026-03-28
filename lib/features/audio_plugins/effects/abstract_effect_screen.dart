@@ -85,8 +85,9 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
         for (final snapshot in snapshots) {
           // Only process snapshots for this effect and target
           if (snapshot.effectId != widget.effectIdx ||
-              snapshot.target != widget.target)
+              snapshot.target != widget.target) {
             continue;
+          }
 
           for (final paramValue in snapshot.parameters) {
             final index = parameters.indexWhere(

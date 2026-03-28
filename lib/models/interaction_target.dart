@@ -1,9 +1,8 @@
-/// Model classes representing what the user is interacting with via the selection tool.
-/// Used to show the interaction panel with contextual actions.
 
 import 'package:flutter/widgets.dart';
 
-/// Base class for all interaction targets
+/// Model classes representing what the user is interacting with via the selection tool.
+/// Used to show the interaction panel with contextual actions.
 sealed class InteractionTarget {
   /// Position where the user tapped (for popover positioning on desktop)
   final Offset tapPosition;

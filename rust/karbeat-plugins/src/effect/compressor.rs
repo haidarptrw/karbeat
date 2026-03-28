@@ -56,7 +56,7 @@ impl KarbeatCompressor {
 
 // Implement whatever trait your wrapper requires (e.g., `KarbeatEffect`)
 impl RawEffectEngine for KarbeatCompressor {
-    fn prepare(&mut self, sample_rate: f32, _buffer_size: usize) {
+    fn prepare(&mut self, sample_rate: f32, _channels: usize, _buffer_size: usize) {
         self.sample_rate = sample_rate;
         self.recalculate_coefficients();
     }
@@ -205,5 +205,5 @@ impl RawEffectEngine for KarbeatCompressor {
 pub type KarbeatCompressorWrapper = RawEffectWrapper<KarbeatCompressor>;
 
 pub fn create_compressor(sample_rate: Option<f32>) -> RawEffectWrapper<KarbeatCompressor> {
-    RawEffectWrapper::new(KarbeatCompressor::default(), sample_rate.unwrap_or(48000.0))
+    RawEffectWrapper::new(KarbeatCompressor::default(), sample_rate.unwrap_or(48000.0), 2)
 }

@@ -11,7 +11,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-import 'package:karbeat/features/plugins/effects/abstract_effect_screen.dart';
+import 'package:karbeat/features/audio_plugins/effects/abstract_effect_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/features/components/fine_grained_input.dart';
 

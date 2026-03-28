@@ -56,8 +56,9 @@ pub struct AudioEngine {
     is_pattern_playing: bool,
     bpm: f32,
 
-    // Timeline (Song mode)
     sample_rate: u32,
+    num_channels: u16,
+    // Timeline (Song mode)
     playhead_samples: u32,
     current_beat: usize,
     current_bar: usize,
@@ -165,6 +166,7 @@ impl AudioEngine {
         position_producer: Producer<TransportFeedback>,
         feedback_producer: Producer<AudioFeedback>,
         sample_rate: u32,
+        num_channels: u16,
         initial_bpm: f32,
         initial_state: AudioRenderState,
     ) -> Self {
@@ -182,6 +184,7 @@ impl AudioEngine {
             is_pattern_playing: false,
             bpm: initial_bpm,
             sample_rate,
+            num_channels,
             playhead_samples: 0,
             active_generators: Vec::with_capacity(32),
             active_oneshots: Vec::with_capacity(16),
@@ -537,7 +540,7 @@ impl AudioEngine {
             } => {
                 // Prepare the plugin with current sample rate and buffer size
                 let buf_size = self.current_state.graph.buffer_size.max(512);
-                plugin.prepare(self.sample_rate as f32, buf_size);
+                plugin.prepare(self.sample_rate as f32, self.num_channels as usize, buf_size);
 
                 let id_index = generator_id.to_u32() as usize;
 
@@ -598,7 +601,7 @@ impl AudioEngine {
             } => {
                 // Prepare the effect
                 let buf_size = self.current_state.graph.buffer_size.max(512);
-                effect.prepare(self.sample_rate as f32, buf_size);
+                effect.prepare(self.sample_rate as f32, self.num_channels as usize, buf_size);
 
                 self.plugin_state.add_track_effect(
                     track_id.to_u32() as usize,
@@ -665,7 +668,7 @@ impl AudioEngine {
                 mut effect,
             } => {
                 let buf_size = self.current_state.graph.buffer_size;
-                effect.prepare(self.sample_rate as f32, buf_size);
+                effect.prepare(self.sample_rate as f32, self.num_channels as usize, buf_size);
                 self.plugin_state.master_effects.push(AudioEffectInstance {
                     id: effect_id,
                     plugin: effect,
@@ -733,7 +736,7 @@ impl AudioEngine {
                 mut effect,
             } => {
                 let buf_size = self.current_state.graph.buffer_size.max(512);
-                effect.prepare(self.sample_rate as f32, buf_size);
+                effect.prepare(self.sample_rate as f32, self.num_channels as usize, buf_size);
 
                 self.plugin_state.add_bus_effect(
                     bus_id.to_u32() as usize,

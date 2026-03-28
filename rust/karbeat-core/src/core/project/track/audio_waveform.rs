@@ -10,7 +10,7 @@ define_id!(AudioSourceId);
 
 use memmap2::Mmap;
 /// Audio Waveform data of an audio sample
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 // STATIC global variables for waveform mipmaps
 
@@ -21,7 +21,7 @@ pub struct AudioWaveform {
     #[serde(skip)]
     pub buffer: Option<Arc<Mmap>>, // future update: replace this with Arc<[f32]> for better performance
     /// path to the audio source file
-    pub file_path: String,
+    pub file_path: PathBuf,
     /// name of the audio waveform
     pub name: String,
     /// Sample rate of the audio waveform
@@ -54,7 +54,7 @@ impl Default for AudioWaveform {
         Self {
             id: None,
             buffer: None,
-            file_path: String::new(),
+            file_path: PathBuf::new(),
             name: "Sample".to_string(),
             sample_rate: 44100,
             channels: 2,

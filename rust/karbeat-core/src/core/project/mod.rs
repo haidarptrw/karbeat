@@ -13,7 +13,6 @@ pub mod transport;
 
 use std::{
     cmp::Ordering,
-    path::PathBuf,
     sync::{Arc, RwLock},
 };
 
@@ -170,9 +169,6 @@ impl Ord for Note {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AssetLibrary {
-    // Map ID -> File Path on Disk
-    // When loading a project, we check if these paths still exist
-    pub sample_paths: HashMap<AudioSourceId, PathBuf>,
     pub next_id: u32,
     #[serde(skip)]
     pub source_map: HashMap<AudioSourceId, Arc<AudioWaveform>>,
@@ -181,7 +177,6 @@ pub struct AssetLibrary {
 impl Default for AssetLibrary {
     fn default() -> Self {
         Self {
-            sample_paths: HashMap::new(),
             next_id: 1,
             source_map: HashMap::new(),
         }
@@ -229,14 +224,11 @@ impl ApplicationState {
         source_id: AudioSourceId,
     ) -> anyhow::Result<AudioSourceId> {
         // we check whether the source exists
-        // ASSUME: the id inside source_map and sample_paths are same based on the existing insertion logic
         let library = Arc::make_mut(&mut self.asset_library);
 
         if library.source_map.remove(&source_id).is_none() {
             return Err(anyhow!("Source does not exist"));
         }
-
-        library.sample_paths.remove(&source_id);
 
         // cascade delete
         for track_arc in self.tracks.values_mut() {

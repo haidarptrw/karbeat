@@ -144,14 +144,14 @@ impl SynthFilter {
 
 /// ADSR envelope settings
 #[derive(Clone, Copy, Debug)]
-pub struct AdsrSettings {
+pub struct EnvelopeSettings {
     pub attack: f32,  // Seconds
     pub decay: f32,   // Seconds
     pub sustain: f32, // 0.0 to 1.0
     pub release: f32, // Seconds
 }
 
-impl Default for AdsrSettings {
+impl Default for EnvelopeSettings {
     fn default() -> Self {
         Self {
             attack: 0.01,
@@ -171,6 +171,39 @@ pub enum EnvelopeStage {
     Sustain,
     Release,
     Idle,
+}
+
+// ============================================================================
+// OSCILLATOR
+// ============================================================================
+
+#[derive(Clone, Copy)]
+pub struct Oscillator {
+    pub waveform: Waveform,
+    pub detune: f32,      // In semitones
+    pub mix: f32,         // 0.0 to 1.0
+    pub pulse_width: f32, // 0.0 to 1.0 (For Pulse/Square)
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Waveform {
+    Sine = 0,
+    Saw = 1,
+    Square = 2,
+    Triangle = 3,
+    Noise = 4,
+}
+
+impl From<f32> for Waveform {
+    fn from(v: f32) -> Self {
+        match v as u32 {
+            0 => Waveform::Sine,
+            1 => Waveform::Saw,
+            2 => Waveform::Square,
+            3 => Waveform::Triangle,
+            _ => Waveform::Noise,
+        }
+    }
 }
 
 // ============================================================================
@@ -218,7 +251,7 @@ impl SynthVoice {
     }
 
     /// Advance envelope by dt seconds, returns current level
-    pub fn advance_envelope(&mut self, dt: f32, settings: &AdsrSettings) -> f32 {
+    pub fn advance_envelope(&mut self, dt: f32, settings: &EnvelopeSettings) -> f32 {
         self.env_timer += dt;
 
         match self.env_stage {
@@ -292,35 +325,38 @@ impl SynthVoice {
 #[derive(Clone, Debug)]
 pub struct StandardSynthBase {
     pub sample_rate: f32,
+    pub channels: usize,
     pub active_voices: Vec<SynthVoice>,
     pub voice_buffer: Vec<f32>,
     pub gain: f32,
     pub filter: SynthFilter,
-    pub amp_envelope: AdsrSettings,
+    pub amp_envelope: EnvelopeSettings,
 }
 
 impl Default for StandardSynthBase {
     fn default() -> Self {
-        Self::new(48000.0)
+        Self::new(48000.0, 2)
     }
 }
 
 impl StandardSynthBase {
     /// Create a new SynthBase with the given sample rate
-    pub fn new(sample_rate: f32) -> Self {
+    pub fn new(sample_rate: f32, channels: usize) -> Self {
         Self {
             sample_rate,
             active_voices: Vec::with_capacity(16),
             voice_buffer: Vec::with_capacity(512),
             gain: 0.5,
             filter: SynthFilter::default(),
-            amp_envelope: AdsrSettings::default(),
+            amp_envelope: EnvelopeSettings::default(),
+            channels,
         }
     }
 
     /// Prepare for playback
-    pub fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
+    pub fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize) {
         self.sample_rate = sample_rate;
+        self.channels = channels;
         if self.voice_buffer.len() < max_buffer_size {
             self.voice_buffer.resize(max_buffer_size, 0.0);
         }

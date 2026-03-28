@@ -30,7 +30,7 @@ impl From<f32> for FilterType {
 }
 
 /// Node of each filter
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct KarbeatParametricEQFilterNode {
     /// Type of filter
     pub filter_type: FilterType,
@@ -57,11 +57,11 @@ pub struct KarbeatParametricEQFilterNode {
     a1: f32,
     a2: f32,
 
-    // Cascaded biquad state: [stage][channel(L/R)]
-    x1: [[f32; 2]; MAX_ORDER],
-    x2: [[f32; 2]; MAX_ORDER],
-    y1: [[f32; 2]; MAX_ORDER],
-    y2: [[f32; 2]; MAX_ORDER],
+    // Cascaded biquad state: [channel(L/R...N)][stage]
+    x1: Vec<[f32; MAX_ORDER]>,
+    x2: Vec<[f32; MAX_ORDER]>,
+    y1: Vec<[f32; MAX_ORDER]>,
+    y2: Vec<[f32; MAX_ORDER]>,
 }
 
 impl KarbeatParametricEQFilterNode {
@@ -78,14 +78,23 @@ impl KarbeatParametricEQFilterNode {
             b2: 0.0,
             a1: 0.0,
             a2: 0.0,
-            x1: [[0.0; 2]; MAX_ORDER],
-            x2: [[0.0; 2]; MAX_ORDER],
-            y1: [[0.0; 2]; MAX_ORDER],
-            y2: [[0.0; 2]; MAX_ORDER],
+            x1: vec![[0.0; MAX_ORDER]; 2], // Default to stereo, will be resized if necessary
+            x2: vec![[0.0; MAX_ORDER]; 2],
+            y1: vec![[0.0; MAX_ORDER]; 2],
+            y2: vec![[0.0; MAX_ORDER]; 2],
         };
         // Initial calc assuming 48k, will be updated in process
         node.update_coefficients(48000.0);
         node
+    }
+
+    pub fn ensure_channels(&mut self, channels: usize) {
+        if self.x1.len() != channels {
+            self.x1.resize(channels, [0.0; MAX_ORDER]);
+            self.x2.resize(channels, [0.0; MAX_ORDER]);
+            self.y1.resize(channels, [0.0; MAX_ORDER]);
+            self.y2.resize(channels, [0.0; MAX_ORDER]);
+        }
     }
 
     /// Calculate Biquad Coefficients for Peaking EQ
@@ -182,11 +191,8 @@ impl KarbeatParametricEQFilterNode {
         self.a2 = a2_raw * inv_a0;
     }
 
-    /// Process a single sample for a specific channel (0=Left, 1=Right)
-    /// Cascades through (order + 1) identical biquad stages for steeper slopes.
-    #[inline]
     pub fn process_sample(&mut self, sample: f32, channel: usize) -> f32 {
-        if !self.active {
+        if !self.active || channel >= self.x1.len() {
             return sample;
         }
 
@@ -197,16 +203,16 @@ impl KarbeatParametricEQFilterNode {
             // Direct Form I per stage
             let x0 = signal;
             let y0 = self.b0 * x0
-                + self.b1 * self.x1[stage][channel]
-                + self.b2 * self.x2[stage][channel]
-                - self.a1 * self.y1[stage][channel]
-                - self.a2 * self.y2[stage][channel];
+                + self.b1 * self.x1[channel][stage]
+                + self.b2 * self.x2[channel][stage]
+                - self.a1 * self.y1[channel][stage]
+                - self.a2 * self.y2[channel][stage];
 
             // Shift state for this stage
-            self.x2[stage][channel] = self.x1[stage][channel];
-            self.x1[stage][channel] = x0;
-            self.y2[stage][channel] = self.y1[stage][channel];
-            self.y1[stage][channel] = y0;
+            self.x2[channel][stage] = self.x1[channel][stage];
+            self.x1[channel][stage] = x0;
+            self.y2[channel][stage] = self.y1[channel][stage];
+            self.y1[channel][stage] = y0;
 
             signal = y0;
         }
@@ -215,10 +221,12 @@ impl KarbeatParametricEQFilterNode {
     }
 
     pub fn reset_state(&mut self) {
-        self.x1 = [[0.0; 2]; MAX_ORDER];
-        self.x2 = [[0.0; 2]; MAX_ORDER];
-        self.y1 = [[0.0; 2]; MAX_ORDER];
-        self.y2 = [[0.0; 2]; MAX_ORDER];
+        for channel in 0..self.x1.len() {
+            self.x1[channel] = [0.0; MAX_ORDER];
+            self.x2[channel] = [0.0; MAX_ORDER];
+            self.y1[channel] = [0.0; MAX_ORDER];
+            self.y2[channel] = [0.0; MAX_ORDER];
+        }
     }
 
     /// Compute the magnitude response in dB at a given frequency.
@@ -260,10 +268,12 @@ impl KarbeatParametricEQFilterNode {
 pub struct KarbeatParametricEQEngine {
     /// Nodes
     pub nodes: Vec<KarbeatParametricEQFilterNode>,
-    /// Base gain  for all eq
+    /// Base gain for all eq
     pub base_gain: f32,
     /// Cache sample rate to detect changes
     last_sample_rate: f32,
+    /// Number of channels
+    channels: usize,
 }
 
 impl KarbeatParametricEQEngine {
@@ -279,11 +289,13 @@ impl KarbeatParametricEQEngine {
             nodes,
             base_gain: 0.0, // 0 dB default
             last_sample_rate: 48000.0,
+            channels: 2,
         }
     }
 
     fn update_all_nodes(&mut self) {
         for node in &mut self.nodes {
+            node.ensure_channels(self.channels);
             node.update_coefficients(self.last_sample_rate);
         }
     }
@@ -317,9 +329,11 @@ impl KarbeatParametricEQEngine {
 }
 
 impl RawEffectEngine for KarbeatParametricEQEngine {
-    fn prepare(&mut self, sample_rate: f32, _max_buffer_size: usize) {
-        if (sample_rate - self.last_sample_rate).abs() > 0.1 {
+    fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
+        let needs_update = (sample_rate - self.last_sample_rate).abs() > 0.1 || self.channels != channels;
+        if needs_update {
             self.last_sample_rate = sample_rate;
+            self.channels = channels;
             self.update_all_nodes();
         }
     }
@@ -329,9 +343,11 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
         base: &mut karbeat_plugin_api::effect_base::StandardEffectBase,
         buffer: &mut [f32],
     ) {
-        // Check for sample rate changes
-        if (base.sample_rate - self.last_sample_rate).abs() > 0.1 {
+        // Check for sample rate or channel changes
+        let needs_update = (base.sample_rate - self.last_sample_rate).abs() > 0.1 || base.channels != self.channels;
+        if needs_update {
             self.last_sample_rate = base.sample_rate;
+            self.channels = base.channels;
             self.update_all_nodes();
         }
 
@@ -341,20 +357,25 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
             1.0
         };
 
-        for i in (0..buffer.len()).step_by(2) {
-            let mut l = buffer[i] * master_linear_gain;
-            let mut r = buffer[i + 1] * master_linear_gain;
+        if self.channels == 0 {
+             return;
+        }
 
-            // Apply all EQ bands in series
-            for node in &mut self.nodes {
-                if node.active {
-                    l = node.process_sample(l, 0);
-                    r = node.process_sample(r, 1);
+        for i in (0..buffer.len()).step_by(self.channels) {
+            for channel in 0..self.channels {
+                if i + channel < buffer.len() {
+                    let mut sample = buffer[i + channel] * master_linear_gain;
+
+                    // Apply all EQ bands in series
+                    for node in &mut self.nodes {
+                        if node.active {
+                            sample = node.process_sample(sample, channel);
+                        }
+                    }
+
+                    buffer[i + channel] = sample;
                 }
             }
-
-            buffer[i] = l;
-            buffer[i + 1] = r;
         }
     }
 
@@ -566,10 +587,20 @@ pub type KarbeatParametricEQ = RawEffectWrapper<KarbeatParametricEQEngine>;
 
 pub fn create_parametric_eq(
     sample_rate: Option<f32>,
+    channels: usize,
 ) -> RawEffectWrapper<KarbeatParametricEQEngine> {
+    let mut engine = KarbeatParametricEQEngine::new();
+    // Default config initialization if sample rate and channels are passed
+    if let Some(sr) = sample_rate {
+        engine.last_sample_rate = sr;
+    }
+    engine.channels = channels;
+    engine.update_all_nodes();
+
     RawEffectWrapper::new(
-        KarbeatParametricEQEngine::new(),
+        engine,
         sample_rate.unwrap_or(48000.0),
+        channels
     )
 }
 

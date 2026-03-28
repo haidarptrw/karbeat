@@ -1,6 +1,6 @@
 // src/lib.rs
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use memmap2::MmapOptions;
 use rtrb::RingBuffer;
@@ -75,7 +75,7 @@ fn generate_startup_beep() -> AudioWaveform {
 
     AudioWaveform {
         buffer: Some(Arc::new(mmap)),
-        file_path: "internal_beep".to_string(),
+        file_path: PathBuf::from("internal_beep"),
         sample_rate,
         channels: 2,
         duration: duration_secs as f64,
