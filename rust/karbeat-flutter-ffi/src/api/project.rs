@@ -354,7 +354,6 @@ impl AudioWaveformUiForClip {
             .map(|slice| quantize_to_i8(slice))
             .unwrap_or_default();
 
-        log::debug!("The preview buffer: {:?}", preview_buffer);
 
         let audio_waveform_ui = AudioWaveformUiForClip {
             preview_buffer,
