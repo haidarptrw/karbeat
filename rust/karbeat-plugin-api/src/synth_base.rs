@@ -4,6 +4,7 @@
 // Replaces procedural macro-generated code with simple composition.
 
 use indexmap::IndexMap;
+use karbeat_dsp::envelope::{EnvelopeSettings, EnvelopeStage};
 
 use crate::wrapper::PluginParameter;
 
@@ -139,74 +140,6 @@ impl SynthFilter {
 }
 
 // ============================================================================
-// ENVELOPE
-// ============================================================================
-
-/// ADSR envelope settings
-#[derive(Clone, Copy, Debug)]
-pub struct EnvelopeSettings {
-    pub attack: f32,  // Seconds
-    pub decay: f32,   // Seconds
-    pub sustain: f32, // 0.0 to 1.0
-    pub release: f32, // Seconds
-}
-
-impl Default for EnvelopeSettings {
-    fn default() -> Self {
-        Self {
-            attack: 0.01,
-            decay: 0.2,
-            sustain: 0.7,
-            release: 0.5,
-        }
-    }
-}
-
-/// Envelope stage for voice processing
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
-pub enum EnvelopeStage {
-    #[default]
-    Attack,
-    Decay,
-    Sustain,
-    Release,
-    Idle,
-}
-
-// ============================================================================
-// OSCILLATOR
-// ============================================================================
-
-#[derive(Clone, Copy)]
-pub struct Oscillator {
-    pub waveform: Waveform,
-    pub detune: f32,      // In semitones
-    pub mix: f32,         // 0.0 to 1.0
-    pub pulse_width: f32, // 0.0 to 1.0 (For Pulse/Square)
-}
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum Waveform {
-    Sine = 0,
-    Saw = 1,
-    Square = 2,
-    Triangle = 3,
-    Noise = 4,
-}
-
-impl From<f32> for Waveform {
-    fn from(v: f32) -> Self {
-        match v as u32 {
-            0 => Waveform::Sine,
-            1 => Waveform::Saw,
-            2 => Waveform::Square,
-            3 => Waveform::Triangle,
-            _ => Waveform::Noise,
-        }
-    }
-}
-
-// ============================================================================
 // VOICE
 // ============================================================================
 
@@ -302,6 +235,12 @@ impl SynthVoice {
                 self.env_level = 0.0;
                 self.is_active = false;
             }
+            EnvelopeStage::Delay => {
+                // TODO: Implement this
+            },
+            EnvelopeStage::Hold => {
+                // TODO: Implement this
+            },
         }
 
         self.env_level

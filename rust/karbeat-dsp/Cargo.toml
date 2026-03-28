@@ -10,3 +10,4 @@ rustfft.workspace = true
 num-complex.workspace = true
 log.workspace = true
 serde.workspace = true
+fastrand.workspace = true

@@ -13,7 +13,7 @@ use crate::{
     },
 };
 use indexmap::IndexMap;
-use karbeat_dsp::is_power_of_two;
+use karbeat_utils::math::is_power_of_two;
 
 // =============================================================================
 // Audio Thread Owned Plugin State

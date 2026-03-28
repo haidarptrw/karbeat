@@ -2,9 +2,8 @@
 
 use std::{collections::HashMap, f32::consts::PI};
 
-use karbeat_plugin_api::traits::{MidiEvent, MidiMessage};
-use karbeat_plugin_api::synth_base::{EnvelopeSettings, StandardSynthBase, SynthVoice};
-use karbeat_plugin_api::wrapper::{RawSynthEngine, RawSynthWrapper};
+use karbeat_dsp::envelope::EnvelopeSettings;
+use karbeat_plugin_api::prelude::*;
 
 // ============================================================================
 // SYNTH-SPECIFIC TYPES

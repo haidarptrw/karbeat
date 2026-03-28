@@ -1232,6 +1232,7 @@ name = "karbeat-dsp"
 version = "0.1.0-alpha.1"
 dependencies = [
  "dasp",
+ "fastrand",
  "log",
  "num-complex",
  "rustfft",

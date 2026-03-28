@@ -171,3 +171,23 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
 
     Ok(app_state)
 }
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod test {
+    pub fn it_should_be_able_to_save_project() {
+        todo!();
+    }
+
+    pub fn it_should_be_able_to_load_valid_project() {
+        todo!();
+    }
+
+    pub fn it_should_reject_invalid_project_file() {
+        todo!();
+    }
+
+    pub fn test_flow_from_save_to_load() {
+        todo!();
+    }
+}
