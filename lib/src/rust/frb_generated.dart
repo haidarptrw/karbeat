@@ -5146,7 +5146,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       name: dco_decode_String(arr[0]),
       author: dco_decode_String(arr[1]),
       version: dco_decode_String(arr[2]),
-      createdAt: dco_decode_CastedPrimitive_u_64(arr[3]),
+      createdAt: dco_decode_String(arr[3]),
     );
   }
 
@@ -6457,7 +6457,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_author = sse_decode_String(deserializer);
     var var_version = sse_decode_String(deserializer);
-    var var_createdAt = sse_decode_CastedPrimitive_u_64(deserializer);
+    var var_createdAt = sse_decode_String(deserializer);
     return UiProjectMetadata(
       name: var_name,
       author: var_author,
@@ -7701,7 +7701,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.author, serializer);
     sse_encode_String(self.version, serializer);
-    sse_encode_CastedPrimitive_u_64(self.createdAt, serializer);
+    sse_encode_String(self.createdAt, serializer);
   }
 
   @protected

@@ -317,7 +317,7 @@ class UiProjectMetadata {
   final String name;
   final String author;
   final String version;
-  final int createdAt;
+  final String createdAt;
 
   const UiProjectMetadata({
     required this.name,

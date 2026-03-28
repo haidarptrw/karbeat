@@ -10,7 +10,7 @@ pub trait KarbeatEffect: Send + Sync {
     /// Returns the unique name of the plugin
     fn name(&self) -> &str;
 
-    /// Prepare the plugin for playback (allocate buffers, set sample rate)
+    /// Prepare the plugin for playback (allocate buffers, set sample rate and number of channels)
     fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
 
     /// Reset internal state (clear delay lines, reverb tails, etc.)
@@ -43,7 +43,7 @@ pub trait KarbeatGenerator: Send + Sync {
     /// Get the name of the generator
     fn name(&self) -> &str;
 
-    /// Prepare the plugin so that it can properly used for audio processing
+    /// Prepare the plugin for playback (allocate buffers, set sample rate and number of channels)
     fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
 
     /// Reset the parameters of the plugin

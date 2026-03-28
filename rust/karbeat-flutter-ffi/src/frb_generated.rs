@@ -5149,7 +5149,7 @@ impl SseDecode for crate::api::project::UiProjectMetadata {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_author = <String>::sse_decode(deserializer);
         let mut var_version = <String>::sse_decode(deserializer);
-        let mut var_createdAt = <u64>::sse_decode(deserializer);
+        let mut var_createdAt = <String>::sse_decode(deserializer);
         return crate::api::project::UiProjectMetadata {
             name: var_name,
             author: var_author,
@@ -7442,7 +7442,7 @@ impl SseEncode for crate::api::project::UiProjectMetadata {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.author, serializer);
         <String>::sse_encode(self.version, serializer);
-        <u64>::sse_encode(self.created_at, serializer);
+        <String>::sse_encode(self.created_at, serializer);
     }
 }
 

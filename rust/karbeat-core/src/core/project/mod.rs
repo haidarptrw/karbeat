@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use karbeat_utils::define_id;
 // src/core/project/mod.rs
@@ -108,7 +109,7 @@ pub struct ProjectMetadata {
     pub name: String,
     pub author: String,
     pub version: String,
-    pub created_at: u64,
+    pub created_at: DateTime<Utc>,
 }
 
 impl Default for ProjectMetadata {
@@ -117,7 +118,7 @@ impl Default for ProjectMetadata {
             name: "Untitled".to_string(),
             author: Default::default(),
             version: Default::default(),
-            created_at: Default::default(),
+            created_at: Utc::now(),
         }
     }
 }

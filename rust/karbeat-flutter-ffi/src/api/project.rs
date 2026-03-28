@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ops::Deref};
 
+use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 use karbeat_utils::audio_utils::quantize_to_i8;
 use serde::Serialize;
@@ -60,7 +61,7 @@ pub struct UiProjectMetadata {
     pub name: String,
     pub author: String,
     pub version: String,
-    pub created_at: u64,
+    pub created_at: String,
 }
 
 impl From<ProjectMetadata> for UiProjectMetadata {
@@ -69,7 +70,7 @@ impl From<ProjectMetadata> for UiProjectMetadata {
             name: m.name,
             author: m.author,
             version: m.version,
-            created_at: m.created_at,
+            created_at: m.created_at.to_rfc3339(),
         }
     }
 }
@@ -80,7 +81,7 @@ impl From<UiProjectMetadata> for ProjectMetadata {
             name: m.name,
             author: m.author,
             version: m.version,
-            created_at: m.created_at,
+            created_at: m.created_at.parse::<DateTime<Utc>>().unwrap_or(Utc::now()),
         }
     }
 }
