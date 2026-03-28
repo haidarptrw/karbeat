@@ -62,7 +62,9 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
           trackId: s.trackId,
           startTime: s.timeSamples.toInt(),
         );
-        ref.read(karbeatStateProvider).notifyBackendChange(ProjectEvent.tracksChanged);
+        ref.read(karbeatStateProvider).notifyCustomBackendChange(() async {
+          await ref.read(karbeatStateProvider).syncTrackState(s.trackId);
+        });
         state = const ClipPlacementState();
         return Result.ok(null);
       } catch (e) {
@@ -74,6 +76,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
   }
 }
 
-final clipPlacementProvider = NotifierProvider<ClipPlacementNotifier, ClipPlacementState>(
-  () => ClipPlacementNotifier(),
-);
+final clipPlacementProvider =
+    NotifierProvider<ClipPlacementNotifier, ClipPlacementState>(
+      () => ClipPlacementNotifier(),
+    );

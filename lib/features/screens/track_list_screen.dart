@@ -33,14 +33,17 @@ class TrackListScreen extends ConsumerWidget {
 
         return Builder(
           builder: (context) {
-            final tracks = ref.watch(
-              karbeatStateProvider.select((s) => s.tracks),
-            );
-            final sortedTracks = tracks.values.toList()
-              ..sort((a, b) => a.id.compareTo(b.id));
+            final trackIdsStr = ref.watch(karbeatStateProvider.select((s) {
+              final keys = s.tracks.keys.toList()..sort();
+              return keys.join(',');
+            }));
+            
+            final trackIds = trackIdsStr.isEmpty 
+                ? <int>[] 
+                : trackIdsStr.split(',').map(int.parse).toList();
 
             return _SplitTrackView(
-              tracks: sortedTracks,
+              trackIds: trackIds,
               itemHeight: itemHeight,
               headerWidth: headerWidth,
             );
@@ -52,12 +55,12 @@ class TrackListScreen extends ConsumerWidget {
 }
 
 class _SplitTrackView extends ConsumerStatefulWidget {
-  final List<UiTrack> tracks;
+  final List<int> trackIds;
   final double itemHeight;
   final double headerWidth;
 
   const _SplitTrackView({
-    required this.tracks,
+    required this.trackIds,
     required this.itemHeight,
     required this.headerWidth,
   });
@@ -277,13 +280,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     // Determine which track the selection starts on
     int trackIndex = (absoluteY / widget.itemHeight).floor();
-    trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
+    trackIndex = trackIndex.clamp(0, widget.trackIds.length - 1);
 
     setState(() {
       _isRangeSelecting = true;
       _rangeSelectStart = Offset(absoluteX, absoluteY);
       _rangeSelectEnd = Offset(absoluteX, absoluteY);
-      _rangeSelectTrackId = widget.tracks[trackIndex].id;
+      _rangeSelectTrackId = widget.trackIds[trackIndex];
     });
   }
 
@@ -374,7 +377,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   Widget build(BuildContext context) {
     // Calculate total height to ensure both lists have exactly same extent
     // +1 for the Add Button row
-    final int itemCount = widget.tracks.length + 1;
+    final int itemCount = widget.trackIds.length + 1;
     final state = ref.read(karbeatStateProvider);
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
@@ -412,10 +415,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       padding: EdgeInsets.zero,
                       itemCount: itemCount,
                       itemBuilder: (context, index) {
-                        if (index == widget.tracks.length) {
+                        if (index == widget.trackIds.length) {
                           return _buildAddButton();
                         }
-                        return _buildTrackHeader(widget.tracks[index]);
+                        return _TrackHeader(trackId: widget.trackIds[index], itemHeight: widget.itemHeight);
                       },
                     ),
                   ),
@@ -552,7 +555,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                   }
                                 : null,
                             child: ScrollConfiguration(
-                              // Only allow Mouse Drag scrolling when using Pointer or Move tool
+                              // Only allow Mouse Drag scrolling when using Pointer
                               behavior: (selectedTool == ToolSelection.pointer)
                                   ? DragScrollBehavior()
                                   : ScrollConfiguration.of(context).copyWith(
@@ -582,13 +585,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                       padding: EdgeInsets.zero,
                                       itemCount: itemCount,
                                       itemBuilder: (context, index) {
-                                        if (index == widget.tracks.length) {
+                                        if (index == widget.trackIds.length) {
                                           return SizedBox(height: 60);
                                         }
                                         return IgnorePointer(
                                           ignoring: isPlacing,
                                           child: KarbeatTrackSlot(
-                                            trackId: widget.tracks[index].id,
+                                            trackId: widget.trackIds[index],
                                             height: widget.itemHeight,
                                             horizontalScrollController:
                                                 _trackContentController,
@@ -692,8 +695,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     // Determine Track Index
     int trackIndex = (absoluteY / widget.itemHeight).floor();
-    trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
-    final targetTrack = widget.tracks[trackIndex];
+    trackIndex = trackIndex.clamp(0, widget.trackIds.length - 1);
+    final targetTrack = widget.trackIds[trackIndex];
 
     // Calculate Absolute X (Mouse + Scroll)
     double scrollX = 0;
@@ -710,7 +713,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     ref
         .read(clipPlacementProvider.notifier)
-        .updatePlacementTarget(targetTrack.id, samples);
+        .updatePlacementTarget(targetTrack, samples);
   }
 
   Widget _buildGhostClip(BuildContext context) {
@@ -725,7 +728,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
     double absoluteY = _mousePos!.dy + scrollY;
     int trackIndex = (absoluteY / widget.itemHeight).floor();
-    trackIndex = trackIndex.clamp(0, widget.tracks.length - 1);
+    trackIndex = trackIndex.clamp(0, widget.trackIds.length - 1);
 
     double top = (trackIndex * widget.itemHeight) - scrollY;
 
@@ -802,8 +805,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
 
     // Find the track index for the starting track
-    final trackIndex = widget.tracks.indexWhere(
-      (t) => t.id == _rangeSelectTrackId,
+    final trackIndex = widget.trackIds.indexWhere(
+      (t) => t == _rangeSelectTrackId,
     );
     if (trackIndex < 0) return const SizedBox();
 
@@ -865,8 +868,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
 
     // Find source track index
-    final sortedTracks = widget.tracks..sort((a, b) => a.id.compareTo(b.id));
-    final trackIndex = sortedTracks.indexWhere((t) => t.id == selectedTrackId);
+    final sortedTracks = widget.trackIds..sort((a, b) => a.compareTo(b));
+    final trackIndex = sortedTracks.indexWhere((t) => t == selectedTrackId);
     if (trackIndex < 0) return [];
 
     // Calculate target track based on vertical delta
@@ -933,19 +936,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     return overlays;
   }
 
-  final Map<Color, Color> _contrastColorCache = {};
-
-  // 2. Create a helper function that checks the cache first
-  Color _getContrastColor(Color backgroundColor) {
-    // putIfAbsent checks if the key exists. If it does, it returns the cached value instantly.
-    // If it doesn't, it runs the expensive computeLuminance() exactly once, caches it, and returns it.
-    return _contrastColorCache.putIfAbsent(backgroundColor, () {
-      return backgroundColor.computeLuminance() > 0.5
-          ? Colors.black
-          : Colors.white;
-    });
-  }
-
   Widget _buildAddButton() {
     return SizedBox(
       height: 60,
@@ -960,165 +950,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         ),
       ),
     );
-  }
-
-  Widget _buildTrackHeader(UiTrack track) {
-    return ContextMenuWrapper(
-      title: track.name,
-      header: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Name: ${track.name}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "Type: ${track.trackType.name.toUpperCase()}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "ID: ${track.id}",
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Text(
-                "Color: ",
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: Color(
-                    int.parse(track.color.substring(1), radix: 16),
-                  ), // Replace with track.color if available
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        KarbeatContextAction(
-          title: "Rename",
-          icon: Icons.edit,
-          onTap: () {
-            // Replace with your actual rename logic via app_state
-            KarbeatLogger.info("Rename track requested for ID: ${track.id}");
-          },
-        ),
-        KarbeatContextAction(
-          title: "Move Up",
-          icon: Icons.arrow_upward,
-          onTap: () {
-            // Replace with actual move up logic
-            KarbeatLogger.info("Move Up requested for track ID: ${track.id}");
-          },
-        ),
-        KarbeatContextAction(
-          title: "Move Down",
-          icon: Icons.arrow_downward,
-          onTap: () {
-            // Replace with actual move down logic
-            KarbeatLogger.info("Move Down requested for track ID: ${track.id}");
-          },
-        ),
-        KarbeatContextAction(
-          title: "Delete Track",
-          icon: Icons.delete,
-          isDestructive: true,
-          onTap: () {
-            // Replace with actual delete logic via app_state
-            KarbeatLogger.info("Delete track requested for ID: ${track.id}");
-          },
-        ),
-      ],
-      child: SizedBox(
-        height: widget.itemHeight,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: Color(int.parse(track.color.substring(1), radix: 16)),
-            border: Border(
-              bottom: BorderSide(color: Colors.grey.shade400, width: 1),
-              right: BorderSide(color: Colors.grey.shade400, width: 1),
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      track.name,
-                      style: TextStyle(
-                        color: Colors.grey.shade800,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
-                      style: TextStyle(
-                        color: _getContrastColor(
-                          Color(int.parse(track.color.substring(1), radix: 16)),
-                        ),
-                        // color: Colors.grey.shade600, // use inverse color of track color for better contrast
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  InkWell(
-                    onTap: () {},
-                    child: const Icon(
-                      Icons.mic_off,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  InkWell(
-                    onTap: () {},
-                    child: const Icon(
-                      Icons.volume_up,
-                      size: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  IconData _getTrackIcon(UiTrackType type) {
-    switch (type) {
-      case UiTrackType.audio:
-        return Icons.graphic_eq;
-      case UiTrackType.midi:
-        return Icons.piano;
-      case UiTrackType.automation:
-        return Icons.show_chart;
-    }
   }
 
   void _showAddTrackDialog(BuildContext context) {
@@ -1274,6 +1105,184 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       ),
     );
   }
+}
+
+class _TrackHeader extends ConsumerWidget {
+
+  final int trackId;
+  final double itemHeight;
+
+  const _TrackHeader({required this.trackId, required this.itemHeight});
+
+  Color _getContrastColor(Color backgroundColor) {
+    return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+  }
+
+  IconData _getTrackIcon(UiTrackType type) {
+    switch (type) {
+      case UiTrackType.audio:
+        return Icons.graphic_eq;
+      case UiTrackType.midi:
+        return Icons.piano;
+      case UiTrackType.automation:
+        return Icons.show_chart;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Only rebuilds this specific header if the track's name/color/type changes
+    final track = ref.watch(karbeatStateProvider.select((s) => s.tracks[trackId]));
+    
+    if (track == null) return const SizedBox();
+
+    return ContextMenuWrapper(
+      title: track.name,
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Name: ${track.name}",
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Type: ${track.trackType.name.toUpperCase()}",
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "ID: ${track.id}",
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text(
+                "Color: ",
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: Color(
+                    int.parse(track.color.substring(1), radix: 16),
+                  ), // Replace with track.color if available
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        KarbeatContextAction(
+          title: "Rename",
+          icon: Icons.edit,
+          onTap: () {
+            // Replace with your actual rename logic via app_state
+            KarbeatLogger.info("Rename track requested for ID: ${track.id}");
+          },
+        ),
+        KarbeatContextAction(
+          title: "Move Up",
+          icon: Icons.arrow_upward,
+          onTap: () {
+            // Replace with actual move up logic
+            KarbeatLogger.info("Move Up requested for track ID: ${track.id}");
+          },
+        ),
+        KarbeatContextAction(
+          title: "Move Down",
+          icon: Icons.arrow_downward,
+          onTap: () {
+            // Replace with actual move down logic
+            KarbeatLogger.info("Move Down requested for track ID: ${track.id}");
+          },
+        ),
+        KarbeatContextAction(
+          title: "Delete Track",
+          icon: Icons.delete,
+          isDestructive: true,
+          onTap: () {
+            // Replace with actual delete logic via app_state
+            KarbeatLogger.info("Delete track requested for ID: ${track.id}");
+          },
+        ),
+      ],
+      child: SizedBox(
+        height: itemHeight,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: Color(int.parse(track.color.substring(1), radix: 16)),
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade400, width: 1),
+              right: BorderSide(color: Colors.grey.shade400, width: 1),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(_getTrackIcon(track.trackType), color: Colors.grey.shade700),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      track.name,
+                      style: TextStyle(
+                        color: Colors.grey.shade800,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
+                      style: TextStyle(
+                        color: _getContrastColor(
+                          Color(int.parse(track.color.substring(1), radix: 16)),
+                        ),
+                        // color: Colors.grey.shade600, // use inverse color of track color for better contrast
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  InkWell(
+                    onTap: () {},
+                    child: const Icon(
+                      Icons.mic_off,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  InkWell(
+                    onTap: () {},
+                    child: const Icon(
+                      Icons.volume_up,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
 }
 
 class _TimelineRuler extends ConsumerWidget {

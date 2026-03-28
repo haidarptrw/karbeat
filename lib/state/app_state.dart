@@ -177,7 +177,7 @@ class KarbeatState extends ChangeNotifier {
         notifyListeners();
       }
     });
-    syncTrackState();
+    syncTracksState();
     syncMaxSampleIndex();
     syncTransportState();
     syncMetadataState();
@@ -244,7 +244,7 @@ class KarbeatState extends ChangeNotifier {
     _stateSubscription = _stateEventController.stream.listen((event) async {
       switch (event) {
         case ProjectEvent.tracksChanged:
-          await syncTrackState();
+          await syncTracksState();
           await syncMaxSampleIndex();
           break;
         case ProjectEvent.transportChanged:
@@ -347,7 +347,7 @@ class KarbeatState extends ChangeNotifier {
   // ================ SYNCHRONIZATION ======================
 
   /// Syncs only the track state
-  Future<void> syncTrackState() async {
+  Future<void> syncTracksState() async {
     try {
       final newState = await getTracks();
       _tracks = newState;
@@ -355,6 +355,12 @@ class KarbeatState extends ChangeNotifier {
     } catch (e) {
       KarbeatLogger.error("error when syncing the track state: $e");
     }
+  }
+
+  Future<void> syncTrackState(int trackId) async {
+    final newTrack = await getTrack(trackId: trackId);
+    _tracks[trackId] = newTrack;
+    notifyListeners();
   }
 
   /// Syncs only the transport settings (BPM, time signature) from the backend.
@@ -602,7 +608,7 @@ class KarbeatState extends ChangeNotifier {
     try {
       await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
       notifyCustomBackendChange(() async {
-        await syncTrackState();
+        await syncTracksState();
         await syncGeneratorList();
       });
       return Result.ok(null);

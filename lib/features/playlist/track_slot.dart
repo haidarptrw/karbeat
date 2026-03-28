@@ -56,20 +56,30 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
       karbeatStateProvider.select((s) => s.tracks[widget.trackId]),
     );
 
+    final isSelectedTrack = ref.watch(
+      karbeatStateProvider.select((s) => s.selectedTrackId == widget.trackId),
+    );
+
+    final trackSelectedClipIdsStr = ref.watch(
+      karbeatStateProvider.select((s) {
+        if (s.selectedTrackId != widget.trackId) return '';
+        return s.selectedClipIds.join(',');
+      }),
+    );
+
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
-    final waveformMapAsync = ref.watch(trackWaveformProvider((trackId: widget.trackId)));
+    final waveformMapAsync = ref.watch(
+      trackWaveformProvider((trackId: widget.trackId)),
+    );
 
     final selectedTool = ref.watch(
       karbeatStateProvider.select((s) => s.selectedTool),
     );
 
-    final selectedClipIds = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedClipIds),
-    );
-    final selectedTrackId = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedTrackId),
-    );
+    final selectedClipIds = trackSelectedClipIdsStr.isEmpty
+        ? <int>[]
+        : trackSelectedClipIdsStr.split(',').map(int.parse).toList();
 
     if (track == null) return const SizedBox();
 
@@ -138,9 +148,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
             data: (waveformMap) {
               return track.clips.map((clip) {
                 final isSelected =
-                    (selectedTrackId != null) &&
-                    (widget.trackId == selectedTrackId &&
-                        selectedClipIds.contains(clip.id));
+                    isSelectedTrack && selectedClipIds.contains(clip.id);
 
                 return _InteractiveClip(
                   key: ValueKey(clip.id),
@@ -494,7 +502,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             },
 
             onPanStart: (details) {
-              if (widget.selectedTool == ToolSelection.delete) return;
+              if (widget.selectedTool != ToolSelection.move) return;
 
               final x = details.localPosition.dx;
 
@@ -921,19 +929,16 @@ class _GridPainter extends CustomPainter {
 }
 
 final trackWaveformProvider =
-    FutureProvider.family<
-      Map<int, AudioWaveformUiForClip>,
-      ({int trackId})
-    >((
+    FutureProvider.family<Map<int, AudioWaveformUiForClip>, ({int trackId})>((
       ref,
       arg, // Access fields via the record variable
     ) async {
       final trackId = arg.trackId;
-      
+
       ref.watch(karbeatStateProvider.select((s) => s.tracks[trackId]));
 
       final result = await getAudioWaveformForClipOnlyInSpecificTrack(
-        trackId: trackId
+        trackId: trackId,
       );
 
       return result;
