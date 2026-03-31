@@ -114,22 +114,51 @@ class KarbeatToolbarMenuGroupFactory {
           );
           if (result != null && result.files.single.path != null) {
             final path = result.files.single.path!;
+
+            // 1. Put up the "Glass Pane" blocking all touch events
             if (context.mounted) {
               showDialog(
                 context: context,
-                barrierDismissible: false,
-                builder: (context) =>
-                    const Center(child: CircularProgressIndicator()),
+                barrierDismissible: false, // User cannot tap outside to dismiss
+                useRootNavigator: true, // Ensures it covers the entire app
+                builder: (context) => PopScope(
+                  canPop:
+                      false, // Prevents Android back-button from dismissing it
+                  child: const Center(
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text("Loading Project..."),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               );
             }
 
-            await state.loadProject(path);
+            try {
+              // 2. Await the Rust Shadow Load & Swap
+              await state.loadProject(path);
 
-            // Update the active file path and window title after successful load
-            state.currentFilePath = path;
-            await _updateWindowTitle(path);
-
-            if (context.mounted) Navigator.of(context).pop();
+              // 3. Update UI state (Window title, etc.)
+              state.currentFilePath = path;
+              await _updateWindowTitle(path);
+            } catch (e) {
+              debugPrint("Failed to load project: $e");
+              // Optional: Show error snackbar here
+            } finally {
+              // 4. Tear down the "Glass Pane" SAFELY
+              if (context.mounted) {
+                Navigator.of(context, rootNavigator: true).pop();
+              }
+            }
           }
         },
       ),

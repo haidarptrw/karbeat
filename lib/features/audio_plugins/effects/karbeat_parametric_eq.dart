@@ -1,13 +1,3 @@
-//                Planned UI Layout
-// |                                            |
-// |  Response Curve with draggable             |
-// |  filter node to edit the param values      |
-// |                                            |
-// |                                            |
-// --------------------------------------------
-// | Master | Band 1 | Band 2 | Band 3 | Band 4 |
-// |        |        |        |        |        |
-
 import 'package:flutter/material.dart';
 import 'dart:math';
 
@@ -67,10 +57,10 @@ class EqBand {
 
 class KarbeatParametricEq extends AbstractEffectScreen {
   const KarbeatParametricEq({
-    Key? key,
+    super.key,
     required super.target,
     required super.effectIdx,
-  }) : super(key: key);
+  });
 
   @override
   KarbeatParametricEqState createState() => KarbeatParametricEqState();

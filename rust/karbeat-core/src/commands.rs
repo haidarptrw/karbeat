@@ -1,10 +1,9 @@
+use indexmap::IndexMap;
+
 use crate::{
     audio::engine::PlaybackMode,
     core::project::{
-        mixer::{BusId, EffectId, RoutingConnection},
-        plugin::{KarbeatEffect, KarbeatGenerator},
-        track::audio_waveform::AudioWaveform,
-        GeneratorId, TrackId,
+        GeneratorId, TrackId, mixer::{BusId, EffectId, RoutingConnection}, plugin::{KarbeatEffect, KarbeatGenerator}, track::audio_waveform::AudioWaveform
     },
 };
 
@@ -153,6 +152,13 @@ pub enum AudioCommand {
     UpdateRouting {
         routing: Vec<RoutingConnection>,
     },
+    /// Prepare all of plugins from ApplicationState to AudioEngine (upon loading project)
+    PreparePlugin {
+        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send>>>,
+        master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send>>,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send>>>,
+        generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send>>,
+    }
 }
 
 // ============================================================================

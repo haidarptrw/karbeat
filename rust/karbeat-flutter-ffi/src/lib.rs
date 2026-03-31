@@ -2,6 +2,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
+use karbeat_core::lock::get_app_read;
 use memmap2::MmapOptions;
 use rtrb::RingBuffer;
 
@@ -26,7 +27,7 @@ pub use karbeat_core::context::{ctx as get_ctx, INIT_LOGGER as get_init};
 /// is used by the Audio Thread)
 pub fn broadcast_state_change() {
     // if read failed, we do nothing
-    let app = ctx().app_state.read();
+    let app = get_app_read();
     let render_state = AudioRenderState::from(&*app);
 
     drop(app);

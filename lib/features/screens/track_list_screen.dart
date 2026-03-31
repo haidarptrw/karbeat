@@ -11,6 +11,7 @@ import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/state/clip_placement_state.dart';
+import 'package:karbeat/utils/color.dart';
 import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
@@ -1217,7 +1218,7 @@ class _TrackHeader extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 2),
           padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
-            color: Color(int.parse(track.color.substring(1), radix: 16)),
+            color: track.color.toColor(),
             border: Border(
               bottom: BorderSide(color: Colors.grey.shade400, width: 1),
               right: BorderSide(color: Colors.grey.shade400, width: 1),
@@ -1245,7 +1246,7 @@ class _TrackHeader extends ConsumerWidget {
                       "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
                       style: TextStyle(
                         color: _getContrastColor(
-                          Color(int.parse(track.color.substring(1), radix: 16)),
+                          track.color.toColor(),
                         ),
                         // color: Colors.grey.shade600, // use inverse color of track color for better contrast
                         fontSize: 10,
