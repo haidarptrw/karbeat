@@ -1,6 +1,6 @@
 use karbeat_utils::define_id;
 
-use serde::{Deserialize, Serialize};
+use serde::{ Deserialize, Serialize };
 
 use crate::core::project::PluginInstance;
 
@@ -10,7 +10,7 @@ define_id!(AudioSourceId);
 
 use memmap2::Mmap;
 /// Audio Waveform data of an audio sample
-use std::{path::PathBuf, sync::Arc};
+use std::{ path::PathBuf, sync::Arc };
 
 // STATIC global variables for waveform mipmaps
 
@@ -19,7 +19,7 @@ pub struct AudioWaveform {
     pub id: Option<AudioSourceId>,
     /// Audio buffer of samples
     #[serde(skip)]
-    pub buffer: Option<Arc<Mmap>>, // future update: replace this with Arc<[f32]> for better performance
+    pub buffer: Option<Arc<Mmap>>,
     /// path to the audio source file
     pub file_path: PathBuf,
     /// name of the audio waveform
@@ -47,6 +47,25 @@ pub struct AudioWaveform {
 
     /// Effects applied to the audio waveform
     pub effects: Arc<Vec<PluginInstance>>,
+}
+
+impl PartialEq for AudioWaveform {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id &&
+            self.file_path == other.file_path &&
+            self.name == other.name &&
+            self.sample_rate == other.sample_rate &&
+            self.channels == other.channels &&
+            self.duration == other.duration &&
+            self.root_note == other.root_note &&
+            self.fine_tune == other.fine_tune &&
+            self.trim_start == other.trim_start &&
+            self.trim_end == other.trim_end &&
+            self.is_looping == other.is_looping &&
+            self.normalized == other.normalized &&
+            self.muted == other.muted &&
+            self.effects == other.effects
+    }
 }
 
 impl Default for AudioWaveform {

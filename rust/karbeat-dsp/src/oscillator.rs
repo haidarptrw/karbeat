@@ -1,12 +1,11 @@
 // oscillator.rs (part of karbeat_dsp library)
 
+use std::f64::consts::TAU;
+use dasp::{ Frame, slice };
+
 // ============================================================================
 // OSCILLATOR
 // ============================================================================
-
-use std::f64::consts::{ PI, TAU };
-
-use dasp::{ Frame, signal, slice };
 
 #[derive(Clone, Copy)]
 pub struct Oscillator {
@@ -38,18 +37,6 @@ impl From<f32> for Waveform {
 }
 
 impl Oscillator {
-    /// Pure function to calculate the raw shape based on the current phase
-    #[inline(always)]
-    fn generate_raw_sample(&self, phase: f64) -> f64 {
-        match self.waveform {
-            Waveform::Sine => (phase * TAU).sin(),
-            Waveform::Saw => 2.0 * phase - 1.0,
-            Waveform::Square => if phase < (self.pulse_width as f64) { 1.0 } else { -1.0 }
-            Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
-            Waveform::Noise => fastrand::f64() * 2.0 - 1.0,
-        }
-    }
-
     /// Standard audio output using dasp frames
     pub fn output_wave(
         &self,
@@ -144,6 +131,18 @@ impl Oscillator {
             t * t + 2.0 * t + 1.0
         } else {
             0.0
+        }
+    }
+
+    /// Pure function to calculate the raw shape based on the current phase
+    #[inline(always)]
+    fn generate_raw_sample(&self, phase: f64) -> f64 {
+        match self.waveform {
+            Waveform::Sine => (phase * TAU).sin(),
+            Waveform::Saw => 2.0 * phase - 1.0,
+            Waveform::Square => if phase < (self.pulse_width as f64) { 1.0 } else { -1.0 }
+            Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
+            Waveform::Noise => fastrand::f64() * 2.0 - 1.0,
         }
     }
 }

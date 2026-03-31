@@ -1,7 +1,7 @@
 use crate::core::project::{Clip, Note};
 
 // Enum to hold different types of copied data
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum ClipboardContent {
     #[default]
     Empty,

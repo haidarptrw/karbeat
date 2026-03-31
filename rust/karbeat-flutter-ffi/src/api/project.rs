@@ -442,11 +442,9 @@ pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String>
     let generators = app
         .generator_pool
         .iter()
-        .map(|(&id, generator_guard)| {
-            let generator = generator_guard
-                .read()
-                .expect("Failed to read generator lock");
-            let ui_gen = UiGeneratorInstance::from(&*generator);
+        .map(|(&id, generator_arc)| {
+            let generator = generator_arc.deref();
+            let ui_gen = UiGeneratorInstance::from(generator);
             (id.to_u32(), ui_gen)
         })
         .collect();

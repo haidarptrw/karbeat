@@ -175,19 +175,95 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
 #[cfg(test)]
 #[allow(dead_code)]
 mod test {
-    pub fn it_should_be_able_to_save_project() {
-        todo!();
+    use super::*;
+    use std::io::{Read, Write};
+    use tempfile::tempdir;
+    
+    #[test]
+    fn it_should_be_able_to_save_project() {
+        // 1. Setup isolated temp directory
+        let dir = tempdir().expect("Failed to create temp directory");
+        let file_path = dir.path().join("test_save.karbeat");
+        
+        // 2. Create dummy state
+        let app_state = ApplicationState::default();
+
+        // 3. Execute Save
+        let result = save_karbeat_project(&file_path, &app_state);
+        assert!(result.is_ok(), "Failed to save project: {:?}", result.err());
+        assert!(file_path.exists(), "The .karbeat file was not created on disk");
+
+        // 4. Verify Custom Magic Header exists at the exact beginning of the file
+        let mut file = File::open(&file_path).unwrap();
+        let mut magic = [0u8; 8];
+        file.read_exact(&mut magic).unwrap();
+        assert_eq!(&magic, KARBEAT_MAGIC_HEADER, "Magic header did not match");
     }
 
-    pub fn it_should_be_able_to_load_valid_project() {
-        todo!();
+    #[test]
+    fn it_should_reject_invalid_project_file() {
+        let dir = tempdir().unwrap();
+
+        // === Scenario A: Missing Magic Header ===
+        let file_path_no_magic = dir.path().join("invalid_no_magic.karbeat");
+        let mut file = File::create(&file_path_no_magic).unwrap();
+        file.write_all(b"GARBAGE_DATA_NO_MAGIC_HEADER").unwrap();
+
+        let load_result = load_karbeat_project(&file_path_no_magic);
+        assert!(load_result.is_err());
+        assert_eq!(
+            load_result.unwrap_err().to_string(),
+            "Invalid or corrupted .karbeat file",
+            "Did not fail with the expected magic header error"
+        );
+
+        // === Scenario B: Valid Header, but corrupted ZIP payload ===
+        let file_path_bad_zip = dir.path().join("invalid_bad_zip.karbeat");
+        let mut file2 = File::create(&file_path_bad_zip).unwrap();
+        file2.write_all(KARBEAT_MAGIC_HEADER).unwrap();
+        file2.write_all(b"THIS IS NOT A ZIP FILE").unwrap();
+
+        let load_result_zip = load_karbeat_project(&file_path_bad_zip);
+        assert!(load_result_zip.is_err(), "Failed to reject a corrupted ZIP payload");
     }
 
-    pub fn it_should_reject_invalid_project_file() {
-        todo!();
+    #[test]
+    fn test_flow_from_save_to_load() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("flow_test.karbeat");
+
+        // 1. Setup initial state
+        let original_state = ApplicationState::default();
+
+        // 2. Save
+        let save_result = save_karbeat_project(&file_path, &original_state);
+        assert!(save_result.is_ok(), "Failed to save project in flow test");
+
+        // 3. Peek Metadata
+        let peek_result = peek_project_metadata(&file_path);
+        assert!(peek_result.is_ok(), "Failed to peek metadata from saved file");
+
+        // 4. Load & Verify
+        let load_result = load_karbeat_project(&file_path);
+        assert!(load_result.is_ok(), "Failed to load the project we just saved: {:?}", load_result.err());
+        
+        let _loaded_state = load_result.unwrap();
+        // If your ApplicationState derives `PartialEq`, you can uncomment this to ensure data integrity:
+        assert_eq!(original_state, _loaded_state, "Loaded state did not match the saved state!");
     }
 
-    pub fn test_flow_from_save_to_load() {
-        todo!();
+    #[test]
+    fn it_should_be_able_to_load_valid_project() {
+        // Because "validity" in this context requires a valid TOML and ZIP layout, 
+        // the safest way to test an isolated valid load is to generate a fresh one 
+        // using the save function, ensuring the loader can parse its own formatting.
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("valid_load.karbeat");
+        let app_state = ApplicationState::default();
+
+        save_karbeat_project(&file_path, &app_state).unwrap();
+
+        let load_result = load_karbeat_project(&file_path);
+        assert!(load_result.is_ok(), "Failed to load a known-valid project file");
     }
 }

@@ -1,5 +1,5 @@
 use karbeat_utils::define_id;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -7,13 +7,13 @@ use crate::core::project::{plugin::instance::PluginInstance, ApplicationState};
 
 define_id!(GeneratorId);
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeneratorInstance {
     pub id: GeneratorId,
     pub instance_type: GeneratorInstanceType,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum GeneratorInstanceType {
     // A Synth (Internal or VST)
     Plugin(PluginInstance),
@@ -38,7 +38,7 @@ impl ApplicationState {
         };
 
         self.generator_pool
-            .insert(id, Arc::new(RwLock::new(instance)));
+            .insert(id, Arc::new(instance));
         id
     }
 

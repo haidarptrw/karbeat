@@ -27,7 +27,7 @@ pub enum RoutingNode {
 }
 
 /// A routing connection in the matrix
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RoutingConnection {
     pub source: RoutingNode,
     pub destination: RoutingNode,
@@ -58,7 +58,7 @@ impl RoutingConnection {
 }
 
 /// A mixer bus with its own channel strip
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MixerBus {
     pub id: BusId,
     pub name: String,
@@ -141,7 +141,7 @@ pub enum MixerChannelParams {
     Solo(bool),
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct EffectInstance {
     pub id: EffectId,
     pub instance: Arc<PluginInstance>,
@@ -156,7 +156,7 @@ impl EffectInstance {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct MixerState {
     /// Per-track mixer channels (volume, pan, effects)
     pub channels: IndexMap<TrackId, Arc<MixerChannel>>,
@@ -170,7 +170,7 @@ pub struct MixerState {
     pub bus_counter: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MixerChannel {
     pub volume: f32, // 0.0 to 1.0 (or dB)
     pub pan: f32, // -1.0 to 1.0

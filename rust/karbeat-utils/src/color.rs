@@ -1,7 +1,8 @@
 use serde::{ de, Deserialize, Deserializer, Serialize, Serializer };
 use thiserror::Error;
 
-#[derive(Debug, Clone)]
+/// Just your average color data structure
+#[derive(Debug, Clone, PartialEq)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -14,6 +15,7 @@ pub struct Color {
 pub struct ParseColorError<'a> {
     message: &'a str,
 }
+
 impl Color {
     pub fn new_from_string(s: &str) -> Option<Self> {
         let s = s.trim_start_matches('#');

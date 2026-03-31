@@ -5,7 +5,7 @@ pub mod midi;
 
 use std::{
     collections::BTreeSet,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ use karbeat_utils::color::Color;
 
 define_id!(TrackId);
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct KarbeatTrack {
     pub id: TrackId,
     pub name: String,
@@ -47,7 +47,7 @@ impl Default for KarbeatTrack {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum TrackType {
     Audio,
     Midi,
@@ -244,7 +244,7 @@ impl ApplicationState {
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
         };
         self.generator_pool
-            .insert(gen_id, Arc::new(RwLock::new(generator.clone())));
+            .insert(gen_id, Arc::new(generator.clone()));
 
         let new_track = KarbeatTrack {
             track_type: TrackType::Midi,

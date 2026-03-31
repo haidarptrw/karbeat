@@ -14,7 +14,7 @@ pub mod transport;
 
 use std::{
     cmp::Ordering,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
 
 use hashbrown::HashMap;
@@ -44,7 +44,7 @@ use crate::{
 define_id!(SourceId);
 define_id!(NoteId);
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct ApplicationState {
     // Things store inside ApplicationState
     // - Project Metadata
@@ -64,7 +64,7 @@ pub struct ApplicationState {
     pub pattern_counter: u32,
 
     // Generator sources
-    pub generator_pool: IndexMap<GeneratorId, Arc<RwLock<GeneratorInstance>>>,
+    pub generator_pool: IndexMap<GeneratorId, Arc<GeneratorInstance>>,
     pub generator_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
@@ -104,7 +104,7 @@ pub enum KarbeatSource {
     Automation(u32),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ProjectMetadata {
     pub name: String,
     pub author: String,
@@ -168,7 +168,7 @@ impl Ord for Note {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AssetLibrary {
     pub next_id: u32,
     #[serde(skip)]
@@ -184,7 +184,7 @@ impl Default for AssetLibrary {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AudioHardwareConfig {
     pub selected_input_device: String,
     pub selected_output_device: String,

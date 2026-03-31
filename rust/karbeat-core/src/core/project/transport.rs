@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Serializable project transport settings.
 /// Runtime transport state (is_playing, playhead, etc.) lives in the AudioEngine.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TransportState {
     // general state
     pub bpm: f32,

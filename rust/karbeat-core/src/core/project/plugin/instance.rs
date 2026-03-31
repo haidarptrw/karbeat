@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 ///     parameters: HashMap::new(),
 /// };
 /// ```
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct PluginInstance {
     /// Registry ID for plugin lookup (stable identifier)
     pub registry_id: u32,
