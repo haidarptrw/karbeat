@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use karbeat_utils::define_id;
 use std::{ collections::{ HashMap, HashSet }, sync::Arc };
 
@@ -6,9 +7,8 @@ use thiserror::Error;
 
 use crate::{
     commands::AudioCommand,
-    core::project::{ plugin::KarbeatEffect, ApplicationState, PluginInstance, TrackId },
-    context::ctx,
-    
+    context::{ ctx, utils::send_audio_command },
+    core::project::{ ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect },
 };
 
 define_id!(EffectId);
@@ -27,7 +27,7 @@ pub enum RoutingNode {
 }
 
 /// A routing connection in the matrix
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct RoutingConnection {
     pub source: RoutingNode,
     pub destination: RoutingNode,
@@ -58,7 +58,7 @@ impl RoutingConnection {
 }
 
 /// A mixer bus with its own channel strip
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MixerBus {
     pub id: BusId,
     pub name: String,
@@ -141,7 +141,7 @@ pub enum MixerChannelParams {
     Solo(bool),
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct EffectInstance {
     pub id: EffectId,
     pub instance: Arc<PluginInstance>,
@@ -156,21 +156,21 @@ impl EffectInstance {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct MixerState {
     /// Per-track mixer channels (volume, pan, effects)
-    pub channels: HashMap<TrackId, Arc<MixerChannel>>,
+    pub channels: IndexMap<TrackId, Arc<MixerChannel>>,
     /// Master bus channel
     pub master_bus: Arc<MixerChannel>,
     /// Named buses for grouping/submixing
-    pub buses: HashMap<BusId, Arc<MixerBus>>,
+    pub buses: IndexMap<BusId, Arc<MixerBus>>,
     /// All routing connections in the matrix
     pub routing: Vec<RoutingConnection>,
     /// Counter for generating bus IDs
     pub bus_counter: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MixerChannel {
     pub volume: f32, // 0.0 to 1.0 (or dB)
     pub pan: f32, // -1.0 to 1.0
@@ -206,7 +206,7 @@ impl MixerChannel {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
         let (effect_plugin, effect_name, default_params) = {
-            let registry = ctx().plugin_registry.read().unwrap();
+            let registry = ctx().plugin_registry.read();
             if let Some((effect_box, name)) = registry.create_effect_by_id(effect_registry_id) {
                 let default_params = effect_box.default_parameters();
                 (effect_box, name, default_params)
@@ -328,13 +328,11 @@ impl MixerState {
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
         // Push to the audio thread
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddTrackEffect {
-                track_id: track_id.clone(),
-                effect_id,
-                effect: effect_plugin,
-            });
-        }
+        send_audio_command(AudioCommand::AddTrackEffect {
+            track_id: track_id.clone(),
+            effect_id,
+            effect: effect_plugin,
+        });
 
         log::info!(
             "Effect {} (registry_id={}) added to track {:?}",
@@ -361,11 +359,9 @@ impl MixerState {
         // Clone and modify the channel
         let channel = Arc::make_mut(mixer_channel_arc);
         channel.remove_effect(effect_id)?;
-        
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::RemoveTrackEffect { track_id: track_id.clone(), effect_id });
-        }
-        
+
+        send_audio_command(AudioCommand::RemoveTrackEffect { track_id: track_id.clone(), effect_id });
+
         Ok(())
     }
 
@@ -390,12 +386,10 @@ impl MixerState {
         let channel = Arc::make_mut(&mut self.master_bus);
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddMasterEffect {
-                effect_id,
-                effect: effect_plugin,
-            });
-        }
+        send_audio_command(AudioCommand::AddMasterEffect {
+            effect_id,
+            effect: effect_plugin,
+        });
 
         log::info!("Effect {} (registry_id={}) added to master bus", effect_name, registry_id);
         Ok(())
@@ -406,9 +400,7 @@ impl MixerState {
         channel.remove_effect(effect_id)?;
 
         // Send master effect removal command to audio thread
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::RemoveMasterEffect { effect_id });
-        }
+        send_audio_command(AudioCommand::RemoveMasterEffect { effect_id });
 
         Ok(())
     }
@@ -427,12 +419,10 @@ impl MixerState {
         self.routing.push(RoutingConnection::new(RoutingNode::Bus(bus_id), RoutingNode::Master));
 
         // send signal to audio thread that the BUSSSS is created
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddBus {
-                bus_id,
-                name,
-            });
-        }
+        send_audio_command(AudioCommand::AddBus {
+            bus_id,
+            name,
+        });
 
         bus_id
     }
@@ -444,7 +434,7 @@ impl MixerState {
         }
 
         // Remove the bus
-        self.buses.remove(&bus_id);
+        self.buses.shift_remove(&bus_id);
 
         // Remove all routing connections involving this bus
         self.routing.retain(|conn| {
@@ -452,9 +442,7 @@ impl MixerState {
         });
 
         // send signal to audio thread that the BUSSSS is deleted
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::RemoveBus { bus_id });
-        }
+        send_audio_command(AudioCommand::RemoveBus { bus_id });
 
         Ok(())
     }
@@ -523,13 +511,11 @@ impl MixerState {
         let bus = Arc::make_mut(bus_arc);
         let (effect_plugin, effect_name, effect_id) = bus.channel.add_effect(registry_id)?;
 
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
-            let _ = sender.push(AudioCommand::AddBusEffect {
-                bus_id,
-                effect_id,
-                effect: effect_plugin,
-            });
-        }
+        send_audio_command(AudioCommand::AddBusEffect {
+            bus_id,
+            effect_id,
+            effect: effect_plugin,
+        });
 
         log::info!(
             "Effect {} (registry_id={}) added to bus {:?}",

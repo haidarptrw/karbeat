@@ -1,17 +1,7 @@
-//                Planned UI Layout
-// |                                            |
-// |  Response Curve with draggable             |
-// |  filter node to edit the param values      |
-// |                                            |
-// |                                            |
-// --------------------------------------------
-// | Master | Band 1 | Band 2 | Band 3 | Band 4 |
-// |        |        |        |        |        |
-
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-import 'package:karbeat/features/plugins/effects/abstract_effect_screen.dart';
+import 'package:karbeat/features/audio_plugins/effects/abstract_effect_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/features/components/fine_grained_input.dart';
 
@@ -67,10 +57,10 @@ class EqBand {
 
 class KarbeatParametricEq extends AbstractEffectScreen {
   const KarbeatParametricEq({
-    Key? key,
+    super.key,
     required super.target,
     required super.effectIdx,
-  }) : super(key: key);
+  });
 
   @override
   KarbeatParametricEqState createState() => KarbeatParametricEqState();

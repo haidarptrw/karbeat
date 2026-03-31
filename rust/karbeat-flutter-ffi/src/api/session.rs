@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::api::track::UiResizeEdge;
 use crate::api::{pattern::UiNote, project::UiClip};
 use crate::broadcast_state_change;
+use karbeat_core::core::project::PatternId;
 use karbeat_core::core::{
     history::ProjectAction,
     project::{
@@ -79,7 +80,7 @@ pub fn copy_pattern_notes(
     let mut app = get_app_write();
     let pattern = app
         .pattern_pool
-        .get(&pattern_id.into())
+        .get(&PatternId::from(pattern_id))
         .ok_or("Pattern not found")?;
 
     // Filter notes
@@ -129,7 +130,7 @@ pub fn paste_pattern_notes(target_pattern_id: u32, playhead_tick: u64) -> Result
 
     let pattern_arc = app
         .pattern_pool
-        .get_mut(&target_pattern_id.into())
+        .get_mut(&PatternId::from(target_pattern_id))
         .ok_or("Pattern not found")?;
     let pattern = Arc::make_mut(pattern_arc);
 
@@ -170,7 +171,7 @@ pub fn delete_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), S
     let mut app = get_app_write();
     let pattern_arc = app
         .pattern_pool
-        .get_mut(&pattern_id.into())
+        .get_mut(&PatternId::from(pattern_id))
         .ok_or("Pattern not found")?;
     let pattern = Arc::make_mut(pattern_arc);
 
@@ -218,7 +219,8 @@ pub fn copy_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<UiClipboardConten
     let mut app = get_app_write();
     let mut clips_to_copy = Vec::new();
 
-    let track = app.tracks.get(&track_id.into()).ok_or("Track not found")?;
+    let track_id_typed: TrackId = track_id.into();
+    let track = app.tracks.get(&track_id_typed).ok_or("Track not found")?;
 
     for clip_id in &clip_ids {
         let clip_arc = track

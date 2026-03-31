@@ -3,7 +3,8 @@
 // Shared synthesizer infrastructure for all synth plugins.
 // Replaces procedural macro-generated code with simple composition.
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
+use karbeat_dsp::envelope::{EnvelopeSettings, EnvelopeStage};
 
 use crate::wrapper::PluginParameter;
 
@@ -139,41 +140,6 @@ impl SynthFilter {
 }
 
 // ============================================================================
-// ENVELOPE
-// ============================================================================
-
-/// ADSR envelope settings
-#[derive(Clone, Copy, Debug)]
-pub struct AdsrSettings {
-    pub attack: f32,  // Seconds
-    pub decay: f32,   // Seconds
-    pub sustain: f32, // 0.0 to 1.0
-    pub release: f32, // Seconds
-}
-
-impl Default for AdsrSettings {
-    fn default() -> Self {
-        Self {
-            attack: 0.01,
-            decay: 0.2,
-            sustain: 0.7,
-            release: 0.5,
-        }
-    }
-}
-
-/// Envelope stage for voice processing
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
-pub enum EnvelopeStage {
-    #[default]
-    Attack,
-    Decay,
-    Sustain,
-    Release,
-    Idle,
-}
-
-// ============================================================================
 // VOICE
 // ============================================================================
 
@@ -218,7 +184,7 @@ impl SynthVoice {
     }
 
     /// Advance envelope by dt seconds, returns current level
-    pub fn advance_envelope(&mut self, dt: f32, settings: &AdsrSettings) -> f32 {
+    pub fn advance_envelope(&mut self, dt: f32, settings: &EnvelopeSettings) -> f32 {
         self.env_timer += dt;
 
         match self.env_stage {
@@ -269,6 +235,12 @@ impl SynthVoice {
                 self.env_level = 0.0;
                 self.is_active = false;
             }
+            EnvelopeStage::Delay => {
+                // TODO: Implement this
+            },
+            EnvelopeStage::Hold => {
+                // TODO: Implement this
+            },
         }
 
         self.env_level
@@ -283,7 +255,7 @@ impl SynthVoice {
 /// Embed this in your synth struct instead of using procedural macros.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// pub struct MySynth {
 ///     pub base: SynthBase,
 ///     pub oscillators: [Oscillator; 3],  // Synth-specific
@@ -292,35 +264,38 @@ impl SynthVoice {
 #[derive(Clone, Debug)]
 pub struct StandardSynthBase {
     pub sample_rate: f32,
+    pub channels: usize,
     pub active_voices: Vec<SynthVoice>,
     pub voice_buffer: Vec<f32>,
     pub gain: f32,
     pub filter: SynthFilter,
-    pub amp_envelope: AdsrSettings,
+    pub amp_envelope: EnvelopeSettings,
 }
 
 impl Default for StandardSynthBase {
     fn default() -> Self {
-        Self::new(48000.0)
+        Self::new(48000.0, 2)
     }
 }
 
 impl StandardSynthBase {
     /// Create a new SynthBase with the given sample rate
-    pub fn new(sample_rate: f32) -> Self {
+    pub fn new(sample_rate: f32, channels: usize) -> Self {
         Self {
             sample_rate,
             active_voices: Vec::with_capacity(16),
             voice_buffer: Vec::with_capacity(512),
             gain: 0.5,
             filter: SynthFilter::default(),
-            amp_envelope: AdsrSettings::default(),
+            amp_envelope: EnvelopeSettings::default(),
+            channels,
         }
     }
 
     /// Prepare for playback
-    pub fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
+    pub fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize) {
         self.sample_rate = sample_rate;
+        self.channels = channels;
         if self.voice_buffer.len() < max_buffer_size {
             self.voice_buffer.resize(max_buffer_size, 0.0);
         }
@@ -410,8 +385,8 @@ impl StandardSynthBase {
     }
 
     /// Get default parameter values for base parameters (IDs 0-7)
-    pub fn default_parameters() -> HashMap<u32, f32> {
-        let mut map = HashMap::new();
+    pub fn default_parameters() -> IndexMap<u32, f32> {
+        let mut map = IndexMap::new();
         map.insert(0, 0.5); // gain
         map.insert(1, 2000.0); // filter_cutoff
         map.insert(2, 0.2); // filter_resonance

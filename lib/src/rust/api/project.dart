@@ -4,12 +4,14 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'pattern.dart';
 part 'project.freezed.dart';
 
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AudioWaveformUiForClip`, `AudioWaveformUiForSourceList`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin_internal`, `try_from_audio_waveform_with_target_sample_bin`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -51,7 +53,7 @@ Future<UiTransportState> getTransportState() =>
     RustLib.instance.api.crateApiProjectGetTransportState();
 
 /// Get all audio waveform source list from the backend
-Future<Map<int, AudioWaveformUiForAudioProperties>?> getAudioSourceList() =>
+Future<Map<int, AudioWaveformUiForSourceList>?> getAudioSourceList() =>
     RustLib.instance.api.crateApiProjectGetAudioSourceList();
 
 /// Get generator list used in the project
@@ -144,6 +146,116 @@ class AudioWaveformUiForAudioProperties {
           isLooping == other.isLooping &&
           normalized == other.normalized &&
           muted == other.muted;
+}
+
+class AudioWaveformUiForClip {
+  final String name;
+  final Int8List previewBuffer;
+  final int sampleRate;
+  final int channels;
+  final double duration;
+
+  const AudioWaveformUiForClip({
+    required this.name,
+    required this.previewBuffer,
+    required this.sampleRate,
+    required this.channels,
+    required this.duration,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      previewBuffer.hashCode ^
+      sampleRate.hashCode ^
+      channels.hashCode ^
+      duration.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioWaveformUiForClip &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          previewBuffer == other.previewBuffer &&
+          sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          duration == other.duration;
+}
+
+class AudioWaveformUiForSourceList {
+  final String name;
+  final bool muted;
+  final int sampleRate;
+
+  const AudioWaveformUiForSourceList({
+    required this.name,
+    required this.muted,
+    required this.sampleRate,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ muted.hashCode ^ sampleRate.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AudioWaveformUiForSourceList &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          muted == other.muted &&
+          sampleRate == other.sampleRate;
+}
+
+class UiApplicationState {
+  final UiProjectMetadata metadata;
+  final UiTransportState transport;
+  final UiAudioHardwareConfig hardwareConfig;
+  final Map<int, UiTrack> tracks;
+  final Map<int, UiGeneratorInstance> generators;
+  final Map<int, UiPattern> patterns;
+  final UiMixerState mixer;
+  final int maxSampleIndex;
+  final Map<int, AudioWaveformUiForSourceList> audioSources;
+
+  const UiApplicationState({
+    required this.metadata,
+    required this.transport,
+    required this.hardwareConfig,
+    required this.tracks,
+    required this.generators,
+    required this.patterns,
+    required this.mixer,
+    required this.maxSampleIndex,
+    required this.audioSources,
+  });
+
+  @override
+  int get hashCode =>
+      metadata.hashCode ^
+      transport.hashCode ^
+      hardwareConfig.hashCode ^
+      tracks.hashCode ^
+      generators.hashCode ^
+      patterns.hashCode ^
+      mixer.hashCode ^
+      maxSampleIndex.hashCode ^
+      audioSources.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiApplicationState &&
+          runtimeType == other.runtimeType &&
+          metadata == other.metadata &&
+          transport == other.transport &&
+          hardwareConfig == other.hardwareConfig &&
+          tracks == other.tracks &&
+          generators == other.generators &&
+          patterns == other.patterns &&
+          mixer == other.mixer &&
+          maxSampleIndex == other.maxSampleIndex &&
+          audioSources == other.audioSources;
 }
 
 class UiAudioHardwareConfig {
@@ -258,7 +370,7 @@ class UiProjectMetadata {
   final String name;
   final String author;
   final String version;
-  final int createdAt;
+  final String createdAt;
 
   const UiProjectMetadata({
     required this.name,

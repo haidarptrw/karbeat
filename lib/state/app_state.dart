@@ -18,6 +18,7 @@ import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
 
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
+import 'package:karbeat/services/serializer_service.dart';
 
 /// Top-level Riverpod provider for the app state
 final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
@@ -70,7 +71,7 @@ class KarbeatState extends ChangeNotifier {
 
   // =================== STORES ==========================
   Map<int, UiTrack> _tracks = {};
-  Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
+  // Map<int, AudioWaveformUiForAudioProperties> _audioSources = {};
   Map<int, UiGeneratorInstance> _generators = {};
   Map<int, UiPattern> _patterns = {};
 
@@ -136,8 +137,7 @@ class KarbeatState extends ChangeNotifier {
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
-    _positionBroadcastStream =
-        createPositionStream().asBroadcastStream();
+    _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
       if (pos.isPlaying) {
@@ -178,11 +178,11 @@ class KarbeatState extends ChangeNotifier {
         notifyListeners();
       }
     });
-    syncTrackState();
+    syncTracksState();
     syncMaxSampleIndex();
     syncTransportState();
     syncMetadataState();
-    syncAudioSourceList();
+    // syncAudioSourceList();
     syncPatternList();
     syncGeneratorList();
     syncAudioHardwareConfigState();
@@ -245,7 +245,7 @@ class KarbeatState extends ChangeNotifier {
     _stateSubscription = _stateEventController.stream.listen((event) async {
       switch (event) {
         case ProjectEvent.tracksChanged:
-          await syncTrackState();
+          await syncTracksState();
           await syncMaxSampleIndex();
           break;
         case ProjectEvent.transportChanged:
@@ -255,7 +255,7 @@ class KarbeatState extends ChangeNotifier {
           await syncMetadataState();
           break;
         case ProjectEvent.sourceListChanged:
-          await syncAudioSourceList();
+          // await syncAudioSourceList();
           break;
         case ProjectEvent.generatorListChanged:
           await syncGeneratorList();
@@ -296,7 +296,7 @@ class KarbeatState extends ChangeNotifier {
   bool get isLooping => _isLooping;
   double get tempo => _transportState.bpm;
   Map<int, UiTrack> get tracks => _tracks;
-  Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
+  // Map<int, AudioWaveformUiForAudioProperties> get audioSources => _audioSources;
   Map<int, UiGeneratorInstance> get generators => _generators;
   ToolSelection get selectedTool => _selectedTool;
   WorkspaceView get currentView => _currentView;
@@ -342,21 +342,15 @@ class KarbeatState extends ChangeNotifier {
 
   Map<int, int> trackIdHeightMap = {};
 
+  String? currentFilePath;
+
   // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
-  int? _placingSourceId;
-  UiSourceType? _placingSourceType;
-  int? get placingSourceId => _placingSourceId;
-
-  // Track where the user wants to drop it
-  double _placementTimeSamples = 0.0;
-  int _placementTrackId = -1;
-
-  bool get isPlacing => _placingSourceId != null;
+  // Placement mode state moved to local clipPlacementProvider in TrackListScreen
 
   // ================ SYNCHRONIZATION ======================
 
   /// Syncs only the track state
-  Future<void> syncTrackState() async {
+  Future<void> syncTracksState() async {
     try {
       final newState = await getTracks();
       _tracks = newState;
@@ -364,6 +358,12 @@ class KarbeatState extends ChangeNotifier {
     } catch (e) {
       KarbeatLogger.error("error when syncing the track state: $e");
     }
+  }
+
+  Future<void> syncTrackState(int trackId) async {
+    final newTrack = await getTrack(trackId: trackId);
+    _tracks[trackId] = newTrack;
+    notifyListeners();
   }
 
   /// Syncs only the transport settings (BPM, time signature) from the backend.
@@ -401,11 +401,40 @@ class KarbeatState extends ChangeNotifier {
 
   /// Syncs the list of loaded audio files
   /// Call this when: Adding a file, Removing a file
-  Future<void> syncAudioSourceList() async {
-    final sources = await getAudioSourceList();
-    if (sources != null) {
-      _audioSources = Map.from(sources);
-      notifyListeners();
+  // Future<void> syncAudioSourceList() async {
+  //   final sources = await getAudioSourceList();
+  //   if (sources != null) {
+  //     _audioSources = Map.from(sources);
+  //     notifyListeners();
+  //   }
+  // }
+
+  Future<Result<Map<int, AudioWaveformUiForSourceList>?>>
+  getLoadedAudioSources() async {
+    try {
+      final sources = await getAudioSourceList();
+      if (sources == null) {
+        return Result.error(Exception("Failed to fetch audio source data"));
+      }
+      return Result.ok(sources);
+    } catch (e) {
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<AudioWaveformUiForAudioProperties>> getAudioPropertiesHandle(
+    int id,
+  ) async {
+    try {
+      final audio = await getAudioProperties(id: id);
+      if (audio == null) {
+        return Result.error(
+          Exception("Failed to get audio properties of id $id"),
+        );
+      }
+      return Result.ok(audio);
+    } catch (e) {
+      return Result.error(Exception("$e"));
     }
   }
 
@@ -541,11 +570,51 @@ class KarbeatState extends ChangeNotifier {
 
   // =============== ACTIONS ===============
 
+  /// Save project state using the provided file path
+  Future<Result<void>> saveProject(String path) async {
+    try {
+      final service = SerializerService();
+      await service.saveProject(pathName: path);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to save project: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Load project state from the provided file path and update the Flutter UI state
+  Future<Result<void>> loadProject(String path) async {
+    try {
+      final service = SerializerService();
+      final uiState = await service.loadProject(pathName: path);
+
+      _metadata = uiState.metadata;
+      _transportState = uiState.transport;
+      _hardwareConfig = uiState.hardwareConfig;
+
+      _tracks = Map.from(uiState.tracks);
+      _generators = Map.from(uiState.generators);
+      _patterns = Map.from(uiState.patterns);
+      
+      _mixerState = uiState.mixer;
+      maxSamplesIndex = uiState.maxSampleIndex;
+      // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
+      
+      notifyListeners();
+
+      KarbeatLogger.info("Project loaded successfully from $path");
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to load project: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
   /// Loads an audio file and refreshes the source list
   Future<Result<void>> addAudioFile(String path) async {
     try {
       await addAudioSource(filePath: path);
-      notifyBackendChange(ProjectEvent.sourceListChanged);
+      // notifyBackendChange(ProjectEvent.sourceListChanged);
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to add audio file: $e");
@@ -582,7 +651,7 @@ class KarbeatState extends ChangeNotifier {
     try {
       await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
       notifyCustomBackendChange(() async {
-        await syncTrackState();
+        await syncTracksState();
         await syncGeneratorList();
       });
       return Result.ok(null);
@@ -1191,56 +1260,7 @@ class KarbeatState extends ChangeNotifier {
   }
 
   // ============= PLACEMENT MODE LOGIC =================
-
-  void startPlacement(int sourceId, {required UiSourceType type}) {
-    _placingSourceId = sourceId;
-    _placingSourceType = type;
-    // Switch view to track list immediately so user can place it
-    navigateTo(WorkspaceView.trackList);
-    notifyListeners();
-  }
-
-  /// Updates the target location without notifying all listeners
-  /// (Use setState in the UI for visual feedback to avoid global rebuilds)
-  void updatePlacementTarget(int trackId, double timeSamples) {
-    _placementTrackId = trackId;
-    _placementTimeSamples = timeSamples;
-  }
-
-  Future<Result<void>> confirmPlacement() async {
-    KarbeatLogger.info("CONFIRM Placement");
-    if (_placingSourceId != null &&
-        _placingSourceType != null &&
-        _placementTrackId != -1) {
-      try {
-        await createClip(
-          sourceId: _placingSourceId!,
-          sourceType: _placingSourceType!,
-          trackId: _placementTrackId,
-          startTime: _placementTimeSamples.toInt(),
-        );
-
-        // Reset mode
-        _placingSourceId = null;
-        _placingSourceType = null;
-        _placementTrackId = -1;
-
-        notifyBackendChange(ProjectEvent.tracksChanged);
-        return Result.ok(null);
-      } catch (e) {
-        KarbeatLogger.error("Error creating clip: $e");
-        return Result.error(Exception("$e"));
-      }
-    }
-    return Result.ok(null);
-  }
-
-  void cancelPlacement() {
-    _placingSourceId = null;
-    _placingSourceType = null;
-    _placementTrackId = -1;
-    notifyListeners();
-  }
+  // Placement logic moved to ClipPlacementNotifier
 
   UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
     return UiTrack(

@@ -105,7 +105,7 @@ pub enum CurveType {
 ///
 /// Values are stored in normalized form (0.0–1.0). The lane's `min`/`max`
 /// fields define the mapping to the actual parameter range.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AutomationPoint {
     /// Position in ticks (relative to project start)
     pub time_ticks: u32,
@@ -140,7 +140,7 @@ impl AutomationPoint {
 /// An automation lane that controls a single parameter.
 ///
 /// Lives in `ApplicationState::automation_pool` and is serialized with the project.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AutomationLane {
     pub id: AutomationId,
     /// What this lane controls

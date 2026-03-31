@@ -7,6 +7,8 @@
 use std::any::Any;
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
+
 use crate::effect_base::EffectBase;
 use crate::traits::{KarbeatEffect, KarbeatGenerator, MidiEvent};
 
@@ -114,7 +116,7 @@ impl PluginParameter {
 /// to get automation support and base parameter handling.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// struct MyOscillatorEngine {
 ///     waveform: Waveform,
 ///     detune: f32,
@@ -160,7 +162,7 @@ pub trait RawSynthEngine: Send + Sync {
 /// to get automation support and base parameter handling.
 pub trait RawEffectEngine: Send + Sync {
     /// Prepare the engine (set sample rate, calculate coefficients)
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
 
     /// Process audio in-place using the shared base state.
     fn process(&mut self, base: &mut crate::effect_base::StandardEffectBase, buffer: &mut [f32]);
@@ -190,7 +192,7 @@ pub trait RawEffectEngine: Send + Sync {
 
 pub trait EffectEngine<B: EffectBase>: Send + Sync {
     fn name(&self) -> &str;
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
     fn reset(&mut self);
     /// Engine receives the generic Base, allowing it to read custom state
     fn process(&mut self, base: &mut B, buffer: &mut [f32]);
@@ -216,10 +218,10 @@ pub struct RawSynthWrapper<T: RawSynthEngine + Clone> {
 
 impl<T: RawSynthEngine + Clone> RawSynthWrapper<T> {
     /// Create a new wrapped synth with default settings
-    pub fn new(engine: T, sample_rate: f32) -> Self {
+    pub fn new(engine: T, sample_rate: f32, channels: usize) -> Self {
         Self {
             engine,
-            base: StandardSynthBase::new(sample_rate),
+            base: StandardSynthBase::new(sample_rate, channels),
         }
     }
 
@@ -235,8 +237,8 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for RawSynthWrapper<T
         T::name()
     }
 
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
-        self.base.prepare(sample_rate, max_buffer_size);
+    fn prepare(&mut self, sample_rate: f32, channels: usize,  max_buffer_size: usize) {
+        self.base.prepare(sample_rate, channels, max_buffer_size);
     }
 
     fn reset(&mut self) {
@@ -262,7 +264,7 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for RawSynthWrapper<T
             .unwrap_or(0.0)
     }
 
-    fn default_parameters(&self) -> HashMap<u32, f32> {
+    fn default_parameters(&self) -> IndexMap<u32, f32> {
         let mut params = StandardSynthBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
@@ -295,10 +297,10 @@ pub struct RawEffectWrapper<T: RawEffectEngine + Clone> {
 
 impl<T: RawEffectEngine + Clone> RawEffectWrapper<T> {
     /// Create a new wrapped effect with default settings
-    pub fn new(engine: T, sample_rate: f32) -> Self {
+    pub fn new(engine: T, sample_rate: f32, channels: usize) -> Self {
         Self {
             engine,
-            base: StandardEffectBase::new(sample_rate),
+            base: StandardEffectBase::new(sample_rate, channels),
             dry_buffer: Vec::new(),
         }
     }
@@ -315,8 +317,8 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for RawEffectWrapper<T>
         T::name()
     }
 
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
-        self.base.prepare(sample_rate, max_buffer_size);
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize) {
+        self.base.prepare(sample_rate, channels, max_buffer_size);
         // Pre-allocate dry buffer for mix
         if self.dry_buffer.len() < max_buffer_size * 2 {
             self.dry_buffer.resize(max_buffer_size * 2, 0.0);
@@ -360,7 +362,7 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for RawEffectWrapper<T>
             .unwrap_or(0.0)
     }
 
-    fn default_parameters(&self) -> HashMap<u32, f32> {
+    fn default_parameters(&self) -> IndexMap<u32, f32> {
         let mut params = StandardEffectBase::default_parameters();
         params.extend(T::custom_default_parameters());
         params
@@ -417,10 +419,10 @@ where
         self.engine.name()
     }
 
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize) {
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize) {
         // Now calling custom prepare logic!
-        self.base.prepare(sample_rate, max_buffer_size);
-        self.engine.prepare(sample_rate, max_buffer_size);
+        self.base.prepare(sample_rate, channels, max_buffer_size);
+        self.engine.prepare(sample_rate, channels, max_buffer_size);
 
         if self.dry_buffer.len() < max_buffer_size * 2 {
             self.dry_buffer.resize(max_buffer_size * 2, 0.0);
@@ -464,7 +466,7 @@ where
             .unwrap_or(0.0)
     }
 
-    fn default_parameters(&self) -> HashMap<u32, f32> {
+    fn default_parameters(&self) -> IndexMap<u32, f32> {
         let mut map = B::default_parameters();
         map.extend(self.engine.default_parameters());
         map

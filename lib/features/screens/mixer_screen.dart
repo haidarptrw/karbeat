@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
-import 'package:karbeat/features/plugins/effects/karbeat_parametric_eq.dart';
+import 'package:karbeat/features/audio_plugins/effects/karbeat_parametric_eq.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
@@ -916,30 +916,30 @@ class _PanKnob extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 2),
-        FineGrainedInputWrapper(
-          value: value,
-          onChanged: onChanged,
-          step: 0.01,
-          min: -1.0,
-          max: 1.0,
-          child: SizedBox(
-            width: 56,
-            height: 20,
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-                activeTrackColor: accentColor,
-                inactiveTrackColor: Colors.white12,
-                thumbColor: accentColor,
-                overlayShape: SliderComponentShape.noOverlay,
-              ),
+        SizedBox(
+          width: 56,
+          height: 20,
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              activeTrackColor: accentColor,
+              inactiveTrackColor: Colors.white12,
+              thumbColor: accentColor,
+              overlayShape: SliderComponentShape.noOverlay,
+            ),
+            child: FineGrainedInputWrapper(
+              value: value,
+              onChanged: onChanged,
+              step: 0.01,
+              min: -1.0,
+              max: 1.0,
               child: Slider(
                 value: value,
                 min: -1.0,
                 max: 1.0,
                 onChanged: onChanged,
-                allowedInteraction: SliderInteraction.slideThumb,
+                allowedInteraction: SliderInteraction.slideOnly,
                 onChangeStart: onChangeStart != null
                     ? (_) => onChangeStart!()
                     : null,

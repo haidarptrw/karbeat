@@ -8,7 +8,7 @@ use karbeat_utils::define_id;
 
 define_id!(PatternId);
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Pattern {
     pub id: PatternId,
     pub name: String,

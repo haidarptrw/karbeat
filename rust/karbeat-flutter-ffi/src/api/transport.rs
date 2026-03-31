@@ -2,15 +2,13 @@
 /// Transport API - all functions push AudioCommands to the audio thread.
 /// BPM is also persisted in ApplicationState for project serialization.
 
-use karbeat_core::{commands::AudioCommand, context::ctx};
+use karbeat_core::{ commands::AudioCommand, context::ctx };
 use karbeat_core::lock::get_app_write;
 
 /// helper to push a command to the audio thread
 fn push_command(cmd: AudioCommand) {
-    if let Ok(mut guard) = ctx().command_sender.lock() {
-        if let Some(cmd_producer) = guard.as_mut() {
-            let _ = cmd_producer.push(cmd);
-        }
+    if let Some(cmd_producer) = ctx().command_sender.lock().as_mut() {
+        let _ = cmd_producer.push(cmd);
     }
 }
 

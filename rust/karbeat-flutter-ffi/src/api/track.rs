@@ -1,9 +1,11 @@
 // rust\src\api\track.rs
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::api::project::{UiClip, UiTrack};
+use crate::api::project::{AudioWaveformUiForClip, UiClip, UiTrack};
 use crate::broadcast_state_change;
+use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::core::{
     history::ProjectAction,
@@ -18,6 +20,7 @@ use karbeat_core::core::{
     },
 };
 use karbeat_core::lock::{get_app_read, get_app_write, get_history_lock};
+use karbeat_core::utils::get_waveform_buffer;
 use karbeat_utils::color::Color;
 
 pub enum UiSourceType {
@@ -27,7 +30,7 @@ pub enum UiSourceType {
 
 pub enum UiResizeEdge {
     Left,
-    Right
+    Right,
 }
 
 impl Into<UiResizeEdge> for ResizeEdge {
@@ -41,7 +44,7 @@ impl Into<UiResizeEdge> for ResizeEdge {
 
 impl From<&UiResizeEdge> for ResizeEdge {
     fn from(value: &UiResizeEdge) -> Self {
-        match value  {
+        match value {
             UiResizeEdge::Left => ResizeEdge::Left,
             UiResizeEdge::Right => ResizeEdge::Right,
         }
@@ -50,11 +53,122 @@ impl From<&UiResizeEdge> for ResizeEdge {
 
 impl From<UiResizeEdge> for ResizeEdge {
     fn from(value: UiResizeEdge) -> Self {
-        match  value {
+        match value {
             UiResizeEdge::Left => ResizeEdge::Left,
             UiResizeEdge::Right => ResizeEdge::Right,
         }
     }
+}
+
+pub fn get_audio_waveform_clips_data() -> Result<HashMap<u32, AudioWaveformUiForClip>, String> {
+    let app = get_app_read();
+
+    let map = app
+        .get_audio_sources()
+        .iter()
+        .map(|(&id, arc_waveform)| {
+            let ui = AudioWaveformUiForClip::from(arc_waveform.as_ref());
+            (id.to_u32(), ui)
+        })
+        .collect();
+
+    Ok(map)
+}
+
+pub fn get_audio_waveform_for_clip(audio_source_id: u32) -> Result<AudioWaveformUiForClip, String> {
+    let app = get_app_read();
+
+    let audio_waveform = app.get_audio_source(audio_source_id).ok_or(format!(
+        "Cannot get the audio source with id {}",
+        audio_source_id
+    ))?;
+
+    let audio_waveform_dto = AudioWaveformUiForClip::from(audio_waveform.as_ref());
+
+    Ok(audio_waveform_dto)
+}
+
+/// Getter for all audio waveform data for audio only for this specific track
+pub fn get_audio_waveform_for_clip_only_in_specific_track(
+    track_id: u32,
+) -> Result<HashMap<u32, AudioWaveformUiForClip>, String> {
+    let app = get_app_read();
+
+    // get specific track
+    let track = app
+        .tracks
+        .get(&TrackId::from(track_id))
+        .ok_or(format!("Track not found"))?
+        .as_ref();
+
+    // ** Iterate through tracks and fetch audio waveform for every audio clip **
+
+    let TrackType::Audio = track.track_type else {
+        // Return empty since it is not a audio track
+        return Ok(HashMap::new());
+    };
+
+    let return_map: HashMap<u32, AudioWaveformUiForClip> = track
+        .clips()
+        .iter()
+        .filter_map(|c| {
+            // Get source Id from clip
+            let KarbeatSource::Audio(id) = c.source else {
+                return None;
+            };
+
+            let id_u32 = id.to_u32();
+            let waveform_dto =
+                AudioWaveformUiForClip::try_from_audio_waveform_with_target_sample_bin_internal(
+                    &app,
+                    id.to_u32(),
+                ).ok()?;
+
+            Some((id_u32, waveform_dto))
+        })
+        .collect();
+
+    Ok(return_map)
+}
+
+/// Getter for all audio waveform data for audio in all audio tracks
+pub fn get_audio_waveform_for_clip_all_available_in_tracks(
+) -> Result<HashMap<u32, AudioWaveformUiForClip>, String> {
+    let app = get_app_read();
+
+    let mut return_map: HashMap<u32, AudioWaveformUiForClip> = HashMap::new();
+
+    for track in app.tracks.values() {
+        let track = track.as_ref();
+
+        // Only process audio tracks
+        let TrackType::Audio = track.track_type else {
+            continue;
+        };
+
+        for clip in track.clips().iter() {
+            let KarbeatSource::Audio(id) = clip.source else {
+                continue;
+            };
+
+            let id_u32 = id.to_u32();
+
+            // Avoid duplicate processing
+            if return_map.contains_key(&id_u32) {
+                continue;
+            }
+
+            let Some(audio_source) = app.get_audio_source(id_u32) else {
+                continue;
+            };
+
+            let waveform_dto = AudioWaveformUiForClip::from(audio_source.as_ref());
+
+            return_map.insert(id_u32, waveform_dto);
+        }
+    }
+
+    Ok(return_map)
 }
 
 pub fn create_clip(
@@ -83,10 +197,12 @@ pub fn create_clip(
 
                 let project_sample_rate = app.audio_config.sample_rate as f64;
                 let source_sample_rate = audio_source.sample_rate as f64;
-
-                let source_frames = audio_source.buffer.len() as u32 / audio_source.channels as u32;
+                let buffer_len = get_waveform_buffer(&audio_source.buffer)
+                    .map(|b| b.len())
+                    .unwrap_or(0);
+                let source_frames = (buffer_len as u32) / (audio_source.channels as u32);
                 let timeline_length = if source_sample_rate > 0.0 {
-                    (source_frames as f64 * (project_sample_rate / source_sample_rate)) as u32
+                    ((source_frames as f64) * (project_sample_rate / source_sample_rate)) as u32
                 } else {
                     source_frames // Fallback to avoid division by zero
                 };
@@ -112,7 +228,7 @@ pub fn create_clip(
                 } else {
                     app.transport.bpm
                 };
-                let samples_per_beat = (sample_rate as f32 / (bpm / 60.0)) as u32;
+                let samples_per_beat = ((sample_rate as f32) / (bpm / 60.0)) as u32;
 
                 // Use existing pattern if source_id provided, otherwise create new
                 let (pattern_id, timeline_length) = if let Some(id) = source_id {
@@ -123,8 +239,8 @@ pub fn create_clip(
                         .ok_or(format!("Pattern {} not found", id))?;
 
                     // Calculate length from pattern's ticks
-                    let samples_per_tick = samples_per_beat as f32 / 960.0;
-                    let length = (pattern.length_ticks as f32 * samples_per_tick) as u32;
+                    let samples_per_tick = (samples_per_beat as f32) / 960.0;
+                    let length = ((pattern.length_ticks as f32) * samples_per_tick) as u32;
                     (pattern_id, length)
                 } else {
                     // Create new pattern
@@ -232,7 +348,7 @@ pub fn resize_clip(
                         let new_start = new_time_val;
 
                         // Calculate delta (positive = trimmed right, negative = expanded left)
-                        let delta = new_start as i64 - old_start as i64;
+                        let delta = (new_start as i64) - (old_start as i64);
 
                         let current_offset = modified_clip.offset_start as i64;
                         let new_offset = current_offset + delta;
@@ -329,7 +445,7 @@ pub fn move_clip(
             new_clip.start_time = new_start_time;
 
             // get target track. this is already checked at the beginning, so it will never throws error
-            let target_track = Arc::make_mut(app.tracks.get_mut(&target_track_id.into()).unwrap());
+            let target_track = Arc::make_mut(app.tracks.get_mut(&target_track_id).unwrap());
             let _ = target_track
                 .add_clip(new_clip)
                 .map_err(|e| format!("{}", e));
@@ -435,7 +551,8 @@ pub fn move_clip_batch(
                     track.clips.remove(&clip);
                     let mut modified_clip = (*clip).clone();
                     // Apply delta with clamping to 0
-                    let new_start = (modified_clip.start_time as i64 + delta_samples).max(0) as u32;
+                    let new_start =
+                        ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
                     modified_clip.start_time = new_start;
                     track.clips.insert(Arc::new(modified_clip));
                 }
@@ -480,7 +597,7 @@ pub fn move_clip_batch(
             );
             for clip in clips_to_move {
                 let mut modified_clip = (*clip).clone();
-                let new_start = (modified_clip.start_time as i64 + delta_samples).max(0) as u32;
+                let new_start = ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
                 modified_clip.start_time = new_start;
                 let _ = target_track.add_clip(modified_clip);
             }
@@ -516,8 +633,8 @@ pub fn resize_clip_batch(
                     ResizeEdge::Right => {
                         // Extend/shrink the right edge by delta
                         let current_end = modified_clip.start_time + modified_clip.loop_length;
-                        let new_end = (current_end as i64 + delta_samples)
-                            .max(modified_clip.start_time as i64 + 100)
+                        let new_end = ((current_end as i64) + delta_samples)
+                            .max((modified_clip.start_time as i64) + 100)
                             as u32;
                         modified_clip.loop_length = new_end - modified_clip.start_time;
                     }
@@ -525,11 +642,11 @@ pub fn resize_clip_batch(
                         // Slip edit: move start time and adjust offset
                         let old_start = modified_clip.start_time;
                         let old_end = old_start + modified_clip.loop_length;
-                        let new_start = (old_start as i64 + delta_samples)
-                            .clamp(0, old_end as i64 - 100)
+                        let new_start = ((old_start as i64) + delta_samples)
+                            .clamp(0, (old_end as i64) - 100)
                             as u32;
 
-                        let delta = new_start as i64 - old_start as i64;
+                        let delta = (new_start as i64) - (old_start as i64);
                         let current_offset = modified_clip.offset_start as i64;
                         let new_offset = (current_offset + delta).max(0) as u32;
 

@@ -2,6 +2,7 @@
 name = "karbeat-plugins"
 version = "0.1.0-alpha.1"
 edition = "2021"
+description = "Collection of first-party plugins for Karbeat"
 
 [dependencies]
 karbeat-dsp.workspace = true
@@ -12,3 +13,5 @@ log.workspace = true
 serde.workspace = true
 dasp.workspace = true
 fastrand.workspace = true
+hashbrown.workspace = true
+smallvec.workspace = true

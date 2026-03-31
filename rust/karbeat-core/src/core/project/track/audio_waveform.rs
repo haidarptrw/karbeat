@@ -1,22 +1,27 @@
 use karbeat_utils::define_id;
-use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+use serde::{ Deserialize, Serialize };
 
-use crate::{core::project::PluginInstance, };
+use crate::core::project::PluginInstance;
 
 pub type AudioFrame = [f32; 2];
 
 define_id!(AudioSourceId);
 
+use memmap2::Mmap;
 /// Audio Waveform data of an audio sample
+use std::{ path::PathBuf, sync::Arc };
+
+// STATIC global variables for waveform mipmaps
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AudioWaveform {
+    pub id: Option<AudioSourceId>,
     /// Audio buffer of samples
     #[serde(skip)]
-    pub buffer: Arc<Vec<f32>>,  // future update: replace this with Arc<[f32]> for better performance
+    pub buffer: Option<Arc<Mmap>>,
     /// path to the audio source file
-    pub file_path: String,
+    pub file_path: PathBuf,
     /// name of the audio waveform
     pub name: String,
     /// Sample rate of the audio waveform
@@ -44,11 +49,31 @@ pub struct AudioWaveform {
     pub effects: Arc<Vec<PluginInstance>>,
 }
 
+impl PartialEq for AudioWaveform {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id &&
+            self.file_path == other.file_path &&
+            self.name == other.name &&
+            self.sample_rate == other.sample_rate &&
+            self.channels == other.channels &&
+            self.duration == other.duration &&
+            self.root_note == other.root_note &&
+            self.fine_tune == other.fine_tune &&
+            self.trim_start == other.trim_start &&
+            self.trim_end == other.trim_end &&
+            self.is_looping == other.is_looping &&
+            self.normalized == other.normalized &&
+            self.muted == other.muted &&
+            self.effects == other.effects
+    }
+}
+
 impl Default for AudioWaveform {
     fn default() -> Self {
         Self {
-            buffer: Arc::new(Vec::new()),
-            file_path: String::new(),
+            id: None,
+            buffer: None,
+            file_path: PathBuf::new(),
             name: "Sample".to_string(),
             sample_rate: 44100,
             channels: 2,
@@ -62,5 +87,15 @@ impl Default for AudioWaveform {
             muted: false,
             effects: Default::default(),
         }
+    }
+}
+
+impl AudioWaveform {
+    pub fn try_assign_id(&mut self, id: AudioSourceId) -> anyhow::Result<()> {
+        if self.id.is_some() {
+            return Err(anyhow::anyhow!("Audio waveform already has an ID"));
+        }
+        self.id = Some(id);
+        Ok(())
     }
 }

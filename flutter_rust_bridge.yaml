@@ -1,6 +1,5 @@
 rust_input: crate::api
 rust_root: rust/karbeat-flutter-ffi
-default_external_library_name: karbeat_flutter_ffi
 dart_output: lib/src/rust
 type_64bit_int: true
 dart_enums_style: true

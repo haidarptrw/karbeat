@@ -4,8 +4,8 @@ pub mod audio_waveform;
 pub mod midi;
 
 use std::{
-    collections::{BTreeSet, HashMap},
-    sync::{Arc, RwLock},
+    collections::BTreeSet,
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ use karbeat_utils::color::Color;
 
 define_id!(TrackId);
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct KarbeatTrack {
     pub id: TrackId,
     pub name: String,
@@ -47,7 +47,7 @@ impl Default for KarbeatTrack {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum TrackType {
     Audio,
     Midi,
@@ -210,8 +210,7 @@ impl ApplicationState {
         let (generator_plugin, generator_name, default_params) = {
             let registry = ctx()
                 .plugin_registry
-                .read()
-                .expect("Failed to lock registry");
+                .read();
 
             if let Some((generator_box, name)) = registry.create_generator_by_id(registry_id) {
                 // Get default parameters BEFORE sending to audio thread
@@ -228,7 +227,7 @@ impl ApplicationState {
         };
 
         // Send the plugin to the audio thread (lock-free)
-        if let Some(sender) = ctx().command_sender.lock().unwrap().as_mut() {
+        if let Some(sender) = ctx().command_sender.lock().as_mut() {
             let _ = sender.push(AudioCommand::AddGenerator {
                 generator_id: gen_id,
                 track_id,
@@ -242,11 +241,10 @@ impl ApplicationState {
 
         let generator = GeneratorInstance {
             id: gen_id,
-            effects: HashMap::new(),
             instance_type: GeneratorInstanceType::Plugin(plugin_instance),
         };
         self.generator_pool
-            .insert(gen_id, Arc::new(RwLock::new(generator.clone())));
+            .insert(gen_id, Arc::new(generator.clone()));
 
         let new_track = KarbeatTrack {
             track_type: TrackType::Midi,
@@ -283,8 +281,7 @@ impl ApplicationState {
         let registry_id = {
             let registry = ctx()
                 .plugin_registry
-                .read()
-                .expect("Failed to lock registry");
+                .read();
 
             registry
                 .get_generator_id_by_name(generator_name)
@@ -306,19 +303,19 @@ impl ApplicationState {
             .and_then(|t| t.generator.as_ref().map(|g| g.id));
 
         // Remove the track
-        if self.tracks.remove(&track_id).is_none() {
+        if self.tracks.shift_remove(&track_id).is_none() {
             return Err(anyhow::anyhow!("Track {:?} not found", track_id));
         }
 
         // Remove the mixer channel
-        self.mixer.channels.remove(&track_id);
+        self.mixer.channels.shift_remove(&track_id);
 
         // Remove all routing connections for this track
         self.mixer.remove_track_routing(track_id);
 
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
-            self.generator_pool.remove(&gen_id);
+            self.generator_pool.shift_remove(&gen_id);
         }
 
         // Remove all automation lanes for this track

@@ -53,3 +53,13 @@ Thank you for your interest in Karbeat! Here are a few things to keep in mind:
 - **Plugin Host Support**: We will add plugin host and support for VST3, CLAP, and LV2 for Windows, Linux, and MacOS version. As for android, we are still exploring the best fit and possibility of creating our own plugin format.
 - **Plugin Development**: Currently our plugin registry is very few. You can help to create a plugin by using the Karbeat Plugin API by implementing the `KarbeatGenerator` or `KarbeatEffect` trait.
 ---
+
+## Regarding the Future of the Project
+
+We plan to maintain Karbeat as a mobile-only DAW for the foreseeable future. 
+Meanwhile, our desktop DAW, which will have a different name, will utilize a distinct frontend 
+implementation and a modified backend to accommodate new technologies. 
+We intend to build the desktop version entirely in Rust, though we are still researching the best framework for the task. 
+This shift is necessary because the desktop version will include features incompatible with mobile platforms, such as 
+broad support for popular audio plugin formats like VST3, LV2, CLAP, and AU. Furthermore, Rust offers superior performance 
+for desktop GUI applications compared to Flutter, whose garbage collector can impact real-time efficiency.

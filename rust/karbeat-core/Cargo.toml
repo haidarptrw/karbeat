@@ -2,6 +2,7 @@
 name = "karbeat-core"
 version = "0.1.0-alpha.1"
 edition = "2021"
+description = "Core logic implementation of Karbeat, including audio engine and main business logic"
 
 [dependencies]
 karbeat-dsp.workspace = true
@@ -25,3 +26,13 @@ hashbrown.workspace = true
 rodio.workspace = true
 flutter_rust_bridge.workspace = true
 dasp.workspace = true
+parking_lot.workspace = true
+uuid.workspace = true
+memmap2.workspace = true
+bytemuck.workspace = true
+tempfile.workspace = true
+indexmap.workspace = true
+toml.workspace = true
+rmp-serde.workspace = true
+zip.workspace = true
+chrono.workspace = true

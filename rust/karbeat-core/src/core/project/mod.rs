@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+use indexmap::IndexMap;
 use karbeat_utils::define_id;
 // src/core/project/mod.rs
 
@@ -12,10 +14,10 @@ pub mod transport;
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc, RwLock},
+    sync::Arc,
 };
+
+use hashbrown::HashMap;
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
@@ -42,7 +44,7 @@ use crate::{
 define_id!(SourceId);
 define_id!(NoteId);
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct ApplicationState {
     // Things store inside ApplicationState
     // - Project Metadata
@@ -58,19 +60,19 @@ pub struct ApplicationState {
     pub asset_library: Arc<AssetLibrary>,
 
     // All musical data lives here. The timeline just references these.
-    pub pattern_pool: HashMap<PatternId, Arc<Pattern>>,
+    pub pattern_pool: IndexMap<PatternId, Arc<Pattern>>,
     pub pattern_counter: u32,
 
     // Generator sources
-    pub generator_pool: HashMap<GeneratorId, Arc<RwLock<GeneratorInstance>>>,
+    pub generator_pool: IndexMap<GeneratorId, Arc<GeneratorInstance>>,
     pub generator_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
-    pub tracks: HashMap<TrackId, Arc<KarbeatTrack>>,
+    pub tracks: IndexMap<TrackId, Arc<KarbeatTrack>>,
     pub track_counter: u32,
 
     // Automation lanes pool (lives at the same level as tracks/patterns/generators)
-    pub automation_pool: HashMap<AutomationId, Arc<AutomationLane>>,
+    pub automation_pool: IndexMap<AutomationId, Arc<AutomationLane>>,
     pub automation_counter: u32,
 
     // Counter for clips
@@ -102,12 +104,12 @@ pub enum KarbeatSource {
     Automation(u32),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ProjectMetadata {
     pub name: String,
     pub author: String,
     pub version: String,
-    pub created_at: u64,
+    pub created_at: DateTime<Utc>,
 }
 
 impl Default for ProjectMetadata {
@@ -116,7 +118,7 @@ impl Default for ProjectMetadata {
             name: "Untitled".to_string(),
             author: Default::default(),
             version: Default::default(),
-            created_at: Default::default(),
+            created_at: Utc::now(),
         }
     }
 }
@@ -126,7 +128,7 @@ pub struct Note {
     pub id: NoteId,
     pub start_tick: u64,
     pub duration: u64,
-    pub key: u8, // 0 - 127 MIDI key
+    pub key: u8, // 21 - 127 MIDI key (Keep LB at A0)
     pub velocity: u8,
 
     pub probability: f32,
@@ -166,27 +168,22 @@ impl Ord for Note {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AssetLibrary {
-    // Map ID -> File Path on Disk
-    // When loading a project, we check if these paths still exist
-    pub sample_paths: HashMap<AudioSourceId, PathBuf>,
     pub next_id: u32,
-    #[serde(skip)]
     pub source_map: HashMap<AudioSourceId, Arc<AudioWaveform>>,
 }
 
 impl Default for AssetLibrary {
     fn default() -> Self {
         Self {
-            sample_paths: HashMap::new(),
-            next_id: 1, // Start IDs at 1 (0 can be null/empty)
+            next_id: 1,
             source_map: HashMap::new(),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AudioHardwareConfig {
     pub selected_input_device: String,
     pub selected_output_device: String,
@@ -227,14 +224,11 @@ impl ApplicationState {
         source_id: AudioSourceId,
     ) -> anyhow::Result<AudioSourceId> {
         // we check whether the source exists
-        // ASSUME: the id inside source_map and sample_paths are same based on the existing insertion logic
         let library = Arc::make_mut(&mut self.asset_library);
 
         if library.source_map.remove(&source_id).is_none() {
             return Err(anyhow!("Source does not exist"));
         }
-
-        library.sample_paths.remove(&source_id);
 
         // cascade delete
         for track_arc in self.tracks.values_mut() {
@@ -275,7 +269,7 @@ impl ApplicationState {
 
     /// Remove an automation lane from the pool by its ID.
     pub fn remove_automation_lane(&mut self, lane_id: AutomationId) -> anyhow::Result<()> {
-        if self.automation_pool.remove(&lane_id).is_none() {
+        if self.automation_pool.shift_remove(&lane_id).is_none() {
             return Err(anyhow!("Automation lane {:?} not found", lane_id));
         }
 

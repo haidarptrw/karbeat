@@ -2,6 +2,7 @@
 name = "karbeat-plugin-api"
 version = "0.1.0-alpha.1"
 edition = "2021"
+description = "Plugin API for Karbeat"
 
 [dependencies]
 karbeat-dsp.workspace = true
@@ -10,3 +11,5 @@ karbeat-utils.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 log.workspace = true
+indexmap.workspace = true
+smallvec.workspace = true

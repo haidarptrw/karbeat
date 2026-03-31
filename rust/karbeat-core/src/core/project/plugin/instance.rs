@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 /// Define a plugin instance descriptor.
@@ -8,15 +7,15 @@ use serde::{Deserialize, Serialize};
 /// The actual plugin processing instance is owned by the audio thread's `AudioPluginState`.
 ///
 /// # Example:
-/// ```rust
+/// ```rust,ignore
 /// let instance = PluginInstance {
 ///     registry_id: 0,
 ///     name: "Basic Reverb".to_string(),
 ///     bypass: false,
-///     parameters: HashMap::new(),
+///     parameters: indexmap::IndexMap::new(),
 /// };
 /// ```
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct PluginInstance {
     /// Registry ID for plugin lookup (stable identifier)
     pub registry_id: u32,
@@ -25,7 +24,7 @@ pub struct PluginInstance {
     /// Whether this plugin is bypassed
     pub bypass: bool,
     /// Plugin parameters for persistence (Param ID -> Value)
-    pub parameters: HashMap<u32, f32>,
+    pub parameters: IndexMap<u32, f32>,
 }
 
 impl PluginInstance {
@@ -35,7 +34,7 @@ impl PluginInstance {
             registry_id: 0,
             name: name.to_string(),
             bypass: false,
-            parameters: HashMap::new(),
+            parameters: IndexMap::new(),
         }
     }
 
@@ -45,12 +44,12 @@ impl PluginInstance {
             registry_id,
             name: name.to_string(),
             bypass: false,
-            parameters: HashMap::new(),
+            parameters: IndexMap::new(),
         }
     }
 
     /// Create a new plugin instance with registry ID, name, and default parameters
-    pub fn new_with_params(registry_id: u32, name: &str, parameters: HashMap<u32, f32>) -> Self {
+    pub fn new_with_params(registry_id: u32, name: &str, parameters: IndexMap<u32, f32>) -> Self {
         Self {
             registry_id,
             name: name.to_string(),

@@ -1,4 +1,6 @@
-use std::{any::Any, collections::HashMap, fmt::Debug};
+use std::{any::Any, fmt::Debug};
+
+use indexmap::IndexMap;
 
 use crate::wrapper::PluginParameter;
 
@@ -8,8 +10,8 @@ pub trait KarbeatEffect: Send + Sync {
     /// Returns the unique name of the plugin
     fn name(&self) -> &str;
 
-    /// Prepare the plugin for playback (allocate buffers, set sample rate)
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    /// Prepare the plugin for playback (allocate buffers, set sample rate and number of channels)
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
 
     /// Reset internal state (clear delay lines, reverb tails, etc.)
     /// Called when playback stops or seeks.
@@ -28,7 +30,7 @@ pub trait KarbeatEffect: Send + Sync {
     fn get_parameter(&self, id: u32) -> f32;
 
     /// Get the default values for all parameters supported by this plugin
-    fn default_parameters(&self) -> HashMap<u32, f32>;
+    fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
@@ -41,8 +43,8 @@ pub trait KarbeatGenerator: Send + Sync {
     /// Get the name of the generator
     fn name(&self) -> &str;
 
-    /// Prepare the plugin so that it can properly used for audio processing
-    fn prepare(&mut self, sample_rate: f32, max_buffer_size: usize);
+    /// Prepare the plugin for playback (allocate buffers, set sample rate and number of channels)
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
 
     /// Reset the parameters of the plugin
     fn reset(&mut self);
@@ -58,7 +60,7 @@ pub trait KarbeatGenerator: Send + Sync {
     fn get_parameter(&self, id: u32) -> f32;
 
     /// Get the default values for all parameters supported by this plugin
-    fn default_parameters(&self) -> HashMap<u32, f32>;
+    fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
@@ -102,7 +104,7 @@ impl KarbeatPlugin {
         }
     }
 
-    pub fn default_parameters(&self) -> std::collections::HashMap<u32, f32> {
+    pub fn default_parameters(&self) -> IndexMap<u32, f32> {
         match self {
             KarbeatPlugin::Effect(e) => e.default_parameters(),
             KarbeatPlugin::Generator(g) => g.default_parameters(),

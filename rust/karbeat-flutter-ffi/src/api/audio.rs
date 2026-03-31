@@ -1,10 +1,10 @@
 use std::time::Duration;
 
-use karbeat_core::{
-    audio::event::TransportFeedback,
-    commands::AudioCommand, context::ctx,
-};
-use crate::api::project::{AudioWaveformUiForAudioProperties, UiAudioHardwareConfig};
+use karbeat_core::context::utils::send_audio_command;
+use karbeat_core::core::file_manager::audio_loader::AudioLoader;
+use karbeat_core::core::project::TrackId;
+use karbeat_core::{ audio::event::TransportFeedback, commands::AudioCommand, context::ctx };
+use crate::api::project::{ AudioWaveformUiForAudioProperties, UiAudioHardwareConfig };
 use crate::frb_generated::StreamSink;
 use karbeat_core::lock::get_app_read;
 
@@ -48,7 +48,11 @@ impl From<TransportFeedback> for UiTransportFeedback {
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
     let app = get_app_read();
-    let waveform = app.asset_library.source_map.get(&id.into())?;
+    let waveform = app.get_audio_source(id)?;
+
+    //TODO:Add dyanamic downsampling to send this to the frontend side for smaller memory footprint
+    // downsample(waveform.buffer)
+
     Some(AudioWaveformUiForAudioProperties::from(waveform.as_ref()))
 }
 
@@ -56,25 +60,17 @@ pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties
 pub fn play_source_preview(id: u32) {
     let app = get_app_read();
 
-    if let Some(waveform_arc) = app.asset_library.source_map.get(&id.into()) {
-        let waveform_to_play = (**waveform_arc).clone();
+    if let Some(waveform_arc) = app.get_audio_source(id) {
+        let waveform_to_play = (*waveform_arc).clone();
 
-        if let Ok(mut guard) = ctx().command_sender.lock() {
-            if let Some(sender) = guard.as_mut() {
-                let _ = sender.push(AudioCommand::PlayOneShot(waveform_to_play));
-                log::info!("Preview command sent for ID: {}", id);
-            }
-        }
+        send_audio_command(AudioCommand::PlayOneShot(waveform_to_play));
+        log::info!("Preview command sent for ID: {}", id);
     }
 }
 
 pub fn stop_all_previews() {
-    if let Ok(mut guard) = ctx().command_sender.lock() {
-        if let Some(sender) = guard.as_mut() {
-            let _ = sender.push(AudioCommand::StopAllPreviews);
-            println!("Stop all preview sounds");
-        }
-    }
+    send_audio_command(AudioCommand::StopAllPreviews);
+    println!("Stop all preview sounds");
 }
 
 pub fn get_audio_config() -> Result<UiAudioHardwareConfig, String> {
@@ -87,16 +83,12 @@ pub fn create_position_stream(sink: StreamSink<UiTransportFeedback>) -> Result<(
     std::thread::spawn(move || {
         loop {
             // Get access to the consumer
-            if let Ok(mut guard) = ctx().position_consumer.lock() {
-                if let Some(consumer) = guard.as_mut() {
-                    //Read everything currently in the buffer
-                    while let Ok(pos_data) = consumer.pop() {
-                        if sink.add(UiTransportFeedback::from(pos_data)).is_err() {
-                            println!(
-                                "[Rust] PlaybackPosition Stream disconnected! Stopping thread."
-                            );
-                            return;
-                        }
+            if let Some(consumer) = ctx().position_consumer.lock().as_mut() {
+                //Read everything currently in the buffer
+                while let Ok(pos_data) = consumer.pop() {
+                    if sink.add(UiTransportFeedback::from(pos_data)).is_err() {
+                        println!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
+                        return;
                     }
                 }
             }
@@ -114,7 +106,7 @@ pub fn play_preview_note(
     track_id: u32,
     note_key: i32,
     velocity: i32,
-    is_on: bool,
+    is_on: bool
 ) -> Result<(), String> {
     // validate input
     if note_key < 0 || note_key > 127 {
@@ -131,22 +123,17 @@ pub fn play_preview_note(
 
     let generator_id = {
         let app = get_app_read();
-        let track = app
-            .tracks
-            .get(&track_id.into())
-            .ok_or("Can't find requested track")?;
+        let track = app.tracks.get(&TrackId::from(track_id)).ok_or("Can't find requested track")?;
         track.generator.as_ref().ok_or("Track has no generator")?.id
     };
 
-    if let Ok(mut command_guard) = ctx().command_sender.lock() {
-        if let Some(sender) = command_guard.as_mut() {
-            let _ = sender.push(AudioCommand::PlayPreviewNote {
-                note_key: note_key,
-                generator_id: generator_id.into(),
-                velocity,
-                is_note_on: is_on,
-            });
-        }
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
+        let _ = sender.push(AudioCommand::PlayPreviewNote {
+            note_key: note_key,
+            generator_id: generator_id.into(),
+            velocity,
+            is_note_on: is_on,
+        });
     }
 
     Ok(())
@@ -158,7 +145,7 @@ pub fn play_preview_note_generator(
     generator_id: u32,
     note_key: i32,
     velocity: i32,
-    is_on: bool,
+    is_on: bool
 ) -> Result<(), String> {
     // validate input
     if note_key < 0 || note_key > 127 {
@@ -174,15 +161,13 @@ pub fn play_preview_note_generator(
 
     log::info!("Playing note {}", note_key);
 
-    if let Ok(mut command_guard) = ctx().command_sender.lock() {
-        if let Some(sender) = command_guard.as_mut() {
-            let _ = sender.push(AudioCommand::PlayPreviewNote {
-                note_key,
-                generator_id: generator_id.into(),
-                velocity,
-                is_note_on: is_on,
-            });
-        }
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
+        let _ = sender.push(AudioCommand::PlayPreviewNote {
+            note_key,
+            generator_id: generator_id.into(),
+            velocity,
+            is_note_on: is_on,
+        });
     }
 
     Ok(())

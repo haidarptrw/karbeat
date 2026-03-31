@@ -1,7 +1,9 @@
 // src/lib.rs
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
+use karbeat_core::lock::get_app_read;
+use memmap2::MmapOptions;
 use rtrb::RingBuffer;
 
 pub(crate) use karbeat_core::{
@@ -17,9 +19,6 @@ mod frb_generated;
 // Re-export context utilities for convenience
 pub use karbeat_core::context::{ctx as get_ctx, INIT_LOGGER as get_init};
 
-// Re-exports required by frb_generated.rs (uses bare names via `use crate::*`)
-// Using pub(crate) to hide them from FRB public API scanner while keeping them available to the generated code.
-
 // ==================================================================
 // ================== Functions =====================================
 // ==================================================================
@@ -28,52 +27,36 @@ pub use karbeat_core::context::{ctx as get_ctx, INIT_LOGGER as get_init};
 /// is used by the Audio Thread)
 pub fn broadcast_state_change() {
     // if read failed, we do nothing
-    let Ok(app) = ctx().app_state.read() else {
-        return;
-    };
+    let app = get_app_read();
     let render_state = AudioRenderState::from(&*app);
 
     drop(app);
 
-    if let Ok(mut guard) = ctx().render_state_producer.lock() {
-        if let Some(producer) = guard.as_mut() {
-            {
-                let mut input = producer.input_buffer_publisher();
-                *input = render_state;
-            }
-        }
-    } else {
-        log::error!("Error when publishing");
-    }
+    publish_to_audio_thread(render_state);
 }
 
-#[allow(dead_code)]
 /// Helper to push state to TripleBuffer
-fn publish_to_audio_thread(state: &AudioRenderState) {
-    if let Ok(mut guard) = ctx().render_state_producer.lock() {
-        if let Some(producer) = guard.as_mut() {
-            {
-                let mut input = producer.input_buffer_publisher();
-                *input = state.clone();
-            }
+fn publish_to_audio_thread(state: AudioRenderState) {
+    if let Some(producer) = ctx().render_state_producer.lock().as_mut() {
+        {
+            let mut input = producer.input_buffer_publisher();
+            *input = state;
         }
-    } else {
-        log::error!("Error when publishing audio state");
     }
 }
 
 fn generate_startup_beep() -> AudioWaveform {
     let sample_rate = 48000;
     let duration_secs = 0.5;
-    let total_frames = (sample_rate as f32 * duration_secs) as usize;
+    let total_frames = ((sample_rate as f32) * duration_secs) as usize;
     let frequency = 440.0; // A4 Note
 
     let mut buffer = Vec::with_capacity(total_frames * 2); // Stereo
 
     for i in 0..total_frames {
-        let t = i as f32 / sample_rate as f32;
+        let t = (i as f32) / (sample_rate as f32);
         let signal = (t * frequency * 2.0 * std::f32::consts::PI).sin();
-        let envelope = 1.0 - (i as f32 / total_frames as f32);
+        let envelope = 1.0 - (i as f32) / (total_frames as f32);
 
         let final_sample = signal * envelope * 0.3;
 
@@ -81,9 +64,19 @@ fn generate_startup_beep() -> AudioWaveform {
         buffer.push(final_sample); // Right
     }
 
+    let byte_slice: &[u8] = bytemuck::cast_slice(&buffer);
+    let mut mmap_mut = MmapOptions::new()
+        .len(byte_slice.len())
+        .map_anon()
+        .expect("Failed to create anonymous mmap for beep");
+    mmap_mut.copy_from_slice(byte_slice);
+    let mmap = mmap_mut
+        .make_read_only()
+        .expect("Failed to make mmap read-only");
+
     AudioWaveform {
-        buffer: Arc::new(buffer),
-        file_path: "internal_beep".to_string(),
+        buffer: Some(Arc::new(mmap)),
+        file_path: PathBuf::from("internal_beep"),
         sample_rate,
         channels: 2,
         duration: duration_secs as f64,
@@ -94,7 +87,7 @@ fn generate_startup_beep() -> AudioWaveform {
 
 pub fn init_engine() {
     let initial_state = {
-        let app = ctx().app_state.read().unwrap();
+        let app = ctx().app_state.read();
         AudioRenderState::from(&*app)
     };
 
@@ -105,14 +98,14 @@ pub fn init_engine() {
     let (state_in, state_out) = triple_buffer::TripleBuffer::new(&initial_state).split();
 
     {
-        let mut render_state_guard = ctx().render_state_producer.lock().unwrap();
+        let mut render_state_guard = ctx().render_state_producer.lock();
         *render_state_guard = Some(state_in);
     }
     // Capacity 128 is plenty for manual clicks
     let (cmd_prod, cmd_cons) = RingBuffer::new(128);
 
     // Store Producer in context
-    let mut guard = ctx().command_sender.lock().unwrap();
+    let mut guard = ctx().command_sender.lock();
     *guard = Some(cmd_prod);
 
     match start_audio_stream(state_out, cmd_cons, initial_state) {
@@ -134,9 +127,17 @@ pub fn init_engine() {
 }
 
 pub fn init_logger() {
+    // if release, use info, else use debug
     INIT_LOGGER.call_once(|| {
         use env_logger::Env;
-        let _ = env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+
+        let default_level = if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "info"
+        };
+
+        let _ = env_logger::Builder::from_env(Env::default().default_filter_or(default_level))
             .format_timestamp_millis()
             .target(env_logger::Target::Stdout)
             .try_init();

@@ -52,8 +52,7 @@ Future<List<UiEffectInstance>> getMasterEffects() =>
 /// Get parameter specifications for a generator plugin.
 ///
 /// With the lock-free architecture, the live plugin instance runs on the audio thread
-/// and cannot be accessed directly. Instead, we use the registry factory to create
-/// a temporary plugin instance for querying its static parameter specifications.
+/// and cannot be accessed directly. Instead, we use the registry to query its static parameter specifications.
 /// This is safe because parameter specs are static metadata that don't depend on state.
 ///
 /// The returned specs include the current stored parameter values (from generator pool)
