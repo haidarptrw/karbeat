@@ -56,10 +56,10 @@ Thank you for your interest in Karbeat! Here are a few things to keep in mind:
 
 ## Regarding the Future of the Project
 
-We've been thinking about maintaining Karbeat as a mobile-only DAW in the future. While the desktop DAW with
-different name will use a different implementation for the frontend and slightly different backend to adjust
-to this new technology. We will implement the desktop version of Karbeat fully in Rust, although we are still
-researching for the best framework we can use. This approach is necessary because the desktop version will have
-many features which can't be used in mobile platform such as widely-supported adoption of popular audio plugin options
-such as VST3, LV2, CLAP, and AU. In addition, Rust itself is very performant when it comes to desktop GUI 
-application, unlike Flutter which has a garbage collector that slows down thing a bit.
+We plan to maintain Karbeat as a mobile-only DAW for the foreseeable future. 
+Meanwhile, our desktop DAW—which will have a different name—will utilize a distinct frontend 
+implementation and a modified backend to accommodate new technologies. 
+We intend to build the desktop version entirely in Rust, though we are still researching the best framework for the task. 
+This shift is necessary because the desktop version will include features incompatible with mobile platforms, such as 
+broad support for popular audio plugin formats like VST3, LV2, CLAP, and AU. Furthermore, Rust offers superior performance 
+for desktop GUI applications compared to Flutter, whose garbage collector can impact real-time efficiency.
