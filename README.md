@@ -57,7 +57,7 @@ Thank you for your interest in Karbeat! Here are a few things to keep in mind:
 ## Regarding the Future of the Project
 
 We plan to maintain Karbeat as a mobile-only DAW for the foreseeable future. 
-Meanwhile, our desktop DAW—which will have a different name—will utilize a distinct frontend 
+Meanwhile, our desktop DAW, which will have a different name, will utilize a distinct frontend 
 implementation and a modified backend to accommodate new technologies. 
 We intend to build the desktop version entirely in Rust, though we are still researching the best framework for the task. 
 This shift is necessary because the desktop version will include features incompatible with mobile platforms, such as 
