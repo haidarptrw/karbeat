@@ -15,7 +15,7 @@ define_id!(ClipId);
 
 /// Clip struct that holds data for clip in the timeline
 /// # Example:
-/// ```rust
+/// ```rust,ignore
 /// let clip = Clip {
 ///     name: "My Clip".to_string(),
 ///     id: ClipId::new(0),

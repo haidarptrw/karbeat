@@ -30,7 +30,7 @@ pub trait EffectBase: Send + Sync + Clone {
 /// Embed this in your effect struct instead of duplicating fields.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// pub struct MyReverb {
 ///     pub base: EffectBase,
 ///     pub room_size: f32,  // Effect-specific

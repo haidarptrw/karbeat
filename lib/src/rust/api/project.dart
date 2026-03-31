@@ -4,11 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'pattern.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin_internal`, `try_from_audio_waveform_with_target_sample_bin`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -203,6 +205,57 @@ class AudioWaveformUiForSourceList {
           name == other.name &&
           muted == other.muted &&
           sampleRate == other.sampleRate;
+}
+
+class UiApplicationState {
+  final UiProjectMetadata metadata;
+  final UiTransportState transport;
+  final UiAudioHardwareConfig hardwareConfig;
+  final Map<int, UiTrack> tracks;
+  final Map<int, UiGeneratorInstance> generators;
+  final Map<int, UiPattern> patterns;
+  final UiMixerState mixer;
+  final int maxSampleIndex;
+  final Map<int, AudioWaveformUiForSourceList> audioSources;
+
+  const UiApplicationState({
+    required this.metadata,
+    required this.transport,
+    required this.hardwareConfig,
+    required this.tracks,
+    required this.generators,
+    required this.patterns,
+    required this.mixer,
+    required this.maxSampleIndex,
+    required this.audioSources,
+  });
+
+  @override
+  int get hashCode =>
+      metadata.hashCode ^
+      transport.hashCode ^
+      hardwareConfig.hashCode ^
+      tracks.hashCode ^
+      generators.hashCode ^
+      patterns.hashCode ^
+      mixer.hashCode ^
+      maxSampleIndex.hashCode ^
+      audioSources.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiApplicationState &&
+          runtimeType == other.runtimeType &&
+          metadata == other.metadata &&
+          transport == other.transport &&
+          hardwareConfig == other.hardwareConfig &&
+          tracks == other.tracks &&
+          generators == other.generators &&
+          patterns == other.patterns &&
+          mixer == other.mixer &&
+          maxSampleIndex == other.maxSampleIndex &&
+          audioSources == other.audioSources;
 }
 
 class UiAudioHardwareConfig {

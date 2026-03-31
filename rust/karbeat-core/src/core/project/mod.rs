@@ -171,7 +171,6 @@ impl Ord for Note {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AssetLibrary {
     pub next_id: u32,
-    #[serde(skip)]
     pub source_map: HashMap<AudioSourceId, Arc<AudioWaveform>>,
 }
 

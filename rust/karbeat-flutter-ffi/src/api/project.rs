@@ -2,6 +2,7 @@ use std::{collections::HashMap, ops::Deref};
 
 use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
+use karbeat_core::core::project::ApplicationState;
 use karbeat_utils::audio_utils::quantize_to_i8;
 use serde::Serialize;
 
@@ -25,6 +26,69 @@ pub enum UiTrackType {
     Audio,
     Midi,
     Automation,
+}
+
+pub struct UiApplicationState {
+    pub metadata: UiProjectMetadata,
+    pub transport: UiTransportState,
+    pub hardware_config: UiAudioHardwareConfig,
+    pub tracks: HashMap<u32, UiTrack>,
+    pub generators: HashMap<u32, UiGeneratorInstance>,
+    pub patterns: HashMap<u32, crate::api::pattern::UiPattern>,
+    pub mixer: crate::api::mixer::UiMixerState,
+    pub max_sample_index: u32,
+    pub audio_sources: HashMap<u32, AudioWaveformUiForSourceList>,
+}
+
+impl From<ApplicationState> for UiApplicationState {
+    fn from(value: ApplicationState) -> Self {
+        let tracks: HashMap<u32, UiTrack> = value
+            .tracks
+            .iter()
+            .map(|(id, track)| (id.to_u32(), UiTrack::from(track.as_ref())))
+            .collect();
+
+        let generators: HashMap<u32, UiGeneratorInstance> = value
+            .generator_pool
+            .iter()
+            .map(|(id, gen)| (id.to_u32(), UiGeneratorInstance::from(gen.as_ref())))
+            .collect();
+
+        let patterns: HashMap<u32, crate::api::pattern::UiPattern> = value
+            .pattern_pool
+            .iter()
+            .map(|(id, pat)| {
+                (
+                    id.to_u32(),
+                    crate::api::pattern::UiPattern::from(pat.as_ref()),
+                )
+            })
+            .collect();
+
+        let audio_sources: HashMap<u32, AudioWaveformUiForSourceList> = value
+            .asset_library
+            .source_map
+            .iter()
+            .map(|(id, source)| {
+                (
+                    id.to_u32(),
+                    AudioWaveformUiForSourceList::from(source.as_ref()),
+                )
+            })
+            .collect();
+
+        Self {
+            metadata: UiProjectMetadata::from(value.metadata),
+            transport: UiTransportState::from(value.transport),
+            hardware_config: UiAudioHardwareConfig::from(value.audio_config),
+            tracks,
+            generators,
+            patterns,
+            mixer: crate::api::mixer::UiMixerState::from(&value.mixer),
+            max_sample_index: value.max_sample_index,
+            audio_sources,
+        }
+    }
 }
 
 impl From<UiTrackType> for TrackType {
@@ -354,7 +418,6 @@ impl AudioWaveformUiForClip {
         let preview_buffer = get_waveform_buffer(&audio_waveform.buffer)
             .map(|slice| quantize_to_i8(slice))
             .unwrap_or_default();
-
 
         let audio_waveform_ui = AudioWaveformUiForClip {
             preview_buffer,

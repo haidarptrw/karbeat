@@ -18,6 +18,7 @@ import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
 
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
+import 'package:karbeat/services/serializer_service.dart';
 
 /// Top-level Riverpod provider for the app state
 final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
@@ -341,6 +342,8 @@ class KarbeatState extends ChangeNotifier {
 
   Map<int, int> trackIdHeightMap = {};
 
+  String? currentFilePath;
+
   // =============== PLACEMENT MODE STATE (USED WHEN AUDIO CLIP PLACEMENT) =====================
   // Placement mode state moved to local clipPlacementProvider in TrackListScreen
 
@@ -566,6 +569,46 @@ class KarbeatState extends ChangeNotifier {
   }
 
   // =============== ACTIONS ===============
+
+  /// Save project state using the provided file path
+  Future<Result<void>> saveProject(String path) async {
+    try {
+      final service = SerializerService();
+      await service.saveProject(pathName: path);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to save project: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  /// Load project state from the provided file path and update the Flutter UI state
+  Future<Result<void>> loadProject(String path) async {
+    try {
+      final service = SerializerService();
+      final uiState = await service.loadProject(pathName: path);
+
+      _metadata = uiState.metadata;
+      _transportState = uiState.transport;
+      _hardwareConfig = uiState.hardwareConfig;
+
+      _tracks = Map.from(uiState.tracks);
+      _generators = Map.from(uiState.generators);
+      _patterns = Map.from(uiState.patterns);
+      
+      _mixerState = uiState.mixer;
+      maxSamplesIndex = uiState.maxSampleIndex;
+      // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
+      
+      notifyListeners();
+
+      KarbeatLogger.info("Project loaded successfully from $path");
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Failed to load project: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
 
   /// Loads an audio file and refreshes the source list
   Future<Result<void>> addAudioFile(String path) async {

@@ -11,6 +11,7 @@ import 'api/mixer.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
 import 'api/project.dart';
+import 'api/serialization.dart';
 import 'api/session.dart';
 import 'api/simple.dart';
 import 'api/track.dart';
@@ -300,6 +301,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int dco_decode_u_8(dynamic raw);
+
+  @protected
+  UiApplicationState dco_decode_ui_application_state(dynamic raw);
 
   @protected
   UiAudioHardwareConfig dco_decode_ui_audio_hardware_config(dynamic raw);
@@ -738,6 +742,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
+
+  @protected
+  UiApplicationState sse_decode_ui_application_state(
+    SseDeserializer deserializer,
+  );
 
   @protected
   UiAudioHardwareConfig sse_decode_ui_audio_hardware_config(
@@ -1257,6 +1266,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_application_state(
+    UiApplicationState self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_audio_hardware_config(

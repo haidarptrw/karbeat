@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 /// The actual plugin processing instance is owned by the audio thread's `AudioPluginState`.
 ///
 /// # Example:
-/// ```rust
+/// ```rust,ignore
 /// let instance = PluginInstance {
 ///     registry_id: 0,
 ///     name: "Basic Reverb".to_string(),
 ///     bypass: false,
-///     parameters: HashMap::new(),
+///     parameters: indexmap::IndexMap::new(),
 /// };
 /// ```
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]

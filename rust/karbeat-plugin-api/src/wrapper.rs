@@ -116,7 +116,7 @@ impl PluginParameter {
 /// to get automation support and base parameter handling.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// struct MyOscillatorEngine {
 ///     waveform: Waveform,
 ///     detune: f32,

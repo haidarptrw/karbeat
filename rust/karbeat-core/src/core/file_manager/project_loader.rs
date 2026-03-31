@@ -29,6 +29,8 @@ pub fn save_karbeat_project(
     zip.start_file("metadata.toml", options)?;
     zip.write_all(metadata_toml.as_bytes())?;
 
+    let mut app_state_toml = toml::Value::try_from(&app_state)?;
+
     zip.add_directory("audio/", options)?;
 
     for (id, audio_arc) in app_state.asset_library.source_map.iter() {
@@ -48,9 +50,30 @@ pub fn save_karbeat_project(
         let mut source_audio_file = File::open(&audio_arc.file_path)
         .with_context(|| format!("Failed to open audio file: {}", audio_arc.file_path.display()))?;
         std::io::copy(&mut source_audio_file, &mut zip)?;
+
+        // Modify the TOML tree "in-flight"
+        // Navigate through the JSON-like structure: asset_library -> source_map -> "id" -> file_path
+        if let Some(source_map) = app_state_toml
+            .get_mut("asset_library")
+            .and_then(|al| al.get_mut("source_map"))
+            .and_then(|sm| sm.as_table_mut())
+        {
+            // TOML serializes map keys as strings
+            let id_str = id.to_u32().to_string(); 
+            
+            if let Some(audio_entry) = source_map.get_mut(&id_str) {
+                if let Some(audio_table) = audio_entry.as_table_mut() {
+                    // Overwrite the absolute path with the clean, relative ZIP path
+                    audio_table.insert(
+                        "file_path".to_string(),
+                        toml::Value::String(internal_name.clone()),
+                    );
+                }
+            }
+        }
     }
 
-    let project_toml = toml::to_string(&app_state)?;
+    let project_toml = toml::to_string(&app_state_toml)?;
     zip.start_file("project.toml", options)?;
     zip.write_all(project_toml.as_bytes())?;
 
@@ -154,6 +177,11 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
             .try_assign_id(AudioSourceId::from(id))
             .with_context(|| format!("Duplicate or invalid audio source id {id}"))?;
 
+        // Detach the temp file to prevent it from being deleted after extraction.
+        // This ensures the audio files remain on disk so subsequent saves can read them.
+        tmp.keep()
+            .map_err(|e| anyhow::anyhow!("Failed to persist temp file: {}", e.error))?;
+
         library
             .source_map
             .insert(AudioSourceId::from(id), Arc::new(waveform));
@@ -173,27 +201,27 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 mod test {
     use super::*;
     use std::io::{Read, Write};
     use tempfile::tempdir;
     
+    
     #[test]
     fn it_should_be_able_to_save_project() {
-        // 1. Setup isolated temp directory
+        // Setup isolated temp directory
         let dir = tempdir().expect("Failed to create temp directory");
         let file_path = dir.path().join("test_save.karbeat");
         
-        // 2. Create dummy state
+        // Create dummy state
         let app_state = ApplicationState::default();
 
-        // 3. Execute Save
+        // Execute Save
         let result = save_karbeat_project(&file_path, &app_state);
         assert!(result.is_ok(), "Failed to save project: {:?}", result.err());
         assert!(file_path.exists(), "The .karbeat file was not created on disk");
 
-        // 4. Verify Custom Magic Header exists at the exact beginning of the file
+        // Verify Custom Magic Header exists at the exact beginning of the file
         let mut file = File::open(&file_path).unwrap();
         let mut magic = [0u8; 8];
         file.read_exact(&mut magic).unwrap();
@@ -247,9 +275,9 @@ mod test {
         let load_result = load_karbeat_project(&file_path);
         assert!(load_result.is_ok(), "Failed to load the project we just saved: {:?}", load_result.err());
         
-        let _loaded_state = load_result.unwrap();
-        // If your ApplicationState derives `PartialEq`, you can uncomment this to ensure data integrity:
-        assert_eq!(original_state, _loaded_state, "Loaded state did not match the saved state!");
+        let loaded_state = load_result.unwrap();
+
+        assert_eq!(original_state, loaded_state, "Loaded state did not match the saved state!");
     }
 
     #[test]

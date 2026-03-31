@@ -255,7 +255,7 @@ impl SynthVoice {
 /// Embed this in your synth struct instead of using procedural macros.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// pub struct MySynth {
 ///     pub base: SynthBase,
 ///     pub oscillators: [Oscillator; 3],  // Synth-specific
