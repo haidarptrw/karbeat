@@ -15,10 +15,8 @@ use crate::core::{
 
 const KARBEAT_MAGIC_HEADER: &[u8; 8] = b"KARBEAT1";
 
-pub fn save_karbeat_project(
-    save_path: &Path,
-    app_state: &ApplicationState,
-) -> anyhow::Result<()> {
+// FIXME: Fix it so that when closing the app and then reopen the saved project, would not caused the project to be empty
+pub fn save_karbeat_project(save_path: &Path, app_state: &ApplicationState) -> anyhow::Result<()> {
     let mut file = File::create(save_path)?;
     file.write_all(KARBEAT_MAGIC_HEADER)?;
     let metadata_toml = toml::to_string(&app_state.metadata)?;
@@ -29,7 +27,9 @@ pub fn save_karbeat_project(
     zip.start_file("metadata.toml", options)?;
     zip.write_all(metadata_toml.as_bytes())?;
 
-    let mut app_state_toml = toml::Value::try_from(&app_state)?;
+    // Clone the app state so we can modify file paths for embedded audio
+    let mut saveable_state = app_state.clone();
+    let library = Arc::make_mut(&mut saveable_state.asset_library);
 
     zip.add_directory("audio/", options)?;
 
@@ -47,35 +47,26 @@ pub fn save_karbeat_project(
         let internal_name = format!("audio/{}_{}", id.to_u32(), file_name);
         zip.start_file(&internal_name, options)?;
 
-        let mut source_audio_file = File::open(&audio_arc.file_path)
-        .with_context(|| format!("Failed to open audio file: {}", audio_arc.file_path.display()))?;
+        let mut source_audio_file = File::open(&audio_arc.file_path).with_context(|| {
+            format!(
+                "Failed to open audio file: {}",
+                audio_arc.file_path.display()
+            )
+        })?;
         std::io::copy(&mut source_audio_file, &mut zip)?;
 
-        // Modify the TOML tree "in-flight"
-        // Navigate through the JSON-like structure: asset_library -> source_map -> "id" -> file_path
-        if let Some(source_map) = app_state_toml
-            .get_mut("asset_library")
-            .and_then(|al| al.get_mut("source_map"))
-            .and_then(|sm| sm.as_table_mut())
-        {
-            // TOML serializes map keys as strings
-            let id_str = id.to_u32().to_string(); 
-            
-            if let Some(audio_entry) = source_map.get_mut(&id_str) {
-                if let Some(audio_table) = audio_entry.as_table_mut() {
-                    // Overwrite the absolute path with the clean, relative ZIP path
-                    audio_table.insert(
-                        "file_path".to_string(),
-                        toml::Value::String(internal_name.clone()),
-                    );
-                }
-            }
+        // Rewrite the file path in the cloned state to use the zip-internal path
+        if let Some(entry) = library.source_map.get_mut(id) {
+            let waveform = Arc::make_mut(entry);
+            waveform.file_path = internal_name.into();
         }
     }
 
-    let project_toml = toml::to_string(&app_state_toml)?;
-    zip.start_file("project.toml", options)?;
-    zip.write_all(project_toml.as_bytes())?;
+    // Serialize the modified state to MessagePack binary
+    let project_msgpack = rmp_serde::to_vec(&saveable_state)
+        .context("Failed to serialize project state to MessagePack")?;
+    zip.start_file("project.msgpack", options)?;
+    zip.write_all(&project_msgpack)?;
 
     zip.finish()?;
     Ok(())
@@ -112,8 +103,10 @@ fn parse_embedded_audio_path(zip_name: &str) -> Option<(u32, String)> {
     Some((id, file_name.to_string()))
 }
 
+// FIXME: This is currently failing to load at all. it does not throw an error, but the
 pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
-    let mut file = File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
+    let mut file =
+        File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
 
     let mut magic = [0u8; 8];
     file.read_exact(&mut magic)?;
@@ -122,15 +115,15 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
     }
 
     let mut archive = ZipArchive::new(file)?;
-    let mut project_toml = String::new();
+    let mut project_bytes = Vec::new();
     {
         let mut project_entry = archive
-            .by_name("project.toml")
-            .context("project.toml missing from .karbeat archive")?;
-        project_entry.read_to_string(&mut project_toml)?;
+            .by_name("project.msgpack")
+            .context("project.msgpack missing from .karbeat archive")?;
+        project_entry.read_to_end(&mut project_bytes)?;
     }
-    let mut app_state: ApplicationState = toml::from_str(&project_toml)
-        .context("Failed to deserialize project.toml")?;
+    let mut app_state: ApplicationState =
+        rmp_serde::from_slice(&project_bytes).context("Failed to deserialize project.msgpack")?;
 
     let library = Arc::make_mut(&mut app_state.asset_library);
     library.source_map.clear();
@@ -205,21 +198,23 @@ mod test {
     use super::*;
     use std::io::{Read, Write};
     use tempfile::tempdir;
-    
-    
+
     #[test]
     fn it_should_be_able_to_save_project() {
         // Setup isolated temp directory
         let dir = tempdir().expect("Failed to create temp directory");
         let file_path = dir.path().join("test_save.karbeat");
-        
+
         // Create dummy state
         let app_state = ApplicationState::default();
 
         // Execute Save
         let result = save_karbeat_project(&file_path, &app_state);
         assert!(result.is_ok(), "Failed to save project: {:?}", result.err());
-        assert!(file_path.exists(), "The .karbeat file was not created on disk");
+        assert!(
+            file_path.exists(),
+            "The .karbeat file was not created on disk"
+        );
 
         // Verify Custom Magic Header exists at the exact beginning of the file
         let mut file = File::open(&file_path).unwrap();
@@ -252,7 +247,10 @@ mod test {
         file2.write_all(b"THIS IS NOT A ZIP FILE").unwrap();
 
         let load_result_zip = load_karbeat_project(&file_path_bad_zip);
-        assert!(load_result_zip.is_err(), "Failed to reject a corrupted ZIP payload");
+        assert!(
+            load_result_zip.is_err(),
+            "Failed to reject a corrupted ZIP payload"
+        );
     }
 
     #[test]
@@ -269,21 +267,31 @@ mod test {
 
         // 3. Peek Metadata
         let peek_result = peek_project_metadata(&file_path);
-        assert!(peek_result.is_ok(), "Failed to peek metadata from saved file");
+        assert!(
+            peek_result.is_ok(),
+            "Failed to peek metadata from saved file"
+        );
 
         // 4. Load & Verify
         let load_result = load_karbeat_project(&file_path);
-        assert!(load_result.is_ok(), "Failed to load the project we just saved: {:?}", load_result.err());
-        
+        assert!(
+            load_result.is_ok(),
+            "Failed to load the project we just saved: {:?}",
+            load_result.err()
+        );
+
         let loaded_state = load_result.unwrap();
 
-        assert_eq!(original_state, loaded_state, "Loaded state did not match the saved state!");
+        assert_eq!(
+            original_state, loaded_state,
+            "Loaded state did not match the saved state!"
+        );
     }
 
     #[test]
     fn it_should_be_able_to_load_valid_project() {
-        // Because "validity" in this context requires a valid TOML and ZIP layout, 
-        // the safest way to test an isolated valid load is to generate a fresh one 
+        // Because "validity" in this context requires a valid TOML and ZIP layout,
+        // the safest way to test an isolated valid load is to generate a fresh one
         // using the save function, ensuring the loader can parse its own formatting.
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("valid_load.karbeat");
@@ -292,6 +300,9 @@ mod test {
         save_karbeat_project(&file_path, &app_state).unwrap();
 
         let load_result = load_karbeat_project(&file_path);
-        assert!(load_result.is_ok(), "Failed to load a known-valid project file");
+        assert!(
+            load_result.is_ok(),
+            "Failed to load a known-valid project file"
+        );
     }
 }
