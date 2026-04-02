@@ -102,7 +102,9 @@ class SourceListScreen extends ConsumerWidget {
                 onTap: () {
                   Widget screen;
                   try {
-                    final builder = SynthRegistry.getSynthBuilder(id);
+                    final availableGenerators = ref.read(karbeatStateProvider).availableGenerators;
+                    final registryId = availableGenerators.firstWhere((p) => p.name == gen.name).id;
+                    final builder = SynthRegistry.getSynthBuilder(registryId);
                     screen = builder(id);
                   } catch (_) {
                     screen = DynamicPluginScreen(

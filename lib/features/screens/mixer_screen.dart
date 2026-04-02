@@ -496,9 +496,10 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                   : plugin_api.UiEffectTarget.track(
                                       _selectedChannelId!,
                                     );
-                              final builder = EffectRegistry.getEffectBuilder(
-                                effect.id,
-                              );
+                                    
+                              final availableEffects = ref.read(karbeatStateProvider).availableEffects;
+                              final registryId = availableEffects.firstWhere((p) => p.name == effect.name).id;
+                              final builder = EffectRegistry.getEffectBuilder(registryId);
                               final screen = builder(effect.id, target);
 
                               Navigator.push(
