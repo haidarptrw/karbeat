@@ -1,9 +1,9 @@
 // ====================================================
-// MY RETRO GENERATOR
+// MY RETRO SYNTH
 // Author: Haidar Wibowo
 // ====================================================
 
-use std::{ collections::HashMap, default };
+use std::{ collections::HashMap };
 
 use karbeat_dsp::prelude::*;
 use karbeat_plugin_api::prelude::*;
@@ -11,7 +11,7 @@ use smallvec::{ SmallVec, smallvec };
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
 /// it only has strictly two oscillator and only
-/// available as monophonic for each oscillator, make it
+/// available as monophonic voice for each oscillator, making it
 /// a simple 8-bit retro sound
 #[derive(Clone)]
 pub struct MyRetroEngine {
@@ -174,9 +174,11 @@ impl RawSynthEngine for MyRetroEngine {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
                         if velocity > 0 {
-                            base.active_voices.push(
-                                SynthVoice::new(key, velocity, self.oscillators.len())
-                            );
+                            let mut voice = SynthVoice::new(key, velocity, self.oscillators.len());
+                            for (i, osc) in self.oscillators.iter().enumerate() {
+                                voice.phase[i] = osc.phase_offset;
+                            }
+                            base.active_voices.push(voice);
                         } else {
                             for v in base.active_voices.iter_mut() {
                                 if v.note == key && v.is_active {
@@ -206,6 +208,7 @@ impl RawSynthEngine for MyRetroEngine {
 
     fn set_custom_parameter(&mut self, id: u32, value: f32) {
         match id {
+            // Osc 1
             10 => {
                 self.oscillators[0].waveform = Waveform::from(value);
             }
@@ -217,6 +220,11 @@ impl RawSynthEngine for MyRetroEngine {
             }
             13 => {
                 self.oscillators[0].pulse_width = value.clamp(0.01, 0.99);
+            }
+
+            // Osc 2
+            14 => {
+                self.oscillators[0].phase_offset = value.clamp(0.0, 1.0);
             }
 
             20 => {
@@ -232,6 +240,11 @@ impl RawSynthEngine for MyRetroEngine {
                 self.oscillators[1].pulse_width = value.clamp(0.01, 0.99);
             }
 
+            24 => {
+                self.oscillators[1].phase_offset = value.clamp(0.0, 1.0);
+            }
+
+            // Bitcrush resolution
             30 => {
                 self.bitcrush_resolution = value.clamp(2.0, 256.0);
             }
@@ -245,11 +258,13 @@ impl RawSynthEngine for MyRetroEngine {
             11 => Some(self.oscillators[0].detune),
             12 => Some(self.oscillators[0].mix),
             13 => Some(self.oscillators[0].pulse_width),
+            14 => Some(self.oscillators[0].phase_offset),
 
             20 => Some(self.oscillators[1].waveform as u32 as f32),
             21 => Some(self.oscillators[1].detune),
             22 => Some(self.oscillators[1].mix),
             23 => Some(self.oscillators[1].pulse_width),
+            24 => Some(self.oscillators[1].phase_offset),
 
             30 => Some(self.bitcrush_resolution),
             _ => None,
@@ -262,11 +277,13 @@ impl RawSynthEngine for MyRetroEngine {
         map.insert(11, 0.0);
         map.insert(12, 1.0);
         map.insert(13, 0.5);
+        map.insert(14, 0.0);
 
         map.insert(20, 3.0); // Osc 2: Triangle
         map.insert(21, -12.0);
         map.insert(22, 0.8);
         map.insert(23, 0.5);
+        map.insert(24, 0.0);
 
         map.insert(30, 16.0); // Bitcrush
         map
@@ -317,6 +334,15 @@ impl RawSynthEngine for MyRetroEngine {
                 0.99,
                 0.5
             ),
+            PluginParameter::new_float(
+                14,
+                "Phase",
+                "Oscillator 1",
+                self.oscillators[0].phase_offset,
+                0.0,
+                1.0,
+                0.0
+            ),
 
             PluginParameter::new_choice(
                 20,
@@ -353,6 +379,15 @@ impl RawSynthEngine for MyRetroEngine {
                 0.99,
                 0.5
             ),
+            PluginParameter::new_float(
+                24,
+                "Phase",
+                "Oscillator 2",
+                self.oscillators[1].phase_offset,
+                0.0,
+                1.0,
+                0.0
+            ),
 
             PluginParameter::new_float(
                 30,
@@ -367,6 +402,10 @@ impl RawSynthEngine for MyRetroEngine {
     }
 }
 
+/// A generator/synthesizer that produces a retro-sounding synth sound.
+/// it only has strictly two oscillator and only
+/// available as monophonic voice for each oscillator, making it
+/// a simple 8-bit retro sound
 pub type MyRetro = RawSynthWrapper<MyRetroEngine>;
 
 pub fn create_my_retro_synth(sample_rate: f32, channels: u16) -> MyRetro {

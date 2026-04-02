@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/audio_plugins/dynamic_plugin_screen.dart';
+import 'package:karbeat/features/audio_plugins/generators/synth_registry.dart';
 import 'package:karbeat/features/screens/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
@@ -99,15 +100,20 @@ class SourceListScreen extends ConsumerWidget {
                 icon: Icons.piano,
                 color: Colors.orangeAccent,
                 onTap: () {
-                  // Navigate to dynamic plugin editor for all generator types
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DynamicPluginScreen(
-                        generatorId: id,
-                        generatorName: gen.name,
-                      ),
-                    ),
-                  );
+                  Widget screen;
+                  try {
+                    final builder = SynthRegistry.getSynthBuilder(id);
+                    screen = builder(id);
+                  } catch (_) {
+                    screen = DynamicPluginScreen(
+                      generatorId: id,
+                      generatorName: gen.name,
+                    );
+                  }
+
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => screen));
                 },
                 onPlace: null,
                 // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'dart:math';
 
@@ -60,7 +62,7 @@ class KarbeatParametricEq extends AbstractEffectScreen {
   const KarbeatParametricEq({
     super.key,
     required super.target,
-    required super.effectIdx,
+    required super.effectId,
   });
 
   @override
@@ -103,6 +105,10 @@ class KarbeatParametricEqState
     "24 dB/oct",
     "36 dB/oct",
     "48 dB/oct",
+    "60 dB/oct",
+    "72 dB/oct",
+    "84 dB/oct",
+    "96 dB/oct",
   ];
 
   @override
@@ -126,14 +132,13 @@ class KarbeatParametricEqState
 
       final responseStr = await plugin_api.executeEffectInstanceCommand(
         target: widget.target,
-        effectId: widget.effectIdx,
+        effectId: widget.effectId,
         command: "GET_MAGNITUDE_RESPONSE",
-        payloadJson: '{"num_points": 100}',
+        payloadJson: jsonEncode({'num_points': 100}),
       );
 
-      final List<eq_api.UiResponseCurvePoint> curvePoints = eq_api.parseEqCurveResponse(
-        jsonStr: responseStr,
-      );
+      final List<eq_api.UiResponseCurvePoint> curvePoints = eq_api
+          .parseEqCurveResponse(jsonStr: responseStr);
 
       if (mounted) {
         setState(() => _responseCurve = curvePoints);

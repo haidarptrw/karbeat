@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 /// Maximum number of cascaded biquad stages per band (order 0..3 = 1..4 stages)
-const MAX_ORDER: usize = 4;
+const MAX_ORDER: usize = 8;
 
 use karbeat_plugin_api::wrapper::{RawEffectEngine, RawEffectWrapper};
 use serde_json::{Value, json};

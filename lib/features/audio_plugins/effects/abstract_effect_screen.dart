@@ -15,12 +15,12 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 /// Subclasses must implement [buildEffectBody] to define the custom effect UI.
 abstract class AbstractEffectScreen extends ConsumerStatefulWidget {
   final plugin_api.UiEffectTarget target;
-  final int effectIdx;
+  final int effectId;
 
   const AbstractEffectScreen({
     super.key,
     required this.target,
-    required this.effectIdx,
+    required this.effectId,
   });
 }
 
@@ -57,7 +57,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     // Request initial parameter snapshot from audio thread
     await plugin_api.queryEffectParameters(
       target: widget.target,
-      effectId: widget.effectIdx,
+      effectId: widget.effectId,
     );
 
     // Poll every 50ms for smooth UI updates during automation
@@ -84,7 +84,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       setState(() {
         for (final snapshot in snapshots) {
           // Only process snapshots for this effect and target
-          if (snapshot.effectId != widget.effectIdx ||
+          if (snapshot.effectId != widget.effectId ||
               snapshot.target != widget.target) {
             continue;
           }
@@ -127,7 +127,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     try {
       final specs = await plugin_api.getEffectParameterSpecs(
         target: widget.target,
-        effectId: widget.effectIdx,
+        effectId: widget.effectId,
       );
       setState(() {
         parameters = specs;
@@ -170,7 +170,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     try {
       await plugin_api.setEffectParameter(
         target: widget.target,
-        effectId: widget.effectIdx,
+        effectId: widget.effectId,
         paramId: paramId,
         value: value,
       );
