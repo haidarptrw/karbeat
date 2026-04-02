@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin_internal`, `try_from_audio_waveform_with_target_sample_bin`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -344,17 +344,12 @@ sealed class UiClipSource with _$UiClipSource {
 
 class UiGeneratorInstance {
   final int id;
-  final String name;
-  final Map<int, double> parameters;
+  final UiGeneratorInstanceType instanceType;
 
-  const UiGeneratorInstance({
-    required this.id,
-    required this.name,
-    required this.parameters,
-  });
+  const UiGeneratorInstance({required this.id, required this.instanceType});
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
+  int get hashCode => id.hashCode ^ instanceType.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -362,7 +357,56 @@ class UiGeneratorInstance {
       other is UiGeneratorInstance &&
           runtimeType == other.runtimeType &&
           id == other.id &&
+          instanceType == other.instanceType;
+}
+
+@freezed
+sealed class UiGeneratorInstanceType with _$UiGeneratorInstanceType {
+  const UiGeneratorInstanceType._();
+
+  const factory UiGeneratorInstanceType.plugin(UiPluginInstance field0) =
+      UiGeneratorInstanceType_Plugin;
+  const factory UiGeneratorInstanceType.sampler({
+    required int assetId,
+    required int rootNote,
+  }) = UiGeneratorInstanceType_Sampler;
+}
+
+class UiPluginInstance {
+  /// Registry ID for plugin lookup (stable identifier)
+  final int registryId;
+
+  /// Name of the plugin (for display purposes)
+  final String name;
+
+  /// Whether this plugin is bypassed
+  final bool bypass;
+
+  /// Plugin parameters for persistence (Param ID -> Value)
+  final Map<int, double> parameters;
+
+  const UiPluginInstance({
+    required this.registryId,
+    required this.name,
+    required this.bypass,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode =>
+      registryId.hashCode ^
+      name.hashCode ^
+      bypass.hashCode ^
+      parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiPluginInstance &&
+          runtimeType == other.runtimeType &&
+          registryId == other.registryId &&
           name == other.name &&
+          bypass == other.bypass &&
           parameters == other.parameters;
 }
 

@@ -8,6 +8,7 @@ import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
+import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/utils/formatter.dart';
 import 'package:karbeat/utils/logger.dart';
@@ -561,7 +562,15 @@ class _PianoRollToolbar extends ConsumerWidget {
                 ...generators.entries.map(
                   (entry) => DropdownMenuItem<int?>(
                     value: entry.key,
-                    child: Text(entry.value.name),
+                    child: Text(() {
+                      final instanceType = entry.value.instanceType;
+                      final name = switch (instanceType) {
+                        UiGeneratorInstanceType_Plugin(:final field0) =>
+                          field0.name,
+                        _ => "Sampler",
+                      };
+                      return name;
+                    }()),
                   ),
                 ),
               ],

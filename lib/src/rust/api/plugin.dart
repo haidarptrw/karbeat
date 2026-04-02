@@ -11,6 +11,7 @@ import 'project.dart';
 part 'plugin.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `hash`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `parse_plugin_response`
 
 /// Get all available generators in Plugin Registry (names only, backwards compatible)
 Future<List<String>> getAvailableGenerators() =>

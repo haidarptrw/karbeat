@@ -73,6 +73,26 @@ Future<void> moveClip({
   newTrackId: newTrackId,
 );
 
+/// Cut a clip in half.
+/// This will retain the original clip at the left cut region,
+/// while the right cut region will clone a new clip with the same source,
+/// but with the offset at the cut point
+///
+/// # Parameters
+///
+/// - source_track_id: Track where clip resides
+/// - clip_id: The cut clip id inside the track
+/// - cut_point_sample: Absolute sample point of cut location
+Future<void> cutClip({
+  required int sourceTrackId,
+  required int clipId,
+  required int cutPointSample,
+}) => RustLib.instance.api.crateApiTrackCutClip(
+  sourceTrackId: sourceTrackId,
+  clipId: clipId,
+  cutPointSample: cutPointSample,
+);
+
 /// Add a MIDI track with a generator by its registry ID (preferred method).
 Future<void> addMidiTrackWithGeneratorId({required int registryId}) => RustLib
     .instance

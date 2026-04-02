@@ -66,6 +66,7 @@ class _WaveShapeDrawer extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // Just drawing the square wave for visual retro flavor
+    // TODO: Handles other waveform types
     if (waveformType == 2) {
       _drawSquareWaveform(canvas, size);
     }

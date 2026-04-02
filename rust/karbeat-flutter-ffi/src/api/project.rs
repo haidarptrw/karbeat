@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Deref};
 
 use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
-use karbeat_core::core::project::ApplicationState;
+use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use karbeat_utils::audio_utils::quantize_to_i8;
 use serde::Serialize;
 
@@ -435,8 +435,43 @@ impl AudioWaveformUiForClip {
 // ============================================================
 pub struct UiGeneratorInstance {
     pub id: u32,
+    pub instance_type: UiGeneratorInstanceType,
+}
+
+pub struct UiPluginInstance {
+    /// Registry ID for plugin lookup (stable identifier)
+    pub registry_id: u32,
+    /// Name of the plugin (for display purposes)
     pub name: String,
+    /// Whether this plugin is bypassed
+    pub bypass: bool,
+    /// Plugin parameters for persistence (Param ID -> Value)
     pub parameters: HashMap<u32, f32>,
+}
+
+impl From<PluginInstance> for UiPluginInstance {
+    fn from(value: PluginInstance) -> Self {
+        Self {
+            registry_id: value.registry_id,
+            name: value.name,
+            bypass: value.bypass,
+            parameters: value.parameters.into_iter().collect(),
+        }
+    }
+}
+
+pub enum UiGeneratorInstanceType {
+    Plugin(UiPluginInstance),
+    Sampler { asset_id: u32, root_note: u8 },
+}
+
+impl From<GeneratorInstanceType> for UiGeneratorInstanceType {
+    fn from(value: GeneratorInstanceType) -> Self {
+        match value {
+            GeneratorInstanceType::Plugin(plugin_instance) => Self::Plugin(UiPluginInstance::from(plugin_instance)),
+            GeneratorInstanceType::Sampler { asset_id, root_note } => Self::Sampler { asset_id, root_note },
+        }
+    }
 }
 
 impl From<&GeneratorInstance> for UiGeneratorInstance {
@@ -444,21 +479,14 @@ impl From<&GeneratorInstance> for UiGeneratorInstance {
         match &generator_instance.instance_type {
             GeneratorInstanceType::Plugin(plugin_instance) => Self {
                 id: generator_instance.id.to_u32(),
-                name: plugin_instance.name.clone(),
-                parameters: plugin_instance.parameters.clone().into_iter().collect(),
+                instance_type: UiGeneratorInstanceType::Plugin(UiPluginInstance::from(plugin_instance.to_owned())),
             },
-            GeneratorInstanceType::Sampler { .. } => {
+            GeneratorInstanceType::Sampler { asset_id, root_note } => {
                 Self {
                     id: generator_instance.id.to_u32(),
-                    name: "Sampler".to_string(),
-                    parameters: HashMap::new(), // Add sampler params later if needed
+                    instance_type: UiGeneratorInstanceType::Sampler { asset_id: *asset_id, root_note: *root_note },
                 }
             }
-            GeneratorInstanceType::AudioInput { .. } => Self {
-                id: generator_instance.id.to_u32(),
-                name: "Audio Input".to_string(),
-                parameters: HashMap::new(),
-            },
         }
     }
 }

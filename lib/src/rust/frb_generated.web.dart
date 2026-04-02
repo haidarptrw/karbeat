@@ -121,6 +121,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
 
   @protected
+  UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw);
+
+  @protected
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
 
   @protected
@@ -342,6 +345,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
+  UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw);
+
+  @protected
   UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(
     dynamic raw,
   );
@@ -372,6 +378,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginInfo dco_decode_ui_plugin_info(dynamic raw);
+
+  @protected
+  UiPluginInstance dco_decode_ui_plugin_instance(dynamic raw);
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
@@ -519,6 +528,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(
     SseDeserializer deserializer,
   );
 
@@ -794,6 +808,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiGeneratorInstanceType sse_decode_ui_generator_instance_type(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(
     SseDeserializer deserializer,
   );
@@ -828,6 +847,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer);
+
+  @protected
+  UiPluginInstance sse_decode_ui_plugin_instance(SseDeserializer deserializer);
 
   @protected
   UiPluginParameter sse_decode_ui_plugin_parameter(
@@ -1007,6 +1029,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_mixer_channel(
     UiMixerChannel self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_plugin_instance(
+    UiPluginInstance self,
     SseSerializer serializer,
   );
 
@@ -1335,6 +1363,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_generator_instance_type(
+    UiGeneratorInstanceType self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_generator_parameter_snapshot(
     UiGeneratorParameterSnapshot self,
     SseSerializer serializer,
@@ -1381,6 +1415,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_plugin_instance(
+    UiPluginInstance self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_plugin_parameter(

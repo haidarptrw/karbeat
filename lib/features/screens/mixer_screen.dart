@@ -498,7 +498,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                     );
                                     
                               final availableEffects = ref.read(karbeatStateProvider).availableEffects;
-                              final registryId = availableEffects.firstWhere((p) => p.name == effect.name).id;
+                              final registryId = availableEffects.firstWhere((p) => p.id == effect.registryId).id;
                               final builder = EffectRegistry.getEffectBuilder(registryId);
                               final screen = builder(effect.id, target);
 

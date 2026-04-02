@@ -65,19 +65,21 @@ impl Ord for Clip {
 }
 
 impl ApplicationState {
-    pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) {
+    pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip) -> anyhow::Result<()> {
         // Get the track
-        if let Some(track_arc) = self.tracks.get_mut(&track_id) {
-            // COW: Get mutable track
-            let track = Arc::make_mut(track_arc);
+        match self.tracks.get_mut(&track_id) {
+            Some(track_arc) => {
+                // COW: Get mutable track
+                let track = Arc::make_mut(track_arc);
 
-            // Add Clip & Check bounds
-            // We pass the Clip by value. The track takes ownership and wraps it in Arc.
-            if let Ok(_) = track.add_clip(clip) {
-                // 4. Update Global Max (Cheap u64 comparison)
+                // Add Clip & Check bounds
+                // We pass the Clip by value. The track takes ownership and wraps it in Arc.
+                let _ =  track.add_clip(clip)?;
                 self.update_max_sample_index();
             }
+            _ => return Err(anyhow::anyhow!("Track not found")),
         }
+        Ok(())
     }
 
     pub fn delete_clip_from_track(

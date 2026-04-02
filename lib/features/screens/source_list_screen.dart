@@ -94,8 +94,19 @@ class SourceListScreen extends ConsumerWidget {
             delegate: SliverChildBuilderDelegate((context, index) {
               final id = generators.keys.elementAt(index);
               final gen = generators.values.elementAt(index);
+              final instanceType = gen.instanceType;
+              final name = switch (instanceType) {
+                UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
+                _ => "Sampler",
+              };
+
+              final gen_instance = switch (instanceType) {
+                UiGeneratorInstanceType_Plugin(:final field0) => field0,
+                _ => null,
+              };
+
               return _SourceTile(
-                title: gen.name,
+                title: name,
                 subtitle: "ID: $id",
                 icon: Icons.piano,
                 color: Colors.orangeAccent,
@@ -103,13 +114,13 @@ class SourceListScreen extends ConsumerWidget {
                   Widget screen;
                   try {
                     final availableGenerators = ref.read(karbeatStateProvider).availableGenerators;
-                    final registryId = availableGenerators.firstWhere((p) => p.name == gen.name).id;
+                    final registryId = availableGenerators.firstWhere((p) => p.id == gen_instance?.registryId).id;
                     final builder = SynthRegistry.getSynthBuilder(registryId);
                     screen = builder(id);
                   } catch (_) {
                     screen = DynamicPluginScreen(
                       generatorId: id,
-                      generatorName: gen.name,
+                      generatorName: name,
                     );
                   }
 

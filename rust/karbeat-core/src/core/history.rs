@@ -175,7 +175,7 @@ impl HistoryManager {
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Inverse of DeleteClip: Restore the clip to the track
-                app.add_clip_to_track(*track_id, clip.clone());
+                app.add_clip_to_track(*track_id, clip.clone()).map_err(|e| format!("{}", e))?;
             }
             ProjectAction::MoveClip {
                 old_track_id,

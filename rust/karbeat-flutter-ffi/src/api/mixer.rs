@@ -39,6 +39,7 @@ pub struct UiMixerChannel {
 
 pub struct UiEffectSummary {
     pub id: u32,
+    pub registry_id: u32,
     pub name: String,
 }
 
@@ -75,6 +76,7 @@ impl From<&MixerChannel> for UiMixerChannel {
                 .iter()
                 .map(|instance| UiEffectSummary {
                     id: instance.id.to_u32(),
+                    registry_id: instance.instance.registry_id,
                     name: instance.instance.name.clone(),
                 })
                 .collect(),

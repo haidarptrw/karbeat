@@ -19,9 +19,7 @@ pub fn save_project(path_name: &str) -> Result<(), String> {
 pub fn load_project(path_name: &str) -> Result<crate::api::project::UiApplicationState, String> {
     
     let loaded_app = load_karbeat_project(Path::new(path_name)).map_err(|e| e.to_string())?;
-
-    // HALT THE ENGINE
-    send_audio_command(AudioCommand::StopAndReset);
+    send_audio_command(AudioCommand::StopAndReset); // HALT THE ENGINE
 
     let ui_state = {
         let mut app = get_app_write();
@@ -30,6 +28,7 @@ pub fn load_project(path_name: &str) -> Result<crate::api::project::UiApplicatio
     };
 
     broadcast_state_change();
+    send_audio_command(AudioCommand::SetBPM(ui_state.transport.bpm)); // Send the loaded BPM to audio Thread
     broadcast_plugin_state_loading();
 
     log::info!("Successfully load the project {}", path_name);
