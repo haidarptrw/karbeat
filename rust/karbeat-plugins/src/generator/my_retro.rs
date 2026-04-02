@@ -3,7 +3,7 @@
 // Author: Haidar Wibowo
 // ====================================================
 
-use std::collections::HashMap;
+use std::{ collections::HashMap, default };
 
 use karbeat_dsp::prelude::*;
 use karbeat_plugin_api::prelude::*;
@@ -21,21 +21,26 @@ pub struct MyRetroEngine {
 
 impl Default for MyRetroEngine {
     fn default() -> Self {
+        let osc1 = OscillatorBuilder::default()
+            .waveform(Waveform::Square)
+            .detune(0.0)
+            .mix(1.0)
+            .pulse_width(0.5)
+            .phase_offset(0.0)
+            .build()
+            .unwrap(); // This unwrap is safe
+
+        let osc2 = OscillatorBuilder::default()
+            .waveform(Waveform::Square)
+            .detune(-12.0)
+            .mix(0.8)
+            .pulse_width(0.5)
+            .phase_offset(0.0)
+            .build()
+            .unwrap();
+
         Self {
-            oscillators: smallvec![
-                Oscillator {
-                    waveform: Waveform::Square,
-                    detune: 0.0,
-                    mix: 1.0,
-                    pulse_width: 0.5,
-                },
-                Oscillator {
-                    waveform: Waveform::Triangle,
-                    detune: -12.0,
-                    mix: 0.8,
-                    pulse_width: 0.5,
-                }
-            ],
+            oscillators: smallvec![osc1, osc2],
             bitcrush_resolution: 16.0,
         }
     }

@@ -98,6 +98,7 @@ pub fn ctx() -> &'static KarbeatContext {
 }
 
 pub mod utils {
+    use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
     use smallvec::SmallVec;
 
     use crate::{ commands::AudioCommand, context::ctx };
@@ -115,5 +116,23 @@ pub mod utils {
         }
 
         Ok(())
+    }
+
+    pub fn get_effect_plugin_box(registry_id: u32) -> Option<Box<dyn KarbeatEffect + Send + Sync>> {
+        let registry = ctx().plugin_registry.read();
+        let Some((plugin, _)) = registry.create_effect_by_id(registry_id) else {
+            return None;
+        };
+
+        Some(plugin)
+    }
+
+    pub fn get_synth_plugin_box(registry_id: u32) -> std::option::Option<Box<dyn KarbeatGenerator + Send + Sync>> {
+        let registry = ctx().plugin_registry.read();
+        let Some((plugin, _)) = registry.create_generator_by_id(registry_id) else {
+            return None;
+        };
+
+        Some(plugin)
     }
 }

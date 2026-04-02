@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use crate::api::{ mixer::UiEffectInstance, project::UiGeneratorInstance };
 use crate::broadcast_state_change;
+use flutter_rust_bridge::frb;
+use karbeat_core::lock::get_plugin_registry_read;
 use karbeat_core::{
     commands::{ AudioCommand, AudioFeedback, EffectTarget },
     context::ctx,
@@ -14,7 +16,7 @@ use karbeat_core::{
     lock::{ get_app_read, get_app_write },
 };
 use karbeat_plugin_api::wrapper::ParameterValueType;
-use karbeat_plugins::effect::parametric_eq::KarbeatParametricEQ;
+use karbeat_utils::parser::FromPluginCommand;
 
 // ============================================================================
 // UI TYPES FOR FLUTTER RUST BRIDGE
@@ -770,102 +772,132 @@ pub fn query_effect_parameters(target: UiEffectTarget, effect_id: u32) -> Result
 }
 
 // ============================================================================
-// EQ RESPONSE CURVE API
+// 1. STATELESS COMMANDS (Operates on defaults from the Registry)
 // ============================================================================
 
-/// A point on the EQ response curve (DTO for FRB)
-#[derive(Clone, Debug)]
-pub struct UiResponseCurvePoint {
-    pub frequency: f32,
-    pub magnitude_db: f32,
+/// Execute generator's unique command on a default instance
+pub fn execute_plugin_command_generator(gen_registry_id: u32, command: String, payload_json: String) -> Option<String> {
+    let payload_value: serde_json::Value = serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
+    let registry = get_plugin_registry_read();
+    let (mut plugin, _) = registry.create_generator_by_id(gen_registry_id)?;
+    
+    let response_value = plugin.execute_custom_command(&command, &payload_value);
+    response_value.map(|val| val.to_string())
 }
 
-/// Compute the magnitude response curve for a parametric EQ effect on a track.
-///
-/// Creates a temporary plugin instance, applies stored parameters, and evaluates
-/// the exact biquad transfer function at log-spaced frequency points.
-pub fn get_eq_response_curve(
+/// Execute effect's unique command on a default instance
+pub fn execute_plugin_command_effect(effect_registry_id: u32, command: String, payload_json: String) -> Option<String> {
+    let payload_value: serde_json::Value = serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
+    let registry = get_plugin_registry_read();
+    let (mut plugin, _) = registry.create_effect_by_id(effect_registry_id)?;
+    
+    let response_value = plugin.execute_custom_command(&command, &payload_value);
+    response_value.map(|val| val.to_string())
+}
+
+// ============================================================================
+// 2. STATEFUL COMMANDS (Operates on active instances with User Parameters applied)
+// ============================================================================
+
+/// Execute an effect's command using its exact current state in the project
+pub fn execute_effect_instance_command(
     target: UiEffectTarget,
     effect_id: u32,
-    num_points: u32
-) -> Result<Vec<UiResponseCurvePoint>, String> {
+    command: String,
+    payload_json: String
+) -> Result<String, String> {
     let app = get_app_read();
     let effect_id_typed = EffectId::from(effect_id);
 
     let (plugin_name, plugin_registry_id, plugin_parameters) = match target {
         UiEffectTarget::Track(track_id) => {
-            let channel = app.mixer.channels
-                .get(&TrackId::from(track_id))
+            let channel = app.mixer.channels.get(&TrackId::from(track_id))
                 .ok_or_else(|| format!("Track channel {} not found", track_id))?;
-            let effect = channel.effects
-                .iter()
-                .find(|e| e.id == effect_id_typed)
+            let effect = channel.effects.iter().find(|e| e.id == effect_id_typed)
                 .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id, effect.instance.parameters.clone())
         }
         UiEffectTarget::Bus(bus_id) => {
-            let bus = app.mixer.buses
-                .get(&BusId::from(bus_id))
+            let bus = app.mixer.buses.get(&BusId::from(bus_id))
                 .ok_or_else(|| format!("Bus {} not found", bus_id))?;
-            let effect = bus.channel.effects
-                .iter()
-                .find(|e| e.id == effect_id_typed)
+            let effect = bus.channel.effects.iter().find(|e| e.id == effect_id_typed)
                 .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id, effect.instance.parameters.clone())
         }
         UiEffectTarget::Master => {
-            let effect = app.mixer.master_bus.effects
-                .iter()
-                .find(|e| e.id == effect_id_typed)
+            let effect = app.mixer.master_bus.effects.iter().find(|e| e.id == effect_id_typed)
                 .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id, effect.instance.parameters.clone())
         }
     };
 
-    // Create a temporary plugin from registry
-    let registry = ctx().plugin_registry.read();
-    let temp_plugin = if plugin_registry_id > 0 {
-        registry.create_effect_by_id(plugin_registry_id).map(|(plugin, _)| plugin)
+    // Create a temporary clone of the plugin from the registry
+    let registry = get_plugin_registry_read();
+    let mut temp_plugin = if plugin_registry_id > 0 {
+        registry.create_effect_by_id(plugin_registry_id).map(|(p, _)| p)
     } else {
         registry.create_effect(&plugin_name)
-    };
+    }.ok_or_else(|| format!("Effect '{}' not found in registry", plugin_name))?;
 
-    let mut temp_plugin = temp_plugin.ok_or_else(||
-        format!("Effect '{}' not found in registry", plugin_name)
-    )?;
-
-    // Apply stored parameters to the temp plugin
+    // Apply the parameters so the plugin knows its actual state
     for (&param_id, &value) in &plugin_parameters {
         temp_plugin.set_parameter(param_id, value);
     }
 
-    // Downcast to KarbeatParametricEQ to access compute_magnitude_response
-    let eq = temp_plugin
-        .as_any()
-        .downcast_ref::<KarbeatParametricEQ>()
-        .ok_or_else(|| "Effect is not a Parametric EQ".to_string())?;
+    let payload_value: serde_json::Value = serde_json::from_str(&payload_json)
+        .unwrap_or(serde_json::json!({}));
 
-    let response = eq.engine.compute_magnitude_response(num_points as usize);
+    let response_value = temp_plugin.execute_custom_command(&command, &payload_value)
+        .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))?;
 
-    Ok(
-        response
-            .into_iter()
-            .map(|(freq, mag_db)| UiResponseCurvePoint {
-                frequency: freq,
-                magnitude_db: mag_db,
-            })
-            .collect()
-    )
+    Ok(response_value.to_string())
+}
+
+/// Execute a generator's command using its exact current state in the project
+pub fn execute_generator_instance_command(
+    generator_id: u32,
+    command: String,
+    payload_json: String
+) -> Result<String, String> {
+    let app = get_app_read();
+    let gen_id_typed = GeneratorId::from(generator_id);
+
+    let gen_arc = app.generator_pool.get(&gen_id_typed)
+        .ok_or_else(|| format!("Generator {} not found", generator_id))?;
+    
+    let (plugin_name, plugin_registry_id, plugin_parameters) = match &gen_arc.instance_type {
+        karbeat_core::core::project::GeneratorInstanceType::Plugin(p) => {
+            (p.name.clone(), p.registry_id, p.parameters.clone())
+        },
+        _ => return Err("Generator is not a plugin".into())
+    };
+
+    // Create temporary clone
+    let registry = get_plugin_registry_read();
+    let mut temp_plugin = if plugin_registry_id > 0 {
+        registry.create_generator_by_id(plugin_registry_id).map(|(p, _)| p)
+    } else {
+        registry.create_generator(&plugin_name)
+    }.ok_or_else(|| format!("Generator '{}' not found in registry", plugin_name))?;
+
+    // Apply state
+    for (&param_id, &value) in &plugin_parameters {
+        temp_plugin.set_parameter(param_id, value);
+    }
+
+    let payload_value: serde_json::Value = serde_json::from_str(&payload_json)
+        .unwrap_or(serde_json::json!({}));
+
+    let response_value = temp_plugin.execute_custom_command(&command, &payload_value)
+        .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))?;
+
+    Ok(response_value.to_string())
+}
+
+#[frb(ignore)]
+pub fn parse_plugin_response<T: FromPluginCommand>(json_str: &str) -> Result<T, String> {
+    let payload: serde_json::Value = serde_json::from_str(json_str)
+        .map_err(|e| format!("Failed to parse JSON string: {}", e))?;
+    
+    T::from_json(&payload)
 }

@@ -4,6 +4,8 @@ use indexmap::IndexMap;
 
 use crate::wrapper::PluginParameter;
 
+use serde_json::Value;
+
 /// Trait that indicates an Effect plugin
 /// Requires Send + Sync so it can be moved between UI and Audio threads
 pub trait KarbeatEffect: Send + Sync {
@@ -35,6 +37,11 @@ pub trait KarbeatEffect: Send + Sync {
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
 
+    /// Execute custom command if provided by implementer
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
+
     // Helper for downcasting if you need concrete access later
     fn as_any(&self) -> &dyn Any;
 }
@@ -64,6 +71,11 @@ pub trait KarbeatGenerator: Send + Sync {
 
     /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+
+    /// Execute custom command if provided by implementer
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
 
     fn as_any(&self) -> &dyn Any;
 }
@@ -132,6 +144,14 @@ impl KarbeatPlugin {
         match self {
             KarbeatPlugin::Effect(e) => e.get_parameter_specs(),
             KarbeatPlugin::Generator(g) => g.get_parameter_specs(),
+        }
+    }
+
+    /// Execute a custom command on the plugin (works for both Effects and Generators)
+    pub fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        match self {
+            KarbeatPlugin::Effect(e) => e.execute_custom_command(command, payload),
+            KarbeatPlugin::Generator(g) => g.execute_custom_command(command, payload),
         }
     }
 }

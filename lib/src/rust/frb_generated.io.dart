@@ -7,6 +7,7 @@ import 'api/audio.dart';
 import 'api/mixer.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
+import 'api/plugins/eq.dart';
 import 'api/project.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
@@ -237,6 +238,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   Map<int, AudioWaveformUiForSourceList>?
   dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
 
   @protected
   AudioWaveformUiForAudioProperties?
@@ -668,6 +672,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(
     SseDeserializer deserializer,
   );
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
   AudioWaveformUiForAudioProperties?
@@ -1180,6 +1187,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     Map<int, AudioWaveformUiForSourceList>? self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(

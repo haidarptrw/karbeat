@@ -2,20 +2,55 @@
 
 use std::f64::consts::TAU;
 use dasp::{ Frame, slice };
+use derive_builder::Builder;
 
 // ============================================================================
 // OSCILLATOR
 // ============================================================================
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Builder, Debug)]
+#[builder(setter(into))]
 pub struct Oscillator {
+    #[builder(default = "Waveform::Sine")]
     pub waveform: Waveform,
-    pub detune: f32, // In semitones
-    pub mix: f32, // 0.0 to 1.0
-    pub pulse_width: f32, // 0.0 to 1.0 (For Pulse/Square)
+
+    // Change these to custom to trigger clamping on input
+    #[builder(default = "0.0", setter(custom))]
+    pub detune: f32,
+
+    #[builder(default = "0.0", setter(custom))]
+    pub phase_offset: f32,
+
+    #[builder(default = "1.0", setter(custom))]
+    pub mix: f32, 
+
+    #[builder(default = "0.5", setter(custom))]
+    pub pulse_width: f32, 
 }
 
-#[derive(Clone, Copy, PartialEq)]
+impl OscillatorBuilder {
+    pub fn detune(&mut self, value: f32) -> &mut Self {
+        self.detune = Some(value.clamp(-48.0, 48.0));
+        self
+    }
+
+    pub fn phase_offset(&mut self, value: f32) -> &mut Self {
+        self.phase_offset = Some(value.clamp(0.0, 1.0));
+        self
+    }
+
+    pub fn mix(&mut self, value: f32) -> &mut Self {
+        self.mix = Some(value.clamp(0.0, 1.0));
+        self
+    }
+
+    pub fn pulse_width(&mut self, value: f32) -> &mut Self {
+        self.pulse_width = Some(value.clamp(0.01, 0.99));
+        self
+    }
+}
+
+#[derive(Clone, Debug, Copy, PartialEq)]
 pub enum Waveform {
     Sine = 0,
     Saw = 1,

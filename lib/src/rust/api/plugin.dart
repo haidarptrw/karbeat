@@ -10,7 +10,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `hash`
 
 /// Get all available generators in Plugin Registry (names only, backwards compatible)
 Future<List<String>> getAvailableGenerators() =>
@@ -172,18 +172,50 @@ Future<void> queryEffectParameters({
   effectId: effectId,
 );
 
-/// Compute the magnitude response curve for a parametric EQ effect on a track.
-///
-/// Creates a temporary plugin instance, applies stored parameters, and evaluates
-/// the exact biquad transfer function at log-spaced frequency points.
-Future<List<UiResponseCurvePoint>> getEqResponseCurve({
+/// Execute generator's unique command on a default instance
+Future<String?> executePluginCommandGenerator({
+  required int genRegistryId,
+  required String command,
+  required String payloadJson,
+}) => RustLib.instance.api.crateApiPluginExecutePluginCommandGenerator(
+  genRegistryId: genRegistryId,
+  command: command,
+  payloadJson: payloadJson,
+);
+
+/// Execute effect's unique command on a default instance
+Future<String?> executePluginCommandEffect({
+  required int effectRegistryId,
+  required String command,
+  required String payloadJson,
+}) => RustLib.instance.api.crateApiPluginExecutePluginCommandEffect(
+  effectRegistryId: effectRegistryId,
+  command: command,
+  payloadJson: payloadJson,
+);
+
+/// Execute an effect's command using its exact current state in the project
+Future<String> executeEffectInstanceCommand({
   required UiEffectTarget target,
   required int effectId,
-  required int numPoints,
-}) => RustLib.instance.api.crateApiPluginGetEqResponseCurve(
+  required String command,
+  required String payloadJson,
+}) => RustLib.instance.api.crateApiPluginExecuteEffectInstanceCommand(
   target: target,
   effectId: effectId,
-  numPoints: numPoints,
+  command: command,
+  payloadJson: payloadJson,
+);
+
+/// Execute a generator's command using its exact current state in the project
+Future<String> executeGeneratorInstanceCommand({
+  required int generatorId,
+  required String command,
+  required String payloadJson,
+}) => RustLib.instance.api.crateApiPluginExecuteGeneratorInstanceCommand(
+  generatorId: generatorId,
+  command: command,
+  payloadJson: payloadJson,
 );
 
 enum KarbeatPluginType { generator, effect }
@@ -343,26 +375,4 @@ class UiPluginParameter {
           step == other.step &&
           paramType == other.paramType &&
           choices == other.choices;
-}
-
-/// A point on the EQ response curve (DTO for FRB)
-class UiResponseCurvePoint {
-  final double frequency;
-  final double magnitudeDb;
-
-  const UiResponseCurvePoint({
-    required this.frequency,
-    required this.magnitudeDb,
-  });
-
-  @override
-  int get hashCode => frequency.hashCode ^ magnitudeDb.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is UiResponseCurvePoint &&
-          runtimeType == other.runtimeType &&
-          frequency == other.frequency &&
-          magnitudeDb == other.magnitudeDb;
 }

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 const MAX_ORDER: usize = 4;
 
 use karbeat_plugin_api::wrapper::{RawEffectEngine, RawEffectWrapper};
+use serde_json::{Value, json};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FilterType {
@@ -580,6 +581,27 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
         }
 
         params
+    }
+
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        match command {
+            "GET_MAGNITUDE_RESPONSE" => {
+                // Safely extract the requested number of points, defaulting to 100
+                let num_points = payload.get("num_points")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100) as usize;
+
+                let response = self.compute_magnitude_response(num_points);
+
+                // Convert the Rust tuples into a JSON array of objects
+                let json_response: Vec<Value> = response.into_iter().map(|(freq, db)| {
+                    json!({ "frequency": freq, "magnitude_db": db })
+                }).collect();
+
+                Some(json!(json_response))
+            }
+            _ => None
+        }
     }
 }
 

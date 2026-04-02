@@ -8,6 +8,7 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
+use serde_json::Value;
 
 use crate::effect_base::EffectBase;
 use crate::traits::{KarbeatEffect, KarbeatGenerator, MidiEvent};
@@ -155,6 +156,11 @@ pub trait RawSynthEngine: Send + Sync {
     fn name() -> &'static str
     where
         Self: Sized;
+
+    /// OPTIONAL: Execute a custom GUI command. Returns an optional JSON string.
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
 }
 
 /// Trait for raw effect engines (core DSP logic only).
@@ -188,6 +194,11 @@ pub trait RawEffectEngine: Send + Sync {
     fn name() -> &'static str
     where
         Self: Sized;
+
+    /// OPTIONAL: Execute a custom GUI command. Returns an optional JSON string.
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
 }
 
 pub trait EffectEngine<B: EffectBase>: Send + Sync {
@@ -200,6 +211,11 @@ pub trait EffectEngine<B: EffectBase>: Send + Sync {
     fn set_custom_parameter(&mut self, id: u32, value: f32);
     fn default_parameters(&self) -> HashMap<u32, f32>;
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+
+    /// OPTIONAL: Execute a custom GUI command. Returns an optional JSON string.
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
 }
 
 // ============================================================================
@@ -274,6 +290,10 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for RawSynthWrapper<T
         self.get_all_parameters()
     }
 
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        self.engine.execute_custom_command(command, payload)
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -304,6 +324,7 @@ impl<T: RawEffectEngine + Clone> RawEffectWrapper<T> {
             dry_buffer: Vec::new(),
         }
     }
+
 
     pub fn get_all_parameters(&self) -> Vec<PluginParameter> {
         let mut params = StandardEffectBase::get_parameter_specs();
@@ -370,6 +391,10 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for RawEffectWrapper<T>
 
     fn get_parameter_specs(&self) -> Vec<PluginParameter> {
         self.get_all_parameters()
+    }
+
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        self.engine.execute_custom_command(command, payload)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -476,6 +501,10 @@ where
         let mut specs = B::get_parameter_specs();
         specs.extend(self.engine.get_parameter_specs());
         specs
+    }
+
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        self.engine.execute_custom_command(command, payload)
     }
 
     fn as_any(&self) -> &dyn Any {
