@@ -101,11 +101,11 @@ abstract class RustLibApi extends BaseApi {
     required int registryId,
   });
 
-  Future<void> crateApiTrackAddMidiTrackWithGenerator({
+  Future<UiTrack> crateApiTrackAddMidiTrackWithGenerator({
     required String generatorName,
   });
 
-  Future<void> crateApiTrackAddMidiTrackWithGeneratorId({
+  Future<UiTrack> crateApiTrackAddMidiTrackWithGeneratorId({
     required int registryId,
   });
 
@@ -170,7 +170,7 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<UiTransportFeedback> crateApiAudioCreatePositionStream();
 
-  Future<void> crateApiTrackCutClip({
+  Future<List<UiClip>> crateApiTrackCutClip({
     required int sourceTrackId,
     required int clipId,
     required int cutPointSample,
@@ -362,14 +362,14 @@ abstract class RustLibApi extends BaseApi {
     required int newStartTime,
   });
 
-  Future<void> crateApiTrackMoveClip({
+  Future<UiClip> crateApiTrackMoveClip({
     required int sourceTrackId,
     required int clipId,
     required int newStartTime,
     int? newTrackId,
   });
 
-  Future<void> crateApiTrackMoveClipBatch({
+  Future<List<UiClip>> crateApiTrackMoveClipBatch({
     required int sourceTrackId,
     required List<int> clipIds,
     required int deltaSamples,
@@ -464,14 +464,14 @@ abstract class RustLibApi extends BaseApi {
     required int newTimeVal,
   });
 
-  Future<void> crateApiTrackResizeClip({
+  Future<UiClip> crateApiTrackResizeClip({
     required int trackId,
     required int clipId,
     required UiResizeEdge edge,
     required int newTimeVal,
   });
 
-  Future<void> crateApiTrackResizeClipBatch({
+  Future<List<UiClip>> crateApiTrackResizeClipBatch({
     required int trackId,
     required List<int> clipIds,
     required UiResizeEdge edge,
@@ -708,7 +708,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiTrackAddMidiTrackWithGenerator({
+  Future<UiTrack> crateApiTrackAddMidiTrackWithGenerator({
     required String generatorName,
   }) {
     return handler.executeNormal(
@@ -724,7 +724,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_ui_track,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackAddMidiTrackWithGeneratorConstMeta,
@@ -741,7 +741,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiTrackAddMidiTrackWithGeneratorId({
+  Future<UiTrack> crateApiTrackAddMidiTrackWithGeneratorId({
     required int registryId,
   }) {
     return handler.executeNormal(
@@ -757,7 +757,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_ui_track,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackAddMidiTrackWithGeneratorIdConstMeta,
@@ -1242,7 +1242,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiTrackCutClip({
+  Future<List<UiClip>> crateApiTrackCutClip({
     required int sourceTrackId,
     required int clipId,
     required int cutPointSample,
@@ -1262,7 +1262,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_list_ui_clip,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackCutClipConstMeta,
@@ -2929,7 +2929,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<void> crateApiTrackMoveClip({
+  Future<UiClip> crateApiTrackMoveClip({
     required int sourceTrackId,
     required int clipId,
     required int newStartTime,
@@ -2951,7 +2951,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_ui_clip,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackMoveClipConstMeta,
@@ -2967,7 +2967,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<void> crateApiTrackMoveClipBatch({
+  Future<List<UiClip>> crateApiTrackMoveClipBatch({
     required int sourceTrackId,
     required List<int> clipIds,
     required int deltaSamples,
@@ -2989,7 +2989,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_list_ui_clip,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackMoveClipBatchConstMeta,
@@ -3636,7 +3636,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<void> crateApiTrackResizeClip({
+  Future<UiClip> crateApiTrackResizeClip({
     required int trackId,
     required int clipId,
     required UiResizeEdge edge,
@@ -3658,7 +3658,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_ui_clip,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackResizeClipConstMeta,
@@ -3674,7 +3674,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<void> crateApiTrackResizeClipBatch({
+  Future<List<UiClip>> crateApiTrackResizeClipBatch({
     required int trackId,
     required List<int> clipIds,
     required UiResizeEdge edge,
@@ -3696,7 +3696,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_list_ui_clip,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackResizeClipBatchConstMeta,

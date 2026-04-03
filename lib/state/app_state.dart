@@ -902,15 +902,33 @@ class KarbeatState extends ChangeNotifier {
 
     try {
       await track_api.deleteClip(trackId: trackId, clipId: clipId);
-      // notifyBackendChange(ProjectEvent.tracksChanged);
-      await syncTrack(trackId);
+      // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error deleting clip: $e");
-      // await syncTrackState();
       return Result.error(Exception("$e"));
     }
   }
+
+  Future<Result<void>> cutClip(
+    int trackId,
+    int clipId,
+    int cutPointSample,
+  ) async {
+    try {
+      await track_api.cutClip(
+        sourceTrackId: trackId,
+        clipId: clipId,
+        cutPointSample: cutPointSample,
+      );
+      await syncTrack(trackId);
+      return Result.ok(null);
+    } catch (e) {
+      KarbeatLogger.error("Error cutting clip: $e");
+      return Result.error(Exception("$e"));
+    }
+  }
+  
 
   Future<Result<void>> resizeClip(
     int trackId,
@@ -926,11 +944,10 @@ class KarbeatState extends ChangeNotifier {
         edge: edge,
         newTimeVal: newTime,
       );
-      await syncTrack(trackId);
+      // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error resizing clip: $e");
-      // await syncTrackState();
       return Result.error(Exception("$e"));
     }
   }
@@ -941,6 +958,7 @@ class KarbeatState extends ChangeNotifier {
     int newStartTime, {
     int? newTrackId,
   }) async {
+    _applyOptimisticMove(trackId, clipId, newStartTime, newTrackId);
     try {
       await track_api.moveClip(
         sourceTrackId: trackId,
@@ -948,17 +966,13 @@ class KarbeatState extends ChangeNotifier {
         newStartTime: newStartTime,
         newTrackId: newTrackId,
       );
-      // notifyBackendChange(ProjectEvent.tracksChanged);
-
-      // Fetch the old track ID and new track ID
-      await syncTrack(trackId);
-      if (newTrackId != null && newTrackId != trackId) {
-        await syncTrack(newTrackId);
-      }
+      // await syncTrack(trackId);
+      // if (newTrackId != null && newTrackId != trackId) {
+      //   await syncTrack(newTrackId);
+      // }
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error moving clip: $e");
-      // await syncTrackState();
       return Result.error(Exception("$e"));
     }
   }
@@ -992,6 +1006,7 @@ class KarbeatState extends ChangeNotifier {
     int deltaSamples, {
     int? newTrackId,
   }) async {
+    _applyOptimisticMoveBatch(trackId, clipIds, deltaSamples, newTrackId);
     try {
       await track_api.moveClipBatch(
         sourceTrackId: trackId,
@@ -999,10 +1014,10 @@ class KarbeatState extends ChangeNotifier {
         deltaSamples: deltaSamples,
         newTrackId: newTrackId,
       );
-      await syncTrack(trackId);
-      if (newTrackId != null && newTrackId != trackId) {
-        await syncTrack(newTrackId);
-      }
+      // await syncTrack(trackId);
+      // if (newTrackId != null && newTrackId != trackId) {
+      //   await syncTrack(newTrackId);
+      // }
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error moving clips in batch: $e");
@@ -1017,6 +1032,7 @@ class KarbeatState extends ChangeNotifier {
     UiResizeEdge edge,
     int deltaSamples,
   ) async {
+    _applyOptimisticResizeBatch(trackId, clipIds, edge, deltaSamples);
     try {
       await track_api.resizeClipBatch(
         trackId: trackId,
@@ -1024,7 +1040,7 @@ class KarbeatState extends ChangeNotifier {
         edge: edge,
         deltaSamples: deltaSamples,
       );
-      await syncTrack(trackId);
+      // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Error resizing clips in batch: $e");
@@ -1216,14 +1232,11 @@ class KarbeatState extends ChangeNotifier {
       }
     }
 
-    // Create Updated Objects
-    final updatedClip = UiClip(
-      id: clip.id,
-      name: clip.name,
+    final updatedClip = _copyWithClip(
+      clip,
       startTime: newStart,
       loopLength: newLength,
       offsetStart: newOffset,
-      source: clip.source,
     );
 
     final updatedClips = List<UiClip>.from(track.clips);
@@ -1234,6 +1247,128 @@ class KarbeatState extends ChangeNotifier {
     _tracks = Map.from(_tracks);
     _tracks[trackId] = updatedTrack;
 
+    notifyListeners();
+  }
+
+  void _applyOptimisticMove(
+    int trackId,
+    int clipId,
+    int newStartTime,
+    int? newTrackId,
+  ) {
+    if (!_tracks.containsKey(trackId)) return;
+    final track = _tracks[trackId]!;
+    final clipIndex = track.clips.indexWhere((c) => c.id == clipId);
+    if (clipIndex == -1) return;
+
+    final clip = track.clips[clipIndex];
+    final updatedClip = _copyWithClip(clip, startTime: newStartTime);
+
+    if (newTrackId != null && newTrackId != trackId) {
+      if (!_tracks.containsKey(newTrackId)) return;
+      final targetTrack = _tracks[newTrackId]!;
+      
+      final sourceClips = List<UiClip>.from(track.clips)..removeAt(clipIndex);
+      final targetClips = List<UiClip>.from(targetTrack.clips)..add(updatedClip);
+
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: sourceClips);
+      _tracks[newTrackId] = _copyWithTrack(targetTrack, clips: targetClips);
+    } else {
+      final updatedClips = List<UiClip>.from(track.clips);
+      updatedClips[clipIndex] = updatedClip;
+      
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    }
+    notifyListeners();
+  }
+
+  void _applyOptimisticMoveBatch(
+    int trackId,
+    List<int> clipIds,
+    int deltaSamples,
+    int? newTrackId,
+  ) {
+    if (!_tracks.containsKey(trackId)) return;
+    final track = _tracks[trackId]!;
+    final targetId = newTrackId ?? trackId;
+    if (!_tracks.containsKey(targetId)) return;
+    final targetTrack = _tracks[targetId]!;
+
+    final clipIdSet = clipIds.toSet();
+    final clipsToMove = track.clips.where((c) => clipIdSet.contains(c.id)).toList();
+    
+    if (trackId != targetId) {
+      final sourceClips = track.clips.where((c) => !clipIdSet.contains(c.id)).toList();
+      final targetClips = List<UiClip>.from(targetTrack.clips);
+      for (var clip in clipsToMove) {
+        int newStart = clip.startTime + deltaSamples;
+        if (newStart < 0) newStart = 0;
+        targetClips.add(_copyWithClip(clip, startTime: newStart));
+      }
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: sourceClips);
+      _tracks[targetId] = _copyWithTrack(targetTrack, clips: targetClips);
+    } else {
+      final updatedClips = track.clips.map((clip) {
+        if (clipIdSet.contains(clip.id)) {
+           int newStart = clip.startTime + deltaSamples;
+           if (newStart < 0) newStart = 0;
+           return _copyWithClip(clip, startTime: newStart);
+        }
+        return clip;
+      }).toList();
+      _tracks = Map.from(_tracks);
+      _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
+    }
+    notifyListeners();
+  }
+
+  void _applyOptimisticResizeBatch(
+    int trackId,
+    List<int> clipIds,
+    UiResizeEdge edge,
+    int deltaSamples,
+  ) {
+    if (!_tracks.containsKey(trackId)) return;
+    final track = _tracks[trackId]!;
+    final clipIdSet = clipIds.toSet();
+
+    final updatedClips = track.clips.map((clip) {
+      if (clipIdSet.contains(clip.id)) {
+        int newStart = clip.startTime;
+        int newLength = clip.loopLength;
+        int newOffset = clip.offsetStart;
+
+        if (edge == UiResizeEdge.right) {
+          int currentEnd = clip.startTime + clip.loopLength;
+          int newEnd = currentEnd + deltaSamples;
+          if (newEnd < clip.startTime + 100) newEnd = clip.startTime + 100;
+          newLength = newEnd - clip.startTime;
+        } else {
+          int oldStart = clip.startTime;
+          int oldEnd = clip.startTime + clip.loopLength;
+          int newStartProposed = oldStart + deltaSamples;
+          if (newStartProposed < 0) newStartProposed = 0;
+          if (newStartProposed > oldEnd - 100) newStartProposed = oldEnd - 100;
+          
+          int delta = newStartProposed - oldStart;
+          int currentOffset = clip.offsetStart;
+          int newOffsetProposed = currentOffset + delta;
+          if (newOffsetProposed < 0) newOffsetProposed = 0;
+
+          newStart = newStartProposed;
+          newLength = oldEnd - newStartProposed;
+          newOffset = newOffsetProposed;
+        }
+        return _copyWithClip(clip, startTime: newStart, loopLength: newLength, offsetStart: newOffset);
+      }
+      return clip;
+    }).toList();
+
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
     notifyListeners();
   }
 
@@ -1265,10 +1400,30 @@ class KarbeatState extends ChangeNotifier {
   UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
     return UiTrack(
       id: original.id,
-      color: "#FFFFFF",
+      color: original.color, // Fixed: use original color instead of #FFFFFF
       name: original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,
+      generatorId: original.generatorId, // Forward generator ID
+    );
+  }
+
+  UiClip _copyWithClip(
+    UiClip original, {
+    String? name,
+    int? id,
+    int? startTime,
+    UiClipSource? source,
+    int? offsetStart,
+    int? loopLength,
+  }) {
+    return UiClip(
+      name: name ?? original.name,
+      id: id ?? original.id,
+      startTime: startTime ?? original.startTime,
+      source: source ?? original.source,
+      offsetStart: offsetStart ?? original.offsetStart,
+      loopLength: loopLength ?? original.loopLength,
     );
   }
 

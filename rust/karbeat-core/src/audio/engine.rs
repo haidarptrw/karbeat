@@ -160,6 +160,8 @@ pub struct AudioVoice {
     pub start_boundary: f64,
     /// The specific end point in the source (from clip.trim_start)
     pub end_boundary: f64,
+    pub clip_elapsed_samples: u32,
+    pub clip_loop_length: u32,
 }
 
 pub struct PreviewVoice {
@@ -1386,6 +1388,7 @@ impl AudioEngine {
     ) -> bool {
         let mut did_render = false;
         let buffer_frames = output.len() / channels;
+        let fade_samples = (sample_rate as f32 * 0.002) as u32;
         for voice in active_oneshots.iter_mut().filter(|v| v.track_id == track_id) {
             did_render = true;
             let src_channels = voice.waveform.channels as usize;
@@ -1413,6 +1416,7 @@ impl AudioEngine {
                 {
                     for frame_idx in voice.output_offset_samples..buffer_frames {
                         let frames_written = (frame_idx - voice.output_offset_samples) as u32;
+                        let current_elapsed = voice.clip_elapsed_samples + frames_written;
                         let mut read_pos = voice.source_read_index + (frames_written as f64) * step;
 
                         if is_looping {
@@ -1424,19 +1428,31 @@ impl AudioEngine {
                             break;
                         }
 
+                        // Calculate the De-click fade multiplier
+                        let mut fade_multiplier = 1.0;
+                        if current_elapsed < fade_samples {
+                            // Fade IN at the very beginning
+                            fade_multiplier = current_elapsed as f32 / fade_samples as f32;
+                        } else if current_elapsed + fade_samples > voice.clip_loop_length {
+                            // Fade OUT at the very end
+                            let remaining = voice.clip_loop_length.saturating_sub(current_elapsed);
+                            fade_multiplier = remaining as f32 / fade_samples as f32;
+                        }
+
                         let sample_frame = sample_waveform_dasp(
                             &voice.waveform,
                             read_pos,
                             src_channels
                         );
-                        out_frames[frame_idx][0] += sample_frame[0];
-                        out_frames[frame_idx][1] += sample_frame[1];
+                        out_frames[frame_idx][0] += sample_frame[0] * fade_multiplier;
+                        out_frames[frame_idx][1] += sample_frame[1] * fade_multiplier;
                     }
                 }
             } else {
                 // Fallback for non-stereo output
                 for frame_idx in voice.output_offset_samples..buffer_frames {
                     let frames_written = (frame_idx - voice.output_offset_samples) as u32;
+                    let current_elapsed = voice.clip_elapsed_samples + frames_written;
                     let mut read_pos = voice.source_read_index + (frames_written as f64) * step;
 
                     if is_looping {
@@ -1448,12 +1464,23 @@ impl AudioEngine {
                         break;
                     }
 
+                    // Calculate the De-click fade multiplier
+                    let mut fade_multiplier = 1.0;
+                    if current_elapsed < fade_samples {
+                        // Fade IN at the very beginning
+                        fade_multiplier = current_elapsed as f32 / fade_samples as f32;
+                    } else if current_elapsed + fade_samples > voice.clip_loop_length {
+                        // Fade OUT at the very end
+                        let remaining = voice.clip_loop_length.saturating_sub(current_elapsed);
+                        fade_multiplier = remaining as f32 / fade_samples as f32;
+                    }
+
                     let sample_frame = sample_waveform_dasp(
                         &voice.waveform,
                         read_pos,
                         src_channels
                     );
-                    output[frame_idx * channels] += sample_frame[0];
+                    output[frame_idx * channels] += sample_frame[0] * fade_multiplier;
                 }
             }
         }
@@ -1834,6 +1861,8 @@ impl AudioEngine {
             source_read_index: source_read_idx,
             start_boundary: trim_start,
             end_boundary: trim_end,
+            clip_elapsed_samples: samples_elapsed,
+            clip_loop_length: clip.loop_length,
         });
     }
 

@@ -3,6 +3,7 @@ import 'package:karbeat/features/components/midi_drawer.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/models/interaction_target.dart';
+import 'package:karbeat/services/prelude.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -449,7 +450,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             // Opaque ensures we catch taps even on transparent parts of waveform
             behavior: HitTestBehavior.opaque,
 
-            onTap: () {
+            onTapUp: (details) async {
               if (widget.selectedTool == ToolSelection.delete) {
                 final state = ref.read(karbeatStateProvider);
                 // If this clip is selected and there are multiple selections, batch delete
@@ -498,6 +499,17 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       trackId: widget.trackId,
                       clipId: widget.clip.id,
                     );
+              } else if (widget.selectedTool == ToolSelection.cut) {
+                final result = await ref.read(karbeatStateProvider).cutClip(
+                  widget.trackId,
+                  widget.clip.id,
+                  widget.clip.startTime +
+                      (details.localPosition.dx * widget.zoomLevel).round(),
+                );
+
+                if (result.isErr()) {
+                  // For now do nothing as nothing happens
+                }
               }
             },
 

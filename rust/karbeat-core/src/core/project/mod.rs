@@ -205,6 +205,8 @@ impl Default for AudioHardwareConfig {
 }
 
 impl ApplicationState {
+
+
     pub fn update_max_sample_index(&mut self) {
         self.max_sample_index = self
             .tracks

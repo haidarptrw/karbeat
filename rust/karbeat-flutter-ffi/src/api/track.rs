@@ -11,9 +11,7 @@ use karbeat_core::core::{
     history::ProjectAction,
     project::{
         clip::ClipId,
-        track::{
-            TrackId, TrackType,
-        },
+        track::{TrackId, TrackType},
         KarbeatSource,
     },
 };
@@ -219,18 +217,18 @@ pub fn resize_clip(
     clip_id: u32,
     edge: UiResizeEdge,
     new_time_val: u32,
-) -> Result<(), String> {
+) -> Result<UiClip, String> {
     let track_id = TrackId::from(track_id);
     let clip_id = ClipId::from(clip_id);
 
-    {
+    let res = {
         let mut app = get_app_write();
         let core_edge: ResizeEdge = edge.into();
-        app.resize_clip(track_id, clip_id, core_edge, new_time_val)?;
-    }
+        app.resize_clip(track_id, clip_id, core_edge, new_time_val)?
+    };
 
     broadcast_state_change();
-    Ok(())
+    Ok(UiClip::from(&res))
 }
 
 pub fn move_clip(
@@ -238,18 +236,18 @@ pub fn move_clip(
     clip_id: u32,
     new_start_time: u32,
     new_track_id: Option<u32>,
-) -> Result<(), String> {
+) -> Result<UiClip, String> {
     let source_track_id = TrackId::from(source_track_id);
     let clip_id = ClipId::from(clip_id);
     let target_track_id = new_track_id.map(TrackId::from).unwrap_or(source_track_id);
 
-    {
+    let res = {
         let mut app = get_app_write();
-        app.move_clip(source_track_id, target_track_id, clip_id, new_start_time)?;
-    }
+        app.move_clip(source_track_id, target_track_id, clip_id, new_start_time)?
+    };
 
     broadcast_state_change();
-    Ok(())
+    Ok(UiClip::from(&res))
 }
 
 /// Cut a clip in half.
@@ -262,40 +260,44 @@ pub fn move_clip(
 /// - source_track_id: Track where clip resides
 /// - clip_id: The cut clip id inside the track
 /// - cut_point_sample: Absolute sample point of cut location
-pub fn cut_clip(source_track_id: u32, clip_id: u32, cut_point_sample: u32) -> Result<(), String> {
+pub fn cut_clip(
+    source_track_id: u32,
+    clip_id: u32,
+    cut_point_sample: u32,
+) -> Result<Vec<UiClip>, String> {
     let source_track_id_typed = TrackId::from(source_track_id);
     let clip_id_typed = ClipId::from(clip_id);
 
-    {
+    let res = {
         let mut app = get_app_write();
         app.cut_clip(&source_track_id_typed, &clip_id_typed, cut_point_sample)
-            .map_err(|e| format!("{}", e))?;
-    }
+            .map_err(|e| format!("{}", e))?
+    };
 
     broadcast_state_change();
-    Ok(())
+    Ok(vec![UiClip::from(&res.0), UiClip::from(&res.1)])
 }
 
 /// Add a MIDI track with a generator by its registry ID (preferred method).
-pub fn add_midi_track_with_generator_id(registry_id: u32) -> Result<(), String> {
-    {
+pub fn add_midi_track_with_generator_id(registry_id: u32) -> Result<UiTrack, String> {
+    let res = {
         let mut app = get_app_write();
         app.add_new_midi_track_with_generator_id(registry_id)
-            .map_err(|e| format!("{}", e))?;
-    }
+            .map_err(|e| format!("{}", e))?
+    };
     broadcast_state_change();
-    Ok(())
+    Ok(UiTrack::from(res.as_ref()))
 }
 
 /// Add a MIDI track with a generator by name (backwards compatible).
-pub fn add_midi_track_with_generator(generator_name: String) -> Result<(), String> {
-    {
+pub fn add_midi_track_with_generator(generator_name: String) -> Result<UiTrack, String> {
+    let res = {
         let mut app = get_app_write();
         app.add_new_midi_track_with_generator(&generator_name)
-            .map_err(|e| format!("{}", e))?;
-    }
+            .map_err(|e| format!("{}", e))?
+    };
     broadcast_state_change();
-    Ok(())
+    Ok(UiTrack::from(res.as_ref()))
 }
 
 pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
@@ -340,18 +342,18 @@ pub fn move_clip_batch(
     clip_ids: Vec<u32>,
     delta_samples: i64,
     new_track_id: Option<u32>,
-) -> Result<(), String> {
+) -> Result<Vec<UiClip>, String> {
     let source_track_id = TrackId::from(source_track_id);
     let target_track_id = new_track_id.map(TrackId::from).unwrap_or(source_track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
 
-    {
+    let res = {
         let mut app = get_app_write();
-        app.move_clip_batch(source_track_id, target_track_id, clip_ids, delta_samples)?;
-    }
+        app.move_clip_batch(source_track_id, target_track_id, clip_ids, delta_samples)?
+    };
 
     broadcast_state_change();
-    Ok(())
+    Ok(res.iter().map(|c| UiClip::from(c)).collect())
 }
 
 /// Resize clips in batch by a delta amount
@@ -360,18 +362,18 @@ pub fn resize_clip_batch(
     clip_ids: Vec<u32>,
     edge: UiResizeEdge,
     delta_samples: i64,
-) -> Result<(), String> {
+) -> Result<Vec<UiClip>, String> {
     let track_id = TrackId::from(track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
 
-    {
+    let res = {
         let mut app = get_app_write();
         let core_edge: ResizeEdge = edge.into();
-        app.resize_clip_batch(track_id, clip_ids, core_edge, delta_samples)?;
-    }
+        app.resize_clip_batch(track_id, clip_ids, core_edge, delta_samples)?
+    };
 
     broadcast_state_change();
-    Ok(())
+    Ok(res.iter().map(|c| UiClip::from(c)).collect())
 }
 
 /// Delete clips in batch

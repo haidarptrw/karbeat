@@ -131,7 +131,7 @@ impl ApplicationState {
         target_track_id: TrackId,
         clip_id: ClipId,
         new_start_time: u32,
-    ) -> Result<(), String> {
+    ) -> Result<Clip, String> {
         // First, extract the clip from the source track
         let clip = {
             let track_arc = self
@@ -165,11 +165,11 @@ impl ApplicationState {
                 .ok_or("Target track not found")?;
             let track = Arc::make_mut(track_arc);
 
-            track.add_clip(modified_clip).map_err(|e| e.to_string())?;
+            track.add_clip(modified_clip.clone()).map_err(|e| e.to_string())?;
         }
 
         self.update_max_sample_index();
-        Ok(())
+        Ok(modified_clip)
     }
 
     /// Resize a clip by updating its start_time, offset_start, and loop_length.
@@ -182,7 +182,7 @@ impl ApplicationState {
         clip_id: ClipId,
         edge: ResizeEdge,
         new_time_val: u32,
-    ) -> Result<(), String> {
+    ) -> Result<Clip, String> {
         let track_arc = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
         let track = Arc::make_mut(track_arc);
 
@@ -233,11 +233,11 @@ impl ApplicationState {
         }
 
         // Re-insert the clip
-        track.clips.insert(Arc::new(modified_clip));
+        track.clips.insert(Arc::new(modified_clip.clone()));
         track.update_max_sample_index();
 
         self.update_max_sample_index();
-        Ok(())
+        Ok(modified_clip)
     }
 
     pub fn create_new_clip(
@@ -343,7 +343,8 @@ impl ApplicationState {
         target_track_id: TrackId,
         clip_ids: Vec<ClipId>,
         delta_samples: i64,
-    ) -> Result<(), String> {
+    ) -> Result<Vec<Clip>, String> {
+        let mut result_clips = Vec::new();
         let target_type = if let Some(target) = self.tracks.get(&target_track_id) {
             target.track_type.clone()
         } else {
@@ -362,7 +363,8 @@ impl ApplicationState {
                     // Apply delta with clamping to 0
                     let new_start = ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
                     modified_clip.start_time = new_start;
-                    track.clips.insert(Arc::new(modified_clip));
+                    track.clips.insert(Arc::new(modified_clip.clone()));
+                    result_clips.push(modified_clip);
                 }
             }
             track.update_max_sample_index();
@@ -400,11 +402,12 @@ impl ApplicationState {
                 let mut modified_clip = (*clip).clone();
                 let new_start = ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
                 modified_clip.start_time = new_start;
-                let _ = target_track.add_clip(modified_clip);
+                let _ = target_track.add_clip(modified_clip.clone());
+                result_clips.push(modified_clip);
             }
         }
         self.update_max_sample_index();
-        Ok(())
+        Ok(result_clips)
     }
 
     pub fn resize_clip_batch(
@@ -413,9 +416,11 @@ impl ApplicationState {
         clip_ids: Vec<ClipId>,
         edge: ResizeEdge,
         delta_samples: i64,
-    ) -> Result<(), String> {
+    ) -> Result<Vec<Clip>, String> {
         let track_arc = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
         let track = Arc::make_mut(track_arc);
+        
+        let mut result_clips = Vec::new();
 
         for clip_id in &clip_ids {
             if let Some(clip) = track.clips.iter().find(|c| c.id == *clip_id).cloned() {
@@ -443,11 +448,12 @@ impl ApplicationState {
                     }
                 }
 
-                track.clips.insert(Arc::new(modified_clip));
+                track.clips.insert(Arc::new(modified_clip.clone()));
+                result_clips.push(modified_clip);
             }
         }
         track.update_max_sample_index();
         self.update_max_sample_index();
-        Ok(())
+        Ok(result_clips)
     }
 }
