@@ -3,17 +3,17 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
-use std::sync::{ Arc, Once };
+use std::sync::{Arc, Once};
 
 use once_cell::sync::Lazy;
-use parking_lot::{ Mutex, RwLock };
+use parking_lot::{Mutex, RwLock};
 use rtrb::Producer;
 use triple_buffer::Input;
 
 use crate::{
-    audio::{ event::TransportFeedback, render_state::AudioRenderState },
-    commands::{ AudioCommand, AudioFeedback },
-    core::{ history::HistoryManager, project::ApplicationState },
+    audio::{event::TransportFeedback, render_state::AudioRenderState},
+    commands::{AudioCommand, AudioFeedback},
+    core::{history::HistoryManager, project::ApplicationState},
 };
 use karbeat_plugins::registry::PluginRegistry;
 
@@ -31,7 +31,7 @@ pub struct MixerParamEvent {
 /// Centralized application context containing all shared state.
 ///
 /// Access via the [`ctx()`] function to get a reference to the global instance.
-pub struct KarbeatContext {
+pub struct KarbeatContext<'a> {
     /// Main application state (UI/editing source of truth)
     pub app_state: Arc<RwLock<ApplicationState>>,
 
@@ -60,10 +60,10 @@ pub struct KarbeatContext {
     pub plugin_registry: RwLock<PluginRegistry>,
 
     /// Mixer parameter event stream sink (Rust → Flutter)
-    pub mixer_event_sink: Mutex<Option<Box<dyn Fn(MixerParamEvent) + Send + Sync + 'static>>>,
+    pub mixer_event_sink: Mutex<Option<Box<dyn Fn(MixerParamEvent) + Send + Sync + 'a>>>,
 }
 
-impl KarbeatContext {
+impl <'a> KarbeatContext<'a> {
     fn new() -> Self {
         Self {
             app_state: Arc::new(RwLock::new(ApplicationState::default())),
@@ -90,18 +90,17 @@ static CONTEXT: Lazy<KarbeatContext> = Lazy::new(KarbeatContext::new);
 ///
 /// # Example
 /// ```ignore
-/// let app = ctx().app_state.read().unwrap();
+/// let app = ctx().app_state.read();
 /// ```
 #[inline]
-pub fn ctx() -> &'static KarbeatContext {
+pub fn ctx() -> &'static KarbeatContext<'static> {
     &CONTEXT
 }
 
 pub mod utils {
     use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
-    use smallvec::SmallVec;
 
-    use crate::{ commands::AudioCommand, context::ctx };
+    use crate::{commands::AudioCommand, context::ctx};
 
     /// Helper function to send AudioCommand to context's command sender
     pub fn send_audio_command(command: AudioCommand) {
@@ -110,9 +109,11 @@ pub mod utils {
         }
     }
 
-    pub fn try_send_audio_command_chain(commands: SmallVec<[AudioCommand; 4]>) -> anyhow::Result<()> {
+    pub fn try_send_audio_command_chain(commands: Vec<AudioCommand>) -> anyhow::Result<()> {
         if let Some(sender) = ctx().command_sender.lock().as_mut() {
-            commands.into_iter().try_for_each(|command| sender.push(command))?;
+            commands
+                .into_iter()
+                .try_for_each(|command| sender.push(command))?;
         }
 
         Ok(())
@@ -127,7 +128,9 @@ pub mod utils {
         Some(plugin)
     }
 
-    pub fn get_synth_plugin_box(registry_id: u32) -> std::option::Option<Box<dyn KarbeatGenerator + Send + Sync>> {
+    pub fn get_synth_plugin_box(
+        registry_id: u32,
+    ) -> std::option::Option<Box<dyn KarbeatGenerator + Send + Sync>> {
         let registry = ctx().plugin_registry.read();
         let Some((plugin, _)) = registry.create_generator_by_id(registry_id) else {
             return None;

@@ -1,7 +1,8 @@
-pub mod utils;
+pub mod api;
 pub mod audio;
 pub mod commands;
 pub mod context;
 pub mod core;
 pub mod lock;
 pub mod test;
+pub mod utils;

@@ -170,12 +170,12 @@ impl HistoryManager {
             }
             ProjectAction::AddClip { track_id, clip } => {
                 // Inverse of AddClip: Delete the clip
-                app.delete_clip_from_track(*track_id, clip.id)
+                app.delete_clip_from_track(*track_id, clip.id, true)
                     .map_err(|e| e.to_string())?;
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Inverse of DeleteClip: Restore the clip to the track
-                app.add_clip_to_track(*track_id, clip.clone()).map_err(|e| format!("{}", e))?;
+                app.add_clip_to_track(*track_id, clip.clone(), true).map_err(|e| format!("{}", e))?;
             }
             ProjectAction::MoveClip {
                 old_track_id,
@@ -284,7 +284,7 @@ impl HistoryManager {
             }
             ProjectAction::DeleteClip { track_id, clip } => {
                 // Forward: Delete the clip from the track
-                app.delete_clip_from_track(*track_id, clip.id)
+                app.delete_clip_from_track(*track_id, clip.id, true)
                     .map_err(|e| e.to_string())?;
             }
             ProjectAction::MoveClip {

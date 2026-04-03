@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::core::project::ApplicationState;
 use crate::core::project::Note;
 use crate::core::project::NoteId;
 use karbeat_utils::define_id;
@@ -165,13 +166,18 @@ impl Pattern {
             ));
         }
 
-        // Validate Timing
-        if new_start_tick >= self.length_ticks {
+        // Validate Key
+        if new_key > 127 {
             return Err(anyhow::anyhow!(
-                "start_tick ({}) must be less than pattern length ({})",
-                new_start_tick,
-                self.length_ticks
+                "MIDI key must be between 0 and 127, got {}",
+                new_key
             ));
+        }
+
+        let duration = self.notes[index].duration;
+        let note_end = new_start_tick + duration;
+        if note_end > self.length_ticks {
+            self.length_ticks = note_end;
         }
 
         // Validate Key
@@ -375,5 +381,119 @@ impl Pattern {
         }
 
         Ok(())
+    }
+}
+
+impl ApplicationState {
+    pub fn add_note_to_pattern(
+        &mut self,
+        pattern_id: PatternId,
+        key: u8,
+        start_tick: u64,
+        duration: Option<u64>,
+    ) -> anyhow::Result<Note> {
+        let pattern_arc = self
+            .pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        pattern.add_note(key, start_tick, duration)
+    }
+
+    pub fn delete_note_from_pattern(
+        &mut self,
+        pattern_id: PatternId,
+        note_id: NoteId,
+    ) -> anyhow::Result<Note> {
+        let pattern_arc = self
+            .pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        let index = pattern
+            .notes
+            .iter()
+            .position(|n| n.id == note_id)
+            .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
+
+        pattern.delete_note(index)
+    }
+
+    pub fn resize_note_in_pattern(
+        &mut self,
+        pattern_id: PatternId,
+        note_id: NoteId,
+        new_duration: u64,
+    ) -> anyhow::Result<(Note, u64)> {
+        let pattern_arc = self
+            .pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        let index = pattern
+            .notes
+            .iter()
+            .position(|n| n.id == note_id)
+            .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
+
+        let old_duration = pattern.notes[index].duration;
+        let note = pattern.resize_note(index, new_duration)?.clone();
+        Ok((note, old_duration))
+    }
+
+    pub fn move_note_in_pattern(
+        &mut self,
+        pattern_id: PatternId,
+        note_id: NoteId,
+        new_start_tick: u64,
+        new_key: u8,
+    ) -> anyhow::Result<(Note, u64, u8)> {
+        let pattern_arc = self
+            .pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        let index = pattern
+            .notes
+            .iter()
+            .position(|n| n.id == note_id)
+            .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
+
+        let old_tick = pattern.notes[index].start_tick;
+        let old_key = pattern.notes[index].key;
+
+        let note = pattern.move_note(index, new_start_tick, new_key)?.clone();
+        Ok((note, old_tick, old_key))
+    }
+
+    pub fn change_note_params_in_pattern(
+        &mut self,
+        pattern_id: PatternId,
+        note_id: NoteId,
+        velocity: Option<u8>,
+        probability: Option<f32>,
+        micro_offset: Option<i8>,
+        mute: Option<bool>,
+    ) -> anyhow::Result<Note> {
+        let pattern_arc = self
+            .pattern_pool
+            .get_mut(&pattern_id)
+            .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
+        let pattern = Arc::make_mut(pattern_arc);
+
+        let index = pattern
+            .notes
+            .iter()
+            .position(|n| n.id == note_id)
+            .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
+
+        let note = pattern
+            .set_note_params(index, velocity, probability, micro_offset, mute)?
+            .clone();
+        Ok(note)
     }
 }
