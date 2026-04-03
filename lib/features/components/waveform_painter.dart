@@ -31,7 +31,7 @@ class StereoWaveformPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.butt;
 
     // Draw Divider Line (Center)
     final dividerPaint = Paint()
@@ -160,7 +160,7 @@ class MonoWaveformPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.butt;
 
     final double width = size.width;
     final double halfHeight = size.height / 2;
@@ -277,7 +277,7 @@ class StereoWaveformClipPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.butt;
 
     double scrollOffset = 0;
     double viewportWidth = 2000; // fallback
@@ -308,7 +308,17 @@ class StereoWaveformClipPainter extends CustomPainter {
     );
 
     if (framesPerPixel < 1.0) {
-      _paintConnectedLines(canvas, size, paint, totalFrames, vLeft, vRight);
+      _paintConnectedLines(
+        canvas,
+        size,
+        paint,
+        totalFrames,
+        vLeft,
+        vRight,
+        scrollOffset,
+        viewportWidth,
+        pad,
+      );
     } else {
       _paintVerticalBars(
         canvas,
@@ -330,7 +340,16 @@ class StereoWaveformClipPainter extends CustomPainter {
     int totalFrames,
     double vLeft,
     double vRight,
+    double scrollOffset,
+    double viewportWidth,
+    double pad,
   ) {
+    final double vLeft = (scrollOffset - clipLeftOffset - pad).clamp(
+      0,
+      size.width,
+    );
+    final double vRight = (scrollOffset - clipLeftOffset + viewportWidth + pad)
+        .clamp(0, size.width);
     // Convert visible pixel range → frame range
     final double startFrameFloat =
         (offsetSamples + (vLeft * zoomLevel)) * ratio;
@@ -485,7 +504,11 @@ class StereoWaveformClipPainter extends CustomPainter {
     }
 
     // Note: PointMode.lines draws unconnected segments (p0-p1, p2-p3)
-    canvas.drawRawPoints(PointMode.lines, rawPoints, paint);
+    canvas.drawRawPoints(
+      PointMode.lines,
+      Float32List.sublistView(rawPoints, 0, ptr),
+      paint,
+    );
   }
 
   @override
@@ -532,7 +555,7 @@ class MonoWaveformClipPainter extends CustomPainter {
       ..color = color
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.butt;
 
     final int totalFrames = samples.length ~/ 2;
     final double framesPerPixel = zoomLevel * ratio;

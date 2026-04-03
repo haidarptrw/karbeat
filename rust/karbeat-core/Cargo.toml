@@ -36,3 +36,4 @@ toml.workspace = true
 rmp-serde.workspace = true
 zip.workspace = true
 chrono.workspace = true
+hound.workspace = true
