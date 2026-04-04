@@ -3,7 +3,6 @@ import 'package:karbeat/features/components/midi_drawer.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/models/interaction_target.dart';
-import 'package:karbeat/services/prelude.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -399,8 +398,9 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       cursor = SystemMouseCursors.click;
     } else if (widget.selectedTool == ToolSelection.move) {
       cursor = SystemMouseCursors.move;
+    } else if (widget.selectedTool == ToolSelection.resize) {
+      cursor = SystemMouseCursors.basic; // Overridden on hover at edges
     }
-
     // Apply Override
     if (_cursorOverride != null) {
       cursor = _cursorOverride!;
@@ -422,7 +422,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
           cursor: cursor,
           // Detect Hover for Resize Cursors (only if not in Delete mode)
           onHover: (event) {
-            if (widget.selectedTool == ToolSelection.delete) return;
+            if (widget.selectedTool != ToolSelection.resize) {
+              if (_cursorOverride != null) {
+                setState(() => _cursorOverride = null);
+              }
+              return;
+            }
 
             final x = event.localPosition.dx;
             if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
@@ -500,12 +505,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                       clipId: widget.clip.id,
                     );
               } else if (widget.selectedTool == ToolSelection.cut) {
-                final result = await ref.read(karbeatStateProvider).cutClip(
-                  widget.trackId,
-                  widget.clip.id,
-                  widget.clip.startTime +
-                      (details.localPosition.dx * widget.zoomLevel).round(),
-                );
+                final result = await ref
+                    .read(karbeatStateProvider)
+                    .cutClip(
+                      widget.trackId,
+                      widget.clip.id,
+                      widget.clip.startTime +
+                          (details.localPosition.dx * widget.zoomLevel).round(),
+                    );
 
                 if (result.isErr()) {
                   // For now do nothing as nothing happens
@@ -514,15 +521,24 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             },
 
             onPanStart: (details) {
-              if (widget.selectedTool != ToolSelection.move) return;
+              if (widget.selectedTool != ToolSelection.move && 
+                  widget.selectedTool != ToolSelection.resize) {
+                return;
+              }
 
               final x = details.localPosition.dx;
 
-              if (x < resizeEdgeSize) {
-                setState(() => _currentAction = _DragAction.resizeLeft);
-              } else if (x > safeWidth - resizeEdgeSize) {
-                setState(() => _currentAction = _DragAction.resizeRight);
-              } else {
+              if (widget.selectedTool == ToolSelection.resize) {
+                if (x < resizeEdgeSize) {
+                  setState(() => _currentAction = _DragAction.resizeLeft);
+                } else if (x > safeWidth - resizeEdgeSize) {
+                  setState(() => _currentAction = _DragAction.resizeRight);
+                } else {
+                  // Clicked the middle of the clip with the resize tool -> do nothing
+                  return; 
+                }
+              } else if (widget.selectedTool == ToolSelection.move) {
+                // Move tool grabs the clip no matter where you click
                 setState(() => _currentAction = _DragAction.move);
                 _createOverlay(context);
               }

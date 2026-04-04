@@ -52,6 +52,9 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
 class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   late Stream<UiTransportFeedback> _positionStream;
 
+  bool _isDragging = false;
+  int _dragSamples = 0;
+
   @override
   void initState() {
     super.initState();
@@ -72,7 +75,11 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox();
 
-                final currentSamples = widget.sampleSelector(snapshot.data!);
+                final streamSamples = widget.sampleSelector(snapshot.data!);
+
+                final currentSamples = _isDragging
+                    ? _dragSamples
+                    : streamSamples;
 
                 double playheadAbsoluteX = 0;
                 if (widget.zoomLevel > 0) {
@@ -108,12 +115,31 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
                         children: [
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
+                            onHorizontalDragStart: (details) {
+                              setState(() {
+                                _isDragging = true;
+                                _dragSamples = streamSamples;
+                              });
+                            },
                             onHorizontalDragUpdate: (details) {
-                              final deltaPixels = details.delta.dx;
-                              final deltaSamples =
-                                  deltaPixels * widget.zoomLevel;
-                              final newSamples = currentSamples + deltaSamples;
-                              widget.onSeek(newSamples.toInt());
+                              // Update local state instantly for buttery smooth UI
+                              setState(() {
+                                final deltaSamples = (details.delta.dx * widget.zoomLevel).toInt();
+                                _dragSamples += deltaSamples;
+                                if (_dragSamples < 0) _dragSamples = 0; // Prevent negative time
+                              });
+                              
+                              widget.onSeek(_dragSamples);
+                            },
+                            onHorizontalDragEnd: (details) {
+                              setState(() {
+                                _isDragging = false;
+                              });
+                            },
+                            onHorizontalDragCancel: () {
+                              setState(() {
+                                _isDragging = false;
+                              });
                             },
                             child: SizedBox(
                               height: 20,

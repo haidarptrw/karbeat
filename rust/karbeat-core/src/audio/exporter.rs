@@ -97,6 +97,7 @@ pub fn export_project_to_wav(
         .map_err(|_| "Queue full")?;
 
     // 6. Setup the WAV Writer
+    // TODO: Create a writer for all audio formats (will be implemented in writer.rs)
     let spec = WavSpec {
         channels: channels as u16,
         sample_rate,
@@ -107,6 +108,8 @@ pub fn export_project_to_wav(
         .map_err(|e| format!("Failed to create WAV file: {}", e))?;
 
     // 7. Determine exact render length (with Reverb Tail)
+    // audio tail is still hardcoded
+    // TODO: determine this based on longest tail in audio engine state
     let tail_seconds = 3.0; // Wait 3 seconds after the last clip for reverb/delays to fade
     let total_samples =
         render_state.graph.max_sample_index + (sample_rate as f32 * tail_seconds) as u32;

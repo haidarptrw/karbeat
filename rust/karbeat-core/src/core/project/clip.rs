@@ -9,9 +9,11 @@ pub enum ResizeEdge {
     Right,
 }
 
+use crate::core::history::ProjectAction;
 use crate::core::project::{ApplicationState, KarbeatSource, track::TrackId, track::TrackType};
 use crate::core::project::track::audio_waveform::AudioSourceId;
 use crate::core::project::track::midi::{PatternId, Pattern};
+use crate::lock::get_history_lock;
 
 define_id!(ClipId);
 
@@ -97,7 +99,7 @@ impl ApplicationState {
         clip_id: ClipId,
         update_max_sample_index: bool
     ) -> anyhow::Result<Arc<Clip>> {
-        if let Some(track_arc) = self.tracks.get_mut(&track_id) {
+        let deleted_clip = if let Some(track_arc) = self.tracks.get_mut(&track_id) {
             let track = Arc::make_mut(track_arc);
             match track.remove_clip(&clip_id) {
                 Ok(clip) => {
@@ -110,7 +112,15 @@ impl ApplicationState {
             }
         } else {
             Err(anyhow::anyhow!("Track not found"))
-        }
+        }?;
+
+        let mut history_manager = get_history_lock();
+        history_manager.push(ProjectAction::DeleteClip {
+            track_id,
+            clip: (*deleted_clip).clone(),
+        });
+
+        Ok(deleted_clip)
     }
 
     /// Get a clip from a track by its ID.
@@ -247,7 +257,7 @@ impl ApplicationState {
         track_id: TrackId,
         start_time: u32,
     ) -> anyhow::Result<Clip> {
-        match source_type {
+        let clip = match source_type {
             ClipSourceType::Audio => {
                 let source_id = source_id.ok_or_else(|| anyhow::anyhow!("Audio clip needs source id"))?;
                 let source_id = AudioSourceId::from(source_id);
@@ -281,7 +291,7 @@ impl ApplicationState {
                 };
                 self.add_clip_to_track(track_id, clip.clone(), true)?;
 
-                Ok(clip)
+                clip
             }
             ClipSourceType::Midi => {
                 let sample_rate = self.audio_config.sample_rate;
@@ -332,9 +342,13 @@ impl ApplicationState {
                 };
 
                 self.add_clip_to_track(track_id, clip.clone(), true)?;
-                Ok(clip)
+                clip
             }
-        }
+        };
+
+        let mut history_manager = get_history_lock();
+        history_manager.push(ProjectAction::AddClip { track_id, clip: clip.clone() });
+        Ok(clip)
     }
 
     pub fn move_clip_batch(

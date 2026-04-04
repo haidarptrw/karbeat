@@ -25,7 +25,16 @@ final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
   return KarbeatState();
 });
 
-enum ToolSelection { pointer, cut, draw, move, delete, scrub, zoom, select }
+enum ToolSelection {
+  pointer,
+  cut,
+  draw,
+  move,
+  delete,
+  zoom,
+  select,
+  resize,
+}
 
 /// Piano roll specific tool selection (independent from main toolbar)
 enum PianoRollToolSelection { pointer, draw, delete, select, slice }
@@ -326,6 +335,9 @@ class KarbeatState extends ChangeNotifier {
 
   // =============== GLOBAL UI STATE ==========================
   double _horizontalZoomLevel = 1000;
+
+  /// Represent zoom level (the value here means number of samples per pixel)
+  /// e.g 1000 means 1000 samples per pixel
   double get horizontalZoomLevel => _horizontalZoomLevel;
 
   /// Min: 1 sample/px (each sample tick visible). Max: 100k samples/px.
@@ -595,11 +607,11 @@ class KarbeatState extends ChangeNotifier {
       _tracks = Map.from(uiState.tracks);
       _generators = Map.from(uiState.generators);
       _patterns = Map.from(uiState.patterns);
-      
+
       _mixerState = uiState.mixer;
       maxSamplesIndex = uiState.maxSampleIndex;
       // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
-      
+
       notifyListeners();
 
       KarbeatLogger.info("Project loaded successfully from $path");
@@ -928,7 +940,6 @@ class KarbeatState extends ChangeNotifier {
       return Result.error(Exception("$e"));
     }
   }
-  
 
   Future<Result<void>> resizeClip(
     int trackId,
@@ -1267,9 +1278,10 @@ class KarbeatState extends ChangeNotifier {
     if (newTrackId != null && newTrackId != trackId) {
       if (!_tracks.containsKey(newTrackId)) return;
       final targetTrack = _tracks[newTrackId]!;
-      
+
       final sourceClips = List<UiClip>.from(track.clips)..removeAt(clipIndex);
-      final targetClips = List<UiClip>.from(targetTrack.clips)..add(updatedClip);
+      final targetClips = List<UiClip>.from(targetTrack.clips)
+        ..add(updatedClip);
 
       _tracks = Map.from(_tracks);
       _tracks[trackId] = _copyWithTrack(track, clips: sourceClips);
@@ -1277,7 +1289,7 @@ class KarbeatState extends ChangeNotifier {
     } else {
       final updatedClips = List<UiClip>.from(track.clips);
       updatedClips[clipIndex] = updatedClip;
-      
+
       _tracks = Map.from(_tracks);
       _tracks[trackId] = _copyWithTrack(track, clips: updatedClips);
     }
@@ -1297,10 +1309,14 @@ class KarbeatState extends ChangeNotifier {
     final targetTrack = _tracks[targetId]!;
 
     final clipIdSet = clipIds.toSet();
-    final clipsToMove = track.clips.where((c) => clipIdSet.contains(c.id)).toList();
-    
+    final clipsToMove = track.clips
+        .where((c) => clipIdSet.contains(c.id))
+        .toList();
+
     if (trackId != targetId) {
-      final sourceClips = track.clips.where((c) => !clipIdSet.contains(c.id)).toList();
+      final sourceClips = track.clips
+          .where((c) => !clipIdSet.contains(c.id))
+          .toList();
       final targetClips = List<UiClip>.from(targetTrack.clips);
       for (var clip in clipsToMove) {
         int newStart = clip.startTime + deltaSamples;
@@ -1313,9 +1329,9 @@ class KarbeatState extends ChangeNotifier {
     } else {
       final updatedClips = track.clips.map((clip) {
         if (clipIdSet.contains(clip.id)) {
-           int newStart = clip.startTime + deltaSamples;
-           if (newStart < 0) newStart = 0;
-           return _copyWithClip(clip, startTime: newStart);
+          int newStart = clip.startTime + deltaSamples;
+          if (newStart < 0) newStart = 0;
+          return _copyWithClip(clip, startTime: newStart);
         }
         return clip;
       }).toList();
@@ -1352,7 +1368,7 @@ class KarbeatState extends ChangeNotifier {
           int newStartProposed = oldStart + deltaSamples;
           if (newStartProposed < 0) newStartProposed = 0;
           if (newStartProposed > oldEnd - 100) newStartProposed = oldEnd - 100;
-          
+
           int delta = newStartProposed - oldStart;
           int currentOffset = clip.offsetStart;
           int newOffsetProposed = currentOffset + delta;
@@ -1362,7 +1378,12 @@ class KarbeatState extends ChangeNotifier {
           newLength = oldEnd - newStartProposed;
           newOffset = newOffsetProposed;
         }
-        return _copyWithClip(clip, startTime: newStart, loopLength: newLength, offsetStart: newOffset);
+        return _copyWithClip(
+          clip,
+          startTime: newStart,
+          loopLength: newLength,
+          offsetStart: newOffset,
+        );
       }
       return clip;
     }).toList();

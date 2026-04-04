@@ -167,26 +167,26 @@ pub fn create_clip(
     source_type: UiSourceType,
     track_id: u32,
     start_time: u32,
-) -> Result<(), String> {
+) -> Result<UiClip, String> {
     let track_id = TrackId::from(track_id);
 
-    {
+    let clip = {
         let mut app = get_app_write();
-        let mut history_manager = get_history_lock();
 
         let core_source_type = match source_type {
             UiSourceType::Audio => karbeat_core::core::project::clip::ClipSourceType::Audio,
             UiSourceType::Midi => karbeat_core::core::project::clip::ClipSourceType::Midi,
         };
 
-        let clip = app
+        app
             .create_new_clip(source_id, core_source_type, track_id, start_time)
-            .map_err(|e| format!("{}", e))?;
+            .map_err(|e| format!("{}", e))?
 
-        history_manager.push(ProjectAction::AddClip { track_id, clip });
-    }
+    };
+
+    let ui_clip = UiClip::from(&clip);
     broadcast_state_change();
-    Ok(())
+    Ok(ui_clip)
 }
 
 pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
@@ -195,18 +195,12 @@ pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
 
     {
         let mut app = get_app_write();
-        let mut history_manager = get_history_lock();
-
-        let deleted_clip_arc = app
-            .delete_clip_from_track(track_id, clip_id, true)
-            .map_err(|e| format!("Failed to delete clip: {}", e))?;
-
-        let deleted_clip = deleted_clip_arc.as_ref().to_owned();
-
-        history_manager.push(ProjectAction::DeleteClip {
-            track_id,
-            clip: deleted_clip,
-        });
+        
+        let _ = app
+        .delete_clip_from_track(track_id, clip_id, true)
+        .map_err(|e| format!("Failed to delete clip: {}", e))?;
+    
+        // let deleted_clip = deleted_clip_arc.as_ref().to_owned();
     }
     broadcast_state_change();
     Ok(())

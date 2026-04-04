@@ -289,6 +289,14 @@ class DefaultControlPanel extends ConsumerWidget {
             onTap: () =>
                 ref.read(karbeatStateProvider).selectTool(ToolSelection.select),
           ),
+          ControlPanelToolbarItem(
+            name: "Resize",
+            icon: Icons.zoom_out_map,
+            color: Colors.blueAccent,
+            isActive: state.selectedTool == ToolSelection.resize,
+            onTap: () =>
+                ref.read(karbeatStateProvider).selectTool(ToolSelection.resize),
+          ),
         ],
       ),
     );

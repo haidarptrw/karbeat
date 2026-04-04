@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 
 use crate::broadcast_state_change;
-use karbeat_core::lock::{get_app_read, get_app_write, get_history_lock};
+use karbeat_core::lock::{get_app_read, get_app_write};
 use karbeat_core::{
     audio::engine::PlaybackMode,
     commands::AudioCommand,
     context::utils::try_send_audio_command_chain,
-    core::{
-        history::ProjectAction,
+    core::
         project::{
             track::midi::{Pattern, PatternId},
             GeneratorId, Note, NoteId,
-        },
-    },
+        }
+    ,
 };
 
 #[derive(Clone)]
@@ -96,72 +95,52 @@ pub fn add_note(
     start_tick: u64,
     duration: Option<u64>,
 ) -> Result<UiNote, String> {
-    let mut history = get_history_lock();
     let note: Option<Note> = {
         let mut app = get_app_write();
         let note = app
-            .add_note_to_pattern(PatternId::from(pattern_id), key as u8, start_tick, duration)
-            .map_err(|e| format!("{}", e))?;
-
+        .add_note_to_pattern(PatternId::from(pattern_id), key as u8, start_tick, duration)
+        .map_err(|e| format!("{}", e))?;
+    
         Some(note)
     };
 
     let note_unwrapped = note.ok_or(
         "Add note failed previously. 
-                This error shouldn't happen as all error cases handle gracefully"
+        This error shouldn't happen as all error cases handle gracefully"
             .to_owned(),
-    )?;
-
+        )?;
+        
     let note_ui = UiNote::from(&note_unwrapped);
-
-    history.push(ProjectAction::AddNote {
-        pattern_id: PatternId::from(pattern_id),
-        note: note_unwrapped,
-    });
+    
     broadcast_state_change();
     Ok(note_ui)
 }
 
 pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
-    let mut history = get_history_lock();
     let note: Note = {
         let mut app = get_app_write();
         app.delete_note_from_pattern(PatternId::from(pattern_id), NoteId::from(note_id))
-            .map_err(|e| format!("{}", e))?
+        .map_err(|e| format!("{}", e))?
     };
-
+    
     let note_ui = UiNote::from(&note);
-
-    // Add to history
-    history.push(ProjectAction::DeleteNote {
-        pattern_id: PatternId::from(pattern_id),
-        note,
-    });
+    
     broadcast_state_change();
     Ok(note_ui)
 }
 
 pub fn resize_note(pattern_id: u32, note_id: u32, new_duration: u64) -> Result<UiNote, String> {
-    let mut history = get_history_lock();
     let mut app = get_app_write();
-
-    let (note, old_duration) = app
-        .resize_note_in_pattern(
-            PatternId::from(pattern_id),
+    
+    let (note, _old_duration) = app
+    .resize_note_in_pattern(
+        PatternId::from(pattern_id),
             NoteId::from(note_id),
             new_duration,
         )
         .map_err(|e| format!("{}", e))?;
-
+    
     let note_ui = UiNote::from(&note);
-
-    // add to history
-    history.push(ProjectAction::ResizeNote {
-        pattern_id: PatternId::from(pattern_id),
-        note_id: NoteId::from(note_id),
-        old_duration,
-        new_duration,
-    });
 
     // drop lock here so that broadcast state change can access the APP_STATE
     drop(app);
@@ -179,10 +158,9 @@ pub fn move_note(
     let pattern_id = PatternId::from(pattern_id);
     let note_id = NoteId::from(note_id);
 
-    let mut history = get_history_lock();
     let mut app = get_app_write();
 
-    let (note, old_tick, old_key) = app
+    let (note, _old_tick, _old_key) = app
         .move_note_in_pattern(
             PatternId::from(pattern_id),
             NoteId::from(note_id),
@@ -192,16 +170,6 @@ pub fn move_note(
         .map_err(|e| format!("{}", e))?;
 
     let ui_note = UiNote::from(&note);
-
-    // push history
-    history.push(ProjectAction::MoveNote {
-        pattern_id,
-        note_id,
-        old_tick,
-        old_key,
-        new_tick: new_start_tick,
-        new_key: new_key as u8,
-    });
 
     drop(app);
     broadcast_state_change();

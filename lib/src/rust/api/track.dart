@@ -30,7 +30,7 @@ Future<Map<int, AudioWaveformUiForClip>>
 getAudioWaveformForClipAllAvailableInTracks() => RustLib.instance.api
     .crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
 
-Future<void> createClip({
+Future<UiClip> createClip({
   int? sourceId,
   required UiSourceType sourceType,
   required int trackId,

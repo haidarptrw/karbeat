@@ -159,7 +159,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<int> crateApiMixerCreateBus({required String name});
 
-  Future<void> crateApiTrackCreateClip({
+  Future<UiClip> crateApiTrackCreateClip({
     int? sourceId,
     required UiSourceType sourceType,
     required int trackId,
@@ -1134,7 +1134,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "create_bus", argNames: ["name"]);
 
   @override
-  Future<void> crateApiTrackCreateClip({
+  Future<UiClip> crateApiTrackCreateClip({
     int? sourceId,
     required UiSourceType sourceType,
     required int trackId,
@@ -1156,7 +1156,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_ui_clip,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiTrackCreateClipConstMeta,

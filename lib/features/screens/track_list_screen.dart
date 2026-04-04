@@ -34,13 +34,15 @@ class TrackListScreen extends ConsumerWidget {
 
         return Builder(
           builder: (context) {
-            final trackIdsStr = ref.watch(karbeatStateProvider.select((s) {
-              final keys = s.tracks.keys.toList()..sort();
-              return keys.join(',');
-            }));
-            
-            final trackIds = trackIdsStr.isEmpty 
-                ? <int>[] 
+            final trackIdsStr = ref.watch(
+              karbeatStateProvider.select((s) {
+                final keys = s.tracks.keys.toList()..sort();
+                return keys.join(',');
+              }),
+            );
+
+            final trackIds = trackIdsStr.isEmpty
+                ? <int>[]
                 : trackIdsStr.split(',').map(int.parse).toList();
 
             return _SplitTrackView(
@@ -242,13 +244,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final double absoluteX = localPosition.dx + scrollX;
     if (absoluteX < 0) return;
 
-    final zoomLevel = state.horizontalZoomLevel;
-
     switch (state.selectedTool) {
-      case ToolSelection.scrub:
-        final double samples = absoluteX * zoomLevel;
-        state.seekTo(samples.toInt());
-        break;
       case ToolSelection.zoom:
         break;
       case ToolSelection.draw:
@@ -391,6 +387,22 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
     final currentTimelineWidth = _timelineWidth;
 
+    handleCursor() {
+      if (isPlacing) {
+        return SystemMouseCursors.move;
+      }
+
+      if (selectedTool == ToolSelection.select) {
+        return SystemMouseCursors.precise;
+      }
+
+      if (selectedTool == ToolSelection.cut) {
+        return SystemMouseCursors.text;
+      }
+
+      return SystemMouseCursors.basic;
+    }
+
     return Stack(
       children: [
         Row(
@@ -419,7 +431,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                         if (index == widget.trackIds.length) {
                           return _buildAddButton();
                         }
-                        return _TrackHeader(trackId: widget.trackIds[index], itemHeight: widget.itemHeight);
+                        return _TrackHeader(
+                          trackId: widget.trackIds[index],
+                          itemHeight: widget.itemHeight,
+                        );
                       },
                     ),
                   ),
@@ -473,14 +488,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       _updateZoom(
                         currentZoom * multiplier,
                         details.localPosition.dx,
-                      );
-                      return;
-                    }
-                    if (selectedTool == ToolSelection.scrub) {
-                      _handleTimelineGesture(
-                        context,
-                        details.localPosition,
-                        isDrag: true,
                       );
                       return;
                     }
@@ -538,11 +545,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       ),
                       Expanded(
                         child: MouseRegion(
-                          cursor: isPlacing
-                              ? SystemMouseCursors.move
-                              : selectedTool == ToolSelection.select
-                              ? SystemMouseCursors.precise
-                              : SystemMouseCursors.basic,
+                          cursor: handleCursor(),
                           onHover: null,
                           child: GestureDetector(
                             behavior: HitTestBehavior.translucent,
@@ -1109,14 +1112,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 }
 
 class _TrackHeader extends ConsumerWidget {
-
   final int trackId;
   final double itemHeight;
 
   const _TrackHeader({required this.trackId, required this.itemHeight});
 
   Color _getContrastColor(Color backgroundColor) {
-    return backgroundColor.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    return backgroundColor.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
   }
 
   IconData _getTrackIcon(UiTrackType type) {
@@ -1133,8 +1137,10 @@ class _TrackHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds this specific header if the track's name/color/type changes
-    final track = ref.watch(karbeatStateProvider.select((s) => s.tracks[trackId]));
-    
+    final track = ref.watch(
+      karbeatStateProvider.select((s) => s.tracks[trackId]),
+    );
+
     if (track == null) return const SizedBox();
 
     return ContextMenuWrapper(
@@ -1245,9 +1251,7 @@ class _TrackHeader extends ConsumerWidget {
                     Text(
                       "ID: ${track.id} | ${track.trackType.name.toUpperCase()}",
                       style: TextStyle(
-                        color: _getContrastColor(
-                          track.color.toColor(),
-                        ),
+                        color: _getContrastColor(track.color.toColor()),
                         // color: Colors.grey.shade600, // use inverse color of track color for better contrast
                         fontSize: 10,
                       ),
@@ -1283,7 +1287,6 @@ class _TrackHeader extends ConsumerWidget {
       ),
     );
   }
-
 }
 
 class _TimelineRuler extends ConsumerWidget {
