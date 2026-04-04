@@ -214,20 +214,28 @@ class DefaultControlPanel extends ConsumerWidget {
             color: Colors.redAccent,
             onTap: () => ref.read(karbeatStateProvider).stop(),
           ),
+          ControlPanelToolbarItem(
+            name: "Loop",
+            icon: Icons.loop,
+            color: Colors.orangeAccent,
+            isActive: state.isLooping,
+            onTap: () => ref.read(karbeatStateProvider).toggleLoop(),
+          ),
         ],
       ),
     );
 
     builder.addWidget(
-      ControlPanelToolbarItem(
-        name: "Loop",
-        icon: Icons.loop,
-        color: Colors.orangeAccent,
-        isActive: state.isLooping,
-        onTap: () => ref.read(karbeatStateProvider).toggleLoop(),
+      Row(
+        children: [
+          ControlPanelToolbarItem(
+            name: "Snap to Grid", icon: Icons.grid_on, color: Colors.blueAccent,
+            isActive: state.snapToGrid,
+            onTap: () => ref.read(karbeatStateProvider).toggleSnapToGrid(),
+          ),
+        ],
       ),
     );
-
     builder.addDivider();
 
     // Info Display

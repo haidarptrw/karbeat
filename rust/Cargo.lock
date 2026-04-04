@@ -1278,7 +1278,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-core"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-dsp"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 dependencies = [
  "dasp",
  "derive_builder",
@@ -1328,7 +1328,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-host"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 dependencies = [
  "karbeat-core",
  "karbeat-plugin-api",
@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugin-api"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -1351,7 +1351,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugins"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 dependencies = [
  "dasp",
  "fastrand",
@@ -1367,7 +1367,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-utils"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 dependencies = [
  "dasp",
  "hashbrown 0.16.1",
@@ -1380,7 +1380,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat_flutter_ffi"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "bytemuck",

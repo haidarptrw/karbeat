@@ -125,7 +125,7 @@ impl Pattern {
     /// Delete all notes within a time range
     pub fn delete_notes_in_range(&mut self, start_tick: u64, end_tick: u64) -> usize {
         let initial_len = self.notes.len();
-        self.notes.retain(|n| (n.start_tick < start_tick || n.start_tick >= end_tick));
+        self.notes.retain(|n| n.start_tick < start_tick || n.start_tick >= end_tick);
         initial_len - self.notes.len()
     }
 

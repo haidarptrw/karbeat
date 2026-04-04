@@ -140,6 +140,7 @@ class KarbeatState extends ChangeNotifier {
 
   /// Denominator of the grid size (e.g 4 = 1/4 note, 16 = 1/16 note)
   int gridSize = 4;
+  bool snapToGrid = false;
 
   // ================== OTHER STATES ====================
   bool _pendingPlayRequest = false;
@@ -221,6 +222,11 @@ class KarbeatState extends ChangeNotifier {
 
     // Always call super.dispose() last to properly tear down the ChangeNotifier
     super.dispose();
+  }
+
+  void toggleSnapToGrid() {
+    snapToGrid = !snapToGrid;
+    notifyListeners();
   }
 
   // =========================================================

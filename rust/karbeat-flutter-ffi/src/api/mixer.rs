@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_core::context::utils::send_audio_command;
 use karbeat_core::core::project::TrackId;
 
 use crate::broadcast_state_change;
 use crate::frb_generated::StreamSink;
 use karbeat_core::lock::{ get_app_read, get_app_write };
 use karbeat_core::{
-    commands::AudioCommand,
     context::{ ctx, MixerParamEvent },
     core::project::mixer::{
         BusId,
@@ -495,12 +493,6 @@ pub fn create_bus(name: String) -> Result<u32, String> {
         let mut app = get_app_write();
         let bus_id = app.mixer.create_bus(name.clone());
 
-        // Send command to audio thread
-        send_audio_command(AudioCommand::AddBus {
-            bus_id,
-            name: name.clone(),
-        });
-
         bus_id
     };
     broadcast_state_change();
@@ -512,11 +504,6 @@ pub fn delete_bus(bus_id: u32) -> Result<(), String> {
     {
         let mut app = get_app_write();
         app.mixer.remove_bus(bus_id.into())?;
-
-        // Send command to audio thread
-        send_audio_command(AudioCommand::RemoveBus {
-            bus_id: bus_id.into(),
-        });
     }
     broadcast_state_change();
     Ok(())
@@ -588,10 +575,7 @@ pub fn set_routing(
 
         app.mixer.add_routing(conn)?;
 
-        // Sync routing to audio thread
-        send_audio_command(AudioCommand::UpdateRouting {
-            routing: app.mixer.routing.clone(),
-        });
+
     }
     broadcast_state_change();
     Ok(())
@@ -609,11 +593,6 @@ pub fn remove_routing(
         let destination: RoutingNode = (&destination).into();
 
         app.mixer.remove_routing(source, destination, is_send)?;
-
-        // Sync routing to audio thread
-        send_audio_command(AudioCommand::UpdateRouting {
-            routing: app.mixer.routing.clone(),
-        });
     }
     broadcast_state_change();
     Ok(())

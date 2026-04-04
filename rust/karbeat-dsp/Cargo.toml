@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-dsp"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 edition = "2021"
 description = "DSP algorithms and utilities for Karbeat"
 

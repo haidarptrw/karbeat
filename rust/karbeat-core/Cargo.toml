@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-core"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 edition = "2021"
 description = "Core logic implementation of Karbeat, including audio engine and main business logic"
 
