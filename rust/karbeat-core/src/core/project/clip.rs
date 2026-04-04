@@ -9,17 +9,15 @@ pub enum ResizeEdge {
     Right,
 }
 
-use crate::core::history::ProjectAction;
-use crate::core::project::{ApplicationState, KarbeatSource, track::TrackId, track::TrackType};
 use crate::core::project::track::audio_waveform::AudioSourceId;
-use crate::core::project::track::midi::{PatternId, Pattern};
-use crate::lock::get_history_lock;
+use crate::core::project::track::midi::{Pattern, PatternId};
+use crate::core::project::{track::TrackId, track::TrackType, ApplicationState, KarbeatSource};
 
 define_id!(ClipId);
 
 pub enum ClipSourceType {
     Midi,
-    Audio
+    Audio,
 }
 
 /// Clip struct that holds data for clip in the timeline
@@ -74,7 +72,12 @@ impl Ord for Clip {
 }
 
 impl ApplicationState {
-    pub fn add_clip_to_track(&mut self, track_id: TrackId, clip: Clip, update_max_sample_index: bool) -> anyhow::Result<()> {
+    pub fn add_clip_to_track(
+        &mut self,
+        track_id: TrackId,
+        clip: Clip,
+        update_max_sample_index: bool,
+    ) -> anyhow::Result<()> {
         // Get the track
         match self.tracks.get_mut(&track_id) {
             Some(track_arc) => {
@@ -83,7 +86,7 @@ impl ApplicationState {
 
                 // Add Clip & Check bounds
                 // We pass the Clip by value. The track takes ownership and wraps it in Arc.
-                let _ =  track.add_clip(clip)?;
+                let _ = track.add_clip(clip)?;
                 if update_max_sample_index {
                     self.update_max_sample_index();
                 }
@@ -97,7 +100,7 @@ impl ApplicationState {
         &mut self,
         track_id: TrackId,
         clip_id: ClipId,
-        update_max_sample_index: bool
+        update_max_sample_index: bool,
     ) -> anyhow::Result<Arc<Clip>> {
         let deleted_clip = if let Some(track_arc) = self.tracks.get_mut(&track_id) {
             let track = Arc::make_mut(track_arc);
@@ -113,12 +116,6 @@ impl ApplicationState {
         } else {
             Err(anyhow::anyhow!("Track not found"))
         }?;
-
-        let mut history_manager = get_history_lock();
-        history_manager.push(ProjectAction::DeleteClip {
-            track_id,
-            clip: (*deleted_clip).clone(),
-        });
 
         Ok(deleted_clip)
     }
@@ -175,7 +172,9 @@ impl ApplicationState {
                 .ok_or("Target track not found")?;
             let track = Arc::make_mut(track_arc);
 
-            track.add_clip(modified_clip.clone()).map_err(|e| e.to_string())?;
+            track
+                .add_clip(modified_clip.clone())
+                .map_err(|e| e.to_string())?;
         }
 
         self.update_max_sample_index();
@@ -259,12 +258,17 @@ impl ApplicationState {
     ) -> anyhow::Result<Clip> {
         let clip = match source_type {
             ClipSourceType::Audio => {
-                let source_id = source_id.ok_or_else(|| anyhow::anyhow!("Audio clip needs source id"))?;
+                let source_id =
+                    source_id.ok_or_else(|| anyhow::anyhow!("Audio clip needs source id"))?;
                 let source_id = AudioSourceId::from(source_id);
                 // check the source
-                let audio_source = self.asset_library.source_map
+                let audio_source = self
+                    .asset_library
+                    .source_map
                     .get(&source_id)
-                    .ok_or_else(|| anyhow::anyhow!("The audio source is not available in the library"))?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("The audio source is not available in the library")
+                    })?
                     .clone();
 
                 let project_sample_rate = self.audio_config.sample_rate as f64;
@@ -295,13 +299,18 @@ impl ApplicationState {
             }
             ClipSourceType::Midi => {
                 let sample_rate = self.audio_config.sample_rate;
-                let bpm = if self.transport.bpm == 0.0 { 120.0 } else { self.transport.bpm };
+                let bpm = if self.transport.bpm == 0.0 {
+                    120.0
+                } else {
+                    self.transport.bpm
+                };
                 let samples_per_beat = ((sample_rate as f32) / (bpm / 60.0)) as u32;
 
                 // Use existing pattern if source_id provided, otherwise create new
                 let (pattern_id, timeline_length) = if let Some(id) = source_id {
                     let pattern_id = PatternId::from(id);
-                    let pattern = self.pattern_pool
+                    let pattern = self
+                        .pattern_pool
                         .get(&pattern_id)
                         .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", id))?;
 
@@ -326,7 +335,8 @@ impl ApplicationState {
                     (new_pattern_id, timeline_length)
                 };
 
-                let pattern_name = self.pattern_pool
+                let pattern_name = self
+                    .pattern_pool
                     .get(&pattern_id)
                     .map(|p| p.name.clone())
                     .unwrap_or_else(|| format!("Pattern {}", pattern_id.to_u32()));
@@ -346,8 +356,6 @@ impl ApplicationState {
             }
         };
 
-        let mut history_manager = get_history_lock();
-        history_manager.push(ProjectAction::AddClip { track_id, clip: clip.clone() });
         Ok(clip)
     }
 
@@ -367,7 +375,10 @@ impl ApplicationState {
 
         if source_track_id == target_track_id {
             // Same track: just update start times
-            let track_arc = self.tracks.get_mut(&source_track_id).ok_or("Source track not found")?;
+            let track_arc = self
+                .tracks
+                .get_mut(&source_track_id)
+                .ok_or("Source track not found")?;
             let track = Arc::make_mut(track_arc);
 
             for clip_id in &clip_ids {
@@ -375,7 +386,8 @@ impl ApplicationState {
                     track.clips.remove(&clip);
                     let mut modified_clip = (*clip).clone();
                     // Apply delta with clamping to 0
-                    let new_start = ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
+                    let new_start =
+                        ((modified_clip.start_time as i64) + delta_samples).max(0) as u32;
                     modified_clip.start_time = new_start;
                     track.clips.insert(Arc::new(modified_clip.clone()));
                     result_clips.push(modified_clip);
@@ -387,11 +399,18 @@ impl ApplicationState {
             let mut clips_to_move = Vec::new();
             {
                 let source_track = Arc::make_mut(
-                    self.tracks.get_mut(&source_track_id).ok_or("Source track not found")?
+                    self.tracks
+                        .get_mut(&source_track_id)
+                        .ok_or("Source track not found")?,
                 );
 
                 for clip_id in &clip_ids {
-                    if let Some(clip) = source_track.clips.iter().find(|c| c.id == *clip_id).cloned() {
+                    if let Some(clip) = source_track
+                        .clips
+                        .iter()
+                        .find(|c| c.id == *clip_id)
+                        .cloned()
+                    {
                         // Check compatibility
                         let is_compatible = match (&target_type, &clip.source) {
                             (TrackType::Audio, KarbeatSource::Audio(_)) => true,
@@ -410,7 +429,9 @@ impl ApplicationState {
 
             // Add to target track
             let target_track = Arc::make_mut(
-                self.tracks.get_mut(&target_track_id).ok_or("Target track not found")?
+                self.tracks
+                    .get_mut(&target_track_id)
+                    .ok_or("Target track not found")?,
             );
             for clip in clips_to_move {
                 let mut modified_clip = (*clip).clone();
@@ -433,7 +454,7 @@ impl ApplicationState {
     ) -> Result<Vec<Clip>, String> {
         let track_arc = self.tracks.get_mut(&track_id).ok_or("Track not found")?;
         let track = Arc::make_mut(track_arc);
-        
+
         let mut result_clips = Vec::new();
 
         for clip_id in &clip_ids {
@@ -444,13 +465,17 @@ impl ApplicationState {
                 match edge {
                     ResizeEdge::Right => {
                         let current_end = modified_clip.start_time + modified_clip.loop_length;
-                        let new_end = ((current_end as i64) + delta_samples).max((modified_clip.start_time as i64) + 100) as u32;
+                        let new_end = ((current_end as i64) + delta_samples)
+                            .max((modified_clip.start_time as i64) + 100)
+                            as u32;
                         modified_clip.loop_length = new_end - modified_clip.start_time;
                     }
                     ResizeEdge::Left => {
                         let old_start = modified_clip.start_time;
                         let old_end = old_start + modified_clip.loop_length;
-                        let new_start = ((old_start as i64) + delta_samples).clamp(0, (old_end as i64) - 100) as u32;
+                        let new_start = ((old_start as i64) + delta_samples)
+                            .clamp(0, (old_end as i64) - 100)
+                            as u32;
 
                         let delta = (new_start as i64) - (old_start as i64);
                         let current_offset = modified_clip.offset_start as i64;

@@ -8,14 +8,14 @@ use crate::broadcast_state_change;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::core::{
-    history::ProjectAction,
     project::{
         clip::ClipId,
         track::{TrackId, TrackType},
         KarbeatSource,
     },
 };
-use karbeat_core::lock::{get_app_read, get_app_write, get_history_lock};
+use karbeat_core::lock::{get_app_read, get_app_write};
+use karbeat_core::api::clip as clip_api;
 use karbeat_utils::color::Color;
 
 pub enum UiSourceType {
@@ -170,19 +170,13 @@ pub fn create_clip(
 ) -> Result<UiClip, String> {
     let track_id = TrackId::from(track_id);
 
-    let clip = {
-        let mut app = get_app_write();
-
-        let core_source_type = match source_type {
-            UiSourceType::Audio => karbeat_core::core::project::clip::ClipSourceType::Audio,
-            UiSourceType::Midi => karbeat_core::core::project::clip::ClipSourceType::Midi,
-        };
-
-        app
-            .create_new_clip(source_id, core_source_type, track_id, start_time)
-            .map_err(|e| format!("{}", e))?
-
+    let core_source_type = match source_type {
+        UiSourceType::Audio => karbeat_core::core::project::clip::ClipSourceType::Audio,
+        UiSourceType::Midi => karbeat_core::core::project::clip::ClipSourceType::Midi,
     };
+
+    let clip = clip_api::add_clip(source_id, core_source_type, track_id, start_time)
+        .map_err(|e| format!("{}", e))?;
 
     let ui_clip = UiClip::from(&clip);
     broadcast_state_change();
@@ -193,15 +187,9 @@ pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
     let track_id = TrackId::from(track_id);
     let clip_id = ClipId::from(clip_id);
 
-    {
-        let mut app = get_app_write();
-        
-        let _ = app
-        .delete_clip_from_track(track_id, clip_id, true)
+    clip_api::delete_clip(track_id, clip_id)
         .map_err(|e| format!("Failed to delete clip: {}", e))?;
-    
-        // let deleted_clip = deleted_clip_arc.as_ref().to_owned();
-    }
+
     broadcast_state_change();
     Ok(())
 }
@@ -214,12 +202,10 @@ pub fn resize_clip(
 ) -> Result<UiClip, String> {
     let track_id = TrackId::from(track_id);
     let clip_id = ClipId::from(clip_id);
+    let core_edge: ResizeEdge = edge.into();
 
-    let res = {
-        let mut app = get_app_write();
-        let core_edge: ResizeEdge = edge.into();
-        app.resize_clip(track_id, clip_id, core_edge, new_time_val)?
-    };
+    let res = clip_api::resize_clip(track_id, clip_id, core_edge, new_time_val)
+        .map_err(|e| format!("{}", e))?;
 
     broadcast_state_change();
     Ok(UiClip::from(&res))
@@ -235,10 +221,8 @@ pub fn move_clip(
     let clip_id = ClipId::from(clip_id);
     let target_track_id = new_track_id.map(TrackId::from).unwrap_or(source_track_id);
 
-    let res = {
-        let mut app = get_app_write();
-        app.move_clip(source_track_id, target_track_id, clip_id, new_start_time)?
-    };
+    let res = clip_api::move_clip(source_track_id, target_track_id, clip_id, new_start_time)
+        .map_err(|e| format!("{}", e))?;
 
     broadcast_state_change();
     Ok(UiClip::from(&res))
@@ -262,14 +246,11 @@ pub fn cut_clip(
     let source_track_id_typed = TrackId::from(source_track_id);
     let clip_id_typed = ClipId::from(clip_id);
 
-    let res = {
-        let mut app = get_app_write();
-        app.cut_clip(&source_track_id_typed, &clip_id_typed, cut_point_sample)
-            .map_err(|e| format!("{}", e))?
-    };
+    let (c1, c2) = clip_api::cut_clip(source_track_id_typed, clip_id_typed, cut_point_sample)
+            .map_err(|e| format!("{}", e))?;
 
     broadcast_state_change();
-    Ok(vec![UiClip::from(&res.0), UiClip::from(&res.1)])
+    Ok(vec![UiClip::from(&c1), UiClip::from(&c2)])
 }
 
 /// Add a MIDI track with a generator by its registry ID (preferred method).
@@ -341,10 +322,8 @@ pub fn move_clip_batch(
     let target_track_id = new_track_id.map(TrackId::from).unwrap_or(source_track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
 
-    let res = {
-        let mut app = get_app_write();
-        app.move_clip_batch(source_track_id, target_track_id, clip_ids, delta_samples)?
-    };
+    let res = clip_api::batch_move_clips(source_track_id, target_track_id, clip_ids, delta_samples)
+        .map_err(|e| format!("{}", e))?;
 
     broadcast_state_change();
     Ok(res.iter().map(|c| UiClip::from(c)).collect())
@@ -359,12 +338,10 @@ pub fn resize_clip_batch(
 ) -> Result<Vec<UiClip>, String> {
     let track_id = TrackId::from(track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
+    let core_edge: ResizeEdge = edge.into();
 
-    let res = {
-        let mut app = get_app_write();
-        let core_edge: ResizeEdge = edge.into();
-        app.resize_clip_batch(track_id, clip_ids, core_edge, delta_samples)?
-    };
+    let res = clip_api::batch_resize_clips(track_id, clip_ids, core_edge, delta_samples)
+        .map_err(|e| format!("{}", e))?;
 
     broadcast_state_change();
     Ok(res.iter().map(|c| UiClip::from(c)).collect())
@@ -375,20 +352,8 @@ pub fn delete_clip_batch(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String
     let track_id = TrackId::from(track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from).collect();
 
-    {
-        let mut app = get_app_write();
-        let mut history_manager = get_history_lock();
-
-        for clip_id in clip_ids {
-            if let Ok(deleted_clip_arc) = app.delete_clip_from_track(track_id, clip_id, true) {
-                let deleted_clip = deleted_clip_arc.as_ref().to_owned();
-                history_manager.push(ProjectAction::DeleteClip {
-                    track_id,
-                    clip: deleted_clip,
-                });
-            }
-        }
-    }
+    clip_api::batch_delete_clips(track_id, clip_ids)
+        .map_err(|e| format!("Failed to delete clips: {}", e))?;
 
     broadcast_state_change();
     Ok(())

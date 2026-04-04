@@ -2,11 +2,9 @@ use std::sync::Arc;
 
 use serde::{ Deserialize, Serialize };
 
-use crate::core::history::ProjectAction;
 use crate::core::project::ApplicationState;
 use crate::core::project::Note;
 use crate::core::project::NoteId;
-use crate::lock::get_history_lock;
 use karbeat_utils::define_id;
 
 define_id!(PatternId);
@@ -398,12 +396,6 @@ impl ApplicationState {
 
         let note = pattern.add_note(key, start_tick, duration)?;
 
-        let mut history = get_history_lock();
-        history.push(ProjectAction::AddNote {
-            pattern_id: PatternId::from(pattern_id),
-            note: note.clone(),
-        });
-
         Ok(note)
     }
 
@@ -423,12 +415,6 @@ impl ApplicationState {
             .ok_or_else(|| anyhow::anyhow!("Note with ID {:?} not found", note_id))?;
 
         let note = pattern.delete_note(index)?;
-        // Add to history
-        let mut history = get_history_lock();
-        history.push(ProjectAction::DeleteNote {
-            pattern_id: PatternId::from(pattern_id),
-            note: note.clone(),
-        });
 
         Ok(note)
     }
@@ -452,14 +438,6 @@ impl ApplicationState {
         let old_duration = pattern.notes[index].duration;
         let note = pattern.resize_note(index, new_duration)?.clone();
 
-        // add to history
-        let mut history = get_history_lock();
-        history.push(ProjectAction::ResizeNote {
-            pattern_id: PatternId::from(pattern_id),
-            note_id: NoteId::from(note_id),
-            old_duration,
-            new_duration,
-        });
         Ok((note, old_duration))
     }
 
@@ -485,16 +463,6 @@ impl ApplicationState {
 
         let note = pattern.move_note(index, new_start_tick, new_key)?.clone();
 
-        // push history
-        let mut history = get_history_lock();
-        history.push(ProjectAction::MoveNote {
-            pattern_id,
-            note_id,
-            old_tick,
-            old_key,
-            new_tick: new_start_tick,
-            new_key: new_key as u8,
-        });
         Ok((note, old_tick, old_key))
     }
 

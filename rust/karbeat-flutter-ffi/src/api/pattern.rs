@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use crate::broadcast_state_change;
-use karbeat_core::lock::{get_app_read, get_app_write};
+use karbeat_core::lock::{get_app_read};
 use karbeat_core::{
+    api::note as note_api,
     audio::engine::PlaybackMode,
     commands::AudioCommand,
     context::utils::try_send_audio_command_chain,
@@ -95,33 +96,18 @@ pub fn add_note(
     start_tick: u64,
     duration: Option<u64>,
 ) -> Result<UiNote, String> {
-    let note: Option<Note> = {
-        let mut app = get_app_write();
-        let note = app
-        .add_note_to_pattern(PatternId::from(pattern_id), key as u8, start_tick, duration)
+    let note = note_api::add_note(PatternId::from(pattern_id), key as u8, start_tick, duration)
         .map_err(|e| format!("{}", e))?;
-    
-        Some(note)
-    };
-
-    let note_unwrapped = note.ok_or(
-        "Add note failed previously. 
-        This error shouldn't happen as all error cases handle gracefully"
-            .to_owned(),
-        )?;
         
-    let note_ui = UiNote::from(&note_unwrapped);
+    let note_ui = UiNote::from(&note);
     
     broadcast_state_change();
     Ok(note_ui)
 }
 
 pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
-    let note: Note = {
-        let mut app = get_app_write();
-        app.delete_note_from_pattern(PatternId::from(pattern_id), NoteId::from(note_id))
-        .map_err(|e| format!("{}", e))?
-    };
+    let note = note_api::delete_note(PatternId::from(pattern_id), NoteId::from(note_id))
+        .map_err(|e| format!("{}", e))?;
     
     let note_ui = UiNote::from(&note);
     
@@ -130,20 +116,14 @@ pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
 }
 
 pub fn resize_note(pattern_id: u32, note_id: u32, new_duration: u64) -> Result<UiNote, String> {
-    let mut app = get_app_write();
-    
-    let (note, _old_duration) = app
-    .resize_note_in_pattern(
+    let note = note_api::resize_note(
         PatternId::from(pattern_id),
-            NoteId::from(note_id),
-            new_duration,
-        )
-        .map_err(|e| format!("{}", e))?;
+        NoteId::from(note_id),
+        new_duration,
+    )
+    .map_err(|e| format!("{}", e))?;
     
     let note_ui = UiNote::from(&note);
-
-    // drop lock here so that broadcast state change can access the APP_STATE
-    drop(app);
 
     broadcast_state_change();
     Ok(note_ui)
@@ -155,23 +135,16 @@ pub fn move_note(
     new_start_tick: u64,
     new_key: u32,
 ) -> Result<UiNote, String> {
-    let pattern_id = PatternId::from(pattern_id);
-    let note_id = NoteId::from(note_id);
-
-    let mut app = get_app_write();
-
-    let (note, _old_tick, _old_key) = app
-        .move_note_in_pattern(
-            PatternId::from(pattern_id),
-            NoteId::from(note_id),
-            new_start_tick,
-            new_key as u8,
-        )
-        .map_err(|e| format!("{}", e))?;
+    let note = note_api::move_note(
+        PatternId::from(pattern_id),
+        NoteId::from(note_id),
+        new_start_tick,
+        new_key as u8,
+    )
+    .map_err(|e| format!("{}", e))?;
 
     let ui_note = UiNote::from(&note);
 
-    drop(app);
     broadcast_state_change();
     Ok(ui_note)
 }
@@ -184,30 +157,21 @@ pub fn change_note_params(
     micro_offset: Option<i64>,
     mute: Option<bool>,
 ) -> Result<UiNote, String> {
-    let pattern_id = PatternId::from(pattern_id);
-    let note_id = NoteId::from(note_id);
-
     // validate inputs
     let velocity = velocity.and_then(|v| u8::try_from(v).ok());
     let micro_offset = micro_offset.and_then(|m| i8::try_from(m).ok());
 
-    let mut app = get_app_write();
-
-    let note = app
-        .change_note_params_in_pattern(
-            PatternId::from(pattern_id),
-            NoteId::from(note_id),
-            velocity,
-            probability,
-            micro_offset,
-            mute,
-        )
-        .map_err(|e| format!("{}", e))?;
+    let note = note_api::change_note_params(
+        PatternId::from(pattern_id),
+        NoteId::from(note_id),
+        velocity,
+        probability,
+        micro_offset,
+        mute,
+    )
+    .map_err(|e| format!("{}", e))?;
 
     let note_ui = UiNote::from(&note);
-
-    // drop lock here so that broadcast state change can access the APP_STATE
-    drop(app);
 
     broadcast_state_change();
     Ok(note_ui)
