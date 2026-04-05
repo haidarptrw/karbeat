@@ -63,7 +63,7 @@ pub enum AudioCommand {
     AddTrackEffect {
         track_id: TrackId,
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send>,
+        effect: Box<dyn KarbeatEffect + Send + Sync>,
     },
     /// Remove an effect from a track's effect chain
     RemoveTrackEffect {
@@ -89,7 +89,7 @@ pub enum AudioCommand {
     /// Add an effect to the master bus
     AddMasterEffect {
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send>,
+        effect: Box<dyn KarbeatEffect + Send + Sync>,
     },
     /// Remove an effect from the master bus
     RemoveMasterEffect {
@@ -129,7 +129,7 @@ pub enum AudioCommand {
     AddBusEffect {
         bus_id: BusId,
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send>,
+        effect: Box<dyn KarbeatEffect + Send + Sync>,
     },
     /// Remove effect from a bus
     RemoveBusEffect {
@@ -154,10 +154,10 @@ pub enum AudioCommand {
     },
     /// Prepare all of plugins from ApplicationState to AudioEngine (upon loading project)
     PreparePlugin {
-        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send>>>,
-        master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send>>,
-        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send>>>,
-        generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send>>,
+        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
+        master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
+        generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>>,
     }
 }
 

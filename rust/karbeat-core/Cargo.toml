@@ -37,3 +37,5 @@ rmp-serde.workspace = true
 zip.workspace = true
 chrono.workspace = true
 hound.workspace = true
+derive_builder.workspace = true
+strum.workspace = true
