@@ -1,10 +1,12 @@
 use std::path::Path;
 
 use karbeat_core::{
-    audio::render_state::broadcast_plugin_state_loading, commands::AudioCommand, context::utils::send_audio_command, core::file_manager::project_loader::{load_karbeat_project, save_karbeat_project}, lock::{get_app_read, get_app_write}
+    audio::render_state::broadcast_plugin_state_loading,
+    commands::AudioCommand,
+    context::utils::{ broadcast_state_change, send_audio_command },
+    core::file_manager::project_loader::{ load_karbeat_project, save_karbeat_project },
+    lock::{ get_app_read, get_app_write },
 };
-
-use crate::broadcast_state_change;
 
 pub fn save_project(path_name: &str) -> Result<(), String> {
     {
@@ -17,7 +19,6 @@ pub fn save_project(path_name: &str) -> Result<(), String> {
 }
 
 pub fn load_project(path_name: &str) -> Result<crate::api::project::UiApplicationState, String> {
-    
     let loaded_app = load_karbeat_project(Path::new(path_name)).map_err(|e| e.to_string())?;
     send_audio_command(AudioCommand::StopAndReset); // HALT THE ENGINE
 

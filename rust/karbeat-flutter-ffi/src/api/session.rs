@@ -1,7 +1,7 @@
 use crate::api::track::UiResizeEdge;
 use crate::api::{pattern::UiNote, project::UiClip};
-use crate::broadcast_state_change;
-use karbeat_core::api::{self, clip as clip_api, note as note_api};
+use karbeat_core::api::{self, clip_api as clip_api, note_api as note_api};
+use karbeat_core::context::utils::broadcast_state_change;
 use karbeat_core::core::project::PatternId;
 use karbeat_core::core::project::{
     clip::ClipId, clipboard::ClipboardContent, track::TrackId, Note,

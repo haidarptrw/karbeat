@@ -2,8 +2,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::api::{ mixer::UiEffectInstance, project::UiGeneratorInstance };
-use crate::broadcast_state_change;
 use flutter_rust_bridge::frb;
+use karbeat_core::context::utils::broadcast_state_change;
 use karbeat_core::lock::get_plugin_registry_read;
 use karbeat_core::{
     commands::{ AudioCommand, AudioFeedback, EffectTarget },

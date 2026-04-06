@@ -5,6 +5,19 @@ use crate::core::project::track::TrackId;
 use crate::lock::{get_app_read, get_app_write, get_history_lock};
 use std::sync::Arc;
 
+pub fn get_clip<T, F>(track_id: TrackId, clip_id: ClipId, mapper: F) -> anyhow::Result<T>
+where
+    F: Fn(&Clip) -> T,
+{
+    let app = get_app_read();
+    let track = app.tracks.get(&track_id).ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+    
+    // Uses your recently fixed `get_clip` which returns `Option<Arc<Clip>>`
+    let clip = track.get_clip(&clip_id).ok_or_else(|| anyhow::anyhow!("Clip {:?} not found in track {:?}", clip_id, track_id))?;
+    
+    Ok(mapper(clip.as_ref()))
+}
+
 pub fn add_clip(
     source_id: Option<u32>,
     source_type: ClipSourceType,

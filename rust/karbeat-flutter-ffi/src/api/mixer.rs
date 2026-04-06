@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
+use karbeat_core::context::utils::broadcast_state_change;
 use karbeat_core::core::project::TrackId;
 
-use crate::broadcast_state_change;
 use crate::frb_generated::StreamSink;
 use karbeat_core::lock::{ get_app_read, get_app_write };
 use karbeat_core::{
@@ -19,6 +19,7 @@ use karbeat_core::{
         RoutingNode,
     },
 };
+use karbeat_core::api::mixer_api as mixer_api;
 
 // ======================================
 // Type Definitions
@@ -274,17 +275,16 @@ fn push_mixer_event(event: MixerParamEvent) {
 
 /// **GETTER: Fetch the mixer state**
 pub fn get_mixer_state() -> UiMixerState {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    mixer_state.into()
+    mixer_api::get_mixer_state(|mixer_state| UiMixerState::from(mixer_state))
 }
 
 /// **GETTER: Fetch a specific mixer channel**
 pub fn get_mixer_channel(track_id: u32) -> Result<UiMixerChannel, String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let channel = mixer_state.channels.get(&TrackId::from(track_id));
-    channel.ok_or("Channel not found".to_owned()).map(|c| c.as_ref().into())
+    mixer_api
+        ::get_mixer_channel(TrackId::from(track_id), |mixer_channel|
+            UiMixerChannel::from(mixer_channel)
+        )
+        .map_err(|e| e.to_string())
 }
 
 pub fn get_mixer_channel_populated(
@@ -574,8 +574,6 @@ pub fn set_routing(
         };
 
         app.mixer.add_routing(conn)?;
-
-
     }
     broadcast_state_change();
     Ok(())

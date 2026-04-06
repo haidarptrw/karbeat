@@ -139,7 +139,7 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
 // Trait AudioLoader
 pub trait AudioLoader {
     fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<u32>;
-    fn get_audio_source(&self, id: u32) -> Option<Arc<AudioWaveform>>;
+    fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>>;
     fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>>;
 }
 
@@ -170,10 +170,10 @@ impl AudioLoader for ApplicationState {
         Ok(id)
     }
 
-    fn get_audio_source(&self, id: u32) -> Option<Arc<AudioWaveform>> {
+    fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>> {
         self.asset_library
             .source_map
-            .get(&AudioSourceId::from(id))
+            .get(id)
             .cloned()
     }
 

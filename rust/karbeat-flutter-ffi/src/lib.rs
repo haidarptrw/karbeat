@@ -2,7 +2,6 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use karbeat_core::lock::get_app_read;
 use memmap2::MmapOptions;
 use rtrb::RingBuffer;
 
@@ -23,27 +22,6 @@ pub use karbeat_core::context::{ctx as get_ctx, INIT_LOGGER as get_init};
 // ================== Functions =====================================
 // ==================================================================
 
-/// Broadcast changes in ApplicationState to AudioRenderState (things that
-/// is used by the Audio Thread)
-pub fn broadcast_state_change() {
-    // if read failed, we do nothing
-    let app = get_app_read();
-    let render_state = AudioRenderState::from(&*app);
-
-    drop(app);
-
-    publish_to_audio_thread(render_state);
-}
-
-/// Helper to push state to TripleBuffer
-fn publish_to_audio_thread(state: AudioRenderState) {
-    if let Some(producer) = ctx().render_state_producer.lock().as_mut() {
-        {
-            let mut input = producer.input_buffer_publisher();
-            *input = state;
-        }
-    }
-}
 
 fn generate_startup_beep() -> AudioWaveform {
     let sample_rate = 48000;

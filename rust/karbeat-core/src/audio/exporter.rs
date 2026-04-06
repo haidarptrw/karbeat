@@ -180,7 +180,8 @@ pub fn export_project(
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
 
     // Determine exact render length
-    let tail_seconds = 3.0; // Wait 3 seconds after the last clip for reverb/delays to fade
+    // TODO: Track tails from effect calculations or add a long tail and trim when the audio gets 0 magnitude
+    let tail_seconds = 3.0; // Wait 3 seconds after the last clip for reverb/delays to fade.
     let total_samples =
         render_state.graph.max_sample_index + (((sample_rate as f32) * tail_seconds) as u32);
     let mut processed_samples: u32 = 0;

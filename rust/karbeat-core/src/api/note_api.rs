@@ -1,14 +1,14 @@
 use crate::core::history::ProjectAction;
 use crate::core::project::track::midi::PatternId;
-use crate::core::project::{clipboard::ClipboardContent, Note, NoteId};
-use crate::lock::{get_app_read, get_app_write, get_history_lock};
+use crate::core::project::{ clipboard::ClipboardContent, Note, NoteId };
+use crate::lock::{ get_app_write, get_history_lock };
 use std::sync::Arc;
 
 pub fn add_note(
     pattern_id: PatternId,
     key: u8,
     start_tick: u64,
-    duration: Option<u64>,
+    duration: Option<u64>
 ) -> anyhow::Result<Note> {
     // 1. Mutate state
     let note = {
@@ -51,7 +51,7 @@ pub fn move_note(
     pattern_id: PatternId,
     note_id: NoteId,
     new_start_tick: u64,
-    new_key: u8,
+    new_key: u8
 ) -> anyhow::Result<Note> {
     // 1. Mutate state
     let (note, old_tick, old_key) = {
@@ -78,7 +78,7 @@ pub fn move_note(
 pub fn resize_note(
     pattern_id: PatternId,
     note_id: NoteId,
-    new_duration: u64,
+    new_duration: u64
 ) -> anyhow::Result<Note> {
     // 1. Mutate state
     let (note, old_duration) = {
@@ -106,7 +106,7 @@ pub fn change_note_params(
     velocity: Option<u8>,
     probability: Option<f32>,
     micro_offset: Option<i8>,
-    mute: Option<bool>,
+    mute: Option<bool>
 ) -> anyhow::Result<Note> {
     let mut app = get_app_write();
     app.change_note_params_in_pattern(
@@ -115,7 +115,7 @@ pub fn change_note_params(
         velocity,
         probability,
         micro_offset,
-        mute,
+        mute
     )
 }
 
@@ -125,14 +125,12 @@ pub fn delete_notes_batch(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyho
     // 1. Mutate state and collect actions
     {
         let mut app = get_app_write();
-        let pattern_arc = app
-            .pattern_pool
+        let pattern_arc = app.pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern not found"))?;
         let pattern = Arc::make_mut(pattern_arc);
 
-        let notes_to_delete: Vec<Note> = pattern
-            .notes
+        let notes_to_delete: Vec<Note> = pattern.notes
             .iter()
             .filter(|n| note_ids.contains(&n.id))
             .cloned()
@@ -167,7 +165,9 @@ pub fn paste_notes(target_pattern_id: PatternId, playhead_tick: u64) -> anyhow::
 
         let notes_to_paste = match &app.clipboard {
             ClipboardContent::Notes(notes) => notes.clone(),
-            _ => return Ok(()),
+            _ => {
+                return Ok(());
+            }
         };
 
         if notes_to_paste.is_empty() {
@@ -181,14 +181,13 @@ pub fn paste_notes(target_pattern_id: PatternId, playhead_tick: u64) -> anyhow::
             .unwrap_or(0);
         let offset = (playhead_tick as i64) - (min_tick as i64);
 
-        let pattern_arc = app
-            .pattern_pool
+        let pattern_arc = app.pattern_pool
             .get_mut(&target_pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern not found"))?;
         let pattern = Arc::make_mut(pattern_arc);
 
         for mut note in notes_to_paste {
-            let new_start = (note.start_tick as i64 + offset).max(0) as u64;
+            let new_start = ((note.start_tick as i64) + offset).max(0) as u64;
             note.start_tick = new_start;
 
             if let Ok(inserted_note) = pattern.insert_note(note) {
