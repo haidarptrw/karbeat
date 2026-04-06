@@ -1304,6 +1304,7 @@ dependencies = [
  "rodio",
  "rtrb",
  "serde",
+ "serde_json",
  "smallvec",
  "strum",
  "symphonia",

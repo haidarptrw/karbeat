@@ -11,7 +11,7 @@ import 'pattern.dart';
 part 'project.freezed.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `into`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin_internal`, `try_from_audio_waveform_with_target_sample_bin`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -64,11 +64,11 @@ Future<Map<int, UiGeneratorInstance>> getGeneratorList() =>
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-Future<void> addAudioSource({required String filePath}) =>
+Future<int> addAudioSource({required String filePath}) =>
     RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-Future<void> addNewTrack({required UiTrackType trackType}) =>
+Future<UiTrack> addNewTrack({required UiTrackType trackType}) =>
     RustLib.instance.api.crateApiProjectAddNewTrack(trackType: trackType);
 
 /// Get all tracks on the session/project.

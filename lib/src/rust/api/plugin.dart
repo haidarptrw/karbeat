@@ -10,16 +10,8 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'plugin.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `hash`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `parse_plugin_response`
-
-/// Get all available generators in Plugin Registry (names only, backwards compatible)
-Future<List<String>> getAvailableGenerators() =>
-    RustLib.instance.api.crateApiPluginGetAvailableGenerators();
-
-/// Get all available effects in Plugin Registry (names only, backwards compatible)
-Future<List<String>> getAvailableEffects() =>
-    RustLib.instance.api.crateApiPluginGetAvailableEffects();
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `hash`, `into`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_info_to_effect`, `from_info_to_synth`, `parse_plugin_response`
 
 /// Get all available generators with their registry IDs (preferred for UI)
 Future<List<UiPluginInfo>> getAvailableGeneratorsWithIds() =>
@@ -51,13 +43,6 @@ Future<List<UiEffectInstance>> getMasterEffects() =>
     RustLib.instance.api.crateApiPluginGetMasterEffects();
 
 /// Get parameter specifications for a generator plugin.
-///
-/// With the lock-free architecture, the live plugin instance runs on the audio thread
-/// and cannot be accessed directly. Instead, we use the registry to query its static parameter specifications.
-/// This is safe because parameter specs are static metadata that don't depend on state.
-///
-/// The returned specs include the current stored parameter values (from generator pool)
-/// which may differ from defaults if the user has modified them.
 Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
   required int generatorId,
 }) => RustLib.instance.api.crateApiPluginGetGeneratorParameterSpecs(
@@ -65,14 +50,6 @@ Future<List<UiPluginParameter>> getGeneratorParameterSpecs({
 );
 
 /// Set a parameter on a generator plugin.
-///
-/// This sends a command to the audio thread to update the parameter.
-/// The parameter value is also stored in PluginInstance for persistence.
-///
-/// # Arguments
-/// * `generator_id` - The ID of the generator
-/// * `param_id` - The parameter ID
-/// * `value` - The new value for the parameter
 Future<void> setGeneratorParameter({
   required int generatorId,
   required int paramId,
@@ -84,10 +61,6 @@ Future<void> setGeneratorParameter({
 );
 
 /// Get a parameter value from a generator plugin.
-///
-/// Returns the stored parameter value for the given parameter ID.
-/// With lock-free architecture, we read from the stored parameters,
-/// not the live plugin on the audio thread.
 Future<double> getGeneratorParameter({
   required int generatorId,
   required int paramId,
@@ -97,27 +70,16 @@ Future<double> getGeneratorParameter({
 );
 
 /// Request a parameter snapshot from the audio thread.
-///
-/// This sends a query to the audio thread, which will respond with the
-/// current parameter values via the feedback channel. Use `poll_parameter_feedback`
-/// to receive the response.
 Future<void> queryGeneratorParameters({required int generatorId}) => RustLib
     .instance
     .api
     .crateApiPluginQueryGeneratorParameters(generatorId: generatorId);
 
 /// Poll for parameter feedback from the audio thread.
-///
-/// This should be called periodically (e.g., in a timer or on parameter screen)
-/// to receive parameter updates from the audio thread. Returns all pending
-/// parameter snapshots.
 Future<List<UiGeneratorParameterSnapshot>> pollGeneratorParameterFeedback() =>
     RustLib.instance.api.crateApiPluginPollGeneratorParameterFeedback();
 
 /// Sync parameter values from audio thread to stored parameters.
-///
-/// Call this after `poll_parameter_feedback` to update the stored parameters
-/// with the latest values from the audio thread.
 Future<void> syncGeneratorParametersFromAudio({
   required List<UiGeneratorParameterSnapshot> snapshots,
 }) => RustLib.instance.api.crateApiPluginSyncGeneratorParametersFromAudio(
@@ -133,10 +95,6 @@ Future<void> syncEffectParametersFromAudio({
   snapshots: snapshots,
 );
 
-/// Get parameter specifications for a track effect plugin.
-///
-/// Creates a temporary plugin instance from the registry to query static parameter
-/// specs, then overlays the current stored parameter values.
 Future<List<UiPluginParameter>> getEffectParameterSpecs({
   required UiEffectTarget target,
   required int effectId,
@@ -145,10 +103,6 @@ Future<List<UiPluginParameter>> getEffectParameterSpecs({
   effectId: effectId,
 );
 
-/// Set a parameter on a track effect plugin.
-///
-/// Sends a command to the audio thread to update the parameter and also
-/// persists the value in the stored PluginInstance parameters.
 Future<void> setEffectParameter({
   required UiEffectTarget target,
   required int effectId,
@@ -161,10 +115,6 @@ Future<void> setEffectParameter({
   value: value,
 );
 
-/// Request a parameter snapshot from the audio thread for a track effect.
-///
-/// The audio thread will respond via AudioFeedback::EffectParameterSnapshot,
-/// which can be polled using `poll_effect_parameter_feedback`.
 Future<void> queryEffectParameters({
   required UiEffectTarget target,
   required int effectId,
@@ -173,7 +123,6 @@ Future<void> queryEffectParameters({
   effectId: effectId,
 );
 
-/// Execute generator's unique command on a default instance
 Future<String?> executePluginCommandGenerator({
   required int genRegistryId,
   required String command,
@@ -184,7 +133,6 @@ Future<String?> executePluginCommandGenerator({
   payloadJson: payloadJson,
 );
 
-/// Execute effect's unique command on a default instance
 Future<String?> executePluginCommandEffect({
   required int effectRegistryId,
   required String command,
@@ -195,7 +143,6 @@ Future<String?> executePluginCommandEffect({
   payloadJson: payloadJson,
 );
 
-/// Execute an effect's command using its exact current state in the project
 Future<String> executeEffectInstanceCommand({
   required UiEffectTarget target,
   required int effectId,
@@ -208,7 +155,6 @@ Future<String> executeEffectInstanceCommand({
   payloadJson: payloadJson,
 );
 
-/// Execute a generator's command using its exact current state in the project
 Future<String> executeGeneratorInstanceCommand({
   required int generatorId,
   required String command,

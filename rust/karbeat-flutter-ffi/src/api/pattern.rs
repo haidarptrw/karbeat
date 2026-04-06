@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use karbeat_core::{
     api::{ note_api as note_api, pattern_api as pattern_api },
-    context::utils::broadcast_state_change,
     core::project::{ GeneratorId, Note, NoteId, track::midi::{ Pattern, PatternId } },
 };
 
@@ -85,7 +84,6 @@ pub fn add_note(
 
     let note_ui = UiNote::from(&note);
 
-    broadcast_state_change();
     Ok(note_ui)
 }
 
@@ -96,7 +94,6 @@ pub fn delete_note(pattern_id: u32, note_id: u32) -> Result<UiNote, String> {
 
     let note_ui = UiNote::from(&note);
 
-    broadcast_state_change();
     Ok(note_ui)
 }
 
@@ -106,8 +103,6 @@ pub fn resize_note(pattern_id: u32, note_id: u32, new_duration: u64) -> Result<U
         .map_err(|e| format!("{}", e))?;
 
     let note_ui = UiNote::from(&note);
-
-    broadcast_state_change();
     Ok(note_ui)
 }
 
@@ -127,8 +122,6 @@ pub fn move_note(
         .map_err(|e| format!("{}", e))?;
 
     let ui_note = UiNote::from(&note);
-
-    broadcast_state_change();
     Ok(ui_note)
 }
 
@@ -157,7 +150,6 @@ pub fn change_note_params(
 
     let note_ui = UiNote::from(&note);
 
-    broadcast_state_change();
     Ok(note_ui)
 }
 

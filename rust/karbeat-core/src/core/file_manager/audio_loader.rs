@@ -138,13 +138,13 @@ pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWavefo
 
 // Trait AudioLoader
 pub trait AudioLoader {
-    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<u32>;
+    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<AudioSourceId>;
     fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>>;
     fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>>;
 }
 
 impl AudioLoader for ApplicationState {
-    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<u32> {
+    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<AudioSourceId> {
         // Load the actual audio data (Heavy I/O operation)
         // This parses the file into f32 samples
         let waveform = match load_audio_file(path, name) {
@@ -155,7 +155,9 @@ impl AudioLoader for ApplicationState {
                 return Err(anyhow!("{}", error_msg));
             }
         };
-        let id = self.asset_library.next_id;
+        let raw_id = self.asset_library.next_id;
+        let source_id = AudioSourceId::from(raw_id);
+        
         let asset_library = Arc::make_mut(&mut self.asset_library);
         asset_library.next_id += 1;
 
@@ -163,11 +165,11 @@ impl AudioLoader for ApplicationState {
 
         asset_library
             .source_map
-            .insert(id.into(), Arc::new(waveform));
+            .insert(source_id, Arc::new(waveform));
 
-        log::info!("Successfully loaded audio: {} (ID: {})", path, id);
+        log::info!("Successfully loaded audio: {} (ID: {})", path, raw_id);
 
-        Ok(id)
+        Ok(source_id)
     }
 
     fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>> {

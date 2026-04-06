@@ -1,21 +1,15 @@
-use std::ops::Deref;
-use std::sync::Arc;
-
-use crate::api::{ mixer::UiEffectInstance, project::UiGeneratorInstance };
+use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
 use flutter_rust_bridge::frb;
-use karbeat_core::context::utils::broadcast_state_change;
-use karbeat_core::lock::get_plugin_registry_read;
+use karbeat_core::api::plugin_api;
 use karbeat_core::{
-    commands::{ AudioCommand, AudioFeedback, EffectTarget },
-    context::ctx,
     core::project::{
-        generator::{ GeneratorId, GeneratorInstanceType },
-        mixer::{ BusId, EffectId },
+        generator::GeneratorId,
+        mixer::{BusId, EffectId},
         TrackId,
     },
-    lock::{ get_app_read, get_app_write },
 };
 use karbeat_plugin_api::wrapper::ParameterValueType;
+use karbeat_plugins::registry::PluginInfo;
 use karbeat_utils::parser::FromPluginCommand;
 
 // ============================================================================
@@ -73,252 +67,102 @@ pub struct UiPluginInfo {
     pub plugin_type: KarbeatPluginType,
 }
 
-/// Get all available generators in Plugin Registry (names only, backwards compatible)
-pub fn get_available_generators() -> Result<Vec<String>, String> {
-    let registry = ctx().plugin_registry.read();
-    Ok(registry.list_generators())
-}
+#[frb(ignore)]
+impl UiPluginInfo {
+    pub fn from_info_to_synth(info: &PluginInfo) -> Self {
+        Self {
+            id: info.id,
+            name: info.name.clone(),
+            plugin_type: KarbeatPluginType::Generator,
+        }
+    }
 
-/// Get all available effects in Plugin Registry (names only, backwards compatible)
-pub fn get_available_effects() -> Result<Vec<String>, String> {
-    let registry = ctx().plugin_registry.read();
-    Ok(registry.list_effects())
+    pub fn from_info_to_effect(info: &PluginInfo) -> Self {
+        Self {
+            id: info.id,
+            name: info.name.clone(),
+            plugin_type: KarbeatPluginType::Effect,
+        }
+    }
 }
 
 /// Get all available generators with their registry IDs (preferred for UI)
 pub fn get_available_generators_with_ids() -> Result<Vec<UiPluginInfo>, String> {
-    let registry = ctx().plugin_registry.read();
-    Ok(
-        registry
-            .list_generators_with_ids()
-            .into_iter()
-            .map(|p| UiPluginInfo {
-                id: p.id,
-                name: p.name,
-                plugin_type: KarbeatPluginType::Generator,
-            })
-            .collect()
-    )
+    Ok(plugin_api::get_available_generators(|plugin_info| {
+        UiPluginInfo::from_info_to_synth(plugin_info)
+    }))
 }
 
 /// Get all available effects with their registry IDs (preferred for UI)
 pub fn get_available_effects_with_ids() -> Result<Vec<UiPluginInfo>, String> {
-    let registry = ctx().plugin_registry.read();
-    Ok(
-        registry
-            .list_effects_with_ids()
-            .into_iter()
-            .map(|p| UiPluginInfo {
-                id: p.id,
-                name: p.name,
-                plugin_type: KarbeatPluginType::Effect,
-            })
-            .collect()
-    )
+    Ok(plugin_api::get_available_effects(|plugin_info| {
+        UiPluginInfo::from_info_to_effect(plugin_info)
+    }))
 }
 
 /// Get a single generator state from the Generator Pool
 pub fn get_generator(generator_id: u32) -> Result<UiGeneratorInstance, String> {
-    let app = get_app_read();
     let gen_id = GeneratorId::from(generator_id);
-
-    let generator_arc = app.generator_pool
-        .get(&gen_id)
+    let gen_instance = plugin_api::get_generator(&gen_id, |g| UiGeneratorInstance::from(g))
         .ok_or_else(|| format!("Generator {} not found", generator_id))?;
-
-    let generator = generator_arc.deref();
-
-    let ui_generator = UiGeneratorInstance::from(generator);
-    Ok(ui_generator)
+    Ok(gen_instance)
 }
 
 pub fn get_effect(track_id: u32, effect_id: u32) -> Result<UiEffectInstance, String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let channel = mixer_state.channels
-        .get(&TrackId::from(track_id))
-        .ok_or("Channel not found".to_owned())?;
-    let effect = channel.effects
-        .iter()
-        .find(|e| e.id.to_u32() == effect_id)
-        .ok_or("Effect instance not found".to_owned())?;
-    Ok(effect.into())
+    let track_id = TrackId::from(track_id);
+    let effect_id = EffectId::from(effect_id);
+    plugin_api::get_effect(&track_id, &effect_id, |e| UiEffectInstance::from(e))
+        .ok_or_else(|| format!("Effect {} not found", effect_id.0))
 }
 
 pub fn get_effect_from_master(effect_id: u32) -> Result<UiEffectInstance, String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let channel = mixer_state.master_bus.as_ref();
-    let effect = channel.effects
-        .iter()
-        .find(|e| e.id.to_u32() == effect_id)
-        .ok_or("Effect instance not found".to_owned())?;
-    Ok(effect.into())
+    let effect_id_typed = EffectId::from(effect_id);
+    plugin_api::get_effect_from_master(&effect_id_typed, |e| UiEffectInstance::from(e))
+        .ok_or_else(|| format!("Effect {} not found", effect_id))
 }
 
 pub fn get_effects_from_track(track_id: u32) -> Result<Vec<UiEffectInstance>, String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let channel = mixer_state.channels
-        .get(&TrackId::from(track_id))
-        .ok_or("Channel not found".to_owned())?;
-    let effects = channel.effects
-        .iter()
-        .map(|e| e.into())
-        .collect();
-    Ok(effects)
+    let track_id = TrackId::from(track_id);
+    plugin_api::get_effects_from_track(&track_id, |e| UiEffectInstance::from(e))
+        .ok_or_else(|| format!("Track {} not found", track_id.0))
 }
 
-pub fn get_master_effects() -> Result<Vec<UiEffectInstance>, String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let master_channel = mixer_state.master_bus.as_ref();
-    let effects = master_channel.effects
-        .iter()
-        .map(|e| e.into())
-        .collect();
-    Ok(effects)
+pub fn get_master_effects() -> Vec<UiEffectInstance> {
+    plugin_api::get_master_effects(|e| UiEffectInstance::from(e))
 }
 
 /// Get parameter specifications for a generator plugin.
-///
-/// With the lock-free architecture, the live plugin instance runs on the audio thread
-/// and cannot be accessed directly. Instead, we use the registry to query its static parameter specifications.
-/// This is safe because parameter specs are static metadata that don't depend on state.
-///
-/// The returned specs include the current stored parameter values (from generator pool)
-/// which may differ from defaults if the user has modified them.
 pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginParameter>, String> {
-    let app = get_app_read();
     let gen_id = GeneratorId::from(generator_id);
-
-    let generator_arc = app.generator_pool
-        .get(&gen_id)
-        .ok_or_else(|| format!("Generator {} not found", generator_id))?;
-
-    let generator = generator_arc.deref();
-
-    if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
-        let registry = ctx().plugin_registry.read();
-
-        // Try ID-based lookup first (preferred), then fall back to name
-        let specs = if plugin_instance.registry_id > 0 {
-            registry.get_generator_parameter_specs_by_id(plugin_instance.registry_id)
-        } else {
-            registry
-                .get_generator_id_by_name(&plugin_instance.name)
-                .and_then(|id| registry.get_generator_parameter_specs_by_id(id))
-        };
-
-        if let Some(specs) = specs {
-            let ui_specs: Vec<UiPluginParameter> = specs
-                .into_iter()
-                .map(|p| {
-                    // Use stored parameter value if available, otherwise default
-                    let value = plugin_instance.parameters
-                        .get(&p.id)
-                        .copied()
-                        .unwrap_or(p.default_value);
-
-                    UiPluginParameter {
-                        id: p.id,
-                        name: p.name,
-                        group: p.group,
-                        value,
-                        min: p.min,
-                        max: p.max,
-                        default_value: p.default_value,
-                        step: p.step,
-                        param_type: UiParameterType::from(p.value_type),
-                        choices: p.choices,
-                    }
-                })
-                .collect();
-
-            Ok(ui_specs)
-        } else {
-            Err(
-                format!(
-                    "Generator '{}' (registry_id={}) not found in registry",
-                    plugin_instance.name,
-                    plugin_instance.registry_id
-                )
-            )
-        }
-    } else {
-        Err("Generator is not a plugin type".to_string())
-    }
+    plugin_api::get_generator_parameter_specs(&gen_id, |p, value| UiPluginParameter {
+        id: p.id,
+        name: p.name,
+        group: p.group,
+        value,
+        min: p.min,
+        max: p.max,
+        default_value: p.default_value,
+        step: p.step,
+        param_type: UiParameterType::from(p.value_type),
+        choices: p.choices,
+    })
 }
 
 /// Set a parameter on a generator plugin.
-///
-/// This sends a command to the audio thread to update the parameter.
-/// The parameter value is also stored in PluginInstance for persistence.
-///
-/// # Arguments
-/// * `generator_id` - The ID of the generator
-/// * `param_id` - The parameter ID
-/// * `value` - The new value for the parameter
 pub fn set_generator_parameter(generator_id: u32, param_id: u32, value: f32) -> Result<(), String> {
     let gen_id = GeneratorId::from(generator_id);
-
-    // Send command to audio thread (lock-free)
-    if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        let _ = sender.push(AudioCommand::SetGeneratorParameter {
-            generator_id: gen_id,
-            param_id,
-            value,
-        });
-    }
-
-    // Also update the stored parameter value for persistence
-    {
-        let mut app = get_app_write();
-
-        if let Some(generator_arc) = app.generator_pool.get_mut(&gen_id) {
-            let generator = Arc::make_mut(generator_arc);
-
-            if let GeneratorInstanceType::Plugin(plugin_instance) = &mut generator.instance_type {
-                plugin_instance.parameters.insert(param_id, value);
-            }
-        }
-    }
-
-    broadcast_state_change();
-    Ok(())
+    plugin_api::set_generator_parameter(&gen_id, param_id, value)
 }
 
 /// Get a parameter value from a generator plugin.
-///
-/// Returns the stored parameter value for the given parameter ID.
-/// With lock-free architecture, we read from the stored parameters,
-/// not the live plugin on the audio thread.
 pub fn get_generator_parameter(generator_id: u32, param_id: u32) -> Result<f32, String> {
-    let app = get_app_read();
     let gen_id = GeneratorId::from(generator_id);
-
-    let generator_arc = app.generator_pool
-        .get(&gen_id)
-        .ok_or_else(|| format!("Generator {} not found", generator_id))?;
-
-    let generator = generator_arc.deref();
-
-    if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
-        // Read from stored parameters
-        plugin_instance.parameters
-            .get(&param_id)
-            .copied()
-            .ok_or_else(|| format!("Parameter {} not found", param_id))
-    } else {
-        Err("Generator is not a plugin type".to_string())
-    }
+    plugin_api::get_generator_parameter(&gen_id, param_id)
 }
 
 // ============================================================================
 // PARAMETER FEEDBACK API (Audio -> UI)
 // ============================================================================
-
-static PENDING_FEEDBACK: std::sync::Mutex<Vec<AudioFeedback>> = std::sync::Mutex::new(Vec::new());
 
 /// Parameter snapshot from the audio thread (DTO)
 #[derive(Clone, Debug)]
@@ -334,12 +178,26 @@ pub enum UiEffectTarget {
     Bus(u32),
 }
 
-impl From<EffectTarget> for UiEffectTarget {
-    fn from(target: EffectTarget) -> Self {
+impl From<karbeat_core::commands::EffectTarget> for UiEffectTarget {
+    fn from(target: karbeat_core::commands::EffectTarget) -> Self {
         match target {
-            EffectTarget::Track(track_id) => UiEffectTarget::Track(track_id.into()),
-            EffectTarget::Master => UiEffectTarget::Master,
-            EffectTarget::Bus(bus_id) => UiEffectTarget::Bus(bus_id.into()),
+            karbeat_core::commands::EffectTarget::Track(track_id) => {
+                UiEffectTarget::Track(track_id.into())
+            }
+            karbeat_core::commands::EffectTarget::Master => UiEffectTarget::Master,
+            karbeat_core::commands::EffectTarget::Bus(bus_id) => UiEffectTarget::Bus(bus_id.into()),
+        }
+    }
+}
+
+impl Into<karbeat_core::commands::EffectTarget> for UiEffectTarget {
+    fn into(self) -> karbeat_core::commands::EffectTarget {
+        match self {
+            UiEffectTarget::Track(id) => {
+                karbeat_core::commands::EffectTarget::Track(TrackId::from(id))
+            }
+            UiEffectTarget::Master => karbeat_core::commands::EffectTarget::Master,
+            UiEffectTarget::Bus(id) => karbeat_core::commands::EffectTarget::Bus(BusId::from(id)),
         }
     }
 }
@@ -359,545 +217,180 @@ pub struct UiParameterValue {
 }
 
 /// Request a parameter snapshot from the audio thread.
-///
-/// This sends a query to the audio thread, which will respond with the
-/// current parameter values via the feedback channel. Use `poll_parameter_feedback`
-/// to receive the response.
 pub fn query_generator_parameters(generator_id: u32) -> Result<(), String> {
     let gen_id = GeneratorId::from(generator_id);
-
-    if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        sender
-            .push(AudioCommand::QueryGeneratorParameters {
-                generator_id: gen_id,
-            })
-            .map_err(|_| "Command queue full".to_string())?;
-        Ok(())
-    } else {
-        Err("Audio stream not initialized".to_string())
-    }
+    plugin_api::query_generator_parameters(&gen_id)
 }
 
 /// Poll for parameter feedback from the audio thread.
-///
-/// This should be called periodically (e.g., in a timer or on parameter screen)
-/// to receive parameter updates from the audio thread. Returns all pending
-/// parameter snapshots.
 pub fn poll_generator_parameter_feedback() -> Vec<UiGeneratorParameterSnapshot> {
-    let mut snapshots = Vec::new();
-
-    let mut pending = PENDING_FEEDBACK.lock().unwrap();
-
-    if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
-        // Drain all pending feedback messages
-        while let Ok(feedback) = consumer.pop() {
-            pending.push(feedback);
+    plugin_api::poll_generator_parameter_feedback(|generator_id, parameters| {
+        UiGeneratorParameterSnapshot {
+            generator_id: generator_id.into(),
+            parameters: parameters
+                .into_iter()
+                .map(|(param_id, value)| UiParameterValue { param_id, value })
+                .collect(),
         }
-    }
-
-    pending.retain(|feedback| {
-        match feedback {
-            AudioFeedback::GeneratorParameterSnapshot(snapshot) => {
-                let ui_snapshot = UiGeneratorParameterSnapshot {
-                    generator_id: snapshot.generator_id.into(),
-                    parameters: snapshot.parameters
-                        .clone()
-                        .into_iter()
-                        .map(|(param_id, value)| UiParameterValue { param_id, value })
-                        .collect(),
-                };
-                snapshots.push(ui_snapshot);
-                false
-            }
-            AudioFeedback::GeneratorParameterChanged(update) => {
-                // Single parameter change - could be from automation
-                // Convert to a single-parameter snapshot
-                let ui_snapshot = UiGeneratorParameterSnapshot {
-                    generator_id: update.generator_id.into(),
-                    parameters: vec![UiParameterValue {
-                        param_id: update.param_id,
-                        value: update.value,
-                    }],
-                };
-                snapshots.push(ui_snapshot);
-                false
-            }
-            _ => true, // Keep effect feedbacks
-        }
-    });
-
-    snapshots
+    })
 }
 
 /// Sync parameter values from audio thread to stored parameters.
-///
-/// Call this after `poll_parameter_feedback` to update the stored parameters
-/// with the latest values from the audio thread.
 pub fn sync_generator_parameters_from_audio(snapshots: &[UiGeneratorParameterSnapshot]) {
-    let mut app = get_app_write();
-
-    for snapshot in snapshots {
-        let gen_id = GeneratorId::from(snapshot.generator_id);
-
-        if let Some(generator_arc) = app.generator_pool.get_mut(&gen_id) {
-            let generator = Arc::make_mut(generator_arc);
-            if let GeneratorInstanceType::Plugin(ref mut plugin_instance) = generator.instance_type {
-                for param in &snapshot.parameters {
-                    plugin_instance.parameters.insert(param.param_id, param.value);
-                }
-            }
-        }
-    }
+    let items = snapshots.iter().map(|snapshot| {
+        let params = snapshot
+            .parameters
+            .iter()
+            .map(|p| (p.param_id, p.value))
+            .collect::<Vec<_>>();
+        (GeneratorId::from(snapshot.generator_id), params)
+    });
+    plugin_api::sync_generator_parameters_from_audio(items);
 }
 
 // Do the same for effect plugin
 pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
-    let mut snapshots = Vec::new();
-
-    let mut pending = PENDING_FEEDBACK.lock().unwrap();
-
-    if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
-        // Drain all pending feedback messages
-        while let Ok(feedback) = consumer.pop() {
-            pending.push(feedback);
+    plugin_api::poll_effect_parameter_feedback(|target, effect_id, parameters| {
+        UiEffectParameterSnapshot {
+            effect_id: effect_id.into(),
+            target: target.into(),
+            parameters: parameters
+                .into_iter()
+                .map(|(param_id, value)| UiParameterValue { param_id, value })
+                .collect(),
         }
-    }
-
-    pending.retain(|feedback| {
-        match feedback {
-            AudioFeedback::EffectParameterSnapshot(snapshot) => {
-                let ui_snapshot = UiEffectParameterSnapshot {
-                    effect_id: snapshot.effect_id.into(),
-                    parameters: snapshot.parameters
-                        .clone()
-                        .into_iter()
-                        .map(|(param_id, value)| UiParameterValue { param_id, value })
-                        .collect(),
-                    target: snapshot.target.clone().into(),
-                };
-                snapshots.push(ui_snapshot);
-                false
-            }
-            AudioFeedback::EffectParameterChanged(update) => {
-                // Single parameter change - could be from automation
-                // Convert to a single-parameter snapshot
-                let ui_snapshot = UiEffectParameterSnapshot {
-                    effect_id: update.effect_id.into(),
-                    parameters: vec![UiParameterValue {
-                        param_id: update.param_id,
-                        value: update.value,
-                    }],
-                    target: update.target.clone().into(),
-                };
-                snapshots.push(ui_snapshot);
-                false
-            }
-            _ => true, // Keep generator feedbacks
-        }
-    });
-
-    snapshots
+    })
 }
 
 pub fn sync_effect_parameters_from_audio(snapshots: &[UiEffectParameterSnapshot]) {
-    let mut app = get_app_write();
-
-    for snapshot in snapshots {
-        let effect_id = EffectId::from(snapshot.effect_id);
-
-        match snapshot.target {
-            UiEffectTarget::Master => {
-                // Update Master Bus Effect
-                let master = Arc::make_mut(&mut app.mixer.master_bus);
-                if let Some(effect) = master.effects.iter_mut().find(|e| e.id == effect_id) {
-                    let plugin = Arc::make_mut(&mut effect.instance);
-                    for param in &snapshot.parameters {
-                        plugin.parameters.insert(param.param_id, param.value);
-                    }
-                }
-            }
-            UiEffectTarget::Track(track_id_u32) => {
-                // Update specific Track Effect
-                let track_id = TrackId::from(track_id_u32);
-                if let Some(channel_arc) = app.mixer.channels.get_mut(&track_id) {
-                    let channel = Arc::make_mut(channel_arc);
-                    if let Some(effect) = channel.effects.iter_mut().find(|e| e.id == effect_id) {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        for param in &snapshot.parameters {
-                            plugin.parameters.insert(param.param_id, param.value);
-                        }
-                    }
-                }
-            }
-            UiEffectTarget::Bus(bus_id_u32) => {
-                // Update specific Bus Effect
-                let bus_id = BusId::from(bus_id_u32);
-                if let Some(bus) = app.mixer.buses.get_mut(&bus_id) {
-                    let bus_mut = Arc::make_mut(bus);
-                    if
-                        let Some(effect) = bus_mut.channel.effects
-                            .iter_mut()
-                            .find(|e| e.id == effect_id)
-                    {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        for param in &snapshot.parameters {
-                            plugin.parameters.insert(param.param_id, param.value);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let items = snapshots.iter().map(|snapshot| {
+        let params = snapshot
+            .parameters
+            .iter()
+            .map(|p| (p.param_id, p.value))
+            .collect::<Vec<_>>();
+        (
+            snapshot.target.clone().into(),
+            EffectId::from(snapshot.effect_id),
+            params,
+        )
+    });
+    plugin_api::sync_effect_parameters_from_audio(items);
 }
 
 // ============================================================================
-// EFFECT PARAMETER API (mirrors Generator Parameter API)
+// EFFECT PARAMETER API
 // ============================================================================
 
-/// Get parameter specifications for a track effect plugin.
-///
-/// Creates a temporary plugin instance from the registry to query static parameter
-/// specs, then overlays the current stored parameter values.
 pub fn get_effect_parameter_specs(
     target: UiEffectTarget,
-    effect_id: u32
+    effect_id: u32,
 ) -> Result<Vec<UiPluginParameter>, String> {
-    let app = get_app_read();
+    let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match &target {
-        UiEffectTarget::Track(track_id) => {
-            let channel = app.mixer.channels
-                .get(&TrackId::from(*track_id))
-                .ok_or_else(|| format!("Track channel {} not found", track_id))?;
-            let effect = channel.effects
-                .iter()
-                .find(|e| e.id == effect_id_typed)
-                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+    plugin_api::get_effect_parameter_specs(&effect_target, &effect_id_typed, |p, value| {
+        UiPluginParameter {
+            id: p.id,
+            name: p.name,
+            group: p.group,
+            value,
+            min: p.min,
+            max: p.max,
+            default_value: p.default_value,
+            step: p.step,
+            param_type: UiParameterType::from(p.value_type),
+            choices: p.choices,
         }
-        UiEffectTarget::Bus(bus_id) => {
-            let bus = app.mixer.buses
-                .get(&BusId::from(*bus_id))
-                .ok_or_else(|| format!("Bus {} not found", bus_id))?;
-            let effect = bus.channel.effects
-                .iter()
-                .find(|e| e.id == effect_id_typed)
-                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
-        }
-        UiEffectTarget::Master => {
-            let effect = app.mixer.master_bus.effects
-                .iter()
-                .find(|e| e.id == effect_id_typed)
-                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
-        }
-    };
-
-    // Create a temporary plugin instance to get static parameter specs
-    let registry = ctx().plugin_registry.read();
-
-    let specs = if plugin_registry_id > 0 {
-        registry.get_effect_parameter_specs_by_id(plugin_registry_id)
-    } else {
-        registry
-            .get_effect_id_by_name(&plugin_name)
-            .and_then(|id| registry.get_effect_parameter_specs_by_id(id))
-    };
-
-    if let Some(specs) = specs {
-        let ui_specs: Vec<UiPluginParameter> = specs
-            .into_iter()
-            .map(|p| {
-                // Use stored parameter value if available, otherwise default
-                let value = plugin_parameters.get(&p.id).copied().unwrap_or(p.default_value);
-
-                UiPluginParameter {
-                    id: p.id,
-                    name: p.name,
-                    group: p.group,
-                    value,
-                    min: p.min,
-                    max: p.max,
-                    default_value: p.default_value,
-                    step: p.step,
-                    param_type: UiParameterType::from(p.value_type),
-                    choices: p.choices,
-                }
-            })
-            .collect();
-
-        Ok(ui_specs)
-    } else {
-        Err(
-            format!(
-                "Effect '{}' (registry_id={}) not found in registry",
-                plugin_name,
-                plugin_registry_id
-            )
-        )
-    }
+    })
 }
 
-/// Set a parameter on a track effect plugin.
-///
-/// Sends a command to the audio thread to update the parameter and also
-/// persists the value in the stored PluginInstance parameters.
 pub fn set_effect_parameter(
     target: UiEffectTarget,
     effect_id: u32,
     param_id: u32,
-    value: f32
+    value: f32,
 ) -> Result<(), String> {
+    let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
-
-    // Send command to audio thread (lock-free)
-    if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        match target {
-            UiEffectTarget::Track(track_id) => {
-                let _ = sender.push(AudioCommand::SetTrackEffectParameter {
-                    track_id: TrackId::from(track_id),
-                    effect_id: effect_id_typed,
-                    param_id,
-                    value,
-                });
-            }
-            UiEffectTarget::Bus(bus_id) => {
-                let _ = sender.push(AudioCommand::SetBusEffectParameter {
-                    bus_id: BusId::from(bus_id),
-                    effect_id: effect_id_typed,
-                    param_id,
-                    value,
-                });
-            }
-            UiEffectTarget::Master => {
-                let _ = sender.push(AudioCommand::SetMasterEffectParameter {
-                    effect_id: effect_id_typed,
-                    param_id,
-                    value,
-                });
-            }
-        }
-    }
-
-    // Also update the stored parameter value for persistence
-    {
-        let mut app = get_app_write();
-
-        match target {
-            UiEffectTarget::Track(track_id) => {
-                if let Some(channel_arc) = app.mixer.channels.get_mut(&TrackId::from(track_id)) {
-                    let channel = Arc::make_mut(channel_arc);
-                    if
-                        let Some(effect) = channel.effects
-                            .iter_mut()
-                            .find(|e| e.id == effect_id_typed)
-                    {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            UiEffectTarget::Bus(bus_id) => {
-                if let Some(bus) = app.mixer.buses.get_mut(&BusId::from(bus_id)) {
-                    let bus_mut = Arc::make_mut(bus);
-                    if
-                        let Some(effect) = bus_mut.channel.effects
-                            .iter_mut()
-                            .find(|e| e.id == effect_id_typed)
-                    {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            UiEffectTarget::Master => {
-                let master = Arc::make_mut(&mut app.mixer.master_bus);
-                if let Some(effect) = master.effects.iter_mut().find(|e| e.id == effect_id_typed) {
-                    let plugin = Arc::make_mut(&mut effect.instance);
-                    plugin.parameters.insert(param_id, value);
-                }
-            }
-        }
-    }
-
-    broadcast_state_change();
-    Ok(())
+    plugin_api::set_effect_parameter(&effect_target, &effect_id_typed, param_id, value)
 }
 
-/// Request a parameter snapshot from the audio thread for a track effect.
-///
-/// The audio thread will respond via AudioFeedback::EffectParameterSnapshot,
-/// which can be polled using `poll_effect_parameter_feedback`.
 pub fn query_effect_parameters(target: UiEffectTarget, effect_id: u32) -> Result<(), String> {
+    let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
-
-    if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        match target {
-            UiEffectTarget::Track(track_id) => {
-                let _ = sender.push(AudioCommand::QueryTrackEffectParameters {
-                    track_id: TrackId::from(track_id),
-                    effect_id: effect_id_typed,
-                });
-            }
-            UiEffectTarget::Bus(bus_id) => {
-                let _ = sender.push(AudioCommand::QueryBusEffectParameters {
-                    bus_id: BusId::from(bus_id),
-                    effect_id: effect_id_typed,
-                });
-            }
-            UiEffectTarget::Master => {
-                let _ = sender.push(AudioCommand::QueryMasterEffectParameters {
-                    effect_id: effect_id_typed,
-                });
-            }
-        }
-        Ok(())
-    } else {
-        Err("Audio stream not initialized".to_string())
-    }
+    plugin_api::query_effect_parameters(&effect_target, &effect_id_typed)
 }
 
 // ============================================================================
 // 1. STATELESS COMMANDS (Operates on defaults from the Registry)
 // ============================================================================
 
-/// Execute generator's unique command on a default instance
-pub fn execute_plugin_command_generator(gen_registry_id: u32, command: String, payload_json: String) -> Option<String> {
-    let payload_value: serde_json::Value = serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
-    let registry = get_plugin_registry_read();
-    let (mut plugin, _) = registry.create_generator_by_id(gen_registry_id)?;
-    
-    let response_value = plugin.execute_custom_command(&command, &payload_value);
-    response_value.map(|val| val.to_string())
+pub fn execute_plugin_command_generator(
+    gen_registry_id: u32,
+    command: String,
+    payload_json: String,
+) -> Option<String> {
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
+
+    plugin_api::execute_plugin_command_generator(gen_registry_id, &command, &payload_value)
+        .map(|v| v.to_string())
 }
 
-/// Execute effect's unique command on a default instance
-pub fn execute_plugin_command_effect(effect_registry_id: u32, command: String, payload_json: String) -> Option<String> {
-    let payload_value: serde_json::Value = serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
-    let registry = get_plugin_registry_read();
-    let (mut plugin, _) = registry.create_effect_by_id(effect_registry_id)?;
-    
-    let response_value = plugin.execute_custom_command(&command, &payload_value);
-    response_value.map(|val| val.to_string())
+pub fn execute_plugin_command_effect(
+    effect_registry_id: u32,
+    command: String,
+    payload_json: String,
+) -> Option<String> {
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
+
+    plugin_api::execute_plugin_command_effect(effect_registry_id, &command, &payload_value)
+        .map(|v| v.to_string())
 }
 
 // ============================================================================
 // 2. STATEFUL COMMANDS (Operates on active instances with User Parameters applied)
 // ============================================================================
 
-/// Execute an effect's command using its exact current state in the project
 pub fn execute_effect_instance_command(
     target: UiEffectTarget,
     effect_id: u32,
     command: String,
-    payload_json: String
+    payload_json: String,
 ) -> Result<String, String> {
-    let app = get_app_read();
+    let effect_target = target.into();
     let effect_id_typed = EffectId::from(effect_id);
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match target {
-        UiEffectTarget::Track(track_id) => {
-            let channel = app.mixer.channels.get(&TrackId::from(track_id))
-                .ok_or_else(|| format!("Track channel {} not found", track_id))?;
-            let effect = channel.effects.iter().find(|e| e.id == effect_id_typed)
-                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (effect.instance.name.clone(), effect.instance.registry_id, effect.instance.parameters.clone())
-        }
-        UiEffectTarget::Bus(bus_id) => {
-            let bus = app.mixer.buses.get(&BusId::from(bus_id))
-                .ok_or_else(|| format!("Bus {} not found", bus_id))?;
-            let effect = bus.channel.effects.iter().find(|e| e.id == effect_id_typed)
-                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (effect.instance.name.clone(), effect.instance.registry_id, effect.instance.parameters.clone())
-        }
-        UiEffectTarget::Master => {
-            let effect = app.mixer.master_bus.effects.iter().find(|e| e.id == effect_id_typed)
-                .ok_or_else(|| format!("Effect {} not found", effect_id))?;
-            (effect.instance.name.clone(), effect.instance.registry_id, effect.instance.parameters.clone())
-        }
-    };
-
-    // Create a temporary clone of the plugin from the registry
-    let registry = get_plugin_registry_read();
-    let mut temp_plugin = if plugin_registry_id > 0 {
-        registry.create_effect_by_id(plugin_registry_id).map(|(p, _)| p)
-    } else {
-        registry.create_effect(&plugin_name)
-    }.ok_or_else(|| format!("Effect '{}' not found in registry", plugin_name))?;
-
-    // Apply the parameters so the plugin knows its actual state
-    for (&param_id, &value) in &plugin_parameters {
-        temp_plugin.set_parameter(param_id, value);
-    }
-
-    let payload_value: serde_json::Value = serde_json::from_str(&payload_json)
-        .unwrap_or(serde_json::json!({}));
-
-    let response_value = temp_plugin.execute_custom_command(&command, &payload_value)
-        .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))?;
-
-    Ok(response_value.to_string())
+    plugin_api::execute_effect_instance_command(
+        &effect_target,
+        &effect_id_typed,
+        &command,
+        &payload_value,
+    )
+    .map(|v| v.to_string())
 }
 
-/// Execute a generator's command using its exact current state in the project
 pub fn execute_generator_instance_command(
     generator_id: u32,
     command: String,
-    payload_json: String
+    payload_json: String,
 ) -> Result<String, String> {
-    let app = get_app_read();
     let gen_id_typed = GeneratorId::from(generator_id);
+    let payload_value: serde_json::Value =
+        serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
-    let gen_arc = app.generator_pool.get(&gen_id_typed)
-        .ok_or_else(|| format!("Generator {} not found", generator_id))?;
-    
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match &gen_arc.instance_type {
-        karbeat_core::core::project::GeneratorInstanceType::Plugin(p) => {
-            (p.name.clone(), p.registry_id, p.parameters.clone())
-        },
-        _ => return Err("Generator is not a plugin".into())
-    };
-
-    // Create temporary clone
-    let registry = get_plugin_registry_read();
-    let mut temp_plugin = if plugin_registry_id > 0 {
-        registry.create_generator_by_id(plugin_registry_id).map(|(p, _)| p)
-    } else {
-        registry.create_generator(&plugin_name)
-    }.ok_or_else(|| format!("Generator '{}' not found in registry", plugin_name))?;
-
-    // Apply state
-    for (&param_id, &value) in &plugin_parameters {
-        temp_plugin.set_parameter(param_id, value);
-    }
-
-    let payload_value: serde_json::Value = serde_json::from_str(&payload_json)
-        .unwrap_or(serde_json::json!({}));
-
-    let response_value = temp_plugin.execute_custom_command(&command, &payload_value)
-        .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))?;
-
-    Ok(response_value.to_string())
+    plugin_api::execute_generator_instance_command(&gen_id_typed, &command, &payload_value)
+        .map(|v| v.to_string())
 }
 
 #[frb(ignore)]
 pub fn parse_plugin_response<T: FromPluginCommand>(json_str: &str) -> Result<T, String> {
     let payload: serde_json::Value = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse JSON string: {}", e))?;
-    
+
     T::from_json(&payload)
 }

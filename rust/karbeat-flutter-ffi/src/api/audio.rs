@@ -108,6 +108,7 @@ pub fn play_preview_note(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     // validate input
     if note_key < 0 || note_key > 127 {
         return Err("Note key must be between 0 and 127".to_string());
@@ -147,6 +148,7 @@ pub fn play_preview_note_generator(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     // validate input
     if note_key < 0 || note_key > 127 {
         return Err("Note key must be between 0 and 127".to_string());

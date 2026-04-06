@@ -1,3 +1,4 @@
+use crate::context::utils::broadcast_state_change;
 use crate::core::history::ProjectAction;
 use crate::core::project::track::midi::PatternId;
 use crate::core::project::{ clipboard::ClipboardContent, Note, NoteId };
@@ -24,7 +25,7 @@ pub fn add_note(
             note: note.clone(),
         });
     }
-
+    broadcast_state_change();
     Ok(note)
 }
 
@@ -43,6 +44,8 @@ pub fn delete_note(pattern_id: PatternId, note_id: NoteId) -> anyhow::Result<Not
             note: note.clone(),
         });
     }
+
+    broadcast_state_change();
 
     Ok(note)
 }
@@ -72,6 +75,7 @@ pub fn move_note(
         });
     }
 
+    broadcast_state_change();
     Ok(note)
 }
 
@@ -97,6 +101,8 @@ pub fn resize_note(
         });
     }
 
+    broadcast_state_change();
+
     Ok(note)
 }
 
@@ -108,15 +114,20 @@ pub fn change_note_params(
     micro_offset: Option<i8>,
     mute: Option<bool>
 ) -> anyhow::Result<Note> {
-    let mut app = get_app_write();
-    app.change_note_params_in_pattern(
-        pattern_id,
-        note_id,
-        velocity,
-        probability,
-        micro_offset,
-        mute
-    )
+    let note = {
+        let mut app = get_app_write();
+        app.change_note_params_in_pattern(
+            pattern_id,
+            note_id,
+            velocity,
+            probability,
+            micro_offset,
+            mute
+        )?
+    };
+
+    broadcast_state_change();
+    Ok(note)
 }
 
 pub fn delete_notes_batch(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyhow::Result<()> {
@@ -152,6 +163,8 @@ pub fn delete_notes_batch(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyho
             history.push(ProjectAction::Batch(actions));
         }
     }
+
+    broadcast_state_change();
 
     Ok(())
 }
@@ -208,6 +221,6 @@ pub fn paste_notes(target_pattern_id: PatternId, playhead_tick: u64) -> anyhow::
             history.push(ProjectAction::Batch(actions));
         }
     }
-
+    broadcast_state_change();
     Ok(())
 }

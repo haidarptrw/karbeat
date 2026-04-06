@@ -341,6 +341,7 @@ pub fn get_routing_matrix() -> Vec<UiRoutingConnection> {
 // ======================================
 
 pub fn set_master_bus_params(params: Vec<UiMixerChannelParams>) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -387,6 +388,7 @@ pub fn set_mixer_channel_params(
     track_id: u32,
     params: Vec<UiMixerChannelParams>
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -433,6 +435,7 @@ pub fn set_mixer_channel_params(
 
 /// Add an effect to a mixer channel by its registry ID (preferred method).
 pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -449,6 +452,7 @@ pub fn remove_effect_from_mixer_channel(
     track_id: u32,
     effect_instance_id: u32
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -462,6 +466,7 @@ pub fn remove_effect_from_mixer_channel(
 }
 
 pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.add_effect_to_master_bus(registry_id).map_err(|e| format!("{}", e))?;
@@ -472,6 +477,7 @@ pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
 }
 
 pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer
@@ -489,6 +495,7 @@ pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), Stri
 
 /// Create a new mixer bus and return its ID.
 pub fn create_bus(name: String) -> Result<u32, String> {
+    // TODO: Refactor this to Core's API
     let bus_id = {
         let mut app = get_app_write();
         let bus_id = app.mixer.create_bus(name.clone());
@@ -501,6 +508,7 @@ pub fn create_bus(name: String) -> Result<u32, String> {
 
 /// Delete a mixer bus.
 pub fn delete_bus(bus_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.remove_bus(bus_id.into())?;
@@ -511,6 +519,7 @@ pub fn delete_bus(bus_id: u32) -> Result<(), String> {
 
 /// Set bus channel parameters (volume, pan, mute).
 pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let params_legit: Vec<MixerChannelParams> = params
@@ -529,6 +538,7 @@ pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<
 
 /// Add an effect to a bus by its registry ID.
 pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.add_effect_to_bus(bus_id.into(), registry_id).map_err(|e| format!("{}", e))?;
@@ -539,6 +549,7 @@ pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
 }
 
 pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.rename_bus(bus_id.into(), &new_name)?;
@@ -561,6 +572,7 @@ pub fn set_routing(
     send_level: f32,
     is_send: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let source: RoutingNode = (&source).into();
@@ -585,6 +597,7 @@ pub fn remove_routing(
     destination: UiRoutingNode,
     is_send: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let source: RoutingNode = (&source).into();

@@ -1,3 +1,4 @@
+use crate::context::utils::broadcast_state_change;
 use crate::core::history::ProjectAction;
 use crate::core::project::clip::{Clip, ClipId, ClipSourceType, ResizeEdge};
 use crate::core::project::clipboard::ClipboardContent;
@@ -7,7 +8,7 @@ use std::sync::Arc;
 
 pub fn get_clip<T, F>(track_id: TrackId, clip_id: ClipId, mapper: F) -> anyhow::Result<T>
 where
-    F: Fn(&Clip) -> T,
+    F: FnOnce(&Clip) -> T,
 {
     let app = get_app_read();
     let track = app.tracks.get(&track_id).ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
@@ -39,6 +40,8 @@ pub fn add_clip(
         });
     }
 
+    broadcast_state_change();
+
     Ok(clip)
 }
 
@@ -57,6 +60,8 @@ pub fn delete_clip(track_id: TrackId, clip_id: ClipId) -> anyhow::Result<Arc<Cli
             clip: (*deleted_clip).clone(),
         });
     }
+
+    broadcast_state_change();
 
     Ok(deleted_clip)
 }
@@ -93,6 +98,8 @@ pub fn move_clip(
         });
     }
 
+    broadcast_state_change();
+
     Ok(modified_clip)
 }
 
@@ -125,7 +132,7 @@ pub fn resize_clip(
             new_clip: modified_clip.clone(),
         });
     }
-
+    broadcast_state_change();
     Ok(modified_clip)
 }
 
@@ -166,7 +173,7 @@ pub fn cut_clip(
             },
         ]));
     }
-
+    broadcast_state_change();
     Ok((c1, c2))
 }
 
@@ -195,7 +202,7 @@ pub fn batch_delete_clips(track_id: TrackId, clip_ids: Vec<ClipId>) -> anyhow::R
             history.push(ProjectAction::Batch(deleted_actions));
         }
     }
-
+    broadcast_state_change();
     Ok(())
 }
 
@@ -243,7 +250,7 @@ pub fn batch_move_clips(
             }
         }
     }
-
+    broadcast_state_change();
     Ok(modified_clips)
 }
 
@@ -289,8 +296,43 @@ pub fn batch_resize_clips(
             }
         }
     }
-
+    broadcast_state_change();
     Ok(modified_clips)
+}
+
+pub fn copy_clips<T, F>(
+    track_id: TrackId, 
+    clip_ids: Vec<ClipId>, 
+    mapper: F
+) -> anyhow::Result<T>
+where
+    F: FnOnce(&ClipboardContent) -> T,
+{
+    let mut app = get_app_write();
+    let mut clips_to_copy = Vec::with_capacity(clip_ids.len());
+
+    let track = app.tracks.get(&track_id)
+        .ok_or_else(|| anyhow::anyhow!("Track {:?} not found", track_id))?;
+
+    // Clone the requested clips
+    for clip_id in &clip_ids {
+        let clip_arc = track.get_clip(clip_id)
+            .ok_or_else(|| anyhow::anyhow!("Clip {:?} not found", clip_id))?;
+            
+        // Dereference the Arc and clone the inner Clip struct
+        clips_to_copy.push(clip_arc.as_ref().clone());
+    }
+
+    // Update the App's clipboard state
+    if !clips_to_copy.is_empty() {
+        app.clipboard = ClipboardContent::Clips(clips_to_copy);
+    } else {
+        // Standardize empty behavior
+        app.clipboard = ClipboardContent::Empty;
+    }
+
+    // Return the mapped DTO
+    Ok(mapper(&app.clipboard))
 }
 
 pub fn paste_clips(target_track_id: TrackId, paste_start_time: u32) -> anyhow::Result<()> {
@@ -357,6 +399,6 @@ pub fn paste_clips(target_track_id: TrackId, paste_start_time: u32) -> anyhow::R
             history.push(ProjectAction::Batch(actions));
         }
     }
-
+    broadcast_state_change();
     Ok(())
 }

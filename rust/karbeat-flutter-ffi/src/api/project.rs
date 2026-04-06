@@ -3,7 +3,6 @@ use std::{collections::HashMap, ops::Deref};
 use chrono::{DateTime, Utc};
 use flutter_rust_bridge::frb;
 use karbeat_core::api::{audio_waveform_api, project_api, track_api};
-use karbeat_core::context::utils::broadcast_state_change;
 use karbeat_core::core::project::{ApplicationState, PluginInstance};
 use karbeat_utils::audio_utils::quantize_to_i8;
 use serde::Serialize;
@@ -509,24 +508,18 @@ pub fn get_generator_list() -> Result<HashMap<u32, UiGeneratorInstance>, String>
 ///
 /// ## Parameters:
 /// - file_path: Path to the audio file to be added
-pub fn add_audio_source(file_path: &str) {
-    match audio_waveform_api::add_audio_source(file_path) {
-        Ok(id) => {
-            log::info!("Successfully added audio source {}", id);
-            broadcast_state_change();
-        }
-        Err(e) => {
-            log::error!("[error] failed to load the audio: {}", e);
-        }
-    }
+pub fn add_audio_source(file_path: &str) -> Result<u32, String> {
+    let source_id = audio_waveform_api::add_audio_source(file_path).map_err(|e| e.to_string())?;
+    Ok(source_id.to_u32())
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-pub fn add_new_track(track_type: UiTrackType) -> Result<(), String> {
-    track_api::add_new_track(track_type.into());
+pub fn add_new_track(track_type: UiTrackType) -> UiTrack {
+    let arc_track = {
+        track_api::add_new_track(track_type.into())
+    };
     log::info!("[add_new_track] successfully added new track");
-    broadcast_state_change();
-    Ok(())
+    UiTrack::from(arc_track.as_ref())
 }
 
 /// Get all tracks on the session/project.

@@ -1,7 +1,7 @@
 use crate::{ core::project::{TrackId, mixer::{MixerChannel, MixerState}}, lock::get_app_read };
 
 /// **GETTER: Fetch the mixer state from application state and map it to T value**
-pub fn get_mixer_state<T, F>(mapper: F) -> T where F: Fn(&MixerState) -> T {
+pub fn get_mixer_state<T, F>(mapper: F) -> T where F: FnOnce(&MixerState) -> T {
     let app = get_app_read();
     mapper(&app.mixer)
 }

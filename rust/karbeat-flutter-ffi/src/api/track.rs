@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use crate::api::project::{ AudioWaveformUiForClip, UiClip, UiTrack };
-use karbeat_core::context::utils::broadcast_state_change;
 use karbeat_core::core::project::AudioSourceId;
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::core::project::{ clip::ClipId, track::TrackId };
@@ -110,7 +109,6 @@ pub fn create_clip(
         .map_err(|e| format!("{}", e))?;
 
     let ui_clip = UiClip::from(&clip);
-    broadcast_state_change();
     Ok(ui_clip)
 }
 
@@ -120,7 +118,6 @@ pub fn delete_clip(track_id: u32, clip_id: u32) -> Result<(), String> {
 
     clip_api::delete_clip(track_id, clip_id).map_err(|e| format!("Failed to delete clip: {}", e))?;
 
-    broadcast_state_change();
     Ok(())
 }
 
@@ -138,7 +135,6 @@ pub fn resize_clip(
         ::resize_clip(track_id, clip_id, core_edge, new_time_val)
         .map_err(|e| format!("{}", e))?;
 
-    broadcast_state_change();
     Ok(UiClip::from(&res))
 }
 
@@ -156,7 +152,6 @@ pub fn move_clip(
         ::move_clip(source_track_id, target_track_id, clip_id, new_start_time)
         .map_err(|e| format!("{}", e))?;
 
-    broadcast_state_change();
     Ok(UiClip::from(&res))
 }
 
@@ -182,21 +177,18 @@ pub fn cut_clip(
         ::cut_clip(source_track_id_typed, clip_id_typed, cut_point_sample)
         .map_err(|e| format!("{}", e))?;
 
-    broadcast_state_change();
     Ok(vec![UiClip::from(&c1), UiClip::from(&c2)])
 }
 
 /// Add a MIDI track with a generator by its registry ID (preferred method).
 pub fn add_midi_track_with_generator_id(registry_id: u32) -> Result<UiTrack, String> {
     let res = track_api::add_midi_track_with_generator_id(registry_id).map_err(|e| e.to_string())?;
-    broadcast_state_change();
     Ok(UiTrack::from(res.as_ref()))
 }
 
 /// Add a MIDI track with a generator by name (backwards compatible).
 pub fn add_midi_track_with_generator(generator_name: String) -> Result<UiTrack, String> {
     let res = track_api::add_midi_track_with_generator(&generator_name).map_err(|e| e.to_string())?;
-    broadcast_state_change();
     Ok(UiTrack::from(res.as_ref()))
 }
 
@@ -230,7 +222,6 @@ pub fn move_clip_batch(
         ::batch_move_clips(source_track_id, target_track_id, clip_ids, delta_samples)
         .map_err(|e| format!("{}", e))?;
 
-    broadcast_state_change();
     Ok(
         res
             .iter()
@@ -253,7 +244,6 @@ pub fn resize_clip_batch(
         ::batch_resize_clips(track_id, clip_ids, core_edge, delta_samples)
         .map_err(|e| format!("{}", e))?;
 
-    broadcast_state_change();
     Ok(
         res
             .iter()
@@ -270,19 +260,16 @@ pub fn delete_clip_batch(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String
         ::batch_delete_clips(track_id, clip_ids)
         .map_err(|e| format!("Failed to delete clips: {}", e))?;
 
-    broadcast_state_change();
     Ok(())
 }
 
 pub fn change_track_name(track_id: u32, new_name: &str) -> Result<(), String> {
     track_api::change_track_name(TrackId::from(track_id), new_name).map_err(|e| e.to_string())?;
-    broadcast_state_change();
     Ok(())
 }
 
 /// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
 pub fn change_track_color(track_id: u32, new_color: &str) -> Result<(), String> {
     track_api::change_track_color(TrackId::from(track_id), new_color).map_err(|e| e.to_string())?;
-    broadcast_state_change();
     Ok(())
 }

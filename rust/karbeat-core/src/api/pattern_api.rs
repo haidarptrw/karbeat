@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use crate::{ audio::engine::PlaybackMode, commands::AudioCommand, context::utils::try_send_audio_command_chain, core::project::{ GeneratorId, Pattern, PatternId }, lock::get_app_read };
+use crate::{
+    audio::engine::PlaybackMode,
+    commands::AudioCommand,
+    context::utils::try_send_audio_command_chain,
+    core::project::{ ClipboardContent, GeneratorId, Note, NoteId, Pattern, PatternId },
+    lock::{ get_app_read, get_app_write },
+};
 
 pub fn get_pattern(pattern_id: &PatternId) -> anyhow::Result<Arc<Pattern>> {
     let app = get_app_read();
@@ -63,4 +69,35 @@ pub fn stop_pattern_preview() -> anyhow::Result<()> {
     try_send_audio_command_chain(
         vec![AudioCommand::SetPlaying(false), AudioCommand::SetPlaybackMode(PlaybackMode::Song)]
     )
+}
+
+pub fn copy_pattern_notes<T, F>(
+    pattern_id: PatternId,
+    note_ids: Vec<NoteId>,
+    mapper: F
+) -> anyhow::Result<T>
+    where F: FnOnce(&ClipboardContent) -> T
+{
+    let mut app = get_app_write();
+
+    let pattern = app.pattern_pool
+        .get(&pattern_id)
+        .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
+
+    // Filter and clone the requested notes
+    let notes_to_copy: Vec<Note> = pattern.notes
+        .iter()
+        .filter(|n| note_ids.contains(&n.id))
+        .cloned()
+        .collect();
+
+    // Update the App's clipboard state
+    if !notes_to_copy.is_empty() {
+        app.clipboard = ClipboardContent::Notes(notes_to_copy);
+    } else {
+        app.clipboard = ClipboardContent::Empty;
+    }
+
+    // Pass the internal reference to the closure before the lock drops
+    Ok(mapper(&app.clipboard))
 }
