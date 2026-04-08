@@ -8,6 +8,7 @@ members = [
     "karbeat-plugins",
     "karbeat-plugin-api",
     "karbeat-utils",
+    "karbeat-macros", "karbeat-plugin-types",
 ]
 
 [workspace.dependencies]
@@ -18,6 +19,8 @@ karbeat-host = { path = "karbeat-host" }
 karbeat-plugin-api = { path = "karbeat-plugin-api" }
 karbeat-plugins = { path = "karbeat-plugins" }
 karbeat-utils = { path = "karbeat-utils" }
+karbeat-macros = { path = "karbeat-macros"}
+karbeat-plugin-types = {path = "karbeat-plugin-types"}
 anyhow = "1.0.100"
 cpal = { version = "0.17.3", features = ["jack", "asio"] }
 env_logger = "0.11.8"
@@ -56,7 +59,7 @@ chrono = { version = "0.4.44", features = ["serde"] }
 rmp-serde = "1.3.1"
 derive_builder = "0.20.2"
 hound = "3.5.1"
-strum ={ version = "0.28.0", features = ["derive"] }
+strum = { version = "0.28.0", features = ["derive"] }
 
 [profile.dev]
 opt-level = 3

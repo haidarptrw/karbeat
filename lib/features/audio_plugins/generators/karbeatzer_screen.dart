@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/features/audio_plugins/generators/abstract_generator_screen.dart';
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
 class KarbeatzerScreen extends AbstractGeneratorScreen {
   const KarbeatzerScreen({super.key, required super.generatorId});
@@ -48,6 +49,10 @@ class KarbeatzerScreenState
           _buildSectionHeader('Master'),
           _buildMasterSection(),
           const SizedBox(height: 24),
+
+          // Build filter
+          _buildSectionHeader('Filter'),
+          
 
           // Oscillator 1
           _buildSectionHeader('Oscillator 1'),
@@ -254,6 +259,81 @@ class KarbeatzerScreenState
             max: max,
             onChanged: (newValue) => setParameter(paramId, newValue),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBoolParameter(plugin_api.UiPluginParameter param) {
+    final isOn = param.value >= 0.5;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          param.name,
+          style: const TextStyle(color: Colors.grey, fontSize: 14),
+        ),
+        Switch(
+          value: isOn,
+          activeThumbColor: Colors.cyanAccent,
+          onChanged: (value) => setParameter(param.id, value ? 1.0 : 0.0),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChoiceParameter(plugin_api.UiPluginParameter param) {
+    final currentChoice = param.value.toInt().clamp(
+      0,
+      param.choices.length - 1,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          param.name,
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: List.generate(param.choices.length, (index) {
+            final isSelected = currentChoice == index;
+            return GestureDetector(
+              onTap: () => setParameter(param.id, index.toDouble()),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.cyanAccent.withAlpha(51)
+                      : Colors.grey.shade800,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isSelected
+                        ? Colors.cyanAccent
+                        : Colors.grey.shade700,
+                    width: isSelected ? 2 : 1,
+                  ),
+                ),
+                child: Text(
+                  param.choices[index],
+                  style: TextStyle(
+                    color: isSelected ? Colors.cyanAccent : Colors.white70,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              ),
+            );
+          }),
         ),
       ],
     );

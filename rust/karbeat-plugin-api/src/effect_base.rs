@@ -3,8 +3,7 @@
 // Shared effect infrastructure for all effect plugins.
 // Use composition pattern: embed EffectBase in your effect struct.
 use indexmap::IndexMap;
-
-use crate::wrapper::PluginParameter;
+use karbeat_plugin_types::PluginParameter;
 
 pub trait EffectBase: Send + Sync + Clone {
     fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);

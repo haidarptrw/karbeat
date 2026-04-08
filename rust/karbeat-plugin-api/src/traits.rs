@@ -2,8 +2,7 @@ use std::{any::Any, fmt::Debug};
 
 use indexmap::IndexMap;
 
-use crate::wrapper::PluginParameter;
-
+use karbeat_plugin_types::PluginParameter;
 use serde_json::Value;
 
 /// Trait that indicates an Effect plugin

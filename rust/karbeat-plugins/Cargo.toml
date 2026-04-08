@@ -8,6 +8,8 @@ description = "Collection of first-party plugins for Karbeat"
 karbeat-dsp.workspace = true
 karbeat-plugin-api.workspace = true
 karbeat-utils.workspace = true
+karbeat-plugin-types.workspace = true
+karbeat-macros.workspace = true
 
 log.workspace = true
 serde.workspace = true

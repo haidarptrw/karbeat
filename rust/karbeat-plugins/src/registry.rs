@@ -1,12 +1,12 @@
 // src/core/plugin/registry.rs
 
 use hashbrown::HashMap;
+use karbeat_plugin_types::PluginParameter;
 
 // use crate::effect::compressor::create_compressor;
 use crate::effect::parametric_eq::create_parametric_eq;
 use crate::generator::karbeatzer_v2::create_karbeatzer;
 use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
-use karbeat_plugin_api::wrapper::PluginParameter;
 
 /// A function pointer type that creates a new Generator instance
 type GeneratorFactory = Box<dyn Fn() -> Box<dyn KarbeatGenerator + Send + Sync> + Send + Sync>;

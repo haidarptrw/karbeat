@@ -4,5 +4,6 @@ pub mod commands;
 pub mod context;
 pub mod core;
 pub mod lock;
+pub mod plugin_types;
 pub mod test;
 pub mod utils;

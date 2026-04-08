@@ -12,3 +12,5 @@ log.workspace = true
 serde.workspace = true
 fastrand.workspace = true
 derive_builder.workspace = true
+karbeat-macros.workspace = true
+karbeat-plugin-types.workspace = true

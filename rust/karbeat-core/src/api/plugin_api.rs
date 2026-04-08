@@ -1,4 +1,4 @@
-use karbeat_plugin_api::wrapper::PluginParameter;
+use karbeat_plugin_types::PluginParameter;
 use karbeat_plugins::registry::PluginInfo;
 use parking_lot::Mutex;
 

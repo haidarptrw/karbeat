@@ -1,14 +1,12 @@
 use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
 use flutter_rust_bridge::frb;
 use karbeat_core::api::plugin_api;
-use karbeat_core::{
-    core::project::{
-        generator::GeneratorId,
-        mixer::{BusId, EffectId},
-        TrackId,
-    },
+use karbeat_core::core::project::{
+    generator::GeneratorId,
+    mixer::{BusId, EffectId},
+    TrackId,
 };
-use karbeat_plugin_api::wrapper::ParameterValueType;
+use karbeat_core::plugin_types::ParameterValueType;
 use karbeat_plugins::registry::PluginInfo;
 use karbeat_utils::parser::FromPluginCommand;
 

@@ -9,6 +9,7 @@ karbeat-dsp.workspace = true
 karbeat-plugin-api.workspace = true
 karbeat-plugins.workspace = true
 karbeat-utils.workspace = true
+karbeat-plugin-types.workspace = true
 
 anyhow.workspace = true
 cpal.workspace = true
