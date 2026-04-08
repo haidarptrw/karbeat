@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'dart:math';
 
 import 'package:karbeat/features/audio_plugins/effects/abstract_effect_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
+import 'package:karbeat/src/rust/api/plugins/eq.dart' as eq_api;
 import 'package:karbeat/features/components/fine_grained_input.dart';
 
 /// Math helpers for Logarithmic Frequency Mapping
@@ -59,7 +62,7 @@ class KarbeatParametricEq extends AbstractEffectScreen {
   const KarbeatParametricEq({
     super.key,
     required super.target,
-    required super.effectIdx,
+    required super.effectId,
   });
 
   @override
@@ -74,7 +77,7 @@ class KarbeatParametricEqState
   int? _draggingNodeIndex;
 
   // Backend-computed response curve
-  List<plugin_api.UiResponseCurvePoint> _responseCurve = [];
+  List<eq_api.UiResponseCurvePoint> _responseCurve = [];
 
   final List<Color> _bandColors = [
     Colors.redAccent,
@@ -102,6 +105,10 @@ class KarbeatParametricEqState
     "24 dB/oct",
     "36 dB/oct",
     "48 dB/oct",
+    "60 dB/oct",
+    "72 dB/oct",
+    "84 dB/oct",
+    "96 dB/oct",
   ];
 
   @override
@@ -117,13 +124,24 @@ class KarbeatParametricEqState
   /// Fetch the response curve from the Rust backend
   Future<void> _fetchResponseCurve() async {
     try {
-      final curve = await plugin_api.getEqResponseCurve(
+      // final curve = await eq_api.getEqResponseCurve(
+      //   target: widget.target,
+      //   effectId: widget.effectIdx,
+      //   numPoints: 200,
+      // );
+
+      final responseStr = await plugin_api.executeEffectInstanceCommand(
         target: widget.target,
-        effectId: widget.effectIdx,
-        numPoints: 200,
+        effectId: widget.effectId,
+        command: "GET_MAGNITUDE_RESPONSE",
+        payloadJson: jsonEncode({'num_points': 100}),
       );
+
+      final List<eq_api.UiResponseCurvePoint> curvePoints = eq_api
+          .parseEqCurveResponse(jsonStr: responseStr);
+
       if (mounted) {
-        setState(() => _responseCurve = curve);
+        setState(() => _responseCurve = curvePoints);
       }
     } catch (e) {
       debugPrint('Error fetching EQ response curve: $e');
@@ -607,7 +625,7 @@ class _EqResponsePainter extends CustomPainter {
   final List<EqBand> bands;
   final List<Color> bandColors;
   final int? activeNodeIndex;
-  final List<plugin_api.UiResponseCurvePoint> responseCurve;
+  final List<eq_api.UiResponseCurvePoint> responseCurve;
 
   _EqResponsePainter({
     required this.bands,

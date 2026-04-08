@@ -8,104 +8,14 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
+use karbeat_plugin_types::PluginParameter;
+use serde_json::Value;
 
 use crate::effect_base::EffectBase;
 use crate::traits::{KarbeatEffect, KarbeatGenerator, MidiEvent};
 
 use super::effect_base::StandardEffectBase;
 use super::synth_base::StandardSynthBase;
-
-// ============================================================================
-// PARAMETER API
-// ============================================================================
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ParameterValueType {
-    Float,
-    Int,
-    Bool,
-    Choice,
-}
-
-/// Generic description of a plugin parameter for UI generation
-#[derive(Clone, Debug)]
-pub struct PluginParameter {
-    pub id: u32,
-    pub name: String,
-    pub group: String, // e.g., "Oscillator 1", "Master"
-    pub value: f32,    // Current value
-    pub min: f32,
-    pub max: f32,
-    pub default_value: f32,
-    pub step: f32, // 0.0 for continuous
-    pub value_type: ParameterValueType,
-    pub choices: Vec<String>, // Labels for Choice type (index = value)
-}
-
-impl PluginParameter {
-    /// Create a new float parameter
-    pub fn new_float(
-        id: u32,
-        name: &str,
-        group: &str,
-        val: f32,
-        min: f32,
-        max: f32,
-        default: f32,
-    ) -> Self {
-        Self {
-            id,
-            name: name.to_string(),
-            group: group.to_string(),
-            value: val,
-            min,
-            max,
-            default_value: default,
-            step: 0.0,
-            value_type: ParameterValueType::Float,
-            choices: Vec::new(),
-        }
-    }
-
-    /// Create a new boolean parameter
-    pub fn new_bool(id: u32, name: &str, group: &str, val: bool, default: bool) -> Self {
-        Self {
-            id,
-            name: name.to_string(),
-            group: group.to_string(),
-            value: if val { 1.0 } else { 0.0 },
-            min: 0.0,
-            max: 1.0,
-            default_value: if default { 1.0 } else { 0.0 },
-            step: 1.0,
-            value_type: ParameterValueType::Bool,
-            choices: Vec::new(),
-        }
-    }
-
-    /// Create a new choice parameter
-    pub fn new_choice(
-        id: u32,
-        name: &str,
-        group: &str,
-        val: u32,
-        choices: Vec<String>,
-        default: u32,
-    ) -> Self {
-        Self {
-            id,
-            name: name.to_string(),
-            group: group.to_string(),
-            value: val as f32,
-            min: 0.0,
-            max: (choices.len().saturating_sub(1)) as f32,
-            default_value: default as f32,
-            step: 1.0,
-            value_type: ParameterValueType::Choice,
-            choices,
-        }
-    }
-}
 
 // ============================================================================
 // RAW ENGINE TRAITS
@@ -155,6 +65,11 @@ pub trait RawSynthEngine: Send + Sync {
     fn name() -> &'static str
     where
         Self: Sized;
+
+    /// OPTIONAL: Execute a custom GUI command. Returns an optional JSON string.
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
 }
 
 /// Trait for raw effect engines (core DSP logic only).
@@ -188,6 +103,11 @@ pub trait RawEffectEngine: Send + Sync {
     fn name() -> &'static str
     where
         Self: Sized;
+
+    /// OPTIONAL: Execute a custom GUI command. Returns an optional JSON string.
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
 }
 
 pub trait EffectEngine<B: EffectBase>: Send + Sync {
@@ -200,6 +120,11 @@ pub trait EffectEngine<B: EffectBase>: Send + Sync {
     fn set_custom_parameter(&mut self, id: u32, value: f32);
     fn default_parameters(&self) -> HashMap<u32, f32>;
     fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+
+    /// OPTIONAL: Execute a custom GUI command. Returns an optional JSON string.
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
+    }
 }
 
 // ============================================================================
@@ -274,6 +199,10 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for RawSynthWrapper<T
         self.get_all_parameters()
     }
 
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        self.engine.execute_custom_command(command, payload)
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -304,6 +233,7 @@ impl<T: RawEffectEngine + Clone> RawEffectWrapper<T> {
             dry_buffer: Vec::new(),
         }
     }
+
 
     pub fn get_all_parameters(&self) -> Vec<PluginParameter> {
         let mut params = StandardEffectBase::get_parameter_specs();
@@ -370,6 +300,10 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for RawEffectWrapper<T>
 
     fn get_parameter_specs(&self) -> Vec<PluginParameter> {
         self.get_all_parameters()
+    }
+
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        self.engine.execute_custom_command(command, payload)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -476,6 +410,10 @@ where
         let mut specs = B::get_parameter_specs();
         specs.extend(self.engine.get_parameter_specs());
         specs
+    }
+
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        self.engine.execute_custom_command(command, payload)
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -30,7 +30,7 @@ Future<Map<int, AudioWaveformUiForClip>>
 getAudioWaveformForClipAllAvailableInTracks() => RustLib.instance.api
     .crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
 
-Future<void> createClip({
+Future<UiClip> createClip({
   int? sourceId,
   required UiSourceType sourceType,
   required int trackId,
@@ -47,9 +47,7 @@ Future<void> deleteClip({required int trackId, required int clipId}) => RustLib
     .api
     .crateApiTrackDeleteClip(trackId: trackId, clipId: clipId);
 
-/// Resize the clip. for default mode, it will only adjust
-/// the start time and loop length of the clip
-Future<void> resizeClip({
+Future<UiClip> resizeClip({
   required int trackId,
   required int clipId,
   required UiResizeEdge edge,
@@ -61,7 +59,7 @@ Future<void> resizeClip({
   newTimeVal: newTimeVal,
 );
 
-Future<void> moveClip({
+Future<UiClip> moveClip({
   required int sourceTrackId,
   required int clipId,
   required int newStartTime,
@@ -73,14 +71,34 @@ Future<void> moveClip({
   newTrackId: newTrackId,
 );
 
+/// Cut a clip in half.
+/// This will retain the original clip at the left cut region,
+/// while the right cut region will clone a new clip with the same source,
+/// but with the offset at the cut point
+///
+/// # Parameters
+///
+/// - source_track_id: Track where clip resides
+/// - clip_id: The cut clip id inside the track
+/// - cut_point_sample: Absolute sample point of cut location
+Future<List<UiClip>> cutClip({
+  required int sourceTrackId,
+  required int clipId,
+  required int cutPointSample,
+}) => RustLib.instance.api.crateApiTrackCutClip(
+  sourceTrackId: sourceTrackId,
+  clipId: clipId,
+  cutPointSample: cutPointSample,
+);
+
 /// Add a MIDI track with a generator by its registry ID (preferred method).
-Future<void> addMidiTrackWithGeneratorId({required int registryId}) => RustLib
-    .instance
-    .api
-    .crateApiTrackAddMidiTrackWithGeneratorId(registryId: registryId);
+Future<UiTrack> addMidiTrackWithGeneratorId({required int registryId}) =>
+    RustLib.instance.api.crateApiTrackAddMidiTrackWithGeneratorId(
+      registryId: registryId,
+    );
 
 /// Add a MIDI track with a generator by name (backwards compatible).
-Future<void> addMidiTrackWithGenerator({required String generatorName}) =>
+Future<UiTrack> addMidiTrackWithGenerator({required String generatorName}) =>
     RustLib.instance.api.crateApiTrackAddMidiTrackWithGenerator(
       generatorName: generatorName,
     );
@@ -92,7 +110,7 @@ Future<UiTrack> getTrack({required int trackId}) =>
     RustLib.instance.api.crateApiTrackGetTrack(trackId: trackId);
 
 /// move clips in batch
-Future<void> moveClipBatch({
+Future<List<UiClip>> moveClipBatch({
   required int sourceTrackId,
   required List<int> clipIds,
   required int deltaSamples,
@@ -105,7 +123,7 @@ Future<void> moveClipBatch({
 );
 
 /// Resize clips in batch by a delta amount
-Future<void> resizeClipBatch({
+Future<List<UiClip>> resizeClipBatch({
   required int trackId,
   required List<int> clipIds,
   required UiResizeEdge edge,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
-import 'package:karbeat/features/audio_plugins/effects/karbeat_parametric_eq.dart';
+import 'package:karbeat/features/audio_plugins/effects/effect_registry.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
@@ -486,29 +486,27 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                             size: 16,
                           ),
                           onTap: () {
-                            // Match by name (adjust the string matching to exactly what your backend returns)
-                            if (effect.name.toLowerCase().contains('eq') ||
-                                effect.name.toLowerCase().contains(
-                                  'parametric',
-                                )) {
+                            try {
+                              final target = isMaster
+                                  ? const plugin_api.UiEffectTarget.master()
+                                  : _isSelectedBus
+                                  ? plugin_api.UiEffectTarget.bus(
+                                      _selectedChannelId!,
+                                    )
+                                  : plugin_api.UiEffectTarget.track(
+                                      _selectedChannelId!,
+                                    );
+                                    
+                              final availableEffects = ref.read(karbeatStateProvider).availableEffects;
+                              final registryId = availableEffects.firstWhere((p) => p.id == effect.registryId).id;
+                              final builder = EffectRegistry.getEffectBuilder(registryId);
+                              final screen = builder(effect.id, target);
+
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (context) => KarbeatParametricEq(
-                                    target: isMaster
-                                        ? const plugin_api.UiEffectTarget.master()
-                                        : _isSelectedBus
-                                        ? plugin_api.UiEffectTarget.bus(
-                                            _selectedChannelId!,
-                                          )
-                                        : plugin_api.UiEffectTarget.track(
-                                            _selectedChannelId!,
-                                          ),
-                                    effectIdx: effect.id,
-                                  ),
-                                ),
+                                MaterialPageRoute(builder: (context) => screen),
                               );
-                            } else {
+                            } catch (_) {
                               // Feedback for effects that don't have a UI yet
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -604,7 +602,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   child: Text(
-                    "No generators found",
+                    "No effects found",
                     style: TextStyle(color: Colors.grey),
                   ),
                 )

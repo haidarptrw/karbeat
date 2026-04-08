@@ -2,41 +2,9 @@
 
 use std::{collections::HashMap, f32::consts::PI};
 
-use karbeat_dsp::envelope::EnvelopeSettings;
-use karbeat_plugin_api::prelude::*;
-
-// ============================================================================
-// SYNTH-SPECIFIC TYPES
-// ============================================================================
-
-#[derive(Clone, Copy)]
-struct Oscillator {
-    waveform: Waveform,
-    detune: f32,      // In semitones
-    mix: f32,         // 0.0 to 1.0
-    pulse_width: f32, // 0.0 to 1.0 (For Pulse/Square)
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum Waveform {
-    Sine = 0,
-    Saw = 1,
-    Square = 2,
-    Triangle = 3,
-    Noise = 4,
-}
-
-impl From<f32> for Waveform {
-    fn from(v: f32) -> Self {
-        match v as u32 {
-            0 => Waveform::Sine,
-            1 => Waveform::Saw,
-            2 => Waveform::Square,
-            3 => Waveform::Triangle,
-            _ => Waveform::Noise,
-        }
-    }
-}
+use karbeat_dsp::prelude::*;
+use karbeat_plugin_api::{prelude::*};
+use karbeat_plugin_types::*;
 
 // ============================================================================
 // KARBEATZER ENGINE (core synthesis logic)
@@ -48,33 +16,29 @@ impl From<f32> for Waveform {
 #[derive(Clone)]
 pub struct KarbeatzerEngine {
     oscillators: [Oscillator; 3],
-    drive: f32,
+    drive: Param<f32>,
 }
 
 impl Default for KarbeatzerEngine {
     fn default() -> Self {
+       // Create baseline oscillators using our new constructor
+        let mut osc1 = Oscillator::new(10, "Oscillator 1");
+        osc1.waveform.set_base(Waveform::Saw.to_index() as f32);
+        osc1.mix.set_base(1.0);
+
+        let mut osc2 = Oscillator::new(20, "Oscillator 2");
+        osc2.waveform.set_base(Waveform::Square.to_index() as f32);
+        osc2.detune.set_base(0.1);
+        osc2.mix.set_base(0.5);
+
+        let mut osc3 = Oscillator::new(30, "Oscillator 3");
+        osc3.waveform.set_base(Waveform::Sine.to_index() as f32);
+        osc3.detune.set_base(-12.0);
+        osc3.mix.set_base(0.3);
+
         Self {
-            oscillators: [
-                Oscillator {
-                    waveform: Waveform::Saw,
-                    detune: 0.0,
-                    mix: 1.0,
-                    pulse_width: 0.5,
-                },
-                Oscillator {
-                    waveform: Waveform::Square,
-                    detune: 0.1,
-                    mix: 0.5,
-                    pulse_width: 0.5,
-                },
-                Oscillator {
-                    waveform: Waveform::Sine,
-                    detune: -12.0,
-                    mix: 0.3,
-                    pulse_width: 0.5,
-                },
-            ],
-            drive: 0.0,
+            oscillators: [osc1, osc2, osc3],
+            drive: Param::new_float(8, "Drive", "Master", 0.0, 0.0, 1.0),
         }
     }
 }
@@ -94,13 +58,21 @@ impl KarbeatzerEngine {
 
         // Pre-calculate phase increments
         let mut phase_incs = [0.0; 3];
+        let mut wfs = [Waveform::Sine; 3];
+        let mut mixes = [0.0; 3];
+        let mut pws = [0.5; 3];
+        
         for (i, osc) in oscillators.iter().enumerate() {
-            let freq = base_freq * 2.0_f32.powf(osc.detune / 12.0);
+            let detune = osc.detune.get();
+            let freq = base_freq * 2.0_f32.powf(detune / 12.0);
+            
             phase_incs[i] = freq / sample_rate;
+            wfs[i] = osc.waveform.get();
+            mixes[i] = osc.mix.get();
+            pws[i] = osc.pulse_width.get();
         }
 
         for frame in 0..block_size {
-            // Advance envelope
             let env_level = voice.advance_envelope(dt, amp_envelope);
 
             if !voice.is_active {
@@ -110,30 +82,21 @@ impl KarbeatzerEngine {
 
             let velocity_gain = voice.velocity as f32 / 127.0;
             let current_gain = velocity_gain * env_level;
-
             let mut sample_accum = 0.0;
 
-            // Oscillator summation
-            for (i, osc) in oscillators.iter().enumerate() {
+            for i in 0..3 {
                 let phase = voice.phase[i];
 
-                let osc_out = match osc.waveform {
+                let osc_out = match wfs[i] {
                     Waveform::Sine => (phase * 2.0 * PI).sin(),
                     Waveform::Saw => 2.0 * phase - 1.0,
-                    Waveform::Square => {
-                        if phase < osc.pulse_width {
-                            1.0
-                        } else {
-                            -1.0
-                        }
-                    }
+                    Waveform::Square => if phase < pws[i] as f32 { 1.0 } else { -1.0 },
                     Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
                     Waveform::Noise => fastrand::f32() * 2.0 - 1.0,
                 };
 
-                sample_accum += osc_out * osc.mix;
+                sample_accum += osc_out * mixes[i];
 
-                // Advance phase
                 voice.phase[i] += phase_incs[i];
                 if voice.phase[i] >= 1.0 {
                     voice.phase[i] -= 1.0;
@@ -157,6 +120,8 @@ impl RawSynthEngine for KarbeatzerEngine {
         midi_events: &[MidiEvent],
     ) {
         output_buffer.fill(0.0);
+
+        let current_drive = self.drive.get();
 
         let total_frames = output_buffer.len() / 2;
         let mut current_frame = 0;
@@ -205,8 +170,8 @@ impl RawSynthEngine for KarbeatzerEngine {
                 base.filter.process(out_slice, base.sample_rate);
 
                 // Apply drive
-                if self.drive > 0.0 {
-                    let drive_amt = 1.0 + self.drive * 4.0;
+                if current_drive > 0.0 {
+                    let drive_amt = 1.0 + current_drive * 4.0;
                     for sample in out_slice.iter_mut() {
                         *sample = (*sample * drive_amt).tanh();
                     }
@@ -253,204 +218,62 @@ impl RawSynthEngine for KarbeatzerEngine {
     }
 
     fn set_custom_parameter(&mut self, id: u32, value: f32) {
-        match id {
-            // Drive
-            8 => self.drive = value.clamp(0.0, 1.0),
+        if self.drive.id == id {
+            self.drive.set_base(value);
+            return;
+        }
 
-            // Osc 1 (IDs 10-13)
-            10 => self.oscillators[0].waveform = Waveform::from(value),
-            11 => self.oscillators[0].detune = value,
-            12 => self.oscillators[0].mix = value,
-            13 => self.oscillators[0].pulse_width = value.clamp(0.01, 0.99),
-
-            // Osc 2 (IDs 20-23)
-            20 => self.oscillators[1].waveform = Waveform::from(value),
-            21 => self.oscillators[1].detune = value,
-            22 => self.oscillators[1].mix = value,
-            23 => self.oscillators[1].pulse_width = value.clamp(0.01, 0.99),
-
-            // Osc 3 (IDs 30-33)
-            30 => self.oscillators[2].waveform = Waveform::from(value),
-            31 => self.oscillators[2].detune = value,
-            32 => self.oscillators[2].mix = value,
-            33 => self.oscillators[2].pulse_width = value.clamp(0.01, 0.99),
-
-            _ => {}
+        // route to the child oscillators
+        for osc in &mut self.oscillators {
+            if osc.waveform.id == id { osc.waveform.set_base(value); return; }
+            if osc.detune.id == id { osc.detune.set_base(value); return; }
+            if osc.phase_offset.id == id { osc.phase_offset.set_base(value); return; }
+            if osc.mix.id == id { osc.mix.set_base(value); return; }
+            if osc.pulse_width.id == id { osc.pulse_width.set_base(value); return; }
         }
     }
 
     fn get_custom_parameter(&self, id: u32) -> Option<f32> {
-        match id {
-            8 => Some(self.drive),
-
-            10 => Some(self.oscillators[0].waveform as u32 as f32),
-            11 => Some(self.oscillators[0].detune),
-            12 => Some(self.oscillators[0].mix),
-            13 => Some(self.oscillators[0].pulse_width),
-
-            20 => Some(self.oscillators[1].waveform as u32 as f32),
-            21 => Some(self.oscillators[1].detune),
-            22 => Some(self.oscillators[1].mix),
-            23 => Some(self.oscillators[1].pulse_width),
-
-            30 => Some(self.oscillators[2].waveform as u32 as f32),
-            31 => Some(self.oscillators[2].detune),
-            32 => Some(self.oscillators[2].mix),
-            33 => Some(self.oscillators[2].pulse_width),
-
-            _ => None,
+        if self.drive.id == id { return Some(self.drive.get_base().to_f32()); }
+        
+        for osc in &self.oscillators {
+            if osc.waveform.id == id { return Some(osc.waveform.get_base().to_f32()); }
+            if osc.detune.id == id { return Some(osc.detune.get_base().to_f32()); }
+            if osc.phase_offset.id == id { return Some(osc.phase_offset.get_base().to_f32()); }
+            if osc.mix.id == id { return Some(osc.mix.get_base().to_f32()); }
+            if osc.pulse_width.id == id { return Some(osc.pulse_width.get_base().to_f32()); }
         }
+        None
     }
 
     fn custom_default_parameters() -> HashMap<u32, f32> {
         let mut map = HashMap::new();
+        let default_engine = Self::default();
 
-        map.insert(8, 0.0); // Drive
+        map.insert(default_engine.drive.id, default_engine.drive.get_base().to_f32());
 
-        // Osc 1
-        map.insert(10, 1.0); // Saw
-        map.insert(11, 0.0); // Detune
-        map.insert(12, 1.0); // Mix
-        map.insert(13, 0.5); // PW
-
-        // Osc 2
-        map.insert(20, 2.0); // Square
-        map.insert(21, 0.1); // Detune
-        map.insert(22, 0.5); // Mix
-        map.insert(23, 0.5); // PW
-
-        // Osc 3
-        map.insert(30, 0.0); // Sine
-        map.insert(31, -12.0); // Detune
-        map.insert(32, 0.3); // Mix
-        map.insert(33, 0.5); // PW
-
+        for osc in &default_engine.oscillators {
+            map.insert(osc.waveform.id, osc.waveform.get_base().to_f32());
+            map.insert(osc.detune.id, osc.detune.get_base().to_f32());
+            map.insert(osc.phase_offset.id, osc.phase_offset.get_base().to_f32());
+            map.insert(osc.mix.id, osc.mix.get_base().to_f32());
+            map.insert(osc.pulse_width.id, osc.pulse_width.get_base().to_f32());
+        }
         map
     }
 
-    fn get_parameter_specs(&self) -> Vec<karbeat_plugin_api::wrapper::PluginParameter> {
-        use karbeat_plugin_api::wrapper::PluginParameter;
-
-        let waveform_choices = vec![
-            "Sine".into(),
-            "Saw".into(),
-            "Square".into(),
-            "Triangle".into(),
-            "Noise".into(),
-        ];
-
-        vec![
-            // Drive
-            PluginParameter::new_float(8, "Drive", "Master", self.drive, 0.0, 1.0, 0.0),
-            // Osc 1
-            PluginParameter::new_choice(
-                10,
-                "Waveform",
-                "Oscillator 1",
-                self.oscillators[0].waveform as u32,
-                waveform_choices.clone(),
-                1, // Saw default
-            ),
-            PluginParameter::new_float(
-                11,
-                "Detune",
-                "Oscillator 1",
-                self.oscillators[0].detune,
-                -24.0,
-                24.0,
-                0.0,
-            ),
-            PluginParameter::new_float(
-                12,
-                "Mix",
-                "Oscillator 1",
-                self.oscillators[0].mix,
-                0.0,
-                1.0,
-                1.0,
-            ),
-            PluginParameter::new_float(
-                13,
-                "Pulse Width",
-                "Oscillator 1",
-                self.oscillators[0].pulse_width,
-                0.01,
-                0.99,
-                0.5,
-            ),
-            // Osc 2
-            PluginParameter::new_choice(
-                20,
-                "Waveform",
-                "Oscillator 2",
-                self.oscillators[1].waveform as u32,
-                waveform_choices.clone(),
-                2, // Square default
-            ),
-            PluginParameter::new_float(
-                21,
-                "Detune",
-                "Oscillator 2",
-                self.oscillators[1].detune,
-                -24.0,
-                24.0,
-                0.1,
-            ),
-            PluginParameter::new_float(
-                22,
-                "Mix",
-                "Oscillator 2",
-                self.oscillators[1].mix,
-                0.0,
-                1.0,
-                0.5,
-            ),
-            PluginParameter::new_float(
-                23,
-                "Pulse Width",
-                "Oscillator 2",
-                self.oscillators[1].pulse_width,
-                0.01,
-                0.99,
-                0.5,
-            ),
-            // Osc 3
-            PluginParameter::new_choice(
-                30,
-                "Waveform",
-                "Oscillator 3",
-                self.oscillators[2].waveform as u32,
-                waveform_choices,
-                0, // Sine default
-            ),
-            PluginParameter::new_float(
-                31,
-                "Detune",
-                "Oscillator 3",
-                self.oscillators[2].detune,
-                -24.0,
-                24.0,
-                -12.0,
-            ),
-            PluginParameter::new_float(
-                32,
-                "Mix",
-                "Oscillator 3",
-                self.oscillators[2].mix,
-                0.0,
-                1.0,
-                0.3,
-            ),
-            PluginParameter::new_float(
-                33,
-                "Pulse Width",
-                "Oscillator 3",
-                self.oscillators[2].pulse_width,
-                0.01,
-                0.99,
-                0.5,
-            ),
-        ]
+    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+        let mut specs = vec![self.drive.to_spec()];
+        
+        for osc in &self.oscillators {
+            specs.push(osc.waveform.to_spec());
+            specs.push(osc.detune.to_spec());
+            specs.push(osc.phase_offset.to_spec());
+            specs.push(osc.mix.to_spec());
+            specs.push(osc.pulse_width.to_spec());
+        }
+        
+        specs
     }
 }
 

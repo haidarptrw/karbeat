@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-plugins"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 edition = "2021"
 description = "Collection of first-party plugins for Karbeat"
 
@@ -8,6 +8,8 @@ description = "Collection of first-party plugins for Karbeat"
 karbeat-dsp.workspace = true
 karbeat-plugin-api.workspace = true
 karbeat-utils.workspace = true
+karbeat-plugin-types.workspace = true
+karbeat-macros.workspace = true
 
 log.workspace = true
 serde.workspace = true
@@ -15,3 +17,4 @@ dasp.workspace = true
 fastrand.workspace = true
 hashbrown.workspace = true
 smallvec.workspace = true
+serde_json.workspace = true

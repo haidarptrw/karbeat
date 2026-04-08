@@ -14,9 +14,9 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 ///
 /// Subclasses must implement [buildGeneratorBody] to define the custom generator UI.
 abstract class AbstractGeneratorScreen extends ConsumerStatefulWidget {
-  final int generatorIdx;
+  final int generatorId;
 
-  const AbstractGeneratorScreen({super.key, required this.generatorIdx});
+  const AbstractGeneratorScreen({super.key, required this.generatorId});
 }
 
 abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
@@ -50,7 +50,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   @protected
   void startParameterPolling() async {
     // Request initial parameter snapshot from audio thread
-    await plugin_api.queryGeneratorParameters(generatorId: widget.generatorIdx);
+    await plugin_api.queryGeneratorParameters(generatorId: widget.generatorId);
 
     // Poll every 50ms for smooth UI updates during automation
     _parameterPollTimer = Timer.periodic(
@@ -76,7 +76,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
       setState(() {
         for (final snapshot in snapshots) {
           // Only process snapshots for this generator
-          if (snapshot.generatorId != widget.generatorIdx) continue;
+          if (snapshot.generatorId != widget.generatorId) continue;
 
           for (final paramValue in snapshot.parameters) {
             final index = parameters.indexWhere(
@@ -115,7 +115,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
   Future<void> loadParameterSpecs() async {
     try {
       final specs = await plugin_api.getGeneratorParameterSpecs(
-        generatorId: widget.generatorIdx,
+        generatorId: widget.generatorId,
       );
       setState(() {
         parameters = specs;
@@ -157,12 +157,21 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
     // Send to backend
     try {
       await plugin_api.setGeneratorParameter(
-        generatorId: widget.generatorIdx,
+        generatorId: widget.generatorId,
         paramId: paramId,
         value: value,
       );
     } catch (e) {
       debugPrint('Error setting generator parameter: $e');
+    }
+  }
+
+  @protected
+  double getParameter(int paramId, double fallback) {
+    try {
+      return parameters.firstWhere((p) => p.id == paramId).value;
+    } catch (e) {
+      return fallback;
     }
   }
 

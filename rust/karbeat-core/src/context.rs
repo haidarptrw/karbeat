@@ -31,7 +31,7 @@ pub struct MixerParamEvent {
 /// Centralized application context containing all shared state.
 ///
 /// Access via the [`ctx()`] function to get a reference to the global instance.
-pub struct KarbeatContext {
+pub struct KarbeatContext<'a> {
     /// Main application state (UI/editing source of truth)
     pub app_state: Arc<RwLock<ApplicationState>>,
 
@@ -60,10 +60,10 @@ pub struct KarbeatContext {
     pub plugin_registry: RwLock<PluginRegistry>,
 
     /// Mixer parameter event stream sink (Rust → Flutter)
-    pub mixer_event_sink: Mutex<Option<Box<dyn Fn(MixerParamEvent) + Send + Sync + 'static>>>,
+    pub mixer_event_sink: Mutex<Option<Box<dyn Fn(MixerParamEvent) + Send + Sync + 'a>>>,
 }
 
-impl KarbeatContext {
+impl<'a> KarbeatContext<'a> {
     fn new() -> Self {
         Self {
             app_state: Arc::new(RwLock::new(ApplicationState::default())),
@@ -90,17 +90,17 @@ static CONTEXT: Lazy<KarbeatContext> = Lazy::new(KarbeatContext::new);
 ///
 /// # Example
 /// ```ignore
-/// let app = ctx().app_state.read().unwrap();
+/// let app = ctx().app_state.read();
 /// ```
 #[inline]
-pub fn ctx() -> &'static KarbeatContext {
+pub fn ctx() -> &'static KarbeatContext<'static> {
     &CONTEXT
 }
 
 pub mod utils {
-    use smallvec::SmallVec;
+    use karbeat_plugin_api::traits::{ KarbeatEffect, KarbeatGenerator };
 
-    use crate::{ commands::AudioCommand, context::ctx };
+    use crate::{ audio::render_state::AudioRenderState, commands::AudioCommand, context::ctx, lock::get_app_read };
 
     /// Helper function to send AudioCommand to context's command sender
     pub fn send_audio_command(command: AudioCommand) {
@@ -109,11 +109,53 @@ pub mod utils {
         }
     }
 
-    pub fn try_send_audio_command_chain(commands: SmallVec<[AudioCommand; 4]>) -> anyhow::Result<()> {
+    pub fn try_send_audio_command_chain(commands: Vec<AudioCommand>) -> anyhow::Result<()> {
         if let Some(sender) = ctx().command_sender.lock().as_mut() {
             commands.into_iter().try_for_each(|command| sender.push(command))?;
         }
 
         Ok(())
+    }
+
+    pub fn get_effect_plugin_box(registry_id: u32) -> Option<Box<dyn KarbeatEffect + Send + Sync>> {
+        let registry = ctx().plugin_registry.read();
+        let Some((plugin, _)) = registry.create_effect_by_id(registry_id) else {
+            return None;
+        };
+
+        Some(plugin)
+    }
+
+    pub fn get_synth_plugin_box(
+        registry_id: u32
+    ) -> std::option::Option<Box<dyn KarbeatGenerator + Send + Sync>> {
+        let registry = ctx().plugin_registry.read();
+        let Some((plugin, _)) = registry.create_generator_by_id(registry_id) else {
+            return None;
+        };
+
+        Some(plugin)
+    }
+
+    /// Broadcast changes in ApplicationState to AudioRenderState (things that
+    /// is used by the Audio Thread)
+    pub fn broadcast_state_change() {
+        // if read failed, we do nothing
+        let app = get_app_read();
+        let render_state = AudioRenderState::from(&*app);
+
+        drop(app);
+
+        publish_to_audio_thread(render_state);
+    }
+
+    /// Helper to push state to TripleBuffer
+    fn publish_to_audio_thread(state: AudioRenderState) {
+        if let Some(producer) = ctx().render_state_producer.lock().as_mut() {
+            {
+                let mut input = producer.input_buffer_publisher();
+                *input = state;
+            }
+        }
     }
 }

@@ -4,41 +4,20 @@
 // Replaces procedural macro-generated code with simple composition.
 
 use indexmap::IndexMap;
-use karbeat_dsp::envelope::{EnvelopeSettings, EnvelopeStage};
+use karbeat_dsp::{envelope::{EnvelopeSettings, EnvelopeStage}, filter::SimpleFilterMode};
+use karbeat_plugin_types::PluginParameter;
 
-use crate::wrapper::PluginParameter;
 
 // ============================================================================
 // FILTER
 // ============================================================================
-
-/// Filter mode for the synthesizer
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-pub enum FilterMode {
-    #[default]
-    LowPass = 0,
-    HighPass = 1,
-    BandPass = 2,
-    Off = 3,
-}
-
-impl From<f32> for FilterMode {
-    fn from(v: f32) -> Self {
-        match v as u32 {
-            0 => FilterMode::LowPass,
-            1 => FilterMode::HighPass,
-            2 => FilterMode::BandPass,
-            _ => FilterMode::Off,
-        }
-    }
-}
 
 /// State-variable filter for the synthesizer
 #[derive(Clone, Copy, Debug)]
 pub struct SynthFilter {
     pub cutoff: f32,    // Hz (20.0 - 20000.0)
     pub resonance: f32, // 0.0 to 0.95
-    pub mode: FilterMode,
+    pub mode: SimpleFilterMode,
     // Internal state (Stereo)
     s1_l: f32,
     s2_l: f32,
@@ -51,7 +30,7 @@ impl Default for SynthFilter {
         Self {
             cutoff: 2000.0,
             resonance: 0.2,
-            mode: FilterMode::LowPass,
+            mode: SimpleFilterMode::LowPass,
             s1_l: 0.0,
             s2_l: 0.0,
             s1_r: 0.0,
@@ -72,7 +51,7 @@ impl SynthFilter {
     /// Process a stereo interleaved buffer through the filter
     /// Uses the Chamberlin State Variable Filter algorithm
     pub fn process(&mut self, buffer: &mut [f32], sample_rate: f32) {
-        if self.mode == FilterMode::Off {
+        if self.mode == SimpleFilterMode::Off {
             return;
         }
 
@@ -121,19 +100,19 @@ impl SynthFilter {
 
             // Apply output to buffer
             match self.mode {
-                FilterMode::LowPass => {
+                SimpleFilterMode::LowPass => {
                     buffer[l_idx] = lp_l;
                     buffer[r_idx] = lp_r;
                 }
-                FilterMode::HighPass => {
+                SimpleFilterMode::HighPass => {
                     buffer[l_idx] = hp_l;
                     buffer[r_idx] = hp_r;
                 }
-                FilterMode::BandPass => {
+                SimpleFilterMode::BandPass => {
                     buffer[l_idx] = bp_l;
                     buffer[r_idx] = bp_r;
                 }
-                FilterMode::Off => {}
+                SimpleFilterMode::Off => {}
             }
         }
     }
@@ -346,7 +325,7 @@ impl StandardSynthBase {
                 true
             }
             3 => {
-                self.filter.mode = FilterMode::from(value);
+                self.filter.mode = SimpleFilterMode::from(value);
                 true
             }
             4 => {

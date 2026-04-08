@@ -578,6 +578,11 @@ impl MixerState {
             return Err("Routing would create a cycle".to_string());
         }
 
+        // Sync routing to audio thread
+        send_audio_command(AudioCommand::UpdateRouting {
+            routing: self.routing.clone(),
+        });
+
         Ok(())
     }
 
@@ -596,6 +601,12 @@ impl MixerState {
         if self.routing.len() == original_len {
             return Err("Routing connection not found".to_string());
         }
+
+        // Sync routing to audio thread
+        send_audio_command(AudioCommand::UpdateRouting {
+            routing: self.routing.clone(),
+        });
+
         Ok(())
     }
 
@@ -620,7 +631,7 @@ impl MixerState {
         let mut rec_stack = HashSet::new();
 
         for bus_id in self.buses.keys() {
-            if !visited.contains(bus_id) && dfs(*bus_id, &adj, &mut visited, &mut rec_stack) {
+            if !visited.contains(bus_id) && find_cycle(*bus_id, &adj, &mut visited, &mut rec_stack) {
                 return true;
             }
         }
@@ -724,8 +735,8 @@ impl ApplicationState {
         return &self.mixer;
     }
 }
-
-fn dfs(
+/// Helper to find cycle using DFS
+fn find_cycle(
     node: BusId,
     adj: &HashMap<BusId, Vec<BusId>>,
     visited: &mut HashSet<BusId>,
@@ -737,7 +748,7 @@ fn dfs(
     if let Some(neighbors) = adj.get(&node) {
         for &neighbor in neighbors {
             if !visited.contains(&neighbor) {
-                if dfs(neighbor, adj, visited, rec_stack) {
+                if find_cycle(neighbor, adj, visited, rec_stack) {
                     return true;
                 }
             } else if rec_stack.contains(&neighbor) {

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use karbeat_core::context::utils::send_audio_command;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
-use karbeat_core::core::project::TrackId;
+use karbeat_core::core::project::{AudioSourceId, TrackId};
 use karbeat_core::{ audio::event::TransportFeedback, commands::AudioCommand, context::ctx };
 use crate::api::project::{ AudioWaveformUiForAudioProperties, UiAudioHardwareConfig };
 use crate::frb_generated::StreamSink;
@@ -48,7 +48,7 @@ impl From<TransportFeedback> for UiTransportFeedback {
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
     let app = get_app_read();
-    let waveform = app.get_audio_source(id)?;
+    let waveform = app.get_audio_source(&AudioSourceId::from(id))?;
 
     //TODO:Add dyanamic downsampling to send this to the frontend side for smaller memory footprint
     // downsample(waveform.buffer)
@@ -60,7 +60,7 @@ pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties
 pub fn play_source_preview(id: u32) {
     let app = get_app_read();
 
-    if let Some(waveform_arc) = app.get_audio_source(id) {
+    if let Some(waveform_arc) = app.get_audio_source(&AudioSourceId::from(id)) {
         let waveform_to_play = (*waveform_arc).clone();
 
         send_audio_command(AudioCommand::PlayOneShot(waveform_to_play));
@@ -108,6 +108,7 @@ pub fn play_preview_note(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     // validate input
     if note_key < 0 || note_key > 127 {
         return Err("Note key must be between 0 and 127".to_string());
@@ -147,6 +148,7 @@ pub fn play_preview_note_generator(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     // validate input
     if note_key < 0 || note_key > 127 {
         return Err("Note key must be between 0 and 127".to_string());

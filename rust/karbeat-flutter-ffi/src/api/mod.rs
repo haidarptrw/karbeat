@@ -1,3 +1,4 @@
+pub mod plugins;
 pub mod audio;
 pub mod mixer;
 pub mod network;

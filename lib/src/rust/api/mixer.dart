@@ -186,12 +186,17 @@ class UiEffectInstance {
 
 class UiEffectSummary {
   final int id;
+  final int registryId;
   final String name;
 
-  const UiEffectSummary({required this.id, required this.name});
+  const UiEffectSummary({
+    required this.id,
+    required this.registryId,
+    required this.name,
+  });
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode;
+  int get hashCode => id.hashCode ^ registryId.hashCode ^ name.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -199,6 +204,7 @@ class UiEffectSummary {
       other is UiEffectSummary &&
           runtimeType == other.runtimeType &&
           id == other.id &&
+          registryId == other.registryId &&
           name == other.name;
 }
 

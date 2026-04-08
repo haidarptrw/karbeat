@@ -7,6 +7,7 @@ import 'api/audio.dart';
 import 'api/mixer.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
+import 'api/plugins/eq.dart';
 import 'api/project.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
@@ -116,6 +117,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
+
+  @protected
+  UiPluginInstance dco_decode_box_autoadd_ui_plugin_instance(dynamic raw);
 
   @protected
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
@@ -239,6 +243,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
 
   @protected
+  String? dco_decode_opt_String(dynamic raw);
+
+  @protected
   AudioWaveformUiForAudioProperties?
   dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     dynamic raw,
@@ -336,6 +343,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
+  UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw);
+
+  @protected
   UiGeneratorParameterSnapshot dco_decode_ui_generator_parameter_snapshot(
     dynamic raw,
   );
@@ -366,6 +376,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginInfo dco_decode_ui_plugin_info(dynamic raw);
+
+  @protected
+  UiPluginInstance dco_decode_ui_plugin_instance(dynamic raw);
 
   @protected
   UiPluginParameter dco_decode_ui_plugin_parameter(dynamic raw);
@@ -513,6 +526,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiPluginInstance sse_decode_box_autoadd_ui_plugin_instance(
     SseDeserializer deserializer,
   );
 
@@ -670,6 +688,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
   AudioWaveformUiForAudioProperties?
   sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     SseDeserializer deserializer,
@@ -785,6 +806,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiGeneratorInstanceType sse_decode_ui_generator_instance_type(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiGeneratorParameterSnapshot sse_decode_ui_generator_parameter_snapshot(
     SseDeserializer deserializer,
   );
@@ -819,6 +845,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiPluginInfo sse_decode_ui_plugin_info(SseDeserializer deserializer);
+
+  @protected
+  UiPluginInstance sse_decode_ui_plugin_instance(SseDeserializer deserializer);
 
   @protected
   UiPluginParameter sse_decode_ui_plugin_parameter(
@@ -998,6 +1027,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_mixer_channel(
     UiMixerChannel self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_plugin_instance(
+    UiPluginInstance self,
     SseSerializer serializer,
   );
 
@@ -1182,6 +1217,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
     AudioWaveformUiForAudioProperties? self,
     SseSerializer serializer,
@@ -1323,6 +1361,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_generator_instance_type(
+    UiGeneratorInstanceType self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_generator_parameter_snapshot(
     UiGeneratorParameterSnapshot self,
     SseSerializer serializer,
@@ -1369,6 +1413,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_plugin_info(UiPluginInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_plugin_instance(
+    UiPluginInstance self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_plugin_parameter(

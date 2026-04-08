@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/audio_plugins/dynamic_plugin_screen.dart';
+import 'package:karbeat/features/audio_plugins/generators/synth_registry.dart';
 import 'package:karbeat/features/screens/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
@@ -93,21 +94,39 @@ class SourceListScreen extends ConsumerWidget {
             delegate: SliverChildBuilderDelegate((context, index) {
               final id = generators.keys.elementAt(index);
               final gen = generators.values.elementAt(index);
+              final instanceType = gen.instanceType;
+              final name = switch (instanceType) {
+                UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
+                _ => "Sampler",
+              };
+
+              final gen_instance = switch (instanceType) {
+                UiGeneratorInstanceType_Plugin(:final field0) => field0,
+                _ => null,
+              };
+
               return _SourceTile(
-                title: gen.name,
+                title: name,
                 subtitle: "ID: $id",
                 icon: Icons.piano,
                 color: Colors.orangeAccent,
                 onTap: () {
-                  // Navigate to dynamic plugin editor for all generator types
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DynamicPluginScreen(
-                        generatorId: id,
-                        generatorName: gen.name,
-                      ),
-                    ),
-                  );
+                  Widget screen;
+                  try {
+                    final availableGenerators = ref.read(karbeatStateProvider).availableGenerators;
+                    final registryId = availableGenerators.firstWhere((p) => p.id == gen_instance?.registryId).id;
+                    final builder = SynthRegistry.getSynthBuilder(registryId);
+                    screen = builder(id);
+                  } catch (_) {
+                    screen = DynamicPluginScreen(
+                      generatorId: id,
+                      generatorName: name,
+                    );
+                  }
+
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => screen));
                 },
                 onPlace: null,
                 // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement

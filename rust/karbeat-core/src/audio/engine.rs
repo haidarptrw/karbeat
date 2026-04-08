@@ -135,6 +135,7 @@ pub struct GeneratorVoice {
     pub automation_events: SmallVec<[GeneratorAutomationEvent; 4]>,
     // Track if this generator is persistent or temporary
     pub active: bool,
+    pub playing_keys: Vec<u8>,
 }
 
 impl GeneratorVoice {
@@ -145,6 +146,7 @@ impl GeneratorVoice {
             midi_events: SmallVec::new(),
             automation_events: SmallVec::new(),
             active,
+            playing_keys: Vec::new(),
         }
     }
 }
@@ -160,6 +162,8 @@ pub struct AudioVoice {
     pub start_boundary: f64,
     /// The specific end point in the source (from clip.trim_start)
     pub end_boundary: f64,
+    pub clip_elapsed_samples: u32,
+    pub clip_loop_length: u32,
 }
 
 pub struct PreviewVoice {
@@ -404,10 +408,12 @@ impl AudioEngine {
         if self.pattern_playhead_samples >= loop_len_samples {
             self.pattern_playhead_samples = 0;
             self.last_emitted_pattern_samples = 0;
+
+            // This safely clears tracked keys to prevent hang on pattern loop
             Self::stop_all_active_generators_impl(
                 &mut self.active_generators,
                 &mut self.plugin_state
-            ); // Kill notes at loop boundary to prevent hangs
+            );
         }
 
         let start_time = self.pattern_playhead_samples;
@@ -431,14 +437,35 @@ impl AudioEngine {
         let gen_voice = &mut self.active_generators[voice_idx];
         gen_voice.active = true;
 
+        let mut expected_at_start = Vec::new();
+        let mut expected_at_end = Vec::new();
+
         Self::schedule_pattern_notes_raw(
             &mut gen_voice.midi_events,
+            &mut expected_at_start,
+            &mut expected_at_end,
             &pattern.notes,
             self.sample_rate,
             tempo,
             start_time,
             end_time
         );
+
+        let mut missed_keys = Vec::new();
+        for &key in &gen_voice.playing_keys {
+            if !expected_at_start.contains(&key) && !missed_keys.contains(&key) {
+                missed_keys.push(key);
+                gen_voice.midi_events.push(MidiEvent {
+                    sample_offset: 0,
+                    data: MidiMessage::NoteOff { key },
+                });
+            }
+        }
+
+        expected_at_end.sort_unstable();
+        expected_at_end.dedup();
+        gen_voice.playing_keys = expected_at_end;
+        gen_voice.midi_events.sort_by_key(|e| e.sample_offset);
 
         // Render voices to buffer
         self.render_voices_to_buffer(output_buffer, channels);
@@ -476,6 +503,7 @@ impl AudioEngine {
             }
             // Clear any pending MIDI events that might have been queued
             voice.midi_events.clear();
+            voice.playing_keys.clear();
         }
     }
 
@@ -842,9 +870,10 @@ impl AudioEngine {
                 for (gen_id, mut plugin) in generators.into_iter() {
                     plugin.prepare(sample_rate, channels, buf_size);
 
-                    // Since PreparePlugin doesn't pass track_ids directly, we find the 
+                    // Since PreparePlugin doesn't pass track_ids directly, we find the
                     // associated track from the newly synced current_state graph.
-                    let track_id = self.current_state.graph.tracks.iter()
+                    let track_id = self.current_state.graph.tracks
+                        .iter()
                         .find(|t| t.generator.as_ref().map_or(false, |g| g.id == gen_id))
                         .map(|t| t.id)
                         .unwrap_or_else(|| TrackId::from(0));
@@ -855,7 +884,7 @@ impl AudioEngine {
                             id: gen_id,
                             track_id,
                             plugin,
-                        },
+                        }
                     );
                 }
 
@@ -868,7 +897,7 @@ impl AudioEngine {
                             AudioEffectInstance {
                                 id: effect_id,
                                 plugin,
-                            },
+                            }
                         );
                     }
                 }
@@ -881,13 +910,10 @@ impl AudioEngine {
 
                     for (effect_id, mut plugin) in effects_map.into_iter() {
                         plugin.prepare(sample_rate, channels, buf_size);
-                        self.plugin_state.add_bus_effect(
-                            bus_id_index,
-                            AudioEffectInstance {
-                                id: effect_id,
-                                plugin,
-                            },
-                        );
+                        self.plugin_state.add_bus_effect(bus_id_index, AudioEffectInstance {
+                            id: effect_id,
+                            plugin,
+                        });
                     }
                 }
 
@@ -910,7 +936,7 @@ impl AudioEngine {
                 }
 
                 log::info!("[AudioEngine] Prepared all plugins for the newly loaded project.");
-            },
+            }
         }
     }
 
@@ -1386,6 +1412,7 @@ impl AudioEngine {
     ) -> bool {
         let mut did_render = false;
         let buffer_frames = output.len() / channels;
+        let fade_samples = ((sample_rate as f32) * 0.002) as u32;
         for voice in active_oneshots.iter_mut().filter(|v| v.track_id == track_id) {
             did_render = true;
             let src_channels = voice.waveform.channels as usize;
@@ -1413,6 +1440,7 @@ impl AudioEngine {
                 {
                     for frame_idx in voice.output_offset_samples..buffer_frames {
                         let frames_written = (frame_idx - voice.output_offset_samples) as u32;
+                        let current_elapsed = voice.clip_elapsed_samples + frames_written;
                         let mut read_pos = voice.source_read_index + (frames_written as f64) * step;
 
                         if is_looping {
@@ -1424,19 +1452,31 @@ impl AudioEngine {
                             break;
                         }
 
+                        // Calculate the De-click fade multiplier
+                        let mut fade_multiplier = 1.0;
+                        if current_elapsed < fade_samples {
+                            // Fade IN at the very beginning
+                            fade_multiplier = (current_elapsed as f32) / (fade_samples as f32);
+                        } else if current_elapsed + fade_samples > voice.clip_loop_length {
+                            // Fade OUT at the very end
+                            let remaining = voice.clip_loop_length.saturating_sub(current_elapsed);
+                            fade_multiplier = (remaining as f32) / (fade_samples as f32);
+                        }
+
                         let sample_frame = sample_waveform_dasp(
                             &voice.waveform,
                             read_pos,
                             src_channels
                         );
-                        out_frames[frame_idx][0] += sample_frame[0];
-                        out_frames[frame_idx][1] += sample_frame[1];
+                        out_frames[frame_idx][0] += sample_frame[0] * fade_multiplier;
+                        out_frames[frame_idx][1] += sample_frame[1] * fade_multiplier;
                     }
                 }
             } else {
                 // Fallback for non-stereo output
                 for frame_idx in voice.output_offset_samples..buffer_frames {
                     let frames_written = (frame_idx - voice.output_offset_samples) as u32;
+                    let current_elapsed = voice.clip_elapsed_samples + frames_written;
                     let mut read_pos = voice.source_read_index + (frames_written as f64) * step;
 
                     if is_looping {
@@ -1448,12 +1488,23 @@ impl AudioEngine {
                         break;
                     }
 
+                    // Calculate the De-click fade multiplier
+                    let mut fade_multiplier = 1.0;
+                    if current_elapsed < fade_samples {
+                        // Fade IN at the very beginning
+                        fade_multiplier = (current_elapsed as f32) / (fade_samples as f32);
+                    } else if current_elapsed + fade_samples > voice.clip_loop_length {
+                        // Fade OUT at the very end
+                        let remaining = voice.clip_loop_length.saturating_sub(current_elapsed);
+                        fade_multiplier = (remaining as f32) / (fade_samples as f32);
+                    }
+
                     let sample_frame = sample_waveform_dasp(
                         &voice.waveform,
                         read_pos,
                         src_channels
                     );
-                    output[frame_idx * channels] += sample_frame[0];
+                    output[frame_idx * channels] += sample_frame[0] * fade_multiplier;
                 }
             }
         }
@@ -1636,6 +1687,9 @@ impl AudioEngine {
             );
         }
 
+        let mut expected_at_start = Vec::new();
+        let mut expected_at_end = Vec::new();
+
         // Process Clips
         for clip in track.clips() {
             if clip.start_time > end_time {
@@ -1665,6 +1719,8 @@ impl AudioEngine {
                             let gen_voice = &mut self.active_generators[idx];
                             Self::schedule_midi_events(
                                 &mut gen_voice.midi_events,
+                                &mut expected_at_start,
+                                &mut expected_at_end,
                                 self.sample_rate,
                                 self.bpm,
                                 clip,
@@ -1677,6 +1733,29 @@ impl AudioEngine {
                 }
                 _ => {}
             }
+        }
+
+        // Detect interrupted notes and inject NoteOff
+        if let Some(idx) = gen_voice_idx {
+            let voice = &mut self.active_generators[idx];
+
+            let mut missed_keys = Vec::new();
+            for &key in &voice.playing_keys {
+                if !expected_at_start.contains(&key) && !missed_keys.contains(&key) {
+                    missed_keys.push(key);
+                    voice.midi_events.push(MidiEvent {
+                        sample_offset: 0,
+                        data: MidiMessage::NoteOff { key },
+                    });
+                }
+            }
+
+            expected_at_end.sort_unstable();
+            expected_at_end.dedup();
+            voice.playing_keys = expected_at_end;
+
+            // Sort all events (including injected NoteOffs)
+            voice.midi_events.sort_by_key(|e| e.sample_offset);
         }
     }
 
@@ -1834,11 +1913,15 @@ impl AudioEngine {
             source_read_index: source_read_idx,
             start_boundary: trim_start,
             end_boundary: trim_end,
+            clip_elapsed_samples: samples_elapsed,
+            clip_loop_length: clip.loop_length,
         });
     }
 
     fn schedule_midi_events(
         events: &mut SmallVec<[MidiEvent; 4]>,
+        expected_at_start: &mut Vec<u8>,
+        expected_at_end: &mut Vec<u8>,
         sample_rate: u32,
         tempo: f32,
         clip: &Clip,
@@ -1860,11 +1943,16 @@ impl AudioEngine {
         // Calculate the clip's actual end boundary on the timeline
         let clip_end = clip.start_time + clip.loop_length;
 
-        let start_iter = 0;
-        let end_iter = 0;
+        // Ensure pattern loops if the clip is dragged out longer than the pattern length
+        let max_iters = clip.loop_length / pattern_len_samples + 1;
 
-        for i in start_iter..=end_iter {
+        for i in 0..=max_iters {
             let pattern_offset = i * pattern_len_samples;
+
+            // Stop processing if this repetition is beyond the clip's end
+            if clip.start_time + pattern_offset >= clip_end {
+                break;
+            }
 
             for note in &pattern.notes {
                 let note_start = (((note.start_tick as f64) / 960.0) *
@@ -1889,6 +1977,18 @@ impl AudioEngine {
                     continue;
                 }
 
+                // Clamp note-off to clip boundary if it would extend past the clip end
+                // This prevents hanging notes when clips are trimmed
+                let effective_end = abs_end.min(clip_end);
+
+                // Track the expected note for hang prevention during moving of active voice
+                if abs_start <= buffer_start && effective_end > buffer_start {
+                    expected_at_start.push(note.key);
+                }
+                if abs_start <= buffer_end && effective_end > buffer_end {
+                    expected_at_end.push(note.key);
+                }
+
                 // Schedule NoteOn if it falls within the buffer
                 if abs_start >= buffer_start && abs_start < buffer_end {
                     events.push(MidiEvent {
@@ -1899,10 +1999,6 @@ impl AudioEngine {
                         },
                     });
                 }
-
-                // Clamp note-off to clip boundary if it would extend past the clip end
-                // This prevents hanging notes when clips are trimmed
-                let effective_end = abs_end.min(clip_end);
 
                 // Schedule NoteOff if it falls within the buffer
                 if effective_end >= buffer_start && effective_end < buffer_end {
@@ -1919,6 +2015,8 @@ impl AudioEngine {
     // Helper to schedule notes without a Clip wrapper
     fn schedule_pattern_notes_raw(
         events: &mut SmallVec<[MidiEvent; 4]>,
+        expected_at_start: &mut Vec<u8>,
+        expected_at_end: &mut Vec<u8>,
         notes: &[crate::core::project::Note],
         sample_rate: u32,
         tempo: f32,
@@ -1930,6 +2028,13 @@ impl AudioEngine {
         for note in notes {
             let note_start = ((note.start_tick as f32) * samples_per_tick) as u32;
             let note_end = note_start + (((note.duration as f32) * samples_per_tick) as u32);
+
+            if note_start <= buffer_start && note_end > buffer_start {
+                expected_at_start.push(note.key);
+            }
+            if note_start <= buffer_end && note_end > buffer_end {
+                expected_at_end.push(note.key);
+            }
 
             if note_start >= buffer_start && note_start < buffer_end {
                 events.push(MidiEvent {
@@ -1947,7 +2052,7 @@ impl AudioEngine {
                 });
             }
         }
-        events.sort_by_key(|e| e.sample_offset);
+        // events.sort_by_key(|e| e.sample_offset);
     }
 
     fn evaluate_automation_lanes(&mut self) {

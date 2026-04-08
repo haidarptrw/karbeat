@@ -1,6 +1,6 @@
 [package]
 name = "karbeat-host"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 edition = "2021"
 description = "3rd-party plugin hosting implementation for Karbeat, including VST3, LV2, and CLAP support"
 

@@ -8,6 +8,7 @@ members = [
     "karbeat-plugins",
     "karbeat-plugin-api",
     "karbeat-utils",
+    "karbeat-macros", "karbeat-plugin-types",
 ]
 
 [workspace.dependencies]
@@ -18,6 +19,8 @@ karbeat-host = { path = "karbeat-host" }
 karbeat-plugin-api = { path = "karbeat-plugin-api" }
 karbeat-plugins = { path = "karbeat-plugins" }
 karbeat-utils = { path = "karbeat-utils" }
+karbeat-macros = { path = "karbeat-macros"}
+karbeat-plugin-types = {path = "karbeat-plugin-types"}
 anyhow = "1.0.100"
 cpal = { version = "0.17.3", features = ["jack", "asio"] }
 env_logger = "0.11.8"
@@ -29,24 +32,34 @@ once_cell = "1.21.3"
 rodio = "0.22.1"
 rtrb = "0.3.2"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
-symphonia = { version = "0.5.5", default-features = false, features = ["aac", "mp3", "flac", "wav", "ogg"] }
+serde_json = "1.0.149"
+symphonia = { version = "0.5.5", default-features = false, features = [
+    "aac",
+    "mp3",
+    "flac",
+    "wav",
+    "ogg",
+] }
 triple_buffer = "9.0.0"
 rustfft = "6.4.1"
 thiserror = "2.0.17"
 dasp = { version = "0.11.0", features = ["all"] }
 smallvec = "1.15.1"
-hashbrown = {version =  "0.16.1", features = ["serde"]}
-indexmap = {version = "2.13.0", features = ["serde"]}
+hashbrown = { version = "0.16.1", features = ["serde"] }
+indexmap = { version = "2.13.0", features = ["serde"] }
 num-complex = "0.4.6"
 parking_lot = "0.12.5"
-uuid = { version = "1.22.0", features = ["v4", "serde"] } 
+uuid = { version = "1.22.0", features = ["v4", "serde"] }
 memmap2 = "0.9.10"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"
-zip = "8.4.0"
-toml = "1.1.0+spec-1.1.0"
-chrono = {version = "0.4.44", features =["serde"]}
+zip = "8.5.0"
+toml = "1.1.2+spec-1.1.0"
+chrono = { version = "0.4.44", features = ["serde"] }
 rmp-serde = "1.3.1"
+derive_builder = "0.20.2"
+hound = "3.5.1"
+strum = { version = "0.28.0", features = ["derive"] }
 
 [profile.dev]
 opt-level = 3

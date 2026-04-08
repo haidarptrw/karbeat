@@ -1,42 +1,44 @@
 // oscillator.rs (part of karbeat_dsp library)
 
 use std::f64::consts::TAU;
-use dasp::{ Frame, slice };
+use dasp::{Frame, slice};
+
+// Import your new universal parameter types
+use karbeat_macros::EnumParam;
+use karbeat_plugin_types::parameter::Param;
 
 // ============================================================================
 // OSCILLATOR
 // ============================================================================
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Debug)]
 pub struct Oscillator {
-    pub waveform: Waveform,
-    pub detune: f32, // In semitones
-    pub mix: f32, // 0.0 to 1.0
-    pub pulse_width: f32, // 0.0 to 1.0 (For Pulse/Square)
-}
-
-#[derive(Clone, Copy, PartialEq)]
-pub enum Waveform {
-    Sine = 0,
-    Saw = 1,
-    Square = 2,
-    Triangle = 3,
-    Noise = 4,
-}
-
-impl From<f32> for Waveform {
-    fn from(v: f32) -> Self {
-        match v as u32 {
-            0 => Waveform::Sine,
-            1 => Waveform::Saw,
-            2 => Waveform::Square,
-            3 => Waveform::Triangle,
-            _ => Waveform::Noise,
-        }
-    }
+    pub waveform: Param<Waveform>,
+    pub detune: Param<f32>,
+    pub phase_offset: Param<f32>,
+    pub mix: Param<f32>, 
+    pub pulse_width: Param<f32>, 
 }
 
 impl Oscillator {
+    /// Create a new Oscillator building block. 
+    /// Assigns sequential IDs starting from `id_start` under the specified UI `group`.
+    pub fn new(id_start: u32, group: &'static str) -> Self {
+        Self {
+            waveform: Param::new_enum(id_start, "Waveform", group, Waveform::Sine),
+            detune: Param::new_float(id_start + 1, "Detune", group, 0.0, -48.0, 48.0),
+            phase_offset: Param::new_float(id_start + 2, "Phase Offset", group, 0.0, 0.0, 1.0),
+            mix: Param::new_float(id_start + 3, "Mix", group, 1.0, 0.0, 1.0),
+            pulse_width: Param::new_float(id_start + 4, "Pulse Width", group, 0.5, 0.01, 0.99),
+        }
+    }
+
+    /// Exposes a list of all parameters in this block so the parent synth can easily collect them
+    pub fn get_parameters(&self) -> Vec<&dyn std::any::Any> {
+        // This is a conceptual helper. In your parent macro, you can just map these!
+        vec![&self.waveform, &self.detune, &self.phase_offset, &self.mix, &self.pulse_width]
+    }
+
     /// Standard audio output using dasp frames
     pub fn output_wave(
         &self,
@@ -46,32 +48,34 @@ impl Oscillator {
         base_freq: f64,
         current_phase: &mut f64
     ) {
-        if self.mix <= 0.0 || out_block.is_empty() {
+        // 1. Fetch block-level parameters ONCE for performance and thread-safety
+        let current_mix = self.mix.get();
+        if current_mix <= 0.0 || out_block.is_empty() {
             return;
         }
 
-        let actual_freq = base_freq * (2.0_f64).powf((self.detune as f64) / 12.0);
+        let current_detune = self.detune.get();
+        let current_waveform = self.waveform.get();
+        let current_pw = self.pulse_width.get() as f64;
 
-        // DASP: Use internal helper for perfect precision phase steps
+        // 2. Calculate DSP constants
+        let actual_freq = base_freq * (2.0_f64).powf((current_detune as f64) / 12.0);
         let phase_inc = actual_freq / (sample_rate as f64);
 
-        // DASP: Safely cast the flat slice into an array of Stereo Frames
-        // This fails gracefully and costs 0 memory allocation
+        // 3. Process the audio
         if channels == 2 {
             if let Some(frames) = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block) {
                 for frame in frames {
-                    let mut sample = self.generate_raw_sample(*current_phase);
+                    let mut sample = Self::generate_raw_sample(current_waveform, current_pw, *current_phase);
 
                     // Anti-Aliasing
                     sample += Self::poly_blep(*current_phase, phase_inc);
 
-                    let final_sample = (sample * (self.mix as f64)) as f32;
+                    let final_sample = (sample * (current_mix as f64)) as f32;
 
-                    // DASP: add_amp perfectly accumulates the audio into the existing buffer
                     frame[0] = frame[0].add_amp(final_sample); // Left
                     frame[1] = frame[1].add_amp(final_sample); // Right
 
-                    // Fast phase wrapping
                     *current_phase = (*current_phase + phase_inc).fract();
                 }
             }
@@ -89,29 +93,28 @@ impl Oscillator {
         base_freq: f64,
         current_phase: &mut f64
     ) {
-        if self.mix <= 0.0 || out_block.is_empty() {
+        let current_mix = self.mix.get();
+        if current_mix <= 0.0 || out_block.is_empty() {
             return;
         }
 
-        let actual_freq = base_freq * (2.0_f64).powf((self.detune as f64) / 12.0);
+        let current_detune = self.detune.get();
+        let current_waveform = self.waveform.get();
+        let current_pw = self.pulse_width.get() as f64;
+
+        let actual_freq = base_freq * (2.0_f64).powf((current_detune as f64) / 12.0);
         let phase_inc = actual_freq / (sample_rate as f64);
 
         if channels == 2 {
-            // DASP: Cast both buffers to frames so we can zip them cleanly
-            let out_frames = slice
-                ::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block)
-                .unwrap();
+            let out_frames = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block).unwrap();
             let mod_frames = slice::from_sample_slice::<&[[f32; 2]], f32>(mod_buffer).unwrap();
 
             for (out_frame, mod_frame) in out_frames.iter_mut().zip(mod_frames.iter()) {
-                // Read the modulator's left channel to warp our phase
                 let modulation = (mod_frame[0] as f64) * fm_depth;
-
-                // rem_euclid safely wraps negative phase shifts caused by heavy FM
                 let modulated_phase = (*current_phase + modulation).rem_euclid(1.0);
 
-                let sample = self.generate_raw_sample(modulated_phase);
-                let final_sample = (sample * (self.mix as f64)) as f32;
+                let sample = Self::generate_raw_sample(current_waveform, current_pw, modulated_phase);
+                let final_sample = (sample * (current_mix as f64)) as f32;
 
                 out_frame[0] = out_frame[0].add_amp(final_sample);
                 out_frame[1] = out_frame[1].add_amp(final_sample);
@@ -136,13 +139,28 @@ impl Oscillator {
 
     /// Pure function to calculate the raw shape based on the current phase
     #[inline(always)]
-    fn generate_raw_sample(&self, phase: f64) -> f64 {
-        match self.waveform {
+    fn generate_raw_sample(waveform: Waveform, pulse_width: f64, phase: f64) -> f64 {
+        match waveform {
             Waveform::Sine => (phase * TAU).sin(),
             Waveform::Saw => 2.0 * phase - 1.0,
-            Waveform::Square => if phase < (self.pulse_width as f64) { 1.0 } else { -1.0 }
+            Waveform::Square => if phase < pulse_width { 1.0 } else { -1.0 }
             Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
             Waveform::Noise => fastrand::f64() * 2.0 - 1.0,
         }
     }
+}
+
+// ============================================================================
+// WAVEFORM ENUM
+// ============================================================================
+
+#[derive(Clone, Debug, Copy, PartialEq, Default, EnumParam)]
+#[repr(usize)]
+pub enum Waveform {
+    #[default]
+    Sine = 0,
+    Saw = 1,
+    Square = 2,
+    Triangle = 3,
+    Noise = 4,
 }

@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
 /// Maximum number of cascaded biquad stages per band (order 0..3 = 1..4 stages)
-const MAX_ORDER: usize = 4;
+const MAX_ORDER: usize = 8;
 
-use karbeat_plugin_api::wrapper::{RawEffectEngine, RawEffectWrapper};
+use karbeat_plugin_api::prelude::*;
+use karbeat_plugin_types::*;
+use serde_json::{json, Value};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, karbeat_macros::EnumParam)]
 pub enum FilterType {
+    #[default]
     Peaking = 0,
     LowShelf = 1,
     HighShelf = 2,
@@ -269,7 +272,7 @@ pub struct KarbeatParametricEQEngine {
     /// Nodes
     pub nodes: Vec<KarbeatParametricEQFilterNode>,
     /// Base gain for all eq
-    pub base_gain: f32,
+    pub base_gain: Param<f32>,
     /// Cache sample rate to detect changes
     last_sample_rate: f32,
     /// Number of channels
@@ -287,7 +290,7 @@ impl KarbeatParametricEQEngine {
 
         Self {
             nodes,
-            base_gain: 0.0, // 0 dB default
+            base_gain: Param::new_float(2, "Base Gain", "Master", 0.0, -60.0, 24.0),
             last_sample_rate: 48000.0,
             channels: 2,
         }
@@ -316,7 +319,7 @@ impl KarbeatParametricEQEngine {
 
             // Composite magnitude: sum of dB contributions from all bands
             // (multiplication of linear magnitudes = addition of dB values)
-            let mut total_db: f32 = self.base_gain;
+            let mut total_db: f32 = self.base_gain.get();
             for node in &self.nodes {
                 total_db += node.magnitude_db_at(freq, self.last_sample_rate);
             }
@@ -330,7 +333,8 @@ impl KarbeatParametricEQEngine {
 
 impl RawEffectEngine for KarbeatParametricEQEngine {
     fn prepare(&mut self, sample_rate: f32, channels: usize, _max_buffer_size: usize) {
-        let needs_update = (sample_rate - self.last_sample_rate).abs() > 0.1 || self.channels != channels;
+        let needs_update =
+            (sample_rate - self.last_sample_rate).abs() > 0.1 || self.channels != channels;
         if needs_update {
             self.last_sample_rate = sample_rate;
             self.channels = channels;
@@ -344,21 +348,23 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
         buffer: &mut [f32],
     ) {
         // Check for sample rate or channel changes
-        let needs_update = (base.sample_rate - self.last_sample_rate).abs() > 0.1 || base.channels != self.channels;
+        let needs_update = (base.sample_rate - self.last_sample_rate).abs() > 0.1
+            || base.channels != self.channels;
         if needs_update {
             self.last_sample_rate = base.sample_rate;
             self.channels = base.channels;
             self.update_all_nodes();
         }
 
-        let master_linear_gain = if self.base_gain.abs() > 0.01 {
-            10.0_f32.powf(self.base_gain / 20.0)
+        let current_base_gain = self.base_gain.get();
+        let master_linear_gain = if current_base_gain.abs() > 0.01 {
+            10.0_f32.powf(current_base_gain / 20.0)
         } else {
             1.0
         };
 
         if self.channels == 0 {
-             return;
+            return;
         }
 
         for i in (0..buffer.len()).step_by(self.channels) {
@@ -387,7 +393,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
 
     fn set_custom_parameter(&mut self, id: u32, value: f32) {
         match id {
-            2 => self.base_gain = value.clamp(-60.0, 24.0),
+            2 => self.base_gain.set_base(value),
             _ => {
                 if id < 3 {
                     return;
@@ -417,7 +423,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
 
     fn get_custom_parameter(&self, id: u32) -> Option<f32> {
         match id {
-            2 => Some(self.base_gain),
+            2 => Some(self.base_gain.get_base().to_f32()),
             _ => {
                 if id < 3 {
                     return None;
@@ -450,7 +456,11 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
         Self: Sized,
     {
         let mut params = HashMap::new();
-        params.insert(2, 0.0);
+        let default_engine = Self::new();
+        params.insert(
+            default_engine.base_gain.id,
+            default_engine.base_gain.get_base().to_f32(),
+        );
 
         let default_freqs = [60.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0];
 
@@ -483,9 +493,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
         "Parametric EQ"
     }
 
-    fn get_parameter_specs(&self) -> Vec<karbeat_plugin_api::wrapper::PluginParameter> {
-        use karbeat_plugin_api::wrapper::PluginParameter;
-
+    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
         let filter_type_choices = vec![
             "Peaking".into(),
             "Low Shelf".into(),
@@ -498,15 +506,7 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
 
         let default_freqs = [60.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0];
 
-        let mut params = vec![PluginParameter::new_float(
-            2,
-            "Base Gain",
-            "Master",
-            self.base_gain,
-            -60.0,
-            24.0,
-            0.0,
-        )];
+        let mut params = vec![self.base_gain.to_spec()];
 
         let order_choices = vec![
             "12 dB/oct".into(),
@@ -581,6 +581,29 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
 
         params
     }
+
+    fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
+        match command {
+            "GET_MAGNITUDE_RESPONSE" => {
+                // Safely extract the requested number of points, defaulting to 100
+                let num_points = payload
+                    .get("num_points")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100) as usize;
+
+                let response = self.compute_magnitude_response(num_points);
+
+                // Convert the Rust tuples into a JSON array of objects
+                let json_response: Vec<Value> = response
+                    .into_iter()
+                    .map(|(freq, db)| json!({ "frequency": freq, "magnitude_db": db }))
+                    .collect();
+
+                Some(json!(json_response))
+            }
+            _ => None,
+        }
+    }
 }
 
 pub type KarbeatParametricEQ = RawEffectWrapper<KarbeatParametricEQEngine>;
@@ -597,11 +620,5 @@ pub fn create_parametric_eq(
     engine.channels = channels;
     engine.update_all_nodes();
 
-    RawEffectWrapper::new(
-        engine,
-        sample_rate.unwrap_or(48000.0),
-        channels
-    )
+    RawEffectWrapper::new(engine, sample_rate.unwrap_or(48000.0), channels)
 }
-
-

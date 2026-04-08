@@ -1,6 +1,6 @@
 [package]
 name = "karbeat_flutter_ffi"
-version = "0.1.0-alpha.1"
+version = "0.1.1"
 edition = "2021"
 
 [lib]
@@ -24,6 +24,7 @@ smallvec.workspace = true
 memmap2.workspace = true
 bytemuck.workspace = true
 chrono.workspace = true
+serde_json.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

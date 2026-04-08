@@ -15,7 +15,6 @@ use crate::core::{
 
 const KARBEAT_MAGIC_HEADER: &[u8; 8] = b"KARBEAT1";
 
-// FIXME: Fix it so that when closing the app and then reopen the saved project, would not caused the project to be empty
 pub fn save_karbeat_project(save_path: &Path, app_state: &ApplicationState) -> anyhow::Result<()> {
     let mut file = File::create(save_path)?;
     file.write_all(KARBEAT_MAGIC_HEADER)?;
@@ -39,6 +38,8 @@ pub fn save_karbeat_project(save_path: &Path, app_state: &ApplicationState) -> a
         if path.as_os_str().is_empty() || !path.is_file() {
             continue;
         }
+        
+        // Because we extract files retaining their original names, this will always be correct
         let file_name = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -103,7 +104,6 @@ fn parse_embedded_audio_path(zip_name: &str) -> Option<(u32, String)> {
     Some((id, file_name.to_string()))
 }
 
-// FIXME: This is currently failing to load at all. it does not throw an error, but the
 pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
     let mut file =
         File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
@@ -128,6 +128,14 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
     let library = Arc::make_mut(&mut app_state.asset_library);
     library.source_map.clear();
 
+    // Create a persistent cache directory for this session, avoiding randomized file names
+    // We use into_path() to intentionally leak the directory so it persists during playback
+    let cache_dir = tempfile::Builder::new()
+        .prefix("karbeat_session_")
+        .tempdir()
+        .context("Failed to create temporary session cache directory")?
+        .keep();
+
     for i in 0..archive.len() {
         let mut entry = match archive.by_index(i) {
             Ok(e) => e,
@@ -141,39 +149,35 @@ pub fn load_karbeat_project(path: &Path) -> anyhow::Result<ApplicationState> {
             continue;
         }
 
-        let suffix = Path::new(&file_name)
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| format!(".{}", e))
-            .unwrap_or_default();
+        // Create a dedicated folder for this ID to prevent naming collisions
+        // The resulting path looks like: /tmp/karbeat_session_xyz/1/kick.wav
+        let audio_folder = cache_dir.join(id.to_string());
+        std::fs::create_dir_all(&audio_folder)?;
+        
+        let dest_path = audio_folder.join(&file_name);
 
-        let mut tmp = tempfile::Builder::new()
-            .suffix(&suffix)
-            .tempfile()
-            .context("Failed to create temp file for embedded audio")?;
-        std::io::copy(&mut entry, &mut tmp).with_context(|| {
+        let mut dest_file = File::create(&dest_path).with_context(|| {
+            format!("Failed to create extracted audio file at {}", dest_path.display())
+        })?;
+
+        std::io::copy(&mut entry, &mut dest_file).with_context(|| {
             format!("Failed to extract embedded audio from archive entry {name}")
         })?;
-        tmp.as_file_mut().sync_all()?;
 
-        let tmp_path = tmp.path().to_str().with_context(|| {
+        let dest_path_str = dest_path.to_str().with_context(|| {
             format!(
                 "Embedded audio path is not valid UTF-8: {}",
-                tmp.path().display()
+                dest_path.display()
             )
         })?;
 
-        let mut waveform = load_audio_file(tmp_path, Some(&file_name)).with_context(|| {
+        let mut waveform = load_audio_file(dest_path_str, Some(&file_name)).with_context(|| {
             format!("Failed to decode embedded audio for source id {id} ({file_name})")
         })?;
+        
         waveform
             .try_assign_id(AudioSourceId::from(id))
             .with_context(|| format!("Duplicate or invalid audio source id {id}"))?;
-
-        // Detach the temp file to prevent it from being deleted after extraction.
-        // This ensures the audio files remain on disk so subsequent saves can read them.
-        tmp.keep()
-            .map_err(|e| anyhow::anyhow!("Failed to persist temp file: {}", e.error))?;
 
         library
             .source_map

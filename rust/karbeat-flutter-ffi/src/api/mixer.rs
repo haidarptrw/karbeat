@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_core::context::utils::send_audio_command;
+use karbeat_core::context::utils::broadcast_state_change;
 use karbeat_core::core::project::TrackId;
 
-use crate::broadcast_state_change;
 use crate::frb_generated::StreamSink;
 use karbeat_core::lock::{ get_app_read, get_app_write };
 use karbeat_core::{
-    commands::AudioCommand,
     context::{ ctx, MixerParamEvent },
     core::project::mixer::{
         BusId,
@@ -21,6 +19,7 @@ use karbeat_core::{
         RoutingNode,
     },
 };
+use karbeat_core::api::mixer_api as mixer_api;
 
 // ======================================
 // Type Definitions
@@ -39,6 +38,7 @@ pub struct UiMixerChannel {
 
 pub struct UiEffectSummary {
     pub id: u32,
+    pub registry_id: u32,
     pub name: String,
 }
 
@@ -75,6 +75,7 @@ impl From<&MixerChannel> for UiMixerChannel {
                 .iter()
                 .map(|instance| UiEffectSummary {
                     id: instance.id.to_u32(),
+                    registry_id: instance.instance.registry_id,
                     name: instance.instance.name.clone(),
                 })
                 .collect(),
@@ -274,17 +275,16 @@ fn push_mixer_event(event: MixerParamEvent) {
 
 /// **GETTER: Fetch the mixer state**
 pub fn get_mixer_state() -> UiMixerState {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    mixer_state.into()
+    mixer_api::get_mixer_state(|mixer_state| UiMixerState::from(mixer_state))
 }
 
 /// **GETTER: Fetch a specific mixer channel**
 pub fn get_mixer_channel(track_id: u32) -> Result<UiMixerChannel, String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let channel = mixer_state.channels.get(&TrackId::from(track_id));
-    channel.ok_or("Channel not found".to_owned()).map(|c| c.as_ref().into())
+    mixer_api
+        ::get_mixer_channel(TrackId::from(track_id), |mixer_channel|
+            UiMixerChannel::from(mixer_channel)
+        )
+        .map_err(|e| e.to_string())
 }
 
 pub fn get_mixer_channel_populated(
@@ -341,6 +341,7 @@ pub fn get_routing_matrix() -> Vec<UiRoutingConnection> {
 // ======================================
 
 pub fn set_master_bus_params(params: Vec<UiMixerChannelParams>) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -387,6 +388,7 @@ pub fn set_mixer_channel_params(
     track_id: u32,
     params: Vec<UiMixerChannelParams>
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -433,6 +435,7 @@ pub fn set_mixer_channel_params(
 
 /// Add an effect to a mixer channel by its registry ID (preferred method).
 pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -449,6 +452,7 @@ pub fn remove_effect_from_mixer_channel(
     track_id: u32,
     effect_instance_id: u32
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let mixer_state = &mut app.mixer;
@@ -462,6 +466,7 @@ pub fn remove_effect_from_mixer_channel(
 }
 
 pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.add_effect_to_master_bus(registry_id).map_err(|e| format!("{}", e))?;
@@ -472,6 +477,7 @@ pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
 }
 
 pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer
@@ -489,15 +495,10 @@ pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), Stri
 
 /// Create a new mixer bus and return its ID.
 pub fn create_bus(name: String) -> Result<u32, String> {
+    // TODO: Refactor this to Core's API
     let bus_id = {
         let mut app = get_app_write();
         let bus_id = app.mixer.create_bus(name.clone());
-
-        // Send command to audio thread
-        send_audio_command(AudioCommand::AddBus {
-            bus_id,
-            name: name.clone(),
-        });
 
         bus_id
     };
@@ -507,14 +508,10 @@ pub fn create_bus(name: String) -> Result<u32, String> {
 
 /// Delete a mixer bus.
 pub fn delete_bus(bus_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.remove_bus(bus_id.into())?;
-
-        // Send command to audio thread
-        send_audio_command(AudioCommand::RemoveBus {
-            bus_id: bus_id.into(),
-        });
     }
     broadcast_state_change();
     Ok(())
@@ -522,6 +519,7 @@ pub fn delete_bus(bus_id: u32) -> Result<(), String> {
 
 /// Set bus channel parameters (volume, pan, mute).
 pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let params_legit: Vec<MixerChannelParams> = params
@@ -540,6 +538,7 @@ pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<
 
 /// Add an effect to a bus by its registry ID.
 pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.add_effect_to_bus(bus_id.into(), registry_id).map_err(|e| format!("{}", e))?;
@@ -550,6 +549,7 @@ pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
 }
 
 pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         app.mixer.rename_bus(bus_id.into(), &new_name)?;
@@ -572,6 +572,7 @@ pub fn set_routing(
     send_level: f32,
     is_send: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let source: RoutingNode = (&source).into();
@@ -585,11 +586,6 @@ pub fn set_routing(
         };
 
         app.mixer.add_routing(conn)?;
-
-        // Sync routing to audio thread
-        send_audio_command(AudioCommand::UpdateRouting {
-            routing: app.mixer.routing.clone(),
-        });
     }
     broadcast_state_change();
     Ok(())
@@ -601,17 +597,13 @@ pub fn remove_routing(
     destination: UiRoutingNode,
     is_send: bool
 ) -> Result<(), String> {
+    // TODO: Refactor this to Core's API
     {
         let mut app = get_app_write();
         let source: RoutingNode = (&source).into();
         let destination: RoutingNode = (&destination).into();
 
         app.mixer.remove_routing(source, destination, is_send)?;
-
-        // Sync routing to audio thread
-        send_audio_command(AudioCommand::UpdateRouting {
-            routing: app.mixer.routing.clone(),
-        });
     }
     broadcast_state_change();
     Ok(())

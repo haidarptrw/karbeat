@@ -20,11 +20,6 @@ pub enum GeneratorInstanceType {
 
     // A Sampler (Plays a file from AssetLibrary)
     Sampler { asset_id: u32, root_note: u8 },
-
-    // Audio Input (Microphone / Line In)
-    // This might be unavailable due to limitation of the CPAL to
-    // do duplex streaming
-    AudioInput { device_channel_index: u32 }, 
 }
 
 impl ApplicationState {

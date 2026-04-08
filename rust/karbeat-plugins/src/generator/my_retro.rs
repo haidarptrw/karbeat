@@ -1,5 +1,5 @@
 // ====================================================
-// MY RETRO GENERATOR
+// MY RETRO SYNTH
 // Author: Haidar Wibowo
 // ====================================================
 
@@ -7,36 +7,33 @@ use std::collections::HashMap;
 
 use karbeat_dsp::prelude::*;
 use karbeat_plugin_api::prelude::*;
-use smallvec::{ SmallVec, smallvec };
+use karbeat_plugin_types::*;
+use smallvec::{smallvec, SmallVec};
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
 /// it only has strictly two oscillator and only
-/// available as monophonic for each oscillator, make it
+/// available as monophonic voice for each oscillator, making it
 /// a simple 8-bit retro sound
 #[derive(Clone)]
 pub struct MyRetroEngine {
     pub oscillators: SmallVec<[Oscillator; 2]>,
-    pub bitcrush_resolution: f32,
+    pub bitcrush_resolution: Param<f32>,
 }
 
 impl Default for MyRetroEngine {
     fn default() -> Self {
+        let mut osc1 = Oscillator::new(10, "Oscillator 1");
+        osc1.waveform.set_base(Waveform::Square.to_index() as f32);
+        osc1.mix.set_base(1.0);
+
+        let mut osc2 = Oscillator::new(20, "Oscillator 2");
+        osc2.waveform.set_base(Waveform::Square.to_index() as f32);
+        osc2.detune.set_base(-12.0);
+        osc2.mix.set_base(0.8);
+
         Self {
-            oscillators: smallvec![
-                Oscillator {
-                    waveform: Waveform::Square,
-                    detune: 0.0,
-                    mix: 1.0,
-                    pulse_width: 0.5,
-                },
-                Oscillator {
-                    waveform: Waveform::Triangle,
-                    detune: -12.0,
-                    mix: 0.8,
-                    pulse_width: 0.5,
-                }
-            ],
-            bitcrush_resolution: 16.0,
+            oscillators: smallvec![osc1, osc2],
+            bitcrush_resolution: Param::new_float(30, "Resolution", "Bitcrush", 16.0, 2.0, 256.0),
         }
     }
 }
@@ -48,7 +45,7 @@ impl MyRetroEngine {
         channels: u8,
         amp_envelope: &EnvelopeSettings,
         voice: &mut SynthVoice,
-        buffer: &mut [f32]
+        buffer: &mut [f32],
     ) {
         // Clear the scratch buffer before DASP `add_amp` accumulates into it
         buffer.fill(0.0);
@@ -69,7 +66,7 @@ impl MyRetroEngine {
 
         // Apply ADSR, Velocity, and 8-Bit Crush frame-by-frame
         let velocity_gain = (voice.velocity as f32) / 127.0;
-        let crush_steps = self.bitcrush_resolution.max(2.0);
+        let crush_steps = self.bitcrush_resolution.get().max(2.0);
 
         for frame in buffer.chunks_exact_mut(channels as usize) {
             let env_level = voice.advance_envelope(dt, amp_envelope);
@@ -106,7 +103,7 @@ impl RawSynthEngine for MyRetroEngine {
         &mut self,
         base: &mut StandardSynthBase,
         output_buffer: &mut [f32],
-        midi_events: &[MidiEvent]
+        midi_events: &[MidiEvent],
     ) {
         output_buffer.fill(0.0);
 
@@ -146,7 +143,7 @@ impl RawSynthEngine for MyRetroEngine {
                         2, // Stereo
                         &base.amp_envelope,
                         voice,
-                        scratch
+                        scratch,
                     );
 
                     // Mix the voice scratch buffer into the main output
@@ -162,16 +159,17 @@ impl RawSynthEngine for MyRetroEngine {
             }
 
             // Handle MIDI events at this exact frame
-            while
-                event_idx < midi_events.len() &&
-                (midi_events[event_idx].sample_offset as usize) == end_frame
+            while event_idx < midi_events.len()
+                && (midi_events[event_idx].sample_offset as usize) == end_frame
             {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
                         if velocity > 0 {
-                            base.active_voices.push(
-                                SynthVoice::new(key, velocity, self.oscillators.len())
-                            );
+                            let mut voice = SynthVoice::new(key, velocity, self.oscillators.len());
+                            for (i, osc) in self.oscillators.iter().enumerate() {
+                                voice.phase[i] = osc.phase_offset.get();
+                            }
+                            base.active_voices.push(voice);
                         } else {
                             for v in base.active_voices.iter_mut() {
                                 if v.note == key && v.is_active {
@@ -200,168 +198,100 @@ impl RawSynthEngine for MyRetroEngine {
     }
 
     fn set_custom_parameter(&mut self, id: u32, value: f32) {
-        match id {
-            10 => {
-                self.oscillators[0].waveform = Waveform::from(value);
-            }
-            11 => {
-                self.oscillators[0].detune = value;
-            }
-            12 => {
-                self.oscillators[0].mix = value;
-            }
-            13 => {
-                self.oscillators[0].pulse_width = value.clamp(0.01, 0.99);
-            }
+        if self.bitcrush_resolution.id == id {
+            self.bitcrush_resolution.set_base(value);
+            return;
+        }
 
-            20 => {
-                self.oscillators[1].waveform = Waveform::from(value);
+        // Route to the child oscillators
+        for osc in &mut self.oscillators {
+            if osc.waveform.id == id {
+                osc.waveform.set_base(value);
+                return;
             }
-            21 => {
-                self.oscillators[1].detune = value;
+            if osc.detune.id == id {
+                osc.detune.set_base(value);
+                return;
             }
-            22 => {
-                self.oscillators[1].mix = value;
+            if osc.phase_offset.id == id {
+                osc.phase_offset.set_base(value);
+                return;
             }
-            23 => {
-                self.oscillators[1].pulse_width = value.clamp(0.01, 0.99);
+            if osc.mix.id == id {
+                osc.mix.set_base(value);
+                return;
             }
-
-            30 => {
-                self.bitcrush_resolution = value.clamp(2.0, 256.0);
+            if osc.pulse_width.id == id {
+                osc.pulse_width.set_base(value);
+                return;
             }
-            _ => {}
         }
     }
 
     fn get_custom_parameter(&self, id: u32) -> Option<f32> {
-        match id {
-            10 => Some(self.oscillators[0].waveform as u32 as f32),
-            11 => Some(self.oscillators[0].detune),
-            12 => Some(self.oscillators[0].mix),
-            13 => Some(self.oscillators[0].pulse_width),
-
-            20 => Some(self.oscillators[1].waveform as u32 as f32),
-            21 => Some(self.oscillators[1].detune),
-            22 => Some(self.oscillators[1].mix),
-            23 => Some(self.oscillators[1].pulse_width),
-
-            30 => Some(self.bitcrush_resolution),
-            _ => None,
+        if self.bitcrush_resolution.id == id {
+            return Some(self.bitcrush_resolution.get_base().to_f32());
         }
+
+        for osc in &self.oscillators {
+            if osc.waveform.id == id {
+                return Some(osc.waveform.get_base().to_f32());
+            }
+            if osc.detune.id == id {
+                return Some(osc.detune.get_base().to_f32());
+            }
+            if osc.phase_offset.id == id {
+                return Some(osc.phase_offset.get_base().to_f32());
+            }
+            if osc.mix.id == id {
+                return Some(osc.mix.get_base().to_f32());
+            }
+            if osc.pulse_width.id == id {
+                return Some(osc.pulse_width.get_base().to_f32());
+            }
+        }
+        None
     }
 
     fn custom_default_parameters() -> HashMap<u32, f32> {
         let mut map = HashMap::new();
-        map.insert(10, 2.0); // Osc 1: Square
-        map.insert(11, 0.0);
-        map.insert(12, 1.0);
-        map.insert(13, 0.5);
+        let default_engine = Self::default();
 
-        map.insert(20, 3.0); // Osc 2: Triangle
-        map.insert(21, -12.0);
-        map.insert(22, 0.8);
-        map.insert(23, 0.5);
+        map.insert(
+            default_engine.bitcrush_resolution.id,
+            default_engine.bitcrush_resolution.get_base().to_f32(),
+        );
 
-        map.insert(30, 16.0); // Bitcrush
+        for osc in &default_engine.oscillators {
+            map.insert(osc.waveform.id, osc.waveform.get_base().to_f32());
+            map.insert(osc.detune.id, osc.detune.get_base().to_f32());
+            map.insert(osc.phase_offset.id, osc.phase_offset.get_base().to_f32());
+            map.insert(osc.mix.id, osc.mix.get_base().to_f32());
+            map.insert(osc.pulse_width.id, osc.pulse_width.get_base().to_f32());
+        }
         map
     }
 
     fn get_parameter_specs(&self) -> Vec<PluginParameter> {
-        let waveforms = vec![
-            "Sine".into(),
-            "Saw".into(),
-            "Square".into(),
-            "Triangle".into(),
-            "Noise".into()
-        ];
+        let mut specs = Vec::new();
 
-        vec![
-            PluginParameter::new_choice(
-                10,
-                "Waveform",
-                "Oscillator 1",
-                self.oscillators[0].waveform as u32,
-                waveforms.clone(),
-                2
-            ),
-            PluginParameter::new_float(
-                11,
-                "Detune",
-                "Oscillator 1",
-                self.oscillators[0].detune,
-                -24.0,
-                24.0,
-                0.0
-            ),
-            PluginParameter::new_float(
-                12,
-                "Mix",
-                "Oscillator 1",
-                self.oscillators[0].mix,
-                0.0,
-                1.0,
-                1.0
-            ),
-            PluginParameter::new_float(
-                13,
-                "Pulse Width",
-                "Oscillator 1",
-                self.oscillators[0].pulse_width,
-                0.01,
-                0.99,
-                0.5
-            ),
+        for osc in &self.oscillators {
+            specs.push(osc.waveform.to_spec());
+            specs.push(osc.detune.to_spec());
+            specs.push(osc.phase_offset.to_spec());
+            specs.push(osc.mix.to_spec());
+            specs.push(osc.pulse_width.to_spec());
+        }
 
-            PluginParameter::new_choice(
-                20,
-                "Waveform",
-                "Oscillator 2",
-                self.oscillators[1].waveform as u32,
-                waveforms,
-                3
-            ),
-            PluginParameter::new_float(
-                21,
-                "Detune",
-                "Oscillator 2",
-                self.oscillators[1].detune,
-                -24.0,
-                24.0,
-                -12.0
-            ),
-            PluginParameter::new_float(
-                22,
-                "Mix",
-                "Oscillator 2",
-                self.oscillators[1].mix,
-                0.0,
-                1.0,
-                0.8
-            ),
-            PluginParameter::new_float(
-                23,
-                "Pulse Width",
-                "Oscillator 2",
-                self.oscillators[1].pulse_width,
-                0.01,
-                0.99,
-                0.5
-            ),
-
-            PluginParameter::new_float(
-                30,
-                "Resolution",
-                "Bitcrush",
-                self.bitcrush_resolution,
-                2.0,
-                256.0,
-                16.0
-            )
-        ]
+        specs.push(self.bitcrush_resolution.to_spec());
+        specs
     }
 }
 
+/// A generator/synthesizer that produces a retro-sounding synth sound.
+/// it only has strictly two oscillator and only
+/// available as monophonic voice for each oscillator, making it
+/// a simple 8-bit retro sound
 pub type MyRetro = RawSynthWrapper<MyRetroEngine>;
 
 pub fn create_my_retro_synth(sample_rate: f32, channels: u16) -> MyRetro {

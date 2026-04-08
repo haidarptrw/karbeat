@@ -47,3 +47,11 @@ app.*.map.json
 # VSCode Workspace
 *.code-workspace
 .agents/
+
+# ENVs and Secrets
+.env
+.env.*
+!.env.example
+*.key
+credentials.json
+client_secret*.json

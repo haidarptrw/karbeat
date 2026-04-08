@@ -258,6 +258,11 @@ pub fn create_compressor(sample_rate: Option<f32>) -> RawEffectWrapper<KarbeatCo
 
 ## ⚠ Limitations and Important Note
 
-**Currently, there are only limited methods can be implemented in the trait.
+- **Currently, there are only limited methods can be implemented in the trait.
 As the project grows, more trait are added, and may cause breaking changes.
 As the current state of the development is still on the alpha phase, you will expect this very often**
+
+- Currently the Base Wrapper is still unstable and may cause a lot of bug. We recommended to build the DSP from scratch
+using provided building blocks inside the `karbeat-dsp` crate
+
+
