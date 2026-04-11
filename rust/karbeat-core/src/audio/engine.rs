@@ -8,6 +8,7 @@
 use dasp::slice;
 use rtrb::{ Consumer, Producer };
 use smallvec::SmallVec;
+use wide::f32x4;
 use std::{ collections::HashMap, sync::Arc };
 use triple_buffer::Output;
 
@@ -48,9 +49,9 @@ use crate::{
         mixer::{ BusId, MixerChannel, RoutingNode },
         plugin::{ MidiEvent, MidiMessage },
     },
-    utils::get_waveform_buffer,
+    utils::{ apply_simd_mix, apply_simd_mix_gain, get_waveform_buffer },
 };
-use karbeat_utils::audio::db_to_linear;
+use karbeat_utils::{ audio::db_to_linear, math::hermite_interp };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PlaybackMode {
@@ -1226,23 +1227,17 @@ impl AudioEngine {
 
             if track_routes.is_empty() {
                 // No explicit routing: go directly to master (backward compatibility)
-                for i in 0..buf_len {
-                    output[i] += self.mix_buffer[i];
-                }
+                apply_simd_mix(output, &self.mix_buffer);
             } else {
                 // Route to each destination with appropriate send level
                 for conn in track_routes {
                     match conn.destination {
                         RoutingNode::Master => {
-                            for i in 0..buf_len {
-                                output[i] += self.mix_buffer[i] * conn.send_level;
-                            }
+                            apply_simd_mix_gain(output, &self.mix_buffer, conn.send_level);
                         }
                         RoutingNode::Bus(bus_id) => {
                             if let Some(bus_buf) = self.bus_buffers.get_mut(&bus_id) {
-                                for i in 0..buf_len {
-                                    bus_buf[i] += self.mix_buffer[i] * conn.send_level;
-                                }
+                                apply_simd_mix_gain(bus_buf, &self.mix_buffer, conn.send_level);
                             }
                         }
                         RoutingNode::Track(_) => {
@@ -1348,21 +1343,33 @@ impl AudioEngine {
                     (volume, volume)
                 };
 
-                // Use dasp Frame abstraction for clean channel math
                 if channels == 2 {
-                    if
-                        let Some(frames) = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(
-                            &mut self.mix_buffer
-                        )
-                    {
-                        for frame in frames {
-                            frame[0] *= left_gain;
-                            frame[1] *= right_gain;
-                        }
+                    let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
+                    let mut iter = self.mix_buffer.chunks_exact_mut(4);
+
+                    for chunk in iter.by_ref() {
+                        let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                        v *= gain_v;
+                        chunk.copy_from_slice(&v.to_array());
+                    }
+
+                    // Remainder will be 0 or 2 floats (1 stereo frame)
+                    for chunk in iter.into_remainder().chunks_exact_mut(2) {
+                        chunk[0] *= left_gain;
+                        chunk[1] *= right_gain;
                     }
                 } else {
-                    for sample in self.mix_buffer.iter_mut() {
-                        *sample *= left_gain;
+                    let gain_v = f32x4::splat(left_gain);
+                    let mut iter = self.mix_buffer.chunks_exact_mut(4);
+
+                    for chunk in iter.by_ref() {
+                        let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                        v *= gain_v;
+                        chunk.copy_from_slice(&v.to_array());
+                    }
+
+                    for s in iter.into_remainder() {
+                        *s *= left_gain;
                     }
                 }
 
@@ -1375,15 +1382,11 @@ impl AudioEngine {
                 for conn in bus_routes {
                     match conn.destination {
                         RoutingNode::Master => {
-                            for i in 0..buf_len {
-                                output[i] += self.mix_buffer[i] * conn.send_level;
-                            }
+                            apply_simd_mix_gain(output, &self.mix_buffer, conn.send_level);
                         }
                         RoutingNode::Bus(dest_bus_id) => {
                             if let Some(dest_buf) = self.bus_buffers.get_mut(&dest_bus_id) {
-                                for i in 0..buf_len {
-                                    dest_buf[i] += self.mix_buffer[i] * conn.send_level;
-                                }
+                                apply_simd_mix_gain(dest_buf, &self.mix_buffer, conn.send_level);
                             }
                         }
                         RoutingNode::Track(_) => {}
@@ -1432,79 +1435,139 @@ impl AudioEngine {
             let loop_len = trim_end - voice.start_boundary;
             let is_looping = voice.waveform.is_looping && loop_len > 0.0;
 
+            // Pre-calculate exact frame count to avoid branching in the loop
+            let mut frames_to_process = buffer_frames.saturating_sub(voice.output_offset_samples);
+            if !is_looping {
+                let max_steps = (trim_end - 1.0 - voice.source_read_index) / step;
+                if max_steps < 0.0 {
+                    frames_to_process = 0; // Already past the end
+                } else {
+                    frames_to_process = frames_to_process.min((max_steps.floor() as usize) + 1);
+                }
+            }
+
+            if frames_to_process == 0 {
+                continue;
+            }
+
+            did_render = true;
+
+            // Slice exactly the part of the buffer we are writing to
+            let start_idx = voice.output_offset_samples * channels;
+            let end_idx = start_idx + frames_to_process * channels;
+            let target_slice = &mut output[start_idx..end_idx];
+
+            let mut frames_written = 0;
+
             if channels == 2 {
-                if
-                    let Some(out_frames) = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(
-                        output
-                    )
-                {
-                    for frame_idx in voice.output_offset_samples..buffer_frames {
-                        let frames_written = (frame_idx - voice.output_offset_samples) as u32;
-                        let current_elapsed = voice.clip_elapsed_samples + frames_written;
-                        let mut read_pos = voice.source_read_index + (frames_written as f64) * step;
+                // ==== SIMD STEREO (2 frames per loop) ====
+                let mut iter = target_slice.chunks_exact_mut(4);
 
-                        if is_looping {
-                            if read_pos >= trim_end {
-                                let remainder = read_pos - trim_end;
-                                read_pos = voice.start_boundary + (remainder % loop_len);
-                            }
-                        } else if read_pos >= trim_end - 1.0 {
-                            break;
-                        }
+                for chunk in iter.by_ref() {
+                    // Frame 0
+                    let elapsed0 = voice.clip_elapsed_samples + frames_written;
+                    let rp0 = get_read_pos(
+                        voice.source_read_index,
+                        (frames_written as f64) * step,
+                        is_looping,
+                        trim_end,
+                        voice.start_boundary,
+                        loop_len
+                    );
+                    let s0 = sample_waveform_dasp(&voice.waveform, rp0, src_channels);
+                    let fade0 = calc_fade(elapsed0, fade_samples, voice.clip_loop_length);
 
-                        // Calculate the De-click fade multiplier
-                        let mut fade_multiplier = 1.0;
-                        if current_elapsed < fade_samples {
-                            // Fade IN at the very beginning
-                            fade_multiplier = (current_elapsed as f32) / (fade_samples as f32);
-                        } else if current_elapsed + fade_samples > voice.clip_loop_length {
-                            // Fade OUT at the very end
-                            let remaining = voice.clip_loop_length.saturating_sub(current_elapsed);
-                            fade_multiplier = (remaining as f32) / (fade_samples as f32);
-                        }
+                    // Frame 1
+                    let elapsed1 = voice.clip_elapsed_samples + frames_written + 1;
+                    let rp1 = get_read_pos(
+                        voice.source_read_index,
+                        ((frames_written + 1) as f64) * step,
+                        is_looping,
+                        trim_end,
+                        voice.start_boundary,
+                        loop_len
+                    );
+                    let s1 = sample_waveform_dasp(&voice.waveform, rp1, src_channels);
+                    let fade1 = calc_fade(elapsed1, fade_samples, voice.clip_loop_length);
 
-                        let sample_frame = sample_waveform_dasp(
-                            &voice.waveform,
-                            read_pos,
-                            src_channels
-                        );
-                        out_frames[frame_idx][0] += sample_frame[0] * fade_multiplier;
-                        out_frames[frame_idx][1] += sample_frame[1] * fade_multiplier;
-                    }
+                    // SIMD Vector packing
+                    let samples = f32x4::new([s0[0], s0[1], s1[0], s1[1]]);
+                    let fades = f32x4::new([fade0, fade0, fade1, fade1]);
+
+                    // SIMD Fused Multiply-Add
+                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    out_v += samples * fades;
+                    chunk.copy_from_slice(&out_v.to_array());
+
+                    frames_written += 2;
+                }
+
+                // Remainder (0 or 2 floats = 1 stereo frame)
+                for chunk in iter.into_remainder().chunks_exact_mut(2) {
+                    let elapsed0 = voice.clip_elapsed_samples + frames_written;
+                    let rp0 = get_read_pos(
+                        voice.source_read_index,
+                        (frames_written as f64) * step,
+                        is_looping,
+                        trim_end,
+                        voice.start_boundary,
+                        loop_len
+                    );
+                    let s0 = sample_waveform_dasp(&voice.waveform, rp0, src_channels);
+                    let fade0 = calc_fade(elapsed0, fade_samples, voice.clip_loop_length);
+
+                    chunk[0] += s0[0] * fade0;
+                    chunk[1] += s0[1] * fade0;
+                    frames_written += 1;
                 }
             } else {
-                // Fallback for non-stereo output
-                for frame_idx in voice.output_offset_samples..buffer_frames {
-                    let frames_written = (frame_idx - voice.output_offset_samples) as u32;
-                    let current_elapsed = voice.clip_elapsed_samples + frames_written;
-                    let mut read_pos = voice.source_read_index + (frames_written as f64) * step;
+                // ==== SIMD MONO (4 frames per loop) ====
+                let mut iter = target_slice.chunks_exact_mut(4);
 
-                    if is_looping {
-                        if read_pos >= trim_end {
-                            let remainder = read_pos - trim_end;
-                            read_pos = voice.start_boundary + (remainder % loop_len);
-                        }
-                    } else if read_pos >= trim_end - 1.0 {
-                        break;
+                for chunk in iter.by_ref() {
+                    let mut s = [0.0; 4];
+                    let mut f = [0.0; 4];
+
+                    for i in 0..4 {
+                        let elapsed = voice.clip_elapsed_samples + frames_written + i;
+                        let rp = get_read_pos(
+                            voice.source_read_index,
+                            ((frames_written + i) as f64) * step,
+                            is_looping,
+                            trim_end,
+                            voice.start_boundary,
+                            loop_len
+                        );
+                        s[i as usize] = sample_waveform_dasp(&voice.waveform, rp, src_channels)[0];
+                        f[i as usize] = calc_fade(elapsed, fade_samples, voice.clip_loop_length);
                     }
 
-                    // Calculate the De-click fade multiplier
-                    let mut fade_multiplier = 1.0;
-                    if current_elapsed < fade_samples {
-                        // Fade IN at the very beginning
-                        fade_multiplier = (current_elapsed as f32) / (fade_samples as f32);
-                    } else if current_elapsed + fade_samples > voice.clip_loop_length {
-                        // Fade OUT at the very end
-                        let remaining = voice.clip_loop_length.saturating_sub(current_elapsed);
-                        fade_multiplier = (remaining as f32) / (fade_samples as f32);
-                    }
+                    let samples = f32x4::new(s);
+                    let fades = f32x4::new(f);
 
-                    let sample_frame = sample_waveform_dasp(
-                        &voice.waveform,
-                        read_pos,
-                        src_channels
+                    let mut out_v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    out_v += samples * fades;
+                    chunk.copy_from_slice(&out_v.to_array());
+
+                    frames_written += 4;
+                }
+
+                // Remainder (1 to 3 frames)
+                for chunk in iter.into_remainder().iter_mut() {
+                    let elapsed = voice.clip_elapsed_samples + frames_written;
+                    let rp = get_read_pos(
+                        voice.source_read_index,
+                        (frames_written as f64) * step,
+                        is_looping,
+                        trim_end,
+                        voice.start_boundary,
+                        loop_len
                     );
-                    output[frame_idx * channels] += sample_frame[0] * fade_multiplier;
+                    let s0 = sample_waveform_dasp(&voice.waveform, rp, src_channels);
+                    let fade0 = calc_fade(elapsed, fade_samples, voice.clip_loop_length);
+
+                    *chunk += s0[0] * fade0;
+                    frames_written += 1;
                 }
             }
         }
@@ -1549,9 +1612,18 @@ impl AudioEngine {
             }
         }
 
-        // Invert Phase
+        // ==== SIMD Phase Inversion ====
         if mixer_channel.inverted_phase {
-            for sample in buffer.iter_mut() {
+            let neg_one = f32x4::splat(-1.0);
+            let mut iter = buffer.chunks_exact_mut(4);
+
+            for chunk in iter.by_ref() {
+                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                v *= neg_one;
+                chunk.copy_from_slice(&v.to_array());
+            }
+
+            for sample in iter.into_remainder() {
                 *sample = -*sample;
             }
         }
@@ -1576,14 +1648,31 @@ impl AudioEngine {
 
         // Apply gain
         if channels == 2 {
-            if let Some(frames) = slice::to_frame_slice_mut::<&mut [f32], [f32; 2]>(buffer) {
-                for frame in frames {
-                    frame[0] *= left_gain;
-                    frame[1] *= right_gain;
-                }
+            let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
+            let mut iter = buffer.chunks_exact_mut(4);
+
+            for chunk in iter.by_ref() {
+                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                v *= gain_v;
+                chunk.copy_from_slice(&v.to_array());
+            }
+
+            // Handle remainder (0 or 2 floats for stereo)
+            for chunk in iter.into_remainder().chunks_exact_mut(2) {
+                chunk[0] *= left_gain;
+                chunk[1] *= right_gain;
             }
         } else {
-            for sample in buffer.iter_mut() {
+            let gain_v = f32x4::splat(left_gain);
+            let mut iter = buffer.chunks_exact_mut(4);
+
+            for chunk in iter.by_ref() {
+                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                v *= gain_v;
+                chunk.copy_from_slice(&v.to_array());
+            }
+
+            for sample in iter.into_remainder() {
                 *sample *= left_gain;
             }
         }
@@ -1624,9 +1713,18 @@ impl AudioEngine {
             }
         }
 
-        // Invert Phase
+        // ==== SIMD Phase Inversion ====
         if master_bus.inverted_phase {
-            for sample in buffer.iter_mut() {
+            let neg_one = f32x4::splat(-1.0);
+            let mut iter = buffer.chunks_exact_mut(4);
+
+            for chunk in iter.by_ref() {
+                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                v *= neg_one;
+                chunk.copy_from_slice(&v.to_array());
+            }
+
+            for sample in iter.into_remainder() {
                 *sample = -*sample;
             }
         }
@@ -1646,16 +1744,33 @@ impl AudioEngine {
             (volume, volume)
         };
 
-        // Apply gain
+        // ==== SIMD Apply Gain and Pan ====
         if channels == 2 {
-            if let Some(frames) = slice::to_frame_slice_mut::<&mut [f32], [f32; 2]>(buffer) {
-                for frame in frames {
-                    frame[0] *= left_gain;
-                    frame[1] *= right_gain;
-                }
+            let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
+            let mut iter = buffer.chunks_exact_mut(4);
+
+            for chunk in iter.by_ref() {
+                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                v *= gain_v;
+                chunk.copy_from_slice(&v.to_array());
+            }
+
+            // Handle remainder (0 or 2 floats for stereo)
+            for chunk in iter.into_remainder().chunks_exact_mut(2) {
+                chunk[0] *= left_gain;
+                chunk[1] *= right_gain;
             }
         } else {
-            for sample in buffer.iter_mut() {
+            let gain_v = f32x4::splat(left_gain);
+            let mut iter = buffer.chunks_exact_mut(4);
+
+            for chunk in iter.by_ref() {
+                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                v *= gain_v;
+                chunk.copy_from_slice(&v.to_array());
+            }
+
+            for sample in iter.into_remainder() {
                 *sample *= left_gain;
             }
         }
@@ -2170,7 +2285,7 @@ impl AudioEngine {
 
 /// Sample a waveform at a specific position using dasp interpolation.
 /// Handles fallback from 1-channel to 2-channel stereo.
-#[inline(always)]
+#[inline]
 fn sample_waveform_dasp(waveform: &AudioWaveform, pos: f64, src_channels: usize) -> [f32; 2] {
     let idx = pos as usize;
     let alpha = (pos - (idx as f64)) as f32;
@@ -2181,24 +2296,67 @@ fn sample_waveform_dasp(waveform: &AudioWaveform, pos: f64, src_channels: usize)
 
     if src_channels == 2 {
         let frames: &[[f32; 2]] = slice::from_sample_slice(buffer).unwrap_or(&[]);
-        if idx >= frames.len() {
+        let len = frames.len();
+
+        if idx >= len {
             return [0.0, 0.0];
         }
 
-        let curr = frames[idx];
-        let next = if idx + 1 < frames.len() { frames[idx + 1] } else { curr };
+        let p0 = if idx > 0 { frames[idx - 1] } else { frames[idx] };
+        let p1 = frames[idx];
+        let p2 = if idx + 1 < len { frames[idx + 1] } else { p1 };
+        let p3 = if idx + 2 < len { frames[idx + 2] } else { p2 };
 
-        [curr[0] + (next[0] - curr[0]) * alpha, curr[1] + (next[1] - curr[1]) * alpha]
+        [
+            hermite_interp(alpha, p0[0], p1[0], p2[0], p3[0]),
+            hermite_interp(alpha, p0[1], p1[1], p2[1], p3[1]),
+        ]
     } else {
         let frames: &[[f32; 1]] = slice::from_sample_slice(buffer).unwrap_or(&[]);
-        if idx >= frames.len() {
+        let len = frames.len();
+
+        if idx >= len {
             return [0.0, 0.0];
         }
 
-        let curr = frames[idx];
-        let next = if idx + 1 < frames.len() { frames[idx + 1] } else { curr };
+        let p0 = if idx > 0 { frames[idx - 1] } else { frames[idx] };
+        let p1 = frames[idx];
+        let p2 = if idx + 1 < len { frames[idx + 1] } else { p1 };
+        let p3 = if idx + 2 < len { frames[idx + 2] } else { p2 };
 
-        let val = curr[0] + (next[0] - curr[0]) * alpha;
+        let val = hermite_interp(alpha, p0[0], p1[0], p2[0], p3[0]);
         [val, val]
+    }
+}
+
+#[inline(always)]
+fn calc_fade(current_elapsed: u32, fade_samples: u32, loop_length: u32) -> f32 {
+    if fade_samples == 0 {
+        return 1.0;
+    }
+    if current_elapsed < fade_samples {
+        (current_elapsed as f32) / (fade_samples as f32)
+    } else if current_elapsed + fade_samples > loop_length {
+        let remaining = loop_length.saturating_sub(current_elapsed);
+        (remaining as f32) / (fade_samples as f32)
+    } else {
+        1.0
+    }
+}
+
+#[inline(always)]
+fn get_read_pos(
+    base_idx: f64,
+    offset: f64,
+    is_looping: bool,
+    trim_end: f64,
+    start_bound: f64,
+    loop_len: f64
+) -> f64 {
+    let rp = base_idx + offset;
+    if is_looping && rp >= trim_end {
+        start_bound + ((rp - trim_end) % loop_len)
+    } else {
+        rp
     }
 }

@@ -23,6 +23,7 @@
 //! osc.output_wave(&mut out_buffer, 44100, 2, 440.0, &mut phase);
 //! ```
 
+pub mod interpolation;
 pub mod envelope;
 pub mod oscillator;
 pub mod bit_crush;

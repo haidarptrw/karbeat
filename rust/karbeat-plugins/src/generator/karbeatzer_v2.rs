@@ -1,4 +1,4 @@
-// src/plugin/generator/karbeatzer_v2.rs
+//! src/plugin/generator/karbeatzer_v2.rs
 
 use std::{collections::HashMap, f32::consts::PI};
 
