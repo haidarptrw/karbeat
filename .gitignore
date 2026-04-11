@@ -55,3 +55,6 @@ app.*.map.json
 *.key
 credentials.json
 client_secret*.json
+
+.rustup/
+.cargo/

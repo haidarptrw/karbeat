@@ -1,12 +1,10 @@
 use std::time::Duration;
 
-use karbeat_core::context::utils::send_audio_command;
-use karbeat_core::core::file_manager::audio_loader::AudioLoader;
-use karbeat_core::core::project::{AudioSourceId, TrackId};
-use karbeat_core::{ audio::event::TransportFeedback, commands::AudioCommand, context::ctx };
+use karbeat_core::api::audio_api;
+use karbeat_core:: audio::event::TransportFeedback ;
+use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
 use crate::api::project::{ AudioWaveformUiForAudioProperties, UiAudioHardwareConfig };
 use crate::frb_generated::StreamSink;
-use karbeat_core::lock::get_app_read;
 
 #[derive(Clone, Copy, Debug)]
 pub struct UiTransportFeedback {
@@ -47,49 +45,44 @@ impl From<TransportFeedback> for UiTransportFeedback {
 
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
-    let app = get_app_read();
-    let waveform = app.get_audio_source(&AudioSourceId::from(id))?;
-
-    //TODO:Add dyanamic downsampling to send this to the frontend side for smaller memory footprint
-    // downsample(waveform.buffer)
-
-    Some(AudioWaveformUiForAudioProperties::from(waveform.as_ref()))
+    audio_api::get_audio_source(AudioSourceId::from(id), |waveform| {
+        //TODO: Add dynamic downsampling to send this to the frontend side for smaller memory footprint
+        // downsample(waveform.buffer)
+        AudioWaveformUiForAudioProperties::from(waveform)
+    })
 }
 
 /// ACTION: Play the sound via the Engine
 pub fn play_source_preview(id: u32) {
-    let app = get_app_read();
-
-    if let Some(waveform_arc) = app.get_audio_source(&AudioSourceId::from(id)) {
-        let waveform_to_play = (*waveform_arc).clone();
-
-        send_audio_command(AudioCommand::PlayOneShot(waveform_to_play));
+    if let Err(e) = audio_api::play_source_preview(AudioSourceId::from(id)) {
+        log::warn!("Preview failed: {}", e);
+    } else {
         log::info!("Preview command sent for ID: {}", id);
     }
 }
 
 pub fn stop_all_previews() {
-    send_audio_command(AudioCommand::StopAllPreviews);
+    audio_api::stop_all_previews();
     println!("Stop all preview sounds");
 }
 
 pub fn get_audio_config() -> Result<UiAudioHardwareConfig, String> {
-    let app_state = get_app_read();
-    Ok(UiAudioHardwareConfig::from(app_state.audio_config.clone()))
+    Ok(audio_api::get_audio_config(|config| {
+        UiAudioHardwareConfig::from(config)
+    }))
 }
 
 pub fn create_position_stream(sink: StreamSink<UiTransportFeedback>) -> Result<(), String> {
     // Spawn a thread to poll the ring buffer
-    std::thread::spawn(move || {
+   std::thread::spawn(move || {
         loop {
-            // Get access to the consumer
-            if let Some(consumer) = ctx().position_consumer.lock().as_mut() {
-                //Read everything currently in the buffer
-                while let Ok(pos_data) = consumer.pop() {
-                    if sink.add(UiTransportFeedback::from(pos_data)).is_err() {
-                        println!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
-                        return;
-                    }
+            // Drain all pending events from the Core
+            let feedbacks = audio_api::drain_position_feedback(|pos| UiTransportFeedback::from(pos));
+            
+            for fb in feedbacks {
+                if sink.add(fb).is_err() {
+                    println!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
+                    return;
                 }
             }
 
@@ -108,36 +101,21 @@ pub fn play_preview_note(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    // validate input
     if note_key < 0 || note_key > 127 {
         return Err("Note key must be between 0 and 127".to_string());
     }
 
-    if velocity < 0 || velocity > 100 {
-        return Err("Note velocity must be between 0 and 100".to_string());
+    if velocity < 0 || velocity > 127 {
+        return Err("Note velocity must be between 0 and 127".to_string());
     }
 
-    let note_key: u8 = note_key as u8;
-
-    let velocity: u8 = velocity as u8;
-
-    let generator_id = {
-        let app = get_app_read();
-        let track = app.tracks.get(&TrackId::from(track_id)).ok_or("Can't find requested track")?;
-        track.generator.as_ref().ok_or("Track has no generator")?.id
-    };
-
-    if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        let _ = sender.push(AudioCommand::PlayPreviewNote {
-            note_key: note_key,
-            generator_id: generator_id.into(),
-            velocity,
-            is_note_on: is_on,
-        });
-    }
-
-    Ok(())
+    audio_api::play_preview_note(
+        TrackId::from(track_id),
+        note_key as u8,
+        velocity as u8,
+        is_on,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// Play preview sound directly on a generator (without requiring a track).
@@ -148,8 +126,6 @@ pub fn play_preview_note_generator(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    // validate input
     if note_key < 0 || note_key > 127 {
         return Err("Note key must be between 0 and 127".to_string());
     }
@@ -158,19 +134,15 @@ pub fn play_preview_note_generator(
         return Err("Note velocity must be between 0 and 127".to_string());
     }
 
-    let note_key: u8 = note_key as u8;
-    let velocity: u8 = velocity as u8;
-
-    log::info!("Playing note {}", note_key);
-
-    if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        let _ = sender.push(AudioCommand::PlayPreviewNote {
-            note_key,
-            generator_id: generator_id.into(),
-            velocity,
-            is_note_on: is_on,
-        });
+    if is_on {
+        log::info!("Playing note {}", note_key);
     }
 
-    Ok(())
+    audio_api::play_preview_note_generator(
+        GeneratorId::from(generator_id),
+        note_key as u8,
+        velocity as u8,
+        is_on,
+    )
+    .map_err(|e| e.to_string())
 }

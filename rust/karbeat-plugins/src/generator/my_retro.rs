@@ -286,6 +286,14 @@ impl RawSynthEngine for MyRetroEngine {
         specs.push(self.bitcrush_resolution.to_spec());
         specs
     }
+    
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        todo!()
+    }
+    
+    fn clear_automation(&mut self, id: u32) {
+        todo!()
+    }
 }
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.

@@ -275,6 +275,14 @@ impl RawSynthEngine for KarbeatzerEngine {
         
         specs
     }
+    
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        todo!()
+    }
+    
+    fn clear_automation(&mut self, id: u32) {
+        todo!()
+    }
 }
 
 // ============================================================================
@@ -283,8 +291,3 @@ impl RawSynthEngine for KarbeatzerEngine {
 
 /// The full Karbeatzer V2 synth (Subtractive Synthesizer).
 pub type KarbeatzerV2 = RawSynthWrapper<KarbeatzerEngine>;
-
-/// Helper to create a new Karbeatzer instance
-pub fn create_karbeatzer(sample_rate: Option<f32>, channels: usize) -> KarbeatzerV2 {
-    RawSynthWrapper::new(KarbeatzerEngine::default(), sample_rate.unwrap_or(48000.0), channels)
-}

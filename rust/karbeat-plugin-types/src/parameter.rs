@@ -93,7 +93,6 @@ pub trait ParamType: Copy + Clone + Debug {
     fn to_f32(self) -> f32;
 }
 
-// --- Float Implementation ---
 impl ParamType for f32 {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
@@ -104,7 +103,6 @@ impl ParamType for f32 {
     fn to_f32(self) -> f32 { self }
 }
 
-// --- Integer Implementation ---
 impl ParamType for i32 {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
@@ -115,7 +113,6 @@ impl ParamType for i32 {
     fn to_f32(self) -> f32 { self as f32 }
 }
 
-// --- Boolean Implementation ---
 impl ParamType for bool {
     fn from_f32_clamped(val: f32, _bounds: &ParamBounds<Self>) -> Self {
         val >= 0.5
@@ -123,7 +120,7 @@ impl ParamType for bool {
     fn to_f32(self) -> f32 { if self { 1.0 } else { 0.0 } }
 }
 
-// --- Enum/Choice Implementation (using usize) ---
+// Enum/Choice Implementation (using usize)
 impl ParamType for usize {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
@@ -204,7 +201,7 @@ impl<T: ParamType> Param<T> {
         self.base_value = clamped;
         
         // If no automation is currently overriding it, update current_value immediately.
-        // (In a full system, you might have a flag `is_automated` to check here).
+        // TODO: Add `is_automated` flag
         self.current_value = clamped; 
     }
 

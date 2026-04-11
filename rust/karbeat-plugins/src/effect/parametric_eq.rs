@@ -279,6 +279,12 @@ pub struct KarbeatParametricEQEngine {
     channels: usize,
 }
 
+impl Default for KarbeatParametricEQEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KarbeatParametricEQEngine {
     pub fn new() -> Self {
         // Initialize 8 default bands
@@ -604,21 +610,14 @@ impl RawEffectEngine for KarbeatParametricEQEngine {
             _ => None,
         }
     }
+    
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        todo!()
+    }
+    
+    fn clear_automation(&mut self, id: u32) {
+        todo!()
+    }
 }
 
 pub type KarbeatParametricEQ = RawEffectWrapper<KarbeatParametricEQEngine>;
-
-pub fn create_parametric_eq(
-    sample_rate: Option<f32>,
-    channels: usize,
-) -> RawEffectWrapper<KarbeatParametricEQEngine> {
-    let mut engine = KarbeatParametricEQEngine::new();
-    // Default config initialization if sample rate and channels are passed
-    if let Some(sr) = sample_rate {
-        engine.last_sample_rate = sr;
-    }
-    engine.channels = channels;
-    engine.update_all_nodes();
-
-    RawEffectWrapper::new(engine, sample_rate.unwrap_or(48000.0), channels)
-}

@@ -452,6 +452,28 @@ impl StandardSynthBase {
         ]
     }
 
+    pub fn apply_automation(&mut self, id: u32, value: f32) {
+        match id {
+            0 => self.gain = value.clamp(0.0, 1.0),
+            1 => self.filter.cutoff = value.clamp(20.0, 20000.0),
+            2 => self.filter.resonance = value.clamp(0.0, 0.95),
+            3 => self.filter.mode = SimpleFilterMode::from(value),
+            4 => self.amp_envelope.attack = value.clamp(0.001, 5.0),
+            5 => self.amp_envelope.decay = value.clamp(0.001, 5.0),
+            6 => self.amp_envelope.sustain = value.clamp(0.0, 1.0),
+            7 => self.amp_envelope.release = value.clamp(0.001, 10.0),
+            _ => {},
+        }
+    }
+
+    pub fn clear_automation(&mut self, id: u32) {
+        // For base parameters, clearing automation means snapping back to the default value.
+        // We can reuse the logic from default_parameters().
+        if let Some(&default_val) = Self::default_parameters().get(&id) {
+            self.set_parameter(id, default_val);
+        }
+    }
+
     /// Base parameter IDs reserved by SynthBase (0-7)
     pub const BASE_PARAM_COUNT: u32 = 8;
 }

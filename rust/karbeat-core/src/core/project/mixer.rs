@@ -428,9 +428,9 @@ impl MixerState {
     }
 
     /// Remove a bus and all routing connections to/from it
-    pub fn remove_bus(&mut self, bus_id: BusId) -> Result<(), String> {
+    pub fn remove_bus(&mut self, bus_id: BusId) -> anyhow::Result<()> {
         if !self.buses.contains_key(&bus_id) {
-            return Err(format!("Bus {:?} not found", bus_id));
+            return Err(anyhow::anyhow!("Bus {:?} not found", bus_id));
         }
 
         // Remove the bus
@@ -457,10 +457,10 @@ impl MixerState {
         &mut self,
         bus_id: &BusId,
         params: &[MixerChannelParams]
-    ) -> Result<Arc<MixerBus>, String> {
+    ) -> anyhow::Result<Arc<MixerBus>> {
         let bus_arc = self.buses
             .get_mut(bus_id)
-            .ok_or_else(|| format!("Bus {:?} not found", bus_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
         let bus = Arc::make_mut(bus_arc);
         for param in params.iter() {
@@ -486,10 +486,10 @@ impl MixerState {
         Ok(bus_arc.clone())
     }
 
-    pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> Result<(), String> {
+    pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
         let bus_arc = self.buses
             .get_mut(&bus_id)
-            .ok_or_else(|| format!("Bus {:?} not found", bus_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
         let bus = Arc::make_mut(bus_arc);
         let old_name = bus.name.clone();
@@ -548,15 +548,15 @@ impl MixerState {
     // =========================================================================
 
     /// Add a routing connection. Returns error if it would create a cycle.
-    pub fn add_routing(&mut self, connection: RoutingConnection) -> Result<(), String> {
+    pub fn add_routing(&mut self, connection: RoutingConnection) -> anyhow::Result<()> {
         // Validate: source cannot be Master
         if connection.source == RoutingNode::Master {
-            return Err("Master cannot be a routing source".to_string());
+            return Err(anyhow::anyhow!("Master cannot be a routing source"));
         }
 
         // Validate: destination cannot be a Track
         if matches!(connection.destination, RoutingNode::Track(_)) {
-            return Err("Tracks cannot be routing destinations".to_string());
+            return Err(anyhow::anyhow!("Tracks cannot be routing destinations"));
         }
 
         // Check for duplicate
@@ -568,14 +568,14 @@ impl MixerState {
                     c.is_send == connection.is_send
             });
         if exists {
-            return Err("Routing connection already exists".to_string());
+            return Err(anyhow::anyhow!("Routing connection already exists"));
         }
 
         // Temporarily add and check for cycles
         self.routing.push(connection.clone());
         if self.has_routing_cycle() {
             self.routing.pop();
-            return Err("Routing would create a cycle".to_string());
+            return Err(anyhow::anyhow!("Routing would create a cycle"));
         }
 
         // Sync routing to audio thread
@@ -592,14 +592,14 @@ impl MixerState {
         source: RoutingNode,
         destination: RoutingNode,
         is_send: bool
-    ) -> Result<(), String> {
+    ) -> anyhow::Result<()> {
         let original_len = self.routing.len();
         self.routing.retain(|c| {
             !(c.source == source && c.destination == destination && c.is_send == is_send)
         });
 
         if self.routing.len() == original_len {
-            return Err("Routing connection not found".to_string());
+            return Err(anyhow::anyhow!("Routing connection not found"));
         }
 
         // Sync routing to audio thread

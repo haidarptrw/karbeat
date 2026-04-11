@@ -77,7 +77,7 @@ impl From<ApplicationState> for UiApplicationState {
         Self {
             metadata: UiProjectMetadata::from(value.metadata),
             transport: UiTransportState::from(value.transport),
-            hardware_config: UiAudioHardwareConfig::from(value.audio_config),
+            hardware_config: UiAudioHardwareConfig::from(&value.audio_config),
             tracks,
             generators,
             patterns,
@@ -155,11 +155,11 @@ pub struct UiAudioHardwareConfig {
     pub cpu_load: f32,
 }
 
-impl From<AudioHardwareConfig> for UiAudioHardwareConfig {
-    fn from(c: AudioHardwareConfig) -> Self {
+impl From<&AudioHardwareConfig> for UiAudioHardwareConfig {
+    fn from(c: &AudioHardwareConfig) -> Self {
         Self {
-            selected_input_device: c.selected_input_device,
-            selected_output_device: c.selected_output_device,
+            selected_input_device: c.selected_input_device.clone(),
+            selected_output_device: c.selected_output_device.clone(),
             sample_rate: c.sample_rate,
             buffer_size: c.buffer_size,
             cpu_load: c.cpu_load,
@@ -231,7 +231,7 @@ pub fn project_metadata_new() -> UiProjectMetadata {
 
 #[frb(sync)]
 pub fn audio_hardware_config_new() -> UiAudioHardwareConfig {
-    UiAudioHardwareConfig::from(AudioHardwareConfig::default())
+    UiAudioHardwareConfig::from(&AudioHardwareConfig::default())
 }
 
 #[frb(sync)]

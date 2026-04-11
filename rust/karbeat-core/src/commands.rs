@@ -19,7 +19,7 @@ pub enum AudioCommand {
     SetPlayhead(u32),
     PlayPreviewNote {
         note_key: u8,
-        generator_id: u32,
+        generator_id: GeneratorId,
         velocity: u8,
         is_note_on: bool,
     },

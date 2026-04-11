@@ -541,7 +541,7 @@ impl AudioEngine {
                 // e.g Note placing on piano roll, hold press from a keyboard,
                 // or a press at the piano tile on the left of piano roll screen
                 // it also requires the logic to handle input based on the ADSR of the voice generator
-                self.trigger_live_note(generator_id.into(), note_key, velocity, is_note_on);
+                self.trigger_live_note(generator_id, note_key, velocity, is_note_on);
             }
             AudioCommand::SetBPM(bpm) => {
                 self.bpm = bpm;

@@ -30,6 +30,13 @@ pub trait KarbeatEffect: Send + Sync {
     /// Get a parameter value
     fn get_parameter(&self, id: u32) -> f32;
 
+    /// Apply an automated value from the sequencer.
+    /// Modifies the DSP's current value WITHOUT overwriting the user's base value.
+    fn apply_automation(&mut self, id: u32, value: f32);
+
+    /// Clear active automation for a specific parameter, snapping it back to its base value.
+    fn clear_automation(&mut self, id: u32);
+
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> IndexMap<u32, f32>;
 
@@ -64,6 +71,13 @@ pub trait KarbeatGenerator: Send + Sync {
 
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
+
+    /// Apply an automated value from the sequencer.
+    /// Modifies the DSP's current value WITHOUT overwriting the user's base value.
+    fn apply_automation(&mut self, id: u32, value: f32);
+
+    /// Clear active automation for a specific parameter, snapping it back to its base value.
+    fn clear_automation(&mut self, id: u32);
 
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> IndexMap<u32, f32>;
@@ -127,6 +141,20 @@ impl KarbeatPlugin {
         match self {
             KarbeatPlugin::Effect(e) => e.set_parameter(id, value),
             KarbeatPlugin::Generator(g) => g.set_parameter(id, value),
+        }
+    }
+
+    pub fn apply_automation(&mut self, id: u32, value: f32) {
+        match self {
+            KarbeatPlugin::Effect(e) => e.apply_automation(id, value),
+            KarbeatPlugin::Generator(g) => g.apply_automation(id, value),
+        }
+    }
+
+    pub fn clear_automation(&mut self, id: u32) {
+        match self {
+            KarbeatPlugin::Effect(e) => e.clear_automation(id),
+            KarbeatPlugin::Generator(g) => g.clear_automation(id),
         }
     }
 

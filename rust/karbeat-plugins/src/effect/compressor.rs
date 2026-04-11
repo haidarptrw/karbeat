@@ -203,6 +203,14 @@ impl RawEffectEngine for KarbeatCompressor {
     {
         "Karbeat Compressor"
     }
+
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        todo!()
+    }
+
+    fn clear_automation(&mut self, id: u32) {
+        todo!()
+    }
 }
 
 pub type KarbeatCompressorWrapper = RawEffectWrapper<KarbeatCompressor>;

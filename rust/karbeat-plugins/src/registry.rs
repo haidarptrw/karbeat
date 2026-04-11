@@ -4,9 +4,9 @@ use hashbrown::HashMap;
 use karbeat_plugin_types::PluginParameter;
 
 // use crate::effect::compressor::create_compressor;
-use crate::effect::parametric_eq::create_parametric_eq;
-use crate::generator::karbeatzer_v2::create_karbeatzer;
 use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
+
+use crate::{effect::parametric_eq::KarbeatParametricEQ, generator::karbeatzer_v2::KarbeatzerV2};
 
 /// A function pointer type that creates a new Generator instance
 type GeneratorFactory = Box<dyn Fn() -> Box<dyn KarbeatGenerator + Send + Sync> + Send + Sync>;
@@ -61,14 +61,10 @@ impl PluginRegistry {
         let mut registry = Self::new();
 
         // Karbeatzer V2 - our main synth
-        registry.register_generator("Karbeatzer V2", || {
-            // We pass None for sample_rate here because 'prepare()' will be called
-            // by the engine later with the correct rate.
-            Box::new(create_karbeatzer(None, 2))
-        });
+        registry.register_generator("Karbeatzer V2", || Box::new(KarbeatzerV2::build()));
 
         // Parametric EQ
-        registry.register_effect("Parametric EQ", || Box::new(create_parametric_eq(None, 2)));
+        registry.register_effect("Parametric EQ", || Box::new(KarbeatParametricEQ::build()));
 
         registry
     }

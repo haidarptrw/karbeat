@@ -70,6 +70,9 @@ pub trait RawSynthEngine: Send + Sync {
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
         None
     }
+
+    fn apply_automation(&mut self, id: u32, value: f32);
+    fn clear_automation(&mut self, id: u32);
 }
 
 /// Trait for raw effect engines (core DSP logic only).
@@ -108,6 +111,9 @@ pub trait RawEffectEngine: Send + Sync {
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
         None
     }
+
+    fn apply_automation(&mut self, id: u32, value: f32);
+    fn clear_automation(&mut self, id: u32);
 }
 
 pub trait EffectEngine<B: EffectBase>: Send + Sync {
@@ -154,6 +160,12 @@ impl<T: RawSynthEngine + Clone> RawSynthWrapper<T> {
         let mut params = self.base.get_parameter_specs();
         params.extend(self.engine.get_parameter_specs());
         params
+    }
+}
+
+impl<T: RawSynthEngine + Clone + Default> RawSynthWrapper<T> {
+    pub fn build() -> Self {
+        Self::new(T::default(), 48000.0, 2)
     }
 }
 
@@ -206,6 +218,14 @@ impl<T: RawSynthEngine + Clone + 'static> KarbeatGenerator for RawSynthWrapper<T
     fn as_any(&self) -> &dyn Any {
         self
     }
+    
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        self.base.apply_automation(id, value);
+    }
+    
+    fn clear_automation(&mut self, id: u32) {
+        self.base.clear_automation(id);
+    }
 }
 
 // ============================================================================
@@ -239,6 +259,12 @@ impl<T: RawEffectEngine + Clone> RawEffectWrapper<T> {
         let mut params = StandardEffectBase::get_parameter_specs();
         params.extend(self.engine.get_parameter_specs());
         params
+    }
+}
+
+impl<T: RawEffectEngine + Clone + Default> RawEffectWrapper<T> {
+    pub fn build() -> Self {
+        Self::new(T::default(), 48000.0, 2)
     }
 }
 
@@ -308,6 +334,14 @@ impl<T: RawEffectEngine + Clone + 'static> KarbeatEffect for RawEffectWrapper<T>
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        self.base.apply_automation(id, value);
+    }
+    
+    fn clear_automation(&mut self, id: u32) {
+        self.base.clear_automation(id);
     }
 }
 
@@ -418,5 +452,13 @@ where
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+    
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        self.base.apply_automation(id, value);
+    }
+    
+    fn clear_automation(&mut self, id: u32) {
+        self.base.clear_automation(id);
     }
 }
