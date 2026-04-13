@@ -77,7 +77,7 @@ pub fn create_position_stream(sink: StreamSink<UiTransportFeedback>) -> Result<(
    std::thread::spawn(move || {
         loop {
             // Drain all pending events from the Core
-            let feedbacks = audio_api::drain_position_feedback(|pos| UiTransportFeedback::from(pos));
+            let feedbacks = audio_api::drain_position_feedback(UiTransportFeedback::from);
             
             for fb in feedbacks {
                 if sink.add(fb).is_err() {

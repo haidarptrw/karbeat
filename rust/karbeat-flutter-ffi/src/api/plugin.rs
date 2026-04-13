@@ -188,9 +188,9 @@ impl From<karbeat_core::commands::EffectTarget> for UiEffectTarget {
     }
 }
 
-impl Into<karbeat_core::commands::EffectTarget> for UiEffectTarget {
-    fn into(self) -> karbeat_core::commands::EffectTarget {
-        match self {
+impl From<UiEffectTarget> for karbeat_core::commands::EffectTarget {
+    fn from(val: UiEffectTarget) -> Self {
+        match val {
             UiEffectTarget::Track(id) => {
                 karbeat_core::commands::EffectTarget::Track(TrackId::from(id))
             }
