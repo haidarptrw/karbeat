@@ -9,18 +9,12 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `push_mixer_event`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `into`, `into`, `into`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
-/// ======================================
-/// STREAM
-/// ======================================
 /// Create the Rust → Flutter event stream for mixer param changes.
 Stream<UiMixerParamEvent> createMixerEventStream() =>
     RustLib.instance.api.crateApiMixerCreateMixerEventStream();
 
-/// ======================================
-/// GETTERS
-/// ======================================
 /// **GETTER: Fetch the mixer state**
 Future<UiMixerState> getMixerState() =>
     RustLib.instance.api.crateApiMixerGetMixerState();

@@ -7,10 +7,11 @@ use crate::{
     context::ctx,
     core::project::{
         generator::GeneratorInstanceType,
-        mixer::{EffectId, EffectInstance},
+        mixer::{EffectInstance},
         GeneratorId, GeneratorInstance, TrackId,
     },
     lock::{get_app_read, get_app_write, get_plugin_registry_read},
+    shared::id::*
 };
 
 use std::sync::Arc;

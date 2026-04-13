@@ -664,21 +664,6 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  /// Add a MIDI track with a generator by name (backwards compatible).
-  Future<Result<void>> addMidiTrackWithGenerator(String generatorName) async {
-    try {
-      await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
-      notifyCustomBackendChange(() async {
-        await syncTracksState();
-        await syncGeneratorList();
-      });
-      return Result.ok(null);
-    } catch (e) {
-      KarbeatLogger.error("Failed to add midi track: $e");
-      return Result.error(Exception("$e"));
-    }
-  }
-
   Future<Result<void>> addEffectToMixerChannel(
     int channelId,
     int registryId,

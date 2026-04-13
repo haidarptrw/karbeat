@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'project.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `into`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
 Future<Map<int, AudioWaveformUiForClip>> getAudioWaveformClipsData() =>
     RustLib.instance.api.crateApiTrackGetAudioWaveformClipsData();
@@ -95,12 +95,6 @@ Future<List<UiClip>> cutClip({
 Future<UiTrack> addMidiTrackWithGeneratorId({required int registryId}) =>
     RustLib.instance.api.crateApiTrackAddMidiTrackWithGeneratorId(
       registryId: registryId,
-    );
-
-/// Add a MIDI track with a generator by name (backwards compatible).
-Future<UiTrack> addMidiTrackWithGenerator({required String generatorName}) =>
-    RustLib.instance.api.crateApiTrackAddMidiTrackWithGenerator(
-      generatorName: generatorName,
     );
 
 Future<UiClip> getClip({required int trackId, required int clipId}) =>

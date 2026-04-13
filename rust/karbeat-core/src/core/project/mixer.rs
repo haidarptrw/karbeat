@@ -1,5 +1,4 @@
 use indexmap::IndexMap;
-use karbeat_utils::define_id;
 use std::{ collections::{ HashMap, HashSet }, sync::Arc };
 
 use serde::{ Deserialize, Serialize };
@@ -8,11 +7,9 @@ use thiserror::Error;
 use crate::{
     commands::AudioCommand,
     context::{ ctx, utils::send_audio_command },
-    core::project::{ ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect },
+    core::project::{ ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect }, shared::{BusId, EffectId},
 };
 
-define_id!(EffectId);
-define_id!(BusId);
 
 // =============================================================================
 // Routing Matrix Types

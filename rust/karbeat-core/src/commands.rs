@@ -3,8 +3,8 @@ use indexmap::IndexMap;
 use crate::{
     audio::engine::PlaybackMode,
     core::project::{
-        GeneratorId, TrackId, mixer::{BusId, EffectId, RoutingConnection}, plugin::{KarbeatEffect, KarbeatGenerator}, track::audio_waveform::AudioWaveform
-    },
+        GeneratorId, mixer::RoutingConnection, plugin::{KarbeatEffect, KarbeatGenerator}, track::audio_waveform::AudioWaveform
+    }, shared::id::{BusId, EffectId, TrackId},
 };
 
 pub enum AudioCommand {

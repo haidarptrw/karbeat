@@ -1,4 +1,4 @@
-use crate::core::project::mixer::EffectId;
+use crate::shared::id::*;
 
 /// Transport feedback struct sent from the audio thread to Flutter.
 /// This is the single source of truth for all runtime transport state.

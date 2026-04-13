@@ -1,4 +1,3 @@
-use karbeat_utils::define_id;
 // src/core/project/track/automation.rs
 //
 // Automation system for parameter modulation over time.
@@ -9,19 +8,11 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    core::project::{
-        mixer::{BusId, EffectId},
-        track::TrackId,
-    },
-    
-};
+use crate::shared::id::{AutomationId, BusId, EffectId, TrackId};
 
 // ============================================================================
 // IDs
 // ============================================================================
-
-define_id!(AutomationId);
 
 // ============================================================================
 // AUTOMATION TARGET

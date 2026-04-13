@@ -1,7 +1,21 @@
 use std::sync::Arc;
 
 use crate::{
-    context::utils::broadcast_state_change, core::project::{ TrackId, mixer::{ BusId, EffectId, EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState, RoutingConnection, RoutingNode } }, lock::{get_app_read, get_app_write}
+    context::utils::broadcast_state_change,
+    core::project::{
+        TrackId,
+        mixer::{
+            EffectInstance,
+            MixerBus,
+            MixerChannel,
+            MixerChannelParams,
+            MixerState,
+            RoutingConnection,
+            RoutingNode,
+        },
+    },
+    shared::id::*,
+    lock::{ get_app_read, get_app_write },
 };
 
 /// **GETTER: Fetch the mixer state from application state and map it to T value**
@@ -52,18 +66,19 @@ pub fn get_master_bus() -> Arc<MixerChannel> {
     app.mixer.master_bus.clone()
 }
 
-pub fn get_master_bus_populated<C,T,F>(mapper: F) -> C where F: Fn(&EffectInstance) -> T, C: FromIterator<T> {
+pub fn get_master_bus_populated<C, T, F>(mapper: F) -> C
+    where F: Fn(&EffectInstance) -> T, C: FromIterator<T>
+{
     let app = get_app_read();
-    app.mixer.master_bus.effects.iter()
+    app.mixer.master_bus.effects
+        .iter()
         .map(|e| mapper(e))
         .collect()
 }
 
 /// **GETTER: Fetch all buses**
 pub fn get_buses<C, T, F>(mut mapper: F) -> C
-where
-    F: FnMut(&BusId, &MixerBus) -> T,
-    C: FromIterator<T>,
+    where F: FnMut(&BusId, &MixerBus) -> T, C: FromIterator<T>
 {
     let app = get_app_read();
     app.mixer.buses
@@ -74,9 +89,7 @@ where
 
 /// **GETTER: Fetch the routing matrix**
 pub fn get_routing_matrix<C, T, F>(mut mapper: F) -> C
-where
-    F: FnMut(&RoutingConnection) -> T,
-    C: FromIterator<T>,
+    where F: FnMut(&RoutingConnection) -> T, C: FromIterator<T>
 {
     let app = get_app_read();
     app.mixer.routing
@@ -88,15 +101,16 @@ where
 pub fn set_master_bus_params(params: &[MixerChannelParams]) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
-        app.mixer
-            .set_params_master_bus(params)
-            .map_err(|e| anyhow::anyhow!(e.message))?;
+        app.mixer.set_params_master_bus(params).map_err(|e| anyhow::anyhow!(e.message))?;
     }
     broadcast_state_change();
     Ok(())
 }
 
-pub fn set_mixer_channel_params(track_id: TrackId, params: &[MixerChannelParams]) -> anyhow::Result<()> {
+pub fn set_mixer_channel_params(
+    track_id: TrackId,
+    params: &[MixerChannelParams]
+) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
         app.mixer
@@ -107,7 +121,10 @@ pub fn set_mixer_channel_params(track_id: TrackId, params: &[MixerChannelParams]
     Ok(())
 }
 
-pub fn add_effect_to_mixer_channel_by_id(track_id: TrackId, registry_id: u32) -> anyhow::Result<()> {
+pub fn add_effect_to_mixer_channel_by_id(
+    track_id: TrackId,
+    registry_id: u32
+) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
         app.mixer.add_effect_descriptor_by_id(&track_id, registry_id)?;
@@ -116,7 +133,10 @@ pub fn add_effect_to_mixer_channel_by_id(track_id: TrackId, registry_id: u32) ->
     Ok(())
 }
 
-pub fn remove_effect_from_mixer_channel(track_id: TrackId, effect_instance_id: EffectId) -> anyhow::Result<()> {
+pub fn remove_effect_from_mixer_channel(
+    track_id: TrackId,
+    effect_instance_id: EffectId
+) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
         app.mixer.remove_effect_by_id(&track_id, effect_instance_id)?;
@@ -197,7 +217,11 @@ pub fn set_routing(conn: RoutingConnection) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn remove_routing(source: RoutingNode, destination: RoutingNode, is_send: bool) -> anyhow::Result<()> {
+pub fn remove_routing(
+    source: RoutingNode,
+    destination: RoutingNode,
+    is_send: bool
+) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();
         app.mixer.remove_routing(source, destination, is_send)?;

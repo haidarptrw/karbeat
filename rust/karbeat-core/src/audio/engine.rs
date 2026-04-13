@@ -29,11 +29,7 @@ use crate::{
         },
     },
     commands::{
-        AudioCommand,
-        AudioFeedback,
-        EffectParameterSnapshot,
-        EffectTarget,
-        GeneratorParameterSnapshot,
+        AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget, GeneratorParameterSnapshot
     },
     core::project::{
         AudioWaveform,
@@ -46,9 +42,10 @@ use crate::{
         PatternId,
         TrackId,
         automation::AutomationTarget,
-        mixer::{ BusId, MixerChannel, RoutingNode },
+        mixer::{ MixerChannel, RoutingNode },
         plugin::{ MidiEvent, MidiMessage },
     },
+    shared::id::*,
     utils::{ apply_simd_mix, apply_simd_mix_gain, get_waveform_buffer },
 };
 use karbeat_utils::{ audio::db_to_linear, math::hermite_interp };
@@ -627,7 +624,7 @@ impl AudioEngine {
                 // Since they are also needs to be updated to reflect this change.
                 // However because the logic in FFI assume that this is handled, we don't have to do it
             }
-            AudioCommand::AddTrackEffect { track_id, effect_id, mut effect } => {
+            AudioCommand::AddTrackEffect{track_id, effect_id, mut effect } => {
                 // Prepare the effect
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 effect.prepare(self.sample_rate as f32, self.num_channels as usize, buf_size);

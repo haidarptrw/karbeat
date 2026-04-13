@@ -1,9 +1,9 @@
 use crate::context::utils::broadcast_state_change;
 use crate::core::history::ProjectAction;
-use crate::core::project::clip::{Clip, ClipId, ClipSourceType, ResizeEdge};
+use crate::core::project::clip::{Clip, ClipSourceType, ResizeEdge};
 use crate::core::project::clipboard::ClipboardContent;
-use crate::core::project::track::TrackId;
 use crate::lock::{get_app_read, get_app_write, get_history_lock};
+use crate::shared::id::*;
 use std::sync::Arc;
 
 pub fn get_clip<T, F>(track_id: TrackId, clip_id: ClipId, mapper: F) -> anyhow::Result<T>

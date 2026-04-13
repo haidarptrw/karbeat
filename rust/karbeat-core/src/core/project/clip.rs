@@ -1,4 +1,3 @@
-use karbeat_utils::define_id;
 use std::{cmp::Ordering, sync::Arc};
 
 use serde::{Deserialize, Serialize};
@@ -9,11 +8,12 @@ pub enum ResizeEdge {
     Right,
 }
 
-use crate::core::project::track::audio_waveform::AudioSourceId;
-use crate::core::project::track::midi::{Pattern, PatternId};
-use crate::core::project::{track::TrackId, track::TrackType, ApplicationState, KarbeatSource};
+use crate::core::project::track::midi::{Pattern};
+use crate::core::project::{track::TrackType, ApplicationState, KarbeatSource};
+use crate::shared::{AudioSourceId, PatternId};
+use crate::shared::id::{ClipId, TrackId};
 
-define_id!(ClipId);
+
 
 pub enum ClipSourceType {
     Midi,
@@ -82,7 +82,7 @@ impl ApplicationState {
         match self.tracks.get_mut(&track_id) {
             Some(track_arc) => {
                 // COW: Get mutable track
-                let track = Arc::make_mut(track_arc);
+                let track: &mut super::KarbeatTrack = Arc::make_mut(track_arc);
 
                 // Add Clip & Check bounds
                 // We pass the Clip by value. The track takes ownership and wraps it in Arc.
@@ -103,7 +103,7 @@ impl ApplicationState {
         update_max_sample_index: bool,
     ) -> anyhow::Result<Arc<Clip>> {
         let deleted_clip = if let Some(track_arc) = self.tracks.get_mut(&track_id) {
-            let track = Arc::make_mut(track_arc);
+            let track= Arc::make_mut(track_arc);
             match track.remove_clip(&clip_id) {
                 Ok(clip) => {
                     if update_max_sample_index {
@@ -170,7 +170,7 @@ impl ApplicationState {
                 .tracks
                 .get_mut(&target_track_id)
                 .ok_or("Target track not found")?;
-            let track = Arc::make_mut(track_arc);
+            let track: &mut super::KarbeatTrack = Arc::make_mut(track_arc);
 
             track
                 .add_clip(modified_clip.clone())

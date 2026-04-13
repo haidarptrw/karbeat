@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::api::project::{ AudioWaveformUiForClip, UiClip, UiTrack };
 use karbeat_core::core::project::AudioSourceId;
 use karbeat_core::core::project::clip::ResizeEdge;
-use karbeat_core::core::project::{ clip::ClipId, track::TrackId };
+use karbeat_core::shared::id::*;
 use karbeat_core::api::{
     clip_api as clip_api,
     audio_waveform_api as audio_waveform_api,
@@ -183,12 +183,6 @@ pub fn cut_clip(
 /// Add a MIDI track with a generator by its registry ID (preferred method).
 pub fn add_midi_track_with_generator_id(registry_id: u32) -> Result<UiTrack, String> {
     let res = track_api::add_midi_track_with_generator_id(registry_id).map_err(|e| e.to_string())?;
-    Ok(UiTrack::from(res.as_ref()))
-}
-
-/// Add a MIDI track with a generator by name (backwards compatible).
-pub fn add_midi_track_with_generator(generator_name: String) -> Result<UiTrack, String> {
-    let res = track_api::add_midi_track_with_generator(&generator_name).map_err(|e| e.to_string())?;
     Ok(UiTrack::from(res.as_ref()))
 }
 

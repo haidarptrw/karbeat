@@ -1,12 +1,8 @@
-use karbeat_utils::define_id;
-
 use serde::{ Deserialize, Serialize };
 
-use crate::core::project::PluginInstance;
+use crate::{core::project::PluginInstance, shared::id::AudioSourceId};
 
 pub type AudioFrame = [f32; 2];
-
-define_id!(AudioSourceId);
 
 use memmap2::Mmap;
 /// Audio Waveform data of an audio sample

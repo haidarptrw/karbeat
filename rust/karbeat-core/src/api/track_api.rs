@@ -2,7 +2,8 @@ use std::sync::Arc;
 use crate::context::utils::broadcast_state_change;
 use crate::core::project::TrackType;
 use crate::lock::{ get_app_read, get_app_write };
-use crate::core::project::{ KarbeatTrack, track::TrackId };
+use crate::core::project::{ KarbeatTrack };
+use crate::shared::id::*;
 use karbeat_utils::color::Color;
 
 pub fn get_track<T, F>(track_id: TrackId, mapper: F) -> anyhow::Result<T>
@@ -19,15 +20,6 @@ pub fn add_midi_track_with_generator_id(registry_id: u32) -> anyhow::Result<Arc<
     let res = {
         let mut app = get_app_write();
         app.add_new_midi_track_with_generator_id(registry_id)
-    };
-    broadcast_state_change();
-    res
-}
-
-pub fn add_midi_track_with_generator(generator_name: &str) -> anyhow::Result<Arc<KarbeatTrack>> {
-    let res = {
-        let mut app = get_app_write();
-        app.add_new_midi_track_with_generator(generator_name)
     };
     broadcast_state_change();
     res

@@ -2,8 +2,9 @@ use std::collections::HashMap;
 
 use karbeat_core::{
     api::{ note_api as note_api, pattern_api as pattern_api },
-    core::project::{ GeneratorId, Note, NoteId, track::midi::{ Pattern, PatternId } },
+    core::project::{ GeneratorId, Note, NoteId, track::midi::{ Pattern } },
 };
+use karbeat_core::shared::id::*;
 
 #[derive(Clone)]
 pub struct UiPattern {
@@ -44,10 +45,7 @@ impl From<&Note> for UiNote {
 
 impl From<&Pattern> for UiPattern {
     fn from(value: &Pattern) -> Self {
-        let ui_notes: Vec<UiNote> = value.notes
-            .iter()
-            .map(UiNote::from)
-            .collect();
+        let ui_notes: Vec<UiNote> = value.notes.iter().map(UiNote::from).collect();
 
         Self {
             id: value.id.into(), // Convert PatternId to u32

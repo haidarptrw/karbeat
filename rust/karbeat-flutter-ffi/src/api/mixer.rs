@@ -2,13 +2,12 @@ use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::TrackId;
-use karbeat_core::core::project::mixer::EffectId;
+use karbeat_core::shared::id::*;
 
 use crate::frb_generated::StreamSink;
 use karbeat_core::{
     context::{ ctx, MixerParamEvent },
     core::project::mixer::{
-        BusId,
         EffectInstance,
         MixerBus,
         MixerChannel,
