@@ -22,9 +22,9 @@ pub enum UiResizeEdge {
     Right,
 }
 
-impl Into<UiResizeEdge> for ResizeEdge {
-    fn into(self) -> UiResizeEdge {
-        match self {
+impl From<ResizeEdge> for UiResizeEdge {
+    fn from(value: ResizeEdge) -> Self {
+        match value {
             ResizeEdge::Left => UiResizeEdge::Left,
             ResizeEdge::Right => UiResizeEdge::Right,
         }
@@ -225,7 +225,7 @@ pub fn move_clip_batch(
     Ok(
         res
             .iter()
-            .map(|c| UiClip::from(c))
+            .map(UiClip::from)
             .collect()
     )
 }
@@ -247,7 +247,7 @@ pub fn resize_clip_batch(
     Ok(
         res
             .iter()
-            .map(|c| UiClip::from(c))
+            .map(UiClip::from)
             .collect()
     )
 }

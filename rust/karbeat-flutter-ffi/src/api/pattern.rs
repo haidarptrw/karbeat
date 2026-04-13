@@ -46,7 +46,7 @@ impl From<&Pattern> for UiPattern {
     fn from(value: &Pattern) -> Self {
         let ui_notes: Vec<UiNote> = value.notes
             .iter()
-            .map(|note| UiNote::from(note))
+            .map(UiNote::from)
             .collect();
 
         Self {

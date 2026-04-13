@@ -150,10 +150,10 @@ pub fn setup_mipmaps(buffer: &[f32], channels: usize) -> hashbrown::HashMap<u32,
     mipmaps
 }
 
-pub fn find_best_mipmap<'a>(
-    mipmaps: &'a hashbrown::HashMap<u32, Vec<i8>>,
+pub fn find_best_mipmap(
+    mipmaps: &hashbrown::HashMap<u32, Vec<i8>>,
     target: u32,
-) -> Option<&'a Vec<i8>> {
+) -> Option<&Vec<i8>> {
     mipmaps
         .iter()
         .filter(|(k, _)| **k >= target)

@@ -293,6 +293,7 @@ impl ApplicationState {
             track_type: TrackType::Midi,
             id: track_id,
             name: generator_name.clone(),
+            #[allow(clippy::unwrap_used)]
             color: Color::new_from_string("#FF8A65").unwrap(),
             generator: Some(generator),
             ..Default::default()

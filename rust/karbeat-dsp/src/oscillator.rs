@@ -1,7 +1,7 @@
 // oscillator.rs (part of karbeat_dsp library)
 
 use std::f64::consts::TAU;
-use dasp::{Frame, slice};
+use dasp::{ Frame, slice };
 
 // Import your new universal parameter types
 use karbeat_macros::EnumParam;
@@ -16,12 +16,12 @@ pub struct Oscillator {
     pub waveform: Param<Waveform>,
     pub detune: Param<f32>,
     pub phase_offset: Param<f32>,
-    pub mix: Param<f32>, 
-    pub pulse_width: Param<f32>, 
+    pub mix: Param<f32>,
+    pub pulse_width: Param<f32>,
 }
 
 impl Oscillator {
-    /// Create a new Oscillator building block. 
+    /// Create a new Oscillator building block.
     /// Assigns sequential IDs starting from `id_start` under the specified UI `group`.
     pub fn new(id_start: u32, group: &'static str) -> Self {
         Self {
@@ -66,7 +66,11 @@ impl Oscillator {
         if channels == 2 {
             if let Some(frames) = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block) {
                 for frame in frames {
-                    let mut sample = Self::generate_raw_sample(current_waveform, current_pw, *current_phase);
+                    let mut sample = Self::generate_raw_sample(
+                        current_waveform,
+                        current_pw,
+                        *current_phase
+                    );
 
                     // Anti-Aliasing
                     sample += Self::poly_blep(*current_phase, phase_inc);
@@ -82,7 +86,9 @@ impl Oscillator {
         }
     }
 
+    
     /// Frequency Modulation (FM) output using dasp zip iterators
+    #[allow(clippy::too_many_arguments)]
     pub fn output_wave_fm(
         &self,
         out_block: &mut [f32],
@@ -106,14 +112,20 @@ impl Oscillator {
         let phase_inc = actual_freq / (sample_rate as f64);
 
         if channels == 2 {
-            let out_frames = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block).unwrap();
-            let mod_frames = slice::from_sample_slice::<&[[f32; 2]], f32>(mod_buffer).unwrap();
+            let out_frames = slice
+                ::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block)
+                .unwrap_or_default();
+            let mod_frames = slice::from_sample_slice::<&[[f32; 2]], f32>(mod_buffer).unwrap_or_default();
 
             for (out_frame, mod_frame) in out_frames.iter_mut().zip(mod_frames.iter()) {
                 let modulation = (mod_frame[0] as f64) * fm_depth;
                 let modulated_phase = (*current_phase + modulation).rem_euclid(1.0);
 
-                let sample = Self::generate_raw_sample(current_waveform, current_pw, modulated_phase);
+                let sample = Self::generate_raw_sample(
+                    current_waveform,
+                    current_pw,
+                    modulated_phase
+                );
                 let final_sample = (sample * (current_mix as f64)) as f32;
 
                 out_frame[0] = out_frame[0].add_amp(final_sample);

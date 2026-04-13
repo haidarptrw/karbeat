@@ -49,14 +49,14 @@ pub struct UiMixerParamEvent {
     pub solo: Option<bool>,
 }
 
-impl Into<UiMixerParamEvent> for MixerParamEvent {
-    fn into(self) -> UiMixerParamEvent {
-        UiMixerParamEvent {
-            track_id: self.track_id,
-            volume: self.volume,
-            pan: self.pan,
-            mute: self.mute,
-            solo: self.solo,
+impl From<MixerParamEvent> for UiMixerParamEvent {
+    fn from(value: MixerParamEvent) -> Self {
+        Self {
+            track_id: value.track_id,
+            volume: value.volume,
+            pan: value.pan,
+            mute: value.mute,
+            solo: value.solo,
         }
     }
 }
@@ -136,9 +136,9 @@ impl From<&RoutingNode> for UiRoutingNode {
     }
 }
 
-impl Into<RoutingNode> for &UiRoutingNode {
-    fn into(self) -> RoutingNode {
-        match self {
+impl From<&UiRoutingNode> for RoutingNode {
+    fn from(value: &UiRoutingNode) -> Self {
+        match value {
             UiRoutingNode::Track(id) => RoutingNode::Track((*id).into()),
             UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(*id)),
             UiRoutingNode::Master => RoutingNode::Master,
@@ -220,34 +220,34 @@ pub enum UiMixerChannelParams {
     Solo(bool),
 }
 
-impl Into<UiMixerChannelParams> for &MixerChannelParams {
-    fn into(self) -> UiMixerChannelParams {
-        match self {
-            MixerChannelParams::Volume(value) => UiMixerChannelParams::Volume(*value),
-            MixerChannelParams::Pan(value) => UiMixerChannelParams::Pan(*value),
-            MixerChannelParams::Mute(value) => UiMixerChannelParams::Mute(*value),
-            MixerChannelParams::InvertedPhase(value) => UiMixerChannelParams::InvertedPhase(*value),
-            MixerChannelParams::Solo(value) => UiMixerChannelParams::Solo(*value),
+impl From<&MixerChannelParams> for UiMixerChannelParams {
+    fn from(params: &MixerChannelParams) -> Self {
+        match params {
+            MixerChannelParams::Volume(value) => Self::Volume(*value),
+            MixerChannelParams::Pan(value) => Self::Pan(*value),
+            MixerChannelParams::Mute(value) => Self::Mute(*value),
+            MixerChannelParams::InvertedPhase(value) => Self::InvertedPhase(*value),
+            MixerChannelParams::Solo(value) => Self::Solo(*value),
         }
     }
 }
 
-impl Into<MixerChannelParams> for &UiMixerChannelParams {
-    fn into(self) -> MixerChannelParams {
-        match self {
+impl From<&UiMixerChannelParams> for MixerChannelParams {
+    fn from(params: &UiMixerChannelParams) -> Self {
+        match params {
             // Volume is in dB (both UI and backend use dB)
-            UiMixerChannelParams::Volume(value) => MixerChannelParams::Volume(*value),
-            UiMixerChannelParams::Pan(value) => MixerChannelParams::Pan(*value),
-            UiMixerChannelParams::Mute(value) => MixerChannelParams::Mute(*value),
-            UiMixerChannelParams::InvertedPhase(value) => MixerChannelParams::InvertedPhase(*value),
-            UiMixerChannelParams::Solo(value) => MixerChannelParams::Solo(*value),
+            UiMixerChannelParams::Volume(value) => Self::Volume(*value),
+            UiMixerChannelParams::Pan(value) => Self::Pan(*value),
+            UiMixerChannelParams::Mute(value) => Self::Mute(*value),
+            UiMixerChannelParams::InvertedPhase(value) => Self::InvertedPhase(*value),
+            UiMixerChannelParams::Solo(value) => Self::Solo(*value),
         }
     }
 }
 
-/// ======================================
-/// STREAM
-/// ======================================
+// ======================================
+// STREAM
+// ======================================
 
 /// Create the Rust → Flutter event stream for mixer param changes.
 pub fn create_mixer_event_stream(sink: StreamSink<UiMixerParamEvent>) -> Result<(), String> {
@@ -268,9 +268,9 @@ fn push_mixer_event(event: MixerParamEvent) {
     }
 }
 
-/// ======================================
-/// GETTERS
-/// ======================================
+// ======================================
+// GETTERS
+// ======================================
 
 /// **GETTER: Fetch the mixer state**
 pub fn get_mixer_state() -> UiMixerState {

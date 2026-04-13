@@ -226,7 +226,7 @@ impl AutomationLane {
         }
 
         // After last point: return last point's value
-        let last = self.points.last().unwrap();
+        let last = self.points.last()?;
         if time_ticks >= last.time_ticks {
             return Some(last.value);
         }

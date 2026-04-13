@@ -101,12 +101,12 @@ pub fn play_preview_note(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
-    if note_key < 0 || note_key > 127 {
+    if !(0..=127).contains(&note_key) {
         return Err("Note key must be between 0 and 127".to_string());
     }
 
-    if velocity < 0 || velocity > 127 {
-        return Err("Note velocity must be between 0 and 127".to_string());
+    if !(0..=100).contains(&velocity) {
+        return Err("Note velocity must be between 0 and 100".to_string());
     }
 
     audio_api::play_preview_note(
@@ -126,12 +126,12 @@ pub fn play_preview_note_generator(
     velocity: i32,
     is_on: bool
 ) -> Result<(), String> {
-    if note_key < 0 || note_key > 127 {
+    if !(0..=127).contains(&note_key) {
         return Err("Note key must be between 0 and 127".to_string());
     }
 
-    if velocity < 0 || velocity > 127 {
-        return Err("Note velocity must be between 0 and 127".to_string());
+    if !(0..=100).contains(&velocity) {
+        return Err("Note velocity must be between 0 and 100".to_string());
     }
 
     if is_on {

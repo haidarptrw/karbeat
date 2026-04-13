@@ -88,8 +88,8 @@ impl From<ApplicationState> for UiApplicationState {
     }
 }
 
-impl From<UiTrackType> for TrackType {
-    fn from(value: UiTrackType) -> Self {
+impl From<&UiTrackType> for TrackType {
+    fn from(value: &UiTrackType) -> Self {
         match value {
             UiTrackType::Audio => TrackType::Audio,
             UiTrackType::Midi => TrackType::Midi,
@@ -98,9 +98,9 @@ impl From<UiTrackType> for TrackType {
     }
 }
 
-impl Into<UiTrackType> for TrackType {
-    fn into(self) -> UiTrackType {
-        match self {
+impl From<TrackType> for UiTrackType {
+    fn from(value: TrackType) -> Self {
+        match value {
             TrackType::Audio => UiTrackType::Audio,
             TrackType::Midi => UiTrackType::Midi,
             TrackType::Automation => UiTrackType::Automation,
@@ -205,10 +205,7 @@ impl From<UiTransportState> for TransportState {
 
 impl From<&KarbeatTrack> for UiTrack {
     fn from(value: &KarbeatTrack) -> Self {
-        let generator_id = match &value.generator {
-            Some(gen_instance) => Some(gen_instance.id.to_u32()),
-            None => None,
-        };
+        let generator_id = value.generator.as_ref().map(|gen_instance| gen_instance.id.to_u32());
         Self {
             id: value.id.to_u32(),
             name: value.name.clone(),
@@ -297,7 +294,7 @@ impl From<&Clip> for UiClip {
             name: value.name.clone(),
             id: value.id.to_u32(),
             start_time: value.start_time,
-            source: source,
+            source,
             offset_start: value.offset_start,
             loop_length: value.loop_length,
         }
@@ -516,7 +513,7 @@ pub fn add_audio_source(file_path: &str) -> Result<u32, String> {
 /// Add new track to the track list. Throws an error, so it must handled gracefully
 pub fn add_new_track(track_type: UiTrackType) -> UiTrack {
     let arc_track = {
-        track_api::add_new_track(track_type.into())
+        track_api::add_new_track((&track_type).into())
     };
     log::info!("[add_new_track] successfully added new track");
     UiTrack::from(arc_track.as_ref())

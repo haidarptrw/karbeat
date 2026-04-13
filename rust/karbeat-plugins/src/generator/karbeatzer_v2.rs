@@ -90,7 +90,7 @@ impl KarbeatzerEngine {
                 let osc_out = match wfs[i] {
                     Waveform::Sine => (phase * 2.0 * PI).sin(),
                     Waveform::Saw => 2.0 * phase - 1.0,
-                    Waveform::Square => if phase < pws[i] as f32 { 1.0 } else { -1.0 },
+                    Waveform::Square => if phase < pws[i] { 1.0 } else { -1.0 },
                     Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
                     Waveform::Noise => fastrand::f32() * 2.0 - 1.0,
                 };
@@ -129,7 +129,7 @@ impl RawSynthEngine for KarbeatzerEngine {
 
         while current_frame < total_frames {
             let next_event_frame = if event_idx < midi_events.len() {
-                midi_events[event_idx].sample_offset as usize
+                midi_events[event_idx].sample_offset
             } else {
                 total_frames
             };

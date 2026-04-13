@@ -35,14 +35,14 @@ impl From<&ClipboardContent> for UiClipboardContent {
             ClipboardContent::Notes(notes) => {
                 let ui_notes = notes
                     .iter()
-                    .map(|note| UiNote::from(note))
+                    .map(UiNote::from)
                     .collect();
                 UiClipboardContent::Notes(ui_notes)
             }
             ClipboardContent::Clips(clips) => {
                 let ui_clips = clips
                     .iter()
-                    .map(|note| UiClip::from(note))
+                    .map(UiClip::from)
                     .collect();
                 UiClipboardContent::Clips(ui_clips)
             }
