@@ -522,8 +522,8 @@ pub fn add_audio_source(file_path: &str) -> Result<u32, String> {
 }
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-pub fn add_new_track(track_type: UiTrackType) -> UiTrack {
-    let arc_track = { track_api::add_new_track((&track_type).into()) };
+pub fn add_new_audio_track() -> UiTrack {
+    let arc_track = { track_api::add_new_audio_track() };
     log::info!("[add_new_track] successfully added new track");
     UiTrack::from(arc_track.as_ref())
 }

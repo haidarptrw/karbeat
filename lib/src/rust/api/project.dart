@@ -68,8 +68,8 @@ Future<int> addAudioSource({required String filePath}) =>
     RustLib.instance.api.crateApiProjectAddAudioSource(filePath: filePath);
 
 /// Add new track to the track list. Throws an error, so it must handled gracefully
-Future<UiTrack> addNewTrack({required UiTrackType trackType}) =>
-    RustLib.instance.api.crateApiProjectAddNewTrack(trackType: trackType);
+Future<UiTrack> addNewAudioTrack() =>
+    RustLib.instance.api.crateApiProjectAddNewAudioTrack();
 
 /// Get all tracks on the session/project.
 ///

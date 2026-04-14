@@ -25,16 +25,7 @@ final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
   return KarbeatState();
 });
 
-enum ToolSelection {
-  pointer,
-  cut,
-  draw,
-  move,
-  delete,
-  zoom,
-  select,
-  resize,
-}
+enum ToolSelection { pointer, cut, draw, move, delete, zoom, select, resize }
 
 /// Piano roll specific tool selection (independent from main toolbar)
 enum PianoRollToolSelection { pointer, draw, delete, select, slice }
@@ -640,9 +631,9 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> addTrack(UiTrackType type) async {
+  Future<Result<void>> addAudioTrack() async {
     try {
-      await addNewTrack(trackType: type);
+      await addNewAudioTrack();
       notifyBackendChange(ProjectEvent.tracksChanged);
       return Result.ok(null);
     } catch (e) {

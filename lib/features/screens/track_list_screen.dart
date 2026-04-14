@@ -698,7 +698,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         if (_isRangeSelecting) _buildRangeSelectRect(context),
         _buildCutHelperLine(context, state),
 
-
         // Batch drag overlays for all selected clips during move
         ..._buildBatchDragOverlays(context),
         Positioned.fill(
@@ -1063,7 +1062,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
-              ref.read(karbeatStateProvider).addTrack(UiTrackType.audio);
+              ref.read(karbeatStateProvider).addAudioTrack();
             },
             child: const Row(
               children: [
@@ -1640,7 +1639,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
                     );
                   } else {
                     ref.read(karbeatStateProvider).deselectAllClips();
-                  } 
+                  }
                 },
                 child: RepaintBoundary(
                   child: CustomPaint(
@@ -2038,9 +2037,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                     );
               } else if (widget.selectedTool == ToolSelection.cut) {
                 final state = ref.read(karbeatStateProvider);
-                
+
                 // Calculate absolute sample position on the timeline
-                int cutSample = widget.clip.startTime +
+                int cutSample =
+                    widget.clip.startTime +
                     (details.localPosition.dx * widget.zoomLevel).round();
 
                 // Force the cut to match the snapped grid!

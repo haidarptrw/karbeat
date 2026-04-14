@@ -76,7 +76,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1428052283;
+  int get rustContentHash => -1093370027;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -105,7 +105,7 @@ abstract class RustLibApi extends BaseApi {
     required int registryId,
   });
 
-  Future<UiTrack> crateApiProjectAddNewTrack({required UiTrackType trackType});
+  Future<UiTrack> crateApiProjectAddNewAudioTrack();
 
   Future<UiNote> crateApiPatternAddNote({
     required int patternId,
@@ -733,12 +733,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<UiTrack> crateApiProjectAddNewTrack({required UiTrackType trackType}) {
+  Future<UiTrack> crateApiProjectAddNewAudioTrack() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_ui_track_type(trackType, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -750,15 +749,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_ui_track,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiProjectAddNewTrackConstMeta,
-        argValues: [trackType],
+        constMeta: kCrateApiProjectAddNewAudioTrackConstMeta,
+        argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiProjectAddNewTrackConstMeta =>
-      const TaskConstMeta(debugName: "add_new_track", argNames: ["trackType"]);
+  TaskConstMeta get kCrateApiProjectAddNewAudioTrackConstMeta =>
+      const TaskConstMeta(debugName: "add_new_audio_track", argNames: []);
 
   @override
   Future<UiNote> crateApiPatternAddNote({

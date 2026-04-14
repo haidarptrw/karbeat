@@ -4,8 +4,8 @@ use std::f64::consts::TAU;
 use dasp::{ Frame, slice };
 
 // Import your new universal parameter types
-use karbeat_macros::EnumParam;
-use karbeat_plugin_types::parameter::Param;
+use karbeat_macros::{ EnumParam };
+use karbeat_plugin_types::{ AutoParams, ParamType, parameter::{ Param, PluginParameter } };
 
 // ============================================================================
 // OSCILLATOR
@@ -20,6 +20,12 @@ pub struct Oscillator {
     pub pulse_width: Param<f32>,
 }
 
+impl Default for Oscillator {
+    fn default() -> Self {
+        Self::new(0, "Default Osc")
+    }
+}
+
 impl Oscillator {
     /// Create a new Oscillator building block.
     /// Assigns sequential IDs starting from `id_start` under the specified UI `group`.
@@ -31,12 +37,6 @@ impl Oscillator {
             mix: Param::new_float(id_start + 3, "Mix", group, 1.0, 0.0, 1.0),
             pulse_width: Param::new_float(id_start + 4, "Pulse Width", group, 0.5, 0.01, 0.99),
         }
-    }
-
-    /// Exposes a list of all parameters in this block so the parent synth can easily collect them
-    pub fn get_parameters(&self) -> Vec<&dyn std::any::Any> {
-        // This is a conceptual helper. In your parent macro, you can just map these!
-        vec![&self.waveform, &self.detune, &self.phase_offset, &self.mix, &self.pulse_width]
     }
 
     /// Standard audio output using dasp frames
@@ -86,7 +86,6 @@ impl Oscillator {
         }
     }
 
-    
     /// Frequency Modulation (FM) output using dasp zip iterators
     #[allow(clippy::too_many_arguments)]
     pub fn output_wave_fm(
@@ -115,7 +114,9 @@ impl Oscillator {
             let out_frames = slice
                 ::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block)
                 .unwrap_or_default();
-            let mod_frames = slice::from_sample_slice::<&[[f32; 2]], f32>(mod_buffer).unwrap_or_default();
+            let mod_frames = slice
+                ::from_sample_slice::<&[[f32; 2]], f32>(mod_buffer)
+                .unwrap_or_default();
 
             for (out_frame, mod_frame) in out_frames.iter_mut().zip(mod_frames.iter()) {
                 let modulation = (mod_frame[0] as f64) * fm_depth;
@@ -160,6 +161,107 @@ impl Oscillator {
             Waveform::Noise => fastrand::f64() * 2.0 - 1.0,
         }
     }
+}
+
+impl AutoParams for Oscillator {
+    fn auto_get_parameter(&self, id: u32) -> Option<f32> {
+        if self.waveform.id == id {
+            return Some(self.waveform.get_base().to_f32());
+        }
+        if self.detune.id == id {
+            return Some(self.detune.get_base().to_f32());
+        }
+        if self.phase_offset.id == id {
+            return Some(self.phase_offset.get_base().to_f32());
+        }
+        if self.mix.id == id {
+            return Some(self.mix.get_base().to_f32());
+        }
+        if self.pulse_width.id == id {
+            return Some(self.pulse_width.get_base().to_f32());
+        }
+        None
+    }
+
+    fn auto_set_parameter(&mut self, id: u32, value: f32) {
+        if self.waveform.id == id {
+            self.waveform.set_base(value);
+            return;
+        }
+        if self.detune.id == id {
+            self.detune.set_base(value);
+            return;
+        }
+        if self.phase_offset.id == id {
+            self.phase_offset.set_base(value);
+            return;
+        }
+        if self.mix.id == id {
+            self.mix.set_base(value);
+            return;
+        }
+        if self.pulse_width.id == id {
+            self.pulse_width.set_base(value);
+            return;
+        }
+    }
+
+    fn auto_apply_automation(&mut self, id: u32, value: f32) {
+        if self.waveform.id == id {
+            self.waveform.apply_automation(value);
+            return;
+        }
+        if self.detune.id == id {
+            self.detune.apply_automation(value);
+            return;
+        }
+        if self.phase_offset.id == id {
+            self.phase_offset.apply_automation(value);
+            return;
+        }
+        if self.mix.id == id {
+            self.mix.apply_automation(value);
+            return;
+        }
+        if self.pulse_width.id == id {
+            self.pulse_width.apply_automation(value);
+            return;
+        }
+    }
+
+    fn auto_clear_automation(&mut self, id: u32) {
+        if self.waveform.id == id {
+            self.waveform.clear_automation();
+            return;
+        }
+        if self.detune.id == id {
+            self.detune.clear_automation();
+            return;
+        }
+        if self.phase_offset.id == id {
+            self.phase_offset.clear_automation();
+            return;
+        }
+        if self.mix.id == id {
+            self.mix.clear_automation();
+            return;
+        }
+        if self.pulse_width.id == id {
+            self.pulse_width.clear_automation();
+            return;
+        }
+    }
+
+    fn auto_get_parameter_specs(&self) -> Vec<PluginParameter> {
+        vec![
+            self.waveform.to_spec(),
+            self.detune.to_spec(),
+            self.phase_offset.to_spec(),
+            self.mix.to_spec(),
+            self.pulse_width.to_spec()
+        ]
+    }
+
 }
 
 // ============================================================================

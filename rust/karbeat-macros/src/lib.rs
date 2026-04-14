@@ -1,6 +1,11 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+#![allow(dead_code)]
+
+use std::collections::HashMap;
+
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput};
+use quote::{ format_ident, quote };
+use syn::{ Data, DeriveInput, Fields, Lit, Type, parse_macro_input };
 
 #[proc_macro_derive(EnumParam)]
 pub fn derive_enum_param(input: TokenStream) -> TokenStream {
@@ -12,13 +17,22 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
     };
 
     let variants: Vec<_> = data_enum.variants.into_iter().collect();
-    
+
     // Extract variant identifiers and strings for use in generated code
-    let variant_idents: Vec<_> = variants.iter().map(|v| v.ident.clone()).collect();
-    let variant_strings: Vec<_> = variants.iter().map(|v| v.ident.to_string()).collect();
+    let variant_idents: Vec<_> = variants
+        .iter()
+        .map(|v| v.ident.clone())
+        .collect();
+    let variant_strings: Vec<_> = variants
+        .iter()
+        .map(|v| v.ident.to_string())
+        .collect();
 
     // Fallback to the first variant if #[default] is missing
-    let mut default_variant = variants.first().expect("Enum must have at least one variant").ident.clone();
+    let mut default_variant = variants
+        .first()
+        .expect("Enum must have at least one variant")
+        .ident.clone();
     for variant in &variants {
         if variant.attrs.iter().any(|attr| attr.path().is_ident("default")) {
             default_variant = variant.ident.clone();
@@ -26,7 +40,8 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
         }
     }
 
-    let expanded = quote! {
+    let expanded =
+        quote! {
         impl ::karbeat_plugin_types::parameter::EnumParam for #name {
             #[inline(always)]
             fn to_index(self) -> usize {
@@ -52,5 +67,424 @@ pub fn derive_enum_param(input: TokenStream) -> TokenStream {
         }
     };
 
+    TokenStream::from(expanded)
+}
+
+struct ParamDef {
+    field_name: syn::Ident,
+    original_type: Type,
+    id: u32,
+    name: String,
+    group: String,
+    min: f32,
+    max: f32,
+    default: f32,
+}
+
+/// # Overview
+///
+/// Macro to generate implementation for getter, setter, and automation
+///
+/// # How to Use
+///
+/// Put attribute macro on labelled parameters using `#[nested]` if
+/// it is a non-primitive type, or in other words "custom type".
+/// Else, just use the `#[param(id=your_id, name=your_name, group=your_group, min=your_min_value
+/// max=your_max_value, default=your_default_value)]`.
+/// For nested value, your custom type should also implement AutoParams. you can achieve
+/// the same result by using the `#[karbeat_plugin]` macro again in your custom type
+#[proc_macro_attribute]
+pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut ast = parse_macro_input!(item as DeriveInput);
+    let struct_name = &ast.ident;
+    let enum_name = format_ident!("{}ParamIds", struct_name);
+    let mut params = Vec::new();
+    let mut nested_fields: Vec<(syn::Ident, bool)> = Vec::new();
+    let mut used_ids: HashMap<u32, syn::Ident> = HashMap::new();
+    if let Data::Struct(data_struct) = &mut ast.data {
+        if let Fields::Named(fields) = &mut data_struct.fields {
+            for field in fields.named.iter_mut() {
+                let field_ident = field.ident.clone().unwrap();
+                let mut is_param = false;
+
+                let mut macro_error: Option<syn::Error> = None;
+
+                for attr in &field.attrs {
+                    if attr.path().is_ident("param") {
+                        is_param = true;
+                        let mut p_id = 0;
+                        let mut p_name = String::new();
+                        let mut p_group = String::new();
+                        let mut p_min = 0.0;
+                        let mut p_max = 1.0;
+                        let mut p_default = 0.0;
+
+                        let res = attr.parse_nested_meta(|meta| {
+                            if meta.path.is_ident("id") {
+                                let value = meta.value()?.parse::<Lit>()?;
+                                if let Lit::Int(lit_int) = value {
+                                    let parsed_id = lit_int.base10_parse()?;
+
+                                    if let Some(existing_field) = used_ids.get(&parsed_id) {
+                                        return Err(
+                                            syn::Error::new_spanned(
+                                                &lit_int, // Points the error exactly at the duplicate number!
+                                                format!(
+                                                    "Parameter ID collision! ID {} is already used by field `{}`.",
+                                                    parsed_id,
+                                                    existing_field
+                                                )
+                                            )
+                                        );
+                                    }
+
+                                    // Register the ID
+                                    used_ids.insert(parsed_id, field_ident.clone());
+                                    p_id = parsed_id;
+                                }
+                            } else if meta.path.is_ident("name") {
+                                let value = meta.value()?.parse::<Lit>()?;
+                                if let Lit::Str(lit_str) = value {
+                                    p_name = lit_str.value();
+                                }
+                            } else if meta.path.is_ident("group") {
+                                let value = meta.value()?.parse::<Lit>()?;
+                                if let Lit::Str(lit_str) = value {
+                                    p_group = lit_str.value();
+                                }
+                            } else if meta.path.is_ident("min") {
+                                let value = meta.value()?.parse::<Lit>()?;
+                                if let Lit::Float(lit_float) = value {
+                                    p_min = lit_float.base10_parse()?;
+                                }
+                            } else if meta.path.is_ident("max") {
+                                let value = meta.value()?.parse::<Lit>()?;
+                                if let Lit::Float(lit_float) = value {
+                                    p_max = lit_float.base10_parse()?;
+                                }
+                            } else if meta.path.is_ident("default") {
+                                let value = meta.value()?.parse::<Lit>()?;
+                                if let Lit::Float(lit_float) = value {
+                                    p_default = lit_float.base10_parse()?;
+                                }
+                            } else {
+                                return Err(
+                                    syn::Error::new_spanned(
+                                        &meta.path,
+                                        format!("{:?} is not a valid parameter", meta.path)
+                                    )
+                                );
+                            }
+                            Ok(())
+                        });
+
+                        if let Err(e) = res {
+                            macro_error = Some(e);
+                        }
+
+                        params.push(ParamDef {
+                            field_name: field_ident.clone(),
+                            original_type: field.ty.clone(),
+                            id: p_id,
+                            name: p_name,
+                            group: p_group,
+                            min: p_min,
+                            max: p_max,
+                            default: p_default,
+                        });
+                    } else if attr.path().is_ident("nested") {
+                        let is_iterable = match &field.ty {
+                            Type::Array(_) | Type::Slice(_) => true,
+                            Type::Path(p) => {
+                                if let Some(segment) = p.path.segments.last() {
+                                    let id = segment.ident.to_string();
+                                    id == "Vec" || id == "VecDeque" || id == "Option"
+                                } else {
+                                    false
+                                }
+                            }
+                            _ => false,
+                        };
+                        nested_fields.push((field_ident.clone(), is_iterable));
+                    }
+                }
+
+                if let Some(err) = macro_error {
+                    return TokenStream::from(err.to_compile_error());
+                }
+
+                if is_param {
+                    let orig_ty = &field.ty;
+                    let new_ty: Type = syn::parse_quote!(Param<#orig_ty>);
+                    field.ty = new_ty;
+                }
+
+                // Remove the custom attributes so the Rust compiler doesn't panic
+                field.attrs.retain(
+                    |attr| !attr.path().is_ident("param") && !attr.path().is_ident("nested")
+                );
+            }
+        }
+    }
+
+    let enum_variants = params.iter().map(|p| {
+        let variant_name = format_ident!("{}", p.name.replace(" ", ""));
+        let id = p.id;
+        quote! { #variant_name = #id }
+    });
+
+    let set_match_arms = params.iter().map(|p| {
+        let field = &p.field_name;
+        let id = p.id;
+        quote! { #id => { self.#field.set_base(value); return; } }
+    });
+
+    let nested_set_stmts = nested_fields.iter().map(|(f, is_iterable)| {
+        if *is_iterable {
+            quote! {
+                for item in &mut self.#f {
+                    if item.auto_get_parameter(id).is_some() {
+                        item.auto_set_parameter(id, value);
+                        return;
+                    }
+                }
+            }
+        } else {
+            quote! {
+                if self.#f.auto_get_parameter(id).is_some() {
+                    self.#f.auto_set_parameter(id, value);
+                    return;
+                }
+            }
+        }
+    });
+
+    let get_match_arms = params.iter().map(|p| {
+        let field = &p.field_name;
+        let id = p.id;
+        quote! { #id => return Some(self.#field.get_base().to_f32()), }
+    });
+
+    let nested_get_stmts = nested_fields.iter().map(|(f, is_iterable)| {
+        if *is_iterable {
+            quote! {
+                for item in &self.#f {
+                    if let Some(v) = item.auto_get_parameter(id) {
+                        return Some(v);
+                    }
+                }
+            }
+        } else {
+            quote! {
+                if let Some(v) = self.#f.auto_get_parameter(id) {
+                    return Some(v);
+                }
+            }
+        }
+    });
+
+    let apply_auto_arms = params.iter().map(|p| {
+        let field = &p.field_name;
+        let id = p.id;
+        quote! { #id => { self.#field.apply_automation(value); return; } }
+    });
+
+    let nested_apply_stmts = nested_fields.iter().map(|(f, is_iterable)| {
+        if *is_iterable {
+            quote! {
+                for item in &mut self.#f {
+                    if item.auto_get_parameter(id).is_some() {
+                        item.auto_apply_automation(id, value);
+                        return;
+                    }
+                }
+            }
+        } else {
+            quote! {
+                if self.#f.auto_get_parameter(id).is_some() {
+                    self.#f.auto_apply_automation(id, value);
+                    return;
+                }
+            }
+        }
+    });
+
+    let clear_auto_arms = params.iter().map(|p| {
+        let field = &p.field_name;
+        let id = p.id;
+        quote! { #id => { self.#field.clear_automation(); return; } }
+    });
+
+    let nested_clear_stmts = nested_fields.iter().map(|(f, is_iterable)| {
+        if *is_iterable {
+            quote! {
+                for item in &mut self.#f {
+                    if item.auto_get_parameter(id).is_some() {
+                        item.auto_clear_automation(id);
+                        return;
+                    }
+                }
+            }
+        } else {
+            quote! {
+                if self.#f.auto_get_parameter(id).is_some() {
+                    self.#f.auto_clear_automation(id);
+                    return;
+                }
+            }
+        }
+    });
+
+    let spec_pushes = params.iter().map(|p| {
+        let field = &p.field_name;
+        quote! { specs.push(self.#field.to_spec()); }
+    });
+
+    let nested_spec_stmts = nested_fields.iter().map(|(f, is_iterable)| {
+        if *is_iterable {
+            quote! {
+                for item in &self.#f {
+                    specs.extend(item.auto_get_parameter_specs());
+                }
+            }
+        } else {
+            quote! {
+                specs.extend(self.#f.auto_get_parameter_specs());
+            }
+        }
+    });
+
+    let type_checks = params.iter().map(|p| {
+        let ty = &p.original_type;
+
+        quote! {
+            const _: () = {
+                // Define a function that demands the ParamType trait
+                fn assert_implements_param_type<T: karbeat_plugin_types::parameter::ParamType>() {}
+                
+                // Attempt to call it with the field's type. 
+                // If it doesn't implement the trait, the compiler throws a massive error here!
+                let _ = assert_implements_param_type::<#ty>;
+            };
+        }
+    });
+
+    let mut default_field_inits = Vec::new();
+
+    if let Data::Struct(data_struct) = &ast.data {
+        if let Fields::Named(fields) = &data_struct.fields {
+            for field in fields.named.iter() {
+                let field_ident = field.ident.as_ref().unwrap();
+
+                // If the field is in our parsed parameters list, initialize it fully
+                if let Some(p) = params.iter().find(|p| &p.field_name == field_ident) {
+                    let id = p.id;
+                    let name = &p.name;
+                    let group = &p.group;
+                    let default_val = p.default;
+                    let min = p.min;
+                    let max = p.max;
+                    let ty = &p.original_type;
+
+                    // Convert the AST Type to a string to check what it is
+                    let ty_str = quote!(#ty).to_string().replace(" ", "");
+
+                    let param_init = if ty_str == "f32" {
+                        quote! {
+                            karbeat_plugin_types::parameter::Param::new_float(#id, #name, #group, #default_val, #min, #max)
+                        }
+                    } else if ty_str == "bool" {
+                        quote! {
+                            // Convert float default (e.g. 0.0 or 1.0) back to bool
+                            karbeat_plugin_types::parameter::Param::new_bool(#id, #name, #group, #default_val > 0.5)
+                        }
+                    } else {
+                        quote! {
+                            // Treat anything else as an Enum, using the EnumParam trait to cast the default
+                            karbeat_plugin_types::parameter::Param::new_enum(
+                                #id, 
+                                #name, 
+                                #group, 
+                                <#ty as karbeat_plugin_types::parameter::EnumParam>::from_index(#default_val as usize)
+                            )
+                        }
+                    };
+
+                    default_field_inits.push(quote! {
+                        #field_ident: #param_init
+                    });
+                } else {
+                    // For #[nested] or standard fields, fallback to standard default
+                    default_field_inits.push(quote! {
+                        #field_ident: std::default::Default::default()
+                    });
+                }
+            }
+        }
+    }
+    
+    let expanded =
+        quote! {
+        #ast
+
+        #[repr(u32)]
+        pub enum #enum_name {
+            #(#enum_variants),*
+        }
+
+        #(#type_checks)*
+
+        // Generate a base constructor instead of the Default trait
+        impl #struct_name {
+            /// Creates an instance with all `#[param]` fields initialized to their macro defaults.
+            pub fn base_default() -> Self {
+                Self {
+                    #(#default_field_inits),*
+                }
+            }
+        }
+
+        impl karbeat_plugin_types::parameter::AutoParams for #struct_name {
+            fn auto_set_parameter(&mut self, id: u32, value: f32) {
+                match id {
+                    #(#set_match_arms)*
+                    _ => {}
+                }
+                #(#nested_set_stmts)*
+            }
+
+            fn auto_get_parameter(&self, id: u32) -> Option<f32> {
+                match id {
+                    #(#get_match_arms)*
+                    _ => {}
+                }
+                #(#nested_get_stmts)*
+                None
+            }
+
+            fn auto_apply_automation(&mut self, id: u32, value: f32) {
+                match id {
+                    #(#apply_auto_arms)*
+                    _ => {}
+                }
+                #(#nested_apply_stmts)*
+            }
+
+            fn auto_clear_automation(&mut self, id: u32) {
+                match id {
+                    #(#clear_auto_arms)*
+                    _ => {}
+                }
+                #(#nested_clear_stmts)*
+            }
+
+            fn auto_get_parameter_specs(&self) -> Vec<karbeat_plugin_types::parameter::PluginParameter> {
+                let mut specs = Vec::new();
+                #(#spec_pushes)*
+                #(#nested_spec_stmts)*
+                specs
+            }
+        }
+    };
     TokenStream::from(expanded)
 }

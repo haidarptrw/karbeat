@@ -304,3 +304,12 @@ impl<T: EnumParam> Param<T> {
         }
     }
 }
+
+/// Traits that implements the automatic parameters getter, setter, specs, and automation
+pub trait AutoParams {
+    fn auto_get_parameter(&self, id: u32) -> Option<f32>;
+    fn auto_set_parameter(&mut self, id: u32, value: f32);
+    fn auto_apply_automation(&mut self, id: u32, value: f32);
+    fn auto_clear_automation(&mut self, id: u32);
+    fn auto_get_parameter_specs(&self) -> Vec<PluginParameter>;
+}

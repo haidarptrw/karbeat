@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{core::project::{
      ApplicationState, Clip, ClipId, Note, NoteId, TrackId,
-}, shared::PatternId};
+}, shared::id::*};
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
