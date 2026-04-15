@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+use serde::{ Deserialize, Serialize };
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ParameterValueType {
     Float,
     Int,
@@ -9,12 +11,12 @@ pub enum ParameterValueType {
 }
 
 /// Generic description of a plugin parameter for UI generation
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PluginParameter {
     pub id: u32,
     pub name: String,
     pub group: String, // e.g., "Oscillator 1", "Master"
-    pub value: f32,    // Current value
+    pub value: f32, // Current value
     pub min: f32,
     pub max: f32,
     pub default_value: f32,
@@ -32,7 +34,7 @@ impl PluginParameter {
         val: f32,
         min: f32,
         max: f32,
-        default: f32,
+        default: f32
     ) -> Self {
         Self {
             id,
@@ -54,10 +56,18 @@ impl PluginParameter {
             id,
             name: name.to_string(),
             group: group.to_string(),
-            value: if val { 1.0 } else { 0.0 },
+            value: if val {
+                1.0
+            } else {
+                0.0
+            },
             min: 0.0,
             max: 1.0,
-            default_value: if default { 1.0 } else { 0.0 },
+            default_value: if default {
+                1.0
+            } else {
+                0.0
+            },
             step: 1.0,
             value_type: ParameterValueType::Bool,
             choices: Vec::new(),
@@ -71,7 +81,7 @@ impl PluginParameter {
         group: &str,
         val: u32,
         choices: Vec<String>,
-        default: u32,
+        default: u32
     ) -> Self {
         Self {
             id,
@@ -79,7 +89,7 @@ impl PluginParameter {
             group: group.to_string(),
             value: val as f32,
             min: 0.0,
-            max: (choices.len().saturating_sub(1)) as f32,
+            max: choices.len().saturating_sub(1) as f32,
             default_value: default as f32,
             step: 1.0,
             value_type: ParameterValueType::Choice,
@@ -88,7 +98,7 @@ impl PluginParameter {
     }
 }
 
-pub trait ParamType: Copy + Clone + Debug {
+pub trait ParamType: Copy + Clone + Debug + PartialEq {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self;
     fn to_f32(self) -> f32;
 }
@@ -100,24 +110,31 @@ impl ParamType for f32 {
             _ => val,
         }
     }
-    fn to_f32(self) -> f32 { self }
+    fn to_f32(self) -> f32 {
+        self
+    }
 }
 
 impl ParamType for i32 {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
-            ParamBounds::Discrete { min, max } => val.round().clamp(*min as f32, *max as f32) as i32,
+            ParamBounds::Discrete { min, max } =>
+                val.round().clamp(*min as f32, *max as f32) as i32,
             _ => val.round() as i32,
         }
     }
-    fn to_f32(self) -> f32 { self as f32 }
+    fn to_f32(self) -> f32 {
+        self as f32
+    }
 }
 
 impl ParamType for bool {
     fn from_f32_clamped(val: f32, _bounds: &ParamBounds<Self>) -> Self {
         val >= 0.5
     }
-    fn to_f32(self) -> f32 { if self { 1.0 } else { 0.0 } }
+    fn to_f32(self) -> f32 {
+        if self { 1.0 } else { 0.0 }
+    }
 }
 
 // Enum/Choice Implementation (using usize)
@@ -131,11 +148,13 @@ impl ParamType for usize {
             _ => val.round() as usize,
         }
     }
-    fn to_f32(self) -> f32 { self as f32 }
+    fn to_f32(self) -> f32 {
+        self as f32
+    }
 }
 
 /// A trait that allows an enum to be used safely as an automated parameter.
-pub trait EnumParam: Copy + Clone + std::fmt::Debug {
+pub trait EnumParam: Copy + Clone + std::fmt::Debug + PartialEq {
     /// Convert the enum to a raw usize index
     fn to_index(self) -> usize;
     /// Safely convert a usize index back to the enum (falling back to a default if out of bounds)
@@ -147,7 +166,7 @@ pub trait EnumParam: Copy + Clone + std::fmt::Debug {
 impl<T: EnumParam> ParamType for T {
     fn from_f32_clamped(val: f32, _bounds: &ParamBounds<Self>) -> Self {
         // Clamp the float to the exact number of enum variants
-        let max_idx = (T::variants().len().saturating_sub(1)) as f32;
+        let max_idx = T::variants().len().saturating_sub(1) as f32;
         let idx = val.round().clamp(0.0, max_idx) as usize;
         T::from_index(idx)
     }
@@ -158,27 +177,36 @@ impl<T: EnumParam> ParamType for T {
 }
 
 /// Defines the constraints and behavior of a parameter.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ParamBounds<T> {
-    Continuous { min: T, max: T },
-    Discrete { min: T, max: T },
+    Continuous {
+        min: T,
+        max: T,
+    },
+    Discrete {
+        min: T,
+        max: T,
+    },
     Toggle,
-    Choice { count: usize, labels: Vec<&'static str> },
+    Choice {
+        count: usize,
+        labels: Vec<String>,
+    },
 }
 
 /// A strictly typed, thread-safe parameter wrapper for DSP plugins.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Param<T: ParamType> {
     pub id: u32,
-    pub name: &'static str,
-    pub group: &'static str,
-    
+    pub name: String,
+    pub group: String,
+
     /// The value set by the user via the UI (no automation applied)
     base_value: T,
-    
+
     /// The actual value used by the DSP thread (base_value + automation)
     current_value: T,
-    
+
     pub bounds: ParamBounds<T>,
 }
 
@@ -199,10 +227,10 @@ impl<T: ParamType> Param<T> {
     pub fn set_base(&mut self, raw_value: f32) {
         let clamped = T::from_f32_clamped(raw_value, &self.bounds);
         self.base_value = clamped;
-        
+
         // If no automation is currently overriding it, update current_value immediately.
         // TODO: Add `is_automated` flag
-        self.current_value = clamped; 
+        self.current_value = clamped;
     }
 
     /// Apply an automation frame from the sequencer.
@@ -232,7 +260,7 @@ impl<T: ParamType> Param<T> {
                 ParamBounds::Continuous { max, .. } => max.to_f32(),
                 ParamBounds::Discrete { max, .. } => max.to_f32(),
                 ParamBounds::Toggle => 1.0,
-                ParamBounds::Choice { count, .. } => (count.saturating_sub(1)) as f32,
+                ParamBounds::Choice { count, .. } => count.saturating_sub(1) as f32,
             },
             default_value: self.base_value.to_f32(),
             step: match &self.bounds {
@@ -246,7 +274,11 @@ impl<T: ParamType> Param<T> {
                 ParamBounds::Choice { .. } => ParameterValueType::Choice,
             },
             choices: match &self.bounds {
-                ParamBounds::Choice { labels, .. } => labels.iter().map(|s| s.to_string()).collect(),
+                ParamBounds::Choice { labels, .. } =>
+                    labels
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                 _ => vec![],
             },
         }
@@ -256,9 +288,18 @@ impl<T: ParamType> Param<T> {
 // In parameter.rs
 
 impl Param<f32> {
-    pub fn new_float(id: u32, name: &'static str, group: &'static str, default: f32, min: f32, max: f32) -> Self {
+    pub fn new_float(
+        id: u32,
+        name: &'static str,
+        group: &'static str,
+        default: f32,
+        min: f32,
+        max: f32
+    ) -> Self {
         Self {
-            id, name, group,
+            id,
+            name: name.to_owned(),
+            group: group.to_owned(),
             base_value: default.clamp(min, max),
             current_value: default.clamp(min, max),
             bounds: ParamBounds::Continuous { min, max },
@@ -269,7 +310,9 @@ impl Param<f32> {
 impl Param<bool> {
     pub fn new_bool(id: u32, name: &'static str, group: &'static str, default: bool) -> Self {
         Self {
-            id, name, group,
+            id,
+            name: name.to_owned(),
+            group: group.to_owned(),
             base_value: default,
             current_value: default,
             bounds: ParamBounds::Toggle,
@@ -278,12 +321,26 @@ impl Param<bool> {
 }
 
 impl Param<usize> {
-    pub fn new_choice(id: u32, name: &'static str, group: &'static str, default: usize, labels: Vec<&'static str>) -> Self {
+    pub fn new_choice(
+        id: u32,
+        name: &'static str,
+        group: &'static str,
+        default: usize,
+        labels: Vec<&'static str>
+    ) -> Self {
         Self {
-            id, name, group,
+            id,
+            name: name.to_string(),
+            group: group.to_owned(),
             base_value: default,
             current_value: default,
-            bounds: ParamBounds::Choice { count: labels.len(), labels },
+            bounds: ParamBounds::Choice {
+                count: labels.len(),
+                labels: labels
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+            },
         }
     }
 }
@@ -293,13 +350,16 @@ impl<T: EnumParam> Param<T> {
     pub fn new_enum(id: u32, name: &'static str, group: &'static str, default: T) -> Self {
         Self {
             id,
-            name,
-            group,
+            name: name.to_owned(),
+            group: group.to_owned(),
             base_value: default,
             current_value: default,
             bounds: ParamBounds::Choice {
                 count: T::variants().len(),
-                labels: T::variants().to_vec(),
+                labels: T::variants()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             },
         }
     }

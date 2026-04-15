@@ -24,5 +24,6 @@ pub fn hermite_intern_f64(frac: f64, p0: f64, p1: f64, p2: f64, p3: f64) -> f64 
 
 #[inline(always)]
 pub fn lerp<T: Float>(alpha: T, p0: T, p1: T) -> T {
+    // equals to alpha * (p1 - p0) + p0
     (p1 - p0).mul_add(alpha, p0)
 }

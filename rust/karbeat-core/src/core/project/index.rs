@@ -1,32 +1,29 @@
-use std::{
-    cmp::Ordering,
-    sync::Arc,
-};
+use std::{ cmp::Ordering, sync::Arc };
 
-use chrono::{DateTime, Utc};
+use chrono::{ DateTime, Utc };
 use indexmap::IndexMap;
 use hashbrown::HashMap;
 
 use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
+use serde::{ Deserialize, Serialize };
 
-pub use super::clip::{Clip};
+pub use super::clip::{ Clip };
 pub use super::clipboard::ClipboardContent;
-pub use super::generator::{GeneratorInstance, GeneratorInstanceType};
-pub use super::plugin::{instance::PluginInstance, KarbeatPlugin};
+pub use super::generator::{ GeneratorInstance, GeneratorInstanceType };
+pub use super::plugin::{ instance::PluginInstance, KarbeatPlugin };
 pub use super::track::{
-    audio_waveform::{AudioWaveform},
-    midi::{Pattern},
-    KarbeatTrack, TrackType,
+    audio_waveform::{ AudioWaveform },
+    midi::{ Pattern },
+    KarbeatTrack,
+    TrackType,
 };
 pub use super::transport::TransportState;
 
 use crate::{
     core::project::{
-        automation::{AutomationLane, AutomationPoint, AutomationTarget},
+        automation::{ AutomationLane, AutomationPoint, AutomationTarget },
         mixer::MixerState,
     },
-    
 };
 
 pub use crate::shared::*;
@@ -88,7 +85,7 @@ pub enum KarbeatSource {
     Midi(PatternId),
 
     /// Points to an Automation ID (Future implementation)
-    Automation(u32),
+    Automation(AutomationId),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -192,11 +189,8 @@ impl Default for AudioHardwareConfig {
 }
 
 impl ApplicationState {
-
-
     pub fn update_max_sample_index(&mut self) {
-        self.max_sample_index = self
-            .tracks
+        self.max_sample_index = self.tracks
             .values_mut()
             .map(|t| {
                 let track_mut = Arc::make_mut(t);
@@ -210,7 +204,7 @@ impl ApplicationState {
     /// Deletes an audio source and removes all clips referencing it.
     pub fn remove_audio_source(
         &mut self,
-        source_id: AudioSourceId,
+        source_id: AudioSourceId
     ) -> anyhow::Result<AudioSourceId> {
         // we check whether the source exists
         let library = Arc::make_mut(&mut self.asset_library);
@@ -241,7 +235,7 @@ impl ApplicationState {
         label: impl Into<String>,
         min: f32,
         max: f32,
-        default_value: f32,
+        default_value: f32
     ) -> anyhow::Result<AutomationId> {
         // Prevent duplicate lanes for the same target
         if self.automation_pool.values().any(|l| l.target == target) {
@@ -254,6 +248,51 @@ impl ApplicationState {
 
         log::info!("Added automation lane {:?}", lane_id);
         Ok(lane_id)
+    }
+
+    pub fn add_automation_lane_for_track(
+        &mut self,
+        track_id: &TrackId,
+        target: AutomationTarget,
+        label: impl Into<String>,
+        min: f32,
+        max: f32,
+        default_value: f32
+    ) -> anyhow::Result<Arc<AutomationLane>>{
+        let track_arc = self.tracks.get(track_id).ok_or_else(||anyhow!("Track not found"))?;
+
+        // check the track id. if it is a automation lane, return error
+        let is_not_automation_track = matches!(
+            track_arc.track_type, TrackType::Audio | TrackType::Midi
+        );
+
+        if !is_not_automation_track {
+            return Err(anyhow!("Is an automation track. cannot add automation for automation track"));
+        }
+
+        self.add_automation_lane_return_lane(target, label, min, max, default_value)
+    }
+
+    pub fn add_automation_lane_return_lane(
+        &mut self,
+        target: AutomationTarget,
+        label: impl Into<String>,
+        min: f32,
+        max: f32,
+        default_value: f32
+    ) -> anyhow::Result<Arc<AutomationLane>> {
+        // Prevent duplicate lanes for the same target
+        if self.automation_pool.values().any(|l| l.target == target) {
+            return Err(anyhow!("Automation lane for this target already exists"));
+        }
+
+        let lane_id = AutomationId::next(&mut self.automation_counter);
+        let lane = AutomationLane::new(lane_id, target, label, min, max, default_value);
+        let lane_arc = Arc::new(lane);
+        self.automation_pool.insert(lane_id, lane_arc.clone());
+
+        log::info!("Added automation lane {:?}", lane_id);
+        Ok(lane_arc)
     }
 
     /// Remove an automation lane from the pool by its ID.
@@ -270,10 +309,9 @@ impl ApplicationState {
     pub fn add_automation_point(
         &mut self,
         lane_id: AutomationId,
-        point: AutomationPoint,
+        point: AutomationPoint
     ) -> anyhow::Result<()> {
-        let lane_arc = self
-            .automation_pool
+        let lane_arc = self.automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
@@ -286,10 +324,9 @@ impl ApplicationState {
     pub fn remove_automation_point(
         &mut self,
         lane_id: AutomationId,
-        point_index: usize,
+        point_index: usize
     ) -> anyhow::Result<AutomationPoint> {
-        let lane_arc = self
-            .automation_pool
+        let lane_arc = self.automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
@@ -304,28 +341,29 @@ impl ApplicationState {
     }
 
     /// Update an automation point (move in time and/or value).
+    /// returns (old_index, new_index)
     pub fn update_automation_point(
         &mut self,
         lane_id: AutomationId,
         point_index: usize,
         time_ticks: u32,
-        value: f32,
-    ) -> anyhow::Result<()> {
-        let lane_arc = self
-            .automation_pool
+        value: f32
+    ) -> anyhow::Result<(usize, usize)> {
+        let lane_arc = self.automation_pool
             .get_mut(&lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
         let lane = Arc::make_mut(lane_arc);
-        if !lane.update_point(point_index, time_ticks, value) {
-            return Err(anyhow!(
-                "Point index {} out of bounds (lane has {} points)",
-                point_index,
-                lane.points.len()
-            ));
+        match lane.update_point(point_index, time_ticks, value) {
+            Some(new_index) => Ok((point_index, new_index)),
+            None => Err(
+                anyhow!(
+                    "Point index {} out of bounds (lane has {} points)",
+                    point_index,
+                    lane.points.len()
+                )
+            ),
         }
-
-        Ok(())
     }
 
     /// Get all automation lanes that reference a specific track.
@@ -339,7 +377,6 @@ impl ApplicationState {
 
     /// Remove all automation lanes that reference a track (used when deleting tracks).
     pub fn remove_automation_lanes_for_track(&mut self, track_id: TrackId) {
-        self.automation_pool
-            .retain(|_, lane| !lane.target.references_track(track_id));
+        self.automation_pool.retain(|_, lane| !lane.target.references_track(track_id));
     }
 }

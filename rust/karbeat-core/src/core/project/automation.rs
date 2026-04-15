@@ -4,8 +4,7 @@
 // Provides both project-level automation lane data (saved with the project)
 // and a runtime AutomationManager used by plugin wrappers during audio processing.
 
-use std::collections::HashMap;
-
+use karbeat_dsp::interpolation::lerp;
 use serde::{Deserialize, Serialize};
 
 use crate::shared::id::{AutomationId, BusId, EffectId, TrackId};
@@ -191,17 +190,23 @@ impl AutomationLane {
     }
 
     /// Update a point at the given index.
-    pub fn update_point(&mut self, index: usize, time_ticks: u32, value: f32) -> bool {
-        if let Some(point) = self.points.get_mut(index) {
-            point.time_ticks = time_ticks;
-            point.value = value.clamp(0.0, 1.0);
-
-            // Re-sort after update (point may have moved in time)
-            self.points.sort_by(|a, b| a.time_ticks.cmp(&b.time_ticks));
-            true
-        } else {
-            false
+    pub fn update_point(&mut self, index: usize, time_ticks: u32, value: f32) -> Option<usize> {
+        if index >= self.points.len() {
+            return None;
         }
+        
+        let mut point = self.points.remove(index);
+        
+        point.time_ticks = time_ticks;
+        point.value = value;
+        
+        let new_index = match self.points.binary_search_by(|p| p.time_ticks.cmp(&point.time_ticks)) {
+            Ok(pos) => pos,
+            Err(pos) => pos,
+        };
+        
+        self.points.insert(new_index, point);
+        Some(new_index)
     }
 
     /// Get the interpolated normalized value (0.0–1.0) at a given time in ticks.
@@ -246,7 +251,7 @@ impl AutomationLane {
 
         // Interpolate based on curve type of the FIRST point
         let value = match p1.curve_type {
-            CurveType::Linear => lerp(p1.value, p2.value, t),
+            CurveType::Linear => lerp(t, p1.value, p2.value),
             CurveType::Exponential => {
                 // Exponential interpolation (good for frequency/volume)
                 // Avoid log(0) by clamping
@@ -291,72 +296,8 @@ impl AutomationLane {
 // HELPER FUNCTIONS
 // ============================================================================
 
-/// Linear interpolation
-#[inline]
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
-}
+// #[inline]
+// fn lerp(a: f32, b: f32, t: f32) -> f32 {
+//     a + (b - a) * t
+// }
 
-// ============================================================================
-// AUTOMATION MANAGER (runtime — used by plugin wrappers during audio processing)
-// ============================================================================
-
-/// Runtime automation state for a single plugin instance.
-///
-/// This is used by `SynthWrapper` and `EffectWrapper` during audio rendering
-/// to apply per-buffer automation values. It is NOT serialized with the project;
-/// the authoritative data lives in `KarbeatTrack::automation_lanes`.
-#[derive(Clone, Debug, Default)]
-pub struct AutomationManager {
-    /// Map of parameter ID → runtime automation lane
-    pub lanes: HashMap<u32, AutomationLane>,
-}
-
-impl AutomationManager {
-    pub fn new() -> Self {
-        Self {
-            lanes: HashMap::new(),
-        }
-    }
-
-    /// Get or create a lane for a parameter.
-    pub fn get_or_create_lane(&mut self, param_id: u32) -> &mut AutomationLane {
-        self.lanes.entry(param_id).or_insert_with(|| {
-            AutomationLane::new(
-                AutomationId::from(0),
-                AutomationTarget::TrackGeneratorPluginParam {
-                    track_id: TrackId::from(0),
-                    param_id,
-                },
-                format!("Param {}", param_id),
-                0.0,
-                1.0,
-                0.5,
-            )
-        })
-    }
-
-    /// Get a lane by parameter ID.
-    pub fn get_lane(&self, param_id: u32) -> Option<&AutomationLane> {
-        self.lanes.get(&param_id)
-    }
-
-    /// Get mutable lane by parameter ID.
-    pub fn get_lane_mut(&mut self, param_id: u32) -> Option<&mut AutomationLane> {
-        self.lanes.get_mut(&param_id)
-    }
-
-    /// Apply all automation values at the given time.
-    /// Returns a vec of (param_id, denormalized_value) pairs that should be applied.
-    pub fn get_values_at(&self, time_ticks: u32) -> Vec<(u32, f32)> {
-        self.lanes
-            .iter()
-            .filter_map(|(id, lane)| lane.denormalized_value_at(time_ticks).map(|v| (*id, v)))
-            .collect()
-    }
-
-    /// Check if any lanes have automation data.
-    pub fn has_automation(&self) -> bool {
-        self.lanes.values().any(|lane| !lane.points.is_empty())
-    }
-}

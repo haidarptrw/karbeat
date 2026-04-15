@@ -1,5 +1,6 @@
 use std::{ collections::BTreeSet, sync::Arc };
 
+use karbeat_plugin_types::ParamBounds;
 use serde::{ Deserialize, Serialize };
 
 use crate::{
@@ -12,6 +13,7 @@ use crate::{
         GeneratorInstanceType,
         KarbeatSource,
         PluginInstance,
+        automation::{ AutomationLane, AutomationTarget },
         mixer::MixerChannel,
     },
     shared::{ BusId, GeneratorId, id::{ ClipId, TrackId } },
@@ -64,12 +66,7 @@ impl std::str::FromStr for TrackType {
 }
 
 impl KarbeatTrack {
-    pub fn new(
-        id: TrackId,
-        name: &str,
-        color: Color,
-        track_type: TrackType,
-    ) -> Self {
+    pub fn new(id: TrackId, name: &str, color: Color, track_type: TrackType) -> Self {
         Self {
             id,
             name: name.to_string(),
@@ -77,7 +74,7 @@ impl KarbeatTrack {
             track_type,
             clips: BTreeSet::new(),
             max_sample_index: 0,
-            generator: None
+            generator: None,
         }
     }
 
@@ -334,13 +331,96 @@ impl ApplicationState {
         Ok(track_arc)
     }
 
-    pub fn add_new_automation_track_from_bus(&mut self, bus_id: BusId) {
+    pub fn add_new_automation_track_from_bus(
+        &mut self,
+        bus_id: BusId,
+        automation_target: AutomationTarget
+    ) -> anyhow::Result<Arc<AutomationLane>> {
         let track_id = TrackId::next(&mut self.track_counter);
 
-        // find the Bus
-        // TODO: Continue this part
+        // Find the Bus
+        let bus = self
+            .get_mixer_state()
+            .buses.get(&bus_id)
+            .ok_or_else(|| anyhow::anyhow!("Cannot find the mixer bus"))?;
 
+        let (current_value, min, max) = match &automation_target {
+            AutomationTarget::BusVolume(_) => {
+                let curr_value = bus.channel.volume.get_base();
+                let (min_val, max_val) = {
+                    if let ParamBounds::Continuous { min, max } = bus.channel.volume.bounds {
+                        (min, max)
+                    } else {
+                        (-60.0, 6.0)
+                    }
+                };
+                (curr_value, min_val, max_val)
+            }
+            AutomationTarget::BusPan(_) => {
+                let curr_value = bus.channel.pan.get_base();
+                let (min_val, max_val) = {
+                    if let ParamBounds::Continuous { min, max } = bus.channel.pan.bounds {
+                        (min, max)
+                    } else {
+                        (-60.0, 6.0)
+                    }
+                };
+                (curr_value, min_val, max_val)
+            },
+            AutomationTarget::BusPluginParam { .. } => (0.5, 0.0, 1.0), // Standard fallback for plugins
+            _ => {
+                return Err(anyhow::anyhow!("Not an Bus Target"));
+            }
+        };
 
+        // Create a descriptive label for the track
+        let label = match &automation_target {
+            AutomationTarget::BusVolume(_) => format!("{} - Volume", bus.name),
+            AutomationTarget::BusPan(_) => format!("{} - Pan", bus.name),
+            AutomationTarget::BusPluginParam { .. } => format!("{} - Plugin", bus.name),
+            _ => bus.name.clone(),
+        };
+
+        // Initiate the points in the first and last max sample index with the current value
+        // Fallback to ~4 seconds if the project is completely empty
+        let end_sample = self.max_sample_index.max(
+            (self.audio_config.sample_rate * 4) / ((self.transport.bpm * 60.0).floor() as u32)
+        );
+
+        let new_automation_lane = self.add_automation_lane_return_lane(
+            automation_target,
+            label.clone(),
+            min,
+            max,
+            current_value
+        )?;
+
+        // 3. Create an automation track explicitly for the timeline (because it is a Bus target)
+        let mut new_track = KarbeatTrack {
+            track_type: TrackType::Automation,
+            id: track_id,
+            name: label.clone(),
+            color: Color::new_from_rgb(150, 150, 150),
+            ..Default::default()
+        };
+
+        // Assign it to the AutomationId by creating an empty clip spanning the project timeline
+        let automation_clip = Clip {
+            id: ClipId::next(&mut self.clip_counter),
+            name: label,
+            start_time: 0,
+            loop_length: end_sample,
+            offset_start: 0,
+            source: KarbeatSource::Automation(new_automation_lane.id.clone()),
+        };
+
+        // Add the clip using your existing validation (which correctly allows Automation clips on Automation tracks)
+        new_track.add_clip(automation_clip)?;
+
+        // Finally, add the dedicated track into the timeline's main collection
+        self.tracks.insert(track_id, Arc::new(new_track));
+
+        Ok(new_automation_lane)
     }
 
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.

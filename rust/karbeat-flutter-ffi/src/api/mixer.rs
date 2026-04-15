@@ -64,8 +64,8 @@ impl From<&MixerChannel> for UiMixerChannel {
     fn from(value: &MixerChannel) -> Self {
         Self {
             // Volume is in dB (both UI and backend use dB)
-            volume: value.volume,
-            pan: value.pan,
+            volume: value.volume.get(),
+            pan: value.pan.get(),
             mute: value.mute,
             solo: value.solo,
             inverted_phase: value.inverted_phase,

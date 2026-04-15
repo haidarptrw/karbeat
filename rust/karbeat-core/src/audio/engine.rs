@@ -1126,25 +1126,19 @@ impl AudioEngine {
         for track in self.current_state.graph.tracks.iter() {
             let track_id = track.id;
 
-            let default_channel = Arc::new(MixerChannel {
-                volume: 1.0,
-                pan: 0.0,
-                mute: false,
-                solo: false,
-                inverted_phase: false,
-                effects: Vec::new(),
-                ..Default::default()
-            });
+            let default_channel = Arc::new(MixerChannel::default());
 
-            let channel = self.current_state.graph.mixer_state.channels
-                .get(&track_id)
-                .unwrap_or(&default_channel);
+            let mut channel = self.current_state.graph.mixer_state.channels
+                .get(&track_id).cloned()
+                .unwrap_or(default_channel);
+
+            let channel_mut = Arc::make_mut(&mut channel);
 
             // Check mute/solo
-            if channel.mute {
+            if channel_mut.mute {
                 continue;
             }
-            if is_any_solo && !channel.solo {
+            if is_any_solo && !channel_mut.solo {
                 continue;
             }
 
@@ -1203,7 +1197,7 @@ impl AudioEngine {
 
             // Apply track mixer channel (volume/pan/phase) and effects
             Self::apply_mixer_channel_with_effects(
-                channel,
+                channel_mut,
                 &mut self.plugin_state.track_effects,
                 &self.track_automation_events,
                 track_id,
@@ -1260,15 +1254,15 @@ impl AudioEngine {
 
                 // Get bus channel settings
                 let bus_channel = self.current_state.graph.mixer_state.buses
-                    .get(bus_id)
-                    .map(|b| &b.channel);
+                    .get_mut(bus_id)
+                    .map(|b| Arc::make_mut(b));
 
                 let Some(bus_settings) = bus_channel else {
                     continue;
                 };
 
                 // Skip if muted
-                if bus_settings.mute {
+                if bus_settings.channel.mute {
                     continue;
                 }
 
@@ -1278,8 +1272,8 @@ impl AudioEngine {
                 }
                 self.mix_buffer.copy_from_slice(&self.bus_temp_buffer);
 
-                let mut bus_volume = bus_settings.volume;
-                let mut bus_pan = bus_settings.pan;
+                let bus_volume = &mut bus_settings.channel.volume;
+                let bus_pan = &mut bus_settings.channel.pan;
 
                 // CONSUME BUS AUTOMATION
                 if
@@ -1290,10 +1284,10 @@ impl AudioEngine {
                     for event in auto_events {
                         match event {
                             BusAutomationEvent::Volume(v) => {
-                                bus_volume = *v;
+                                bus_volume.apply_automation(*v);
                             }
                             BusAutomationEvent::Pan(v) => {
-                                bus_pan = *v;
+                                bus_pan.apply_automation(*v);
                             }
                             BusAutomationEvent::PluginParam { effect_id, param_id, value } => {
                                 if
@@ -1326,8 +1320,8 @@ impl AudioEngine {
                 }
 
                 // Apply volume and pan (volume is stored in dB)
-                let volume = db_to_linear(bus_volume);
-                let pan = bus_pan.clamp(-1.0, 1.0);
+                let volume = db_to_linear(bus_volume.get());
+                let pan = bus_pan.get();
                 let (left_gain, right_gain) = if channels == 2 {
                     let p = (pan + 1.0) * 0.5;
                     ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
@@ -1388,9 +1382,10 @@ impl AudioEngine {
         }
 
         // ==== Phase 3: Apply master bus effects ====
-        let master_bus = self.current_state.graph.mixer_state.master_bus.clone();
+        let mut master_bus = self.current_state.graph.mixer_state.master_bus.clone();
+        let master_bus_mut = Arc::make_mut(&mut master_bus);
         Self::apply_master_bus_with_effects(
-            &master_bus,
+            master_bus_mut,
             &mut self.plugin_state.master_effects,
             &self.master_automation_events,
             output,
@@ -1568,7 +1563,7 @@ impl AudioEngine {
 
     /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
     fn apply_mixer_channel_with_effects(
-        mixer_channel: &MixerChannel,
+        mixer_channel: &mut MixerChannel,
         track_effects: &mut Vec<Vec<AudioEffectInstance>>,
         track_automation_events: &[(TrackId, Vec<TrackAutomationEvent>)],
         track_id: TrackId,
@@ -1576,8 +1571,8 @@ impl AudioEngine {
         channels: usize
     ) {
         // Extract base values from the current UI state
-        let mut track_volume = mixer_channel.volume;
-        let mut track_pan = mixer_channel.pan;
+        let track_volume = &mut mixer_channel.volume;
+        let track_pan = &mut mixer_channel.pan;
 
         // CONSUME TRACK AUTOMATION
         if
@@ -1588,15 +1583,16 @@ impl AudioEngine {
             for event in auto_events {
                 match event {
                     TrackAutomationEvent::Volume(v) => {
-                        track_volume = *v;
+                        track_volume.apply_automation(*v);
                     }
                     TrackAutomationEvent::Pan(v) => {
-                        track_pan = *v;
+                        track_pan.apply_automation(*v);
+
                     }
                     TrackAutomationEvent::PluginParam { effect_id, param_id, value } => {
                         if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
                             if let Some(effect) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                                effect.plugin.set_parameter(*param_id, *value);
+                                effect.plugin.apply_automation(*param_id, *value);
                             }
                         }
                     }
@@ -1628,8 +1624,8 @@ impl AudioEngine {
         }
 
         // Apply calculated Volume and Pan
-        let pan = track_pan.clamp(-1.0, 1.0);
-        let volume = db_to_linear(track_volume);
+        let pan = track_pan.get();
+        let volume = db_to_linear(track_volume.get());
 
         let (left_gain, right_gain) = if channels == 2 {
             let p = (pan + 1.0) * 0.5;
@@ -1679,27 +1675,27 @@ impl AudioEngine {
     /// * `buffer` - The buffer to apply the master bus settings to
     /// * `channels` - The number of channels in the buffer
     fn apply_master_bus_with_effects(
-        master_bus: &MixerChannel,
+        master_bus: &mut MixerChannel,
         master_effects: &mut [AudioEffectInstance],
         master_automation_events: &[MasterAutomationEvent],
         buffer: &mut [f32],
         channels: usize
     ) {
-        let mut master_volume = master_bus.volume;
-        let mut master_pan = master_bus.pan;
+        let master_volume = &mut master_bus.volume;
+        let master_pan = &mut master_bus.pan;
 
         // CONSUME MASTER AUTOMATION
         for event in master_automation_events {
             match event {
                 MasterAutomationEvent::Volume(v) => {
-                    master_volume = *v;
+                    master_volume.apply_automation(*v);
                 }
                 MasterAutomationEvent::Pan(v) => {
-                    master_pan = *v;
+                    master_pan.apply_automation(*v);
                 }
                 MasterAutomationEvent::PluginParam { effect_id, param_id, value } => {
                     if let Some(effect) = master_effects.iter_mut().find(|e| e.id == *effect_id) {
-                        effect.plugin.set_parameter(*param_id, *value);
+                        effect.plugin.apply_automation(*param_id, *value);
                     }
                 }
             }
@@ -1727,8 +1723,8 @@ impl AudioEngine {
         }
 
         // Volume and Pan (volume is stored in dB)
-        let pan = master_pan.clamp(-1.0, 1.0);
-        let volume = db_to_linear(master_volume);
+        let pan = master_pan.get();
+        let volume = db_to_linear(master_volume.get());
         let (left_gain, right_gain) = if channels == 2 {
             let p = (pan + 1.0) * 0.5;
             ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
