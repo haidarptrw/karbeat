@@ -32,10 +32,10 @@ impl Oscillator {
     pub fn new(id_start: u32, group: &'static str) -> Self {
         Self {
             waveform: Param::new_enum(id_start, "Waveform", group, Waveform::Sine),
-            detune: Param::new_float(id_start + 1, "Detune", group, 0.0, -48.0, 48.0),
-            phase_offset: Param::new_float(id_start + 2, "Phase Offset", group, 0.0, 0.0, 1.0),
-            mix: Param::new_float(id_start + 3, "Mix", group, 1.0, 0.0, 1.0),
-            pulse_width: Param::new_float(id_start + 4, "Pulse Width", group, 0.5, 0.01, 0.99),
+            detune: Param::new_float(id_start + 1, "Detune", group, 0.0, -48.0, 48.0, 0.2),
+            phase_offset: Param::new_float(id_start + 2, "Phase Offset", group, 0.0, 0.0, 1.0, 0.01),
+            mix: Param::new_float(id_start + 3, "Mix", group, 1.0, 0.0, 1.0, 0.01),
+            pulse_width: Param::new_float(id_start + 4, "Pulse Width", group, 0.5, 0.01, 0.99, 0.01),
         }
     }
 

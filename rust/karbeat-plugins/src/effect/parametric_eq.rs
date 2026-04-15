@@ -70,9 +70,9 @@ impl KarbeatParametricEQFilterNode {
         };
 
         let mut node = Self {
-            freq: Param::new_float(base_id, "Frequency", &group, default_freq, 20.0, 20000.0),
-            gain: Param::new_float(base_id + 1, "Gain", &group, 0.0, -24.0, 24.0),
-            q: Param::new_float(base_id + 2, "Q", &group, 0.707, 0.1, 20.0),
+            freq: Param::new_float(base_id, "Frequency", &group, default_freq, 20.0, 20000.0, 1.0),
+            gain: Param::new_float(base_id + 1, "Gain", &group, 0.0, -24.0, 24.0, 0.1),
+            q: Param::new_float(base_id + 2, "Q", &group, 0.707, 0.1, 20.0, 0.1),
             active: Param::new_bool(base_id + 3, "Active", &group, true),
             filter_type: Param::new_enum(base_id + 4, "Type", &group, default_type),
             order: Param::new_choice(
@@ -340,7 +340,7 @@ pub struct KarbeatParametricEQEngine {
     #[nested]
     pub nodes: Vec<KarbeatParametricEQFilterNode>,
 
-    #[param(id = 2, name = "Base Gain", group = "Master", min = -60.0, max = 24.0, default = 0.0)]
+    #[param(id = 2, name = "Base Gain", group = "Master", min = -60.0, max = 24.0, default = 0.0, step = 0.1)]
     pub base_gain: f32,
 
     // Ignored natively by macro

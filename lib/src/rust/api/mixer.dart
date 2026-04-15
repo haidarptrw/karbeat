@@ -9,7 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `push_mixer_event`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Create the Rust → Flutter event stream for mixer param changes.
 Stream<UiMixerParamEvent> createMixerEventStream() =>
@@ -43,6 +43,21 @@ Future<Map<int, UiBus>> getBuses() =>
 /// **GETTER: Fetch the routing matrix**
 Future<List<UiRoutingConnection>> getRoutingMatrix() =>
     RustLib.instance.api.crateApiMixerGetRoutingMatrix();
+
+/// Get track channel's parameter specs
+Future<List<ParameterSpecDTO>?> getTrackMixerChannelSpecs({
+  required int trackId,
+}) => RustLib.instance.api.crateApiMixerGetTrackMixerChannelSpecs(
+  trackId: trackId,
+);
+
+/// Get bus channel's parameter specs
+Future<List<ParameterSpecDTO>?> getBusMixerChannelSpecs({required int busId}) =>
+    RustLib.instance.api.crateApiMixerGetBusMixerChannelSpecs(busId: busId);
+
+/// get master channel's parameter specs
+Future<List<ParameterSpecDTO>> getMasterChannelSpecs() =>
+    RustLib.instance.api.crateApiMixerGetMasterChannelSpecs();
 
 Future<void> setMasterBusParams({required List<UiMixerChannelParams> params}) =>
     RustLib.instance.api.crateApiMixerSetMasterBusParams(params: params);
@@ -132,6 +147,63 @@ Future<void> removeRouting({
   destination: destination,
   isSend: isSend,
 );
+
+class ParameterSpecDTO {
+  final int id;
+  final String name;
+  final String group;
+  final double value;
+  final double min;
+  final double max;
+  final double defaultValue;
+  final double step;
+  final ParameterValueTypeDTO valueType;
+  final List<String> choices;
+
+  const ParameterSpecDTO({
+    required this.id,
+    required this.name,
+    required this.group,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.defaultValue,
+    required this.step,
+    required this.valueType,
+    required this.choices,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      group.hashCode ^
+      value.hashCode ^
+      min.hashCode ^
+      max.hashCode ^
+      defaultValue.hashCode ^
+      step.hashCode ^
+      valueType.hashCode ^
+      choices.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ParameterSpecDTO &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          group == other.group &&
+          value == other.value &&
+          min == other.min &&
+          max == other.max &&
+          defaultValue == other.defaultValue &&
+          step == other.step &&
+          valueType == other.valueType &&
+          choices == other.choices;
+}
+
+enum ParameterValueTypeDTO { float, int, bool, choice }
 
 /// UI representation of a mixer bus.
 class UiBus {

@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_core::core::project::TrackId;
+pub use karbeat_core::{
+    core::project::TrackId,
+    plugin_types::{ ParameterSpec, ParameterValueType },
+};
 use karbeat_core::shared::id::*;
 
 use crate::frb_generated::StreamSink;
@@ -244,6 +247,57 @@ impl From<&UiMixerChannelParams> for MixerChannelParams {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum ParameterValueTypeDTO {
+    Float,
+    Int,
+    Bool,
+    Choice,
+}
+
+// 2. Mirror the Struct
+#[derive(Clone, Debug)]
+pub struct ParameterSpecDTO {
+    pub id: u32,
+    pub name: String,
+    pub group: String,
+    pub value: f32,
+    pub min: f32,
+    pub max: f32,
+    pub default_value: f32,
+    pub step: f32,
+    pub value_type: ParameterValueTypeDTO,
+    pub choices: Vec<String>,
+}
+
+impl From<ParameterValueType> for ParameterValueTypeDTO {
+    fn from(val: ParameterValueType) -> Self {
+        match val {
+            ParameterValueType::Float => ParameterValueTypeDTO::Float,
+            ParameterValueType::Int => ParameterValueTypeDTO::Int,
+            ParameterValueType::Bool => ParameterValueTypeDTO::Bool,
+            ParameterValueType::Choice => ParameterValueTypeDTO::Choice,
+        }
+    }
+}
+
+impl From<&ParameterSpec> for ParameterSpecDTO {
+    fn from(spec: &ParameterSpec) -> Self {
+        Self {
+            id: spec.id,
+            name: spec.name.clone(),
+            group: spec.group.clone(),
+            value: spec.value,
+            min: spec.min,
+            max: spec.max,
+            default_value: spec.default_value,
+            step: spec.step,
+            value_type: spec.value_type.into(), // Automatically uses the enum mapping above
+            choices: spec.choices.clone(),
+        }
+    }
+}
+
 // ======================================
 // STREAM
 // ======================================
@@ -314,6 +368,25 @@ pub fn get_buses() -> HashMap<u32, UiBus> {
 /// **GETTER: Fetch the routing matrix**
 pub fn get_routing_matrix() -> Vec<UiRoutingConnection> {
     mixer_api::get_routing_matrix(|conn| { UiRoutingConnection::from(conn) })
+}
+
+/// Get track channel's parameter specs
+pub fn get_track_mixer_channel_specs(track_id: u32) -> Option<Vec<ParameterSpecDTO>> {
+    mixer_api::get_track_mixer_channel_specs(&TrackId(track_id), |param_spec|
+        ParameterSpecDTO::from(param_spec)
+    )
+}
+
+/// Get bus channel's parameter specs
+pub fn get_bus_mixer_channel_specs(bus_id: u32) -> Option<Vec<ParameterSpecDTO>> {
+    mixer_api::get_bus_mixer_channel_specs(&BusId(bus_id), |param_spec|
+        ParameterSpecDTO::from(param_spec)
+    )
+}
+
+/// get master channel's parameter specs
+pub fn get_master_channel_specs() -> Vec<ParameterSpecDTO> {
+    mixer_api::get_master_channel_specs(|param_spec| ParameterSpecDTO::from(param_spec))
 }
 
 // ======================================

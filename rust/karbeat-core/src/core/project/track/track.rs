@@ -348,7 +348,7 @@ impl ApplicationState {
             AutomationTarget::BusVolume(_) => {
                 let curr_value = bus.channel.volume.get_base();
                 let (min_val, max_val) = {
-                    if let ParamBounds::Continuous { min, max } = bus.channel.volume.bounds {
+                    if let ParamBounds::Continuous { min, max, .. } = bus.channel.volume.bounds {
                         (min, max)
                     } else {
                         (-60.0, 6.0)
@@ -359,7 +359,7 @@ impl ApplicationState {
             AutomationTarget::BusPan(_) => {
                 let curr_value = bus.channel.pan.get_base();
                 let (min_val, max_val) = {
-                    if let ParamBounds::Continuous { min, max } = bus.channel.pan.bounds {
+                    if let ParamBounds::Continuous { min, max, .. } = bus.channel.pan.bounds {
                         (min, max)
                     } else {
                         (-60.0, 6.0)

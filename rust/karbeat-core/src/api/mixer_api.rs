@@ -36,21 +36,28 @@ pub fn get_mixer_channel<T, F>(track_id: TrackId, mapper: F) -> anyhow::Result<T
     channel.ok_or_else(|| anyhow::anyhow!("Channel not found")).map(|c| mapper(c.as_ref()))
 }
 
-pub fn get_track_mixer_channel_specs(track_id: &TrackId) -> Option<Vec<ParameterSpec>> {
+/// Get track channel's parameter specs
+pub fn get_track_mixer_channel_specs<C, U, M>(track_id: &TrackId, mapper: M) -> Option<C>
+    where M: Fn(&ParameterSpec) -> U, C: FromIterator<U>
+{
     let app = get_app_read();
     let mix_channel = app.mixer.channels.get(track_id)?;
-    Some(mix_channel.get_channel_specs())
+    Some(mix_channel.get_channel_specs().iter().map(mapper).collect())
 }
 
-pub fn get_bus_mixer_channel_specs(bus_id: &BusId) -> Option<Vec<ParameterSpec>>  {
+/// Get bus channel's parameter specs
+pub fn get_bus_mixer_channel_specs<C, U, M>(bus_id: &BusId, mapper: M) -> Option<C>
+    where M: Fn(&ParameterSpec) -> U, C: FromIterator<U>
+{
     let app = get_app_read();
     let bus_channel = app.mixer.buses.get(bus_id)?;
-    Some(bus_channel.channel.get_channel_specs())
+    Some(bus_channel.channel.get_channel_specs().iter().map(mapper).collect())
 }
 
-pub fn get_master_channel_specs() -> Vec<ParameterSpec> {
+/// get master channel's parameter specs
+pub fn get_master_channel_specs<C, U, M>(mapper: M) -> C where M: Fn(&ParameterSpec) -> U, C: FromIterator<U> {
     let app = get_app_read();
-    app.mixer.master_bus.get_channel_specs()
+    app.mixer.master_bus.get_channel_specs().iter().map(mapper).collect()
 }
 
 pub fn get_mixer_channel_populated<C, MC, EI, MixChanF, EffInstF>(

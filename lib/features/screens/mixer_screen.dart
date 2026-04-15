@@ -6,6 +6,7 @@ import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
+import 'package:karbeat/utils/logger.dart';
 
 class MixerScreen extends ConsumerStatefulWidget {
   const MixerScreen({super.key});
@@ -725,7 +726,7 @@ class _ChannelEntry {
 // Channel Strip Widget
 // =========================================================
 
-class _ChannelStrip extends StatelessWidget {
+class _ChannelStrip extends StatefulWidget {
   final _ChannelEntry entry;
   final ValueChanged<double> onVolumeChanged;
   final VoidCallback? onVolumeChangeStart;
@@ -753,13 +754,76 @@ class _ChannelStrip extends StatelessWidget {
   });
 
   @override
+  State<_ChannelStrip> createState() => _ChannelStripState();
+}
+
+class _ChannelStripState extends State<_ChannelStrip> {
+  List<ParameterSpecDTO>? _specs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSpecs();
+  }
+
+  Future<void> _loadSpecs() async {
+    List<ParameterSpecDTO>? fetchedSpecs;
+    try {
+      if (widget.entry.isMaster) {
+        fetchedSpecs = await getMasterChannelSpecs();
+      } else if (widget.entry.isBus) {
+        fetchedSpecs = await getBusMixerChannelSpecs(busId: widget.entry.id);
+      } else {
+        fetchedSpecs = await getTrackMixerChannelSpecs(trackId: widget.entry.id);
+      }
+    } catch (e) {
+      debugPrint("Failed to load channel specs: $e");
+    }
+
+    if (mounted) {
+      setState(() {
+        _specs = fetchedSpecs;
+      });
+    }
+  }
+
+  // Safe fallback spec generators just in case the Future hasn't resolved yet 
+  // (Prevents the UI from glitching or throwing layout errors during the microsecond load)
+  ParameterSpecDTO _getVolumeSpec() {
+    if (_specs != null) {
+      return _specs!.firstWhere((s) => s.id == 1, orElse: () => _defaultVolumeSpec());
+    }
+    return _defaultVolumeSpec();
+  }
+
+  ParameterSpecDTO _getPanSpec() {
+    if (_specs != null) {
+      return _specs!.firstWhere((s) => s.id == 2, orElse: () => _defaultPanSpec());
+    }
+    return _defaultPanSpec();
+  }
+
+  ParameterSpecDTO _defaultVolumeSpec() => const ParameterSpecDTO(
+        id: 1, name: 'Volume', group: 'MixerChannel', value: 0.0,
+        min: -100.0, max: 6.0, defaultValue: 0.0, step: 0.1,
+        valueType: ParameterValueTypeDTO.float, choices: [],
+      );
+
+  ParameterSpecDTO _defaultPanSpec() => const ParameterSpecDTO(
+        id: 2, name: 'Pan', group: 'MixerChannel', value: 0.0,
+        min: -1.0, max: 1.0, defaultValue: 0.0, step: 0.01,
+        valueType: ParameterValueTypeDTO.float, choices: [],
+      );
+
+  @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
     final accentColor = entry.isMaster
         ? const Color(0xFFFFD700)
         : const Color(0xFF00E5FF);
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
         width: 72,
         margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -769,14 +833,14 @@ class _ChannelStrip extends StatelessWidget {
               : const Color(0xFF16213E),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected
+            color: widget.isSelected
                 ? accentColor
                 : (entry.isMaster
-                      ? Colors.amber.withValues(alpha: 0.3)
-                      : Colors.white.withValues(alpha: 0.06)),
-            width: isSelected ? 2 : 1,
+                    ? Colors.amber.withValues(alpha: 0.3)
+                    : Colors.white.withValues(alpha: 0.06)),
+            width: widget.isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected
+          boxShadow: widget.isSelected
               ? [
                   BoxShadow(
                     color: accentColor.withValues(alpha: 0.2),
@@ -813,13 +877,14 @@ class _ChannelStrip extends StatelessWidget {
 
             const SizedBox(height: 6),
 
-            // === Pan Knob (placeholder rotary) ===
+            // === Pan Knob ===
             _PanKnob(
               value: entry.channel.pan,
+              spec: _getPanSpec(), // Pass the bound FFI Spec
               accentColor: accentColor,
-              onChanged: onPanChanged,
-              onChangeStart: onPanChangeStart,
-              onChangeEnd: onPanChangeEnd,
+              onChanged: widget.onPanChanged,
+              onChangeStart: widget.onPanChangeStart,
+              onChangeEnd: widget.onPanChangeEnd,
             ),
 
             const SizedBox(height: 4),
@@ -828,10 +893,11 @@ class _ChannelStrip extends StatelessWidget {
             Expanded(
               child: _VolumeFader(
                 value: entry.channel.volume,
+                spec: _getVolumeSpec(), // Pass the bound FFI Spec
                 accentColor: accentColor,
-                onChanged: onVolumeChanged,
-                onChangeStart: onVolumeChangeStart,
-                onChangeEnd: onVolumeChangeEnd,
+                onChanged: widget.onVolumeChanged,
+                onChangeStart: widget.onVolumeChangeStart,
+                onChangeEnd: widget.onVolumeChangeEnd,
               ),
             ),
 
@@ -857,14 +923,14 @@ class _ChannelStrip extends StatelessWidget {
                   label: 'M',
                   isActive: entry.channel.mute,
                   activeColor: Colors.redAccent,
-                  onTap: onMuteToggled,
+                  onTap: widget.onMuteToggled,
                 ),
                 const SizedBox(width: 4),
                 _ToggleButton(
                   label: 'S',
                   isActive: entry.channel.solo,
                   activeColor: Colors.amber,
-                  onTap: onSoloToggled,
+                  onTap: widget.onSoloToggled,
                 ),
               ],
             ),
@@ -883,11 +949,12 @@ class _ChannelStrip extends StatelessWidget {
 }
 
 // =========================================================
-// Pan Knob (simplified horizontal slider)
+// Pan Knob
 // =========================================================
 
 class _PanKnob extends StatelessWidget {
-  final double value; // -1.0 (L) to 1.0 (R)
+  final double value;
+  final ParameterSpecDTO spec; // Injected FFI Spec
   final Color accentColor;
   final ValueChanged<double> onChanged;
   final VoidCallback? onChangeStart;
@@ -895,6 +962,7 @@ class _PanKnob extends StatelessWidget {
 
   const _PanKnob({
     required this.value,
+    required this.spec,
     required this.accentColor,
     required this.onChanged,
     this.onChangeStart,
@@ -933,23 +1001,21 @@ class _PanKnob extends StatelessWidget {
               overlayShape: SliderComponentShape.noOverlay,
             ),
             child: ParameterInteractionWrapper<double>(
-              parameterName:
-                  "Pan", // REQUIRED: The name shown in the context menu
+              parameterName: spec.name,
               value: value,
-              defaultValue:
-                  0.0, // REQUIRED: The value applied when clicking "Reset to default"
-              min: -1.0,
-              max: 1.0,
-              step: 0.01,
+              defaultValue: spec.defaultValue,
+              min: spec.min,
+              max: spec.max,
+              step: spec.step == 0.0 ? 0.01 : spec.step, // Safe fallback step
               onChanged: onChanged,
               onAddAutomation: () {
-                // OPTIONAL: Trigger your automation lane creation here
-                // debugPrint("Create automation for Pan");
+                KarbeatLogger.info("Create automation for ${spec.name} (ID: ${spec.id})");
+                // TODO: Dispatch to state to create the lane
               },
               child: Slider(
                 value: value,
-                min: -1.0,
-                max: 1.0,
+                min: spec.min,
+                max: spec.max,
                 onChanged: onChanged,
                 allowedInteraction: SliderInteraction.slideOnly,
                 onChangeStart: onChangeStart != null
@@ -966,11 +1032,12 @@ class _PanKnob extends StatelessWidget {
 }
 
 // =========================================================
-// Volume Fader (vertical slider)
+// Volume Fader
 // =========================================================
 
 class _VolumeFader extends StatelessWidget {
-  final double value; // dB: -60.0 (silence) to +6.0
+  final double value; 
+  final ParameterSpecDTO spec;
   final Color accentColor;
   final ValueChanged<double> onChanged;
   final VoidCallback? onChangeStart;
@@ -978,6 +1045,7 @@ class _VolumeFader extends StatelessWidget {
 
   const _VolumeFader({
     required this.value,
+    required this.spec,
     required this.accentColor,
     required this.onChanged,
     this.onChangeStart,
@@ -988,18 +1056,24 @@ class _VolumeFader extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // After RotatedBox(quarterTurns: 3), the slider's "width" becomes
-        // the parent's height. We need to give the rotated slider enough
-        // width (= parent's height) so the thumb can travel the full range.
         final sliderWidth = constraints.maxHeight;
+        
+        // Ensure the visual slider stops at -60dB even if the internal `NEG_INFINITY` is lower
+        final visualMin = spec.min < -60.0 ? -60.0 : spec.min;
+
         return RotatedBox(
           quarterTurns: 3,
-          child: FineGrainedInputWrapper(
+          child: ParameterInteractionWrapper<double>(
+            parameterName: spec.name,
             value: value,
+            defaultValue: spec.defaultValue,
+            min: visualMin, 
+            max: spec.max,
+            step: spec.step == 0.0 ? 0.1 : spec.step, 
             onChanged: onChanged,
-            step: 0.1,
-            min: -60.0,
-            max: 6.0,
+            onAddAutomation: () {
+              debugPrint("Create automation for ${spec.name} (ID: ${spec.id})");
+            },
             child: SizedBox(
               width: sliderWidth,
               height: constraints.maxWidth,
@@ -1018,9 +1092,9 @@ class _VolumeFader extends StatelessWidget {
                   ),
                 ),
                 child: Slider(
-                  value: value.clamp(-60.0, 6.0),
-                  min: -60.0,
-                  max: 6.0,
+                  value: value.clamp(visualMin, spec.max),
+                  min: visualMin,
+                  max: spec.max,
                   onChanged: onChanged,
                   allowedInteraction: SliderInteraction.slideThumb,
                   onChangeStart: onChangeStart != null

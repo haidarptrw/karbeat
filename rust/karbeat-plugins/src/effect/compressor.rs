@@ -28,11 +28,11 @@ pub struct KarbeatCompressorEngine {
 impl Default for KarbeatCompressorEngine {
     fn default() -> Self {
         let mut comp = Self {
-            threshold: Param::new_float(2, "Threshold", "Compressor", -20.0, -60.0, 0.0),
-            ratio: Param::new_float(3, "Ratio", "Compressor", 4.0, 1.0, 20.0),
-            attack: Param::new_float(4, "Attack", "Compressor", 10.0, 0.1, 100.0),
-            release: Param::new_float(5, "Release", "Compressor", 100.0, 1.0, 1000.0),
-            makeup_gain: Param::new_float(6, "Makeup Gain", "Compressor", 0.0, -24.0, 24.0),
+            threshold: Param::new_float(2, "Threshold", "Compressor", -20.0, -60.0, 0.0, 0.1),
+            ratio: Param::new_float(3, "Ratio", "Compressor", 4.0, 1.0, 20.0, 0.1),
+            attack: Param::new_float(4, "Attack", "Compressor", 10.0, 0.1, 100.0, 0.1),
+            release: Param::new_float(5, "Release", "Compressor", 100.0, 1.0, 1000.0, 1.0),
+            makeup_gain: Param::new_float(6, "Makeup Gain", "Compressor", 0.0, -24.0, 24.0, 0.1),
 
             sample_rate: 48000.0,
             current_gr_db: 0.0,

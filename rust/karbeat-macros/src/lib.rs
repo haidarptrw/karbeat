@@ -78,6 +78,7 @@ struct ParamDef {
     group: String,
     min: f32,
     max: f32,
+    step: f32,
     default: f32,
 }
 
@@ -90,7 +91,7 @@ struct ParamDef {
 /// Put attribute macro on labelled parameters using `#[nested]` if
 /// it is a non-primitive type, or in other words "custom type".
 /// Else, just use the `#[param(id=your_id, name=your_name, group=your_group, min=your_min_value
-/// max=your_max_value, default=your_default_value)]`.
+/// max=your_max_value, default=your_default_value, step=your_step_value)]`.
 /// For nested value, your custom type should also implement AutoParams. you can achieve
 /// the same result by using the `#[karbeat_plugin]` macro again in your custom type
 #[proc_macro_attribute]
@@ -118,6 +119,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         let mut p_min = 0.0;
                         let mut p_max = 1.0;
                         let mut p_default = 0.0;
+                        let mut p_step = 0.0;
 
                         let res = attr.parse_nested_meta(|meta| {
                             if meta.path.is_ident("id") {
@@ -167,7 +169,13 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 if let Lit::Float(lit_float) = value {
                                     p_default = lit_float.base10_parse()?;
                                 }
-                            } else {
+                            }  else if meta.path.is_ident("step") {
+                                let value = meta.value()?.parse::<Lit>()?;
+                                if let Lit::Float(lit_float) = value {
+                                    p_step = lit_float.base10_parse()?;
+                                }
+                            }
+                            else {
                                 return Err(
                                     syn::Error::new_spanned(
                                         &meta.path,
@@ -190,6 +198,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             group: p_group,
                             min: p_min,
                             max: p_max,
+                            step: p_step,
                             default: p_default,
                         });
                     } else if attr.path().is_ident("nested") {
@@ -384,6 +393,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let default_val = p.default;
                     let min = p.min;
                     let max = p.max;
+                    let step = p.step;
                     let ty = &p.original_type;
 
                     // Convert the AST Type to a string to check what it is
@@ -391,7 +401,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     let param_init = if ty_str == "f32" {
                         quote! {
-                            karbeat_plugin_types::parameter::Param::new_float(#id, #name, #group, #default_val, #min, #max)
+                            karbeat_plugin_types::parameter::Param::new_float(#id, #name, #group, #default_val, #min, #max, #step)
                         }
                     } else if ty_str == "bool" {
                         quote! {

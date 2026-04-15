@@ -106,7 +106,7 @@ pub trait ParamType: Copy + Clone + Debug + PartialEq {
 impl ParamType for f32 {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
-            ParamBounds::Continuous { min, max } => val.clamp(*min, *max),
+            ParamBounds::Continuous { min, max, .. } => val.clamp(*min, *max),
             _ => val,
         }
     }
@@ -118,7 +118,7 @@ impl ParamType for f32 {
 impl ParamType for i32 {
     fn from_f32_clamped(val: f32, bounds: &ParamBounds<Self>) -> Self {
         match bounds {
-            ParamBounds::Discrete { min, max } =>
+            ParamBounds::Discrete { min, max , ..} =>
                 val.round().clamp(*min as f32, *max as f32) as i32,
             _ => val.round() as i32,
         }
@@ -182,10 +182,12 @@ pub enum ParamBounds<T> {
     Continuous {
         min: T,
         max: T,
+        step: T,
     },
     Discrete {
         min: T,
         max: T,
+        step: T,
     },
     Toggle,
     Choice {
@@ -264,8 +266,9 @@ impl<T: ParamType> Param<T> {
             },
             default_value: self.base_value.to_f32(),
             step: match &self.bounds {
-                ParamBounds::Continuous { .. } => 0.0,
-                _ => 1.0,
+                ParamBounds::Continuous { step, .. } => step.to_f32(),
+                ParamBounds::Discrete { step, .. } => step.to_f32(),
+                _ => 1.0, // Toggle and Choice inherently step by 1
             },
             value_type: match &self.bounds {
                 ParamBounds::Continuous { .. } => ParameterValueType::Float,
@@ -294,7 +297,8 @@ impl Param<f32> {
         group: &str,
         default: f32,
         min: f32,
-        max: f32
+        max: f32,
+        step: f32
     ) -> Self {
         Self {
             id,
@@ -302,7 +306,7 @@ impl Param<f32> {
             group: group.to_owned(),
             base_value: default.clamp(min, max),
             current_value: default.clamp(min, max),
-            bounds: ParamBounds::Continuous { min, max },
+            bounds: ParamBounds::Continuous { min, max, step },
         }
     }
 }

@@ -180,8 +180,8 @@ pub struct MixerChannel {
 impl Default for MixerChannel {
     fn default() -> Self {
         Self {
-            volume: Param::new_float(1, "Volume", "MixerChannel", 0.0, -60.0, 6.0), // 0 dB = unity gain
-            pan: Param::new_float(2, "Pan", "MixerChannel", 0.0, -1.0,  1.0),
+            volume: Param::new_float(1, "Volume", "MixerChannel", 0.0, -60.0, 6.0, 0.1), // 0 dB = unity gain
+            pan: Param::new_float(2, "Pan", "MixerChannel", 0.0, -1.0,  1.0, 0.01),
             mute: false,
             solo: false,
             effect_counter: 0,
@@ -232,6 +232,8 @@ impl MixerChannel {
         Ok(())
     }
 
+
+    /// Get parameter specs of channel's parameter
     pub fn get_channel_specs(&self) -> Vec<ParameterSpec> {
         vec![
             self.volume.to_spec(),

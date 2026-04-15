@@ -16,7 +16,6 @@ pub mod api;
 mod frb_generated;
 
 pub use karbeat_core::context::{ctx as get_ctx, INIT_LOGGER as get_init};
-pub use karbeat_core::plugin_types::ParameterSpec;
 
 // ==================================================================
 // ================== Functions =====================================
