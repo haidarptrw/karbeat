@@ -54,31 +54,15 @@ impl MyRetroEngine {
         voice: &mut SynthVoice,
         buffer: &mut [f32],
     ) {
-        // Clear the scratch buffer before DASP `add_amp` accumulates into it
         buffer.fill(0.0);
 
         let base_freq = 440.0 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
         let dt = 1.0 / sample_rate;
-
-        // Render both oscillators directly into the buffer
-        for (i, osc) in self.oscillators.iter().enumerate() {
-            // Ensure the voice has enough phase trackers
-            if i >= voice.phase.len() {
-                voice.phase.push(0.0);
-            }
-
-            let mut phase = voice.phase[i] as f64;
-            osc.output_wave(buffer, sample_rate as u32, channels, base_freq, &mut phase);
-        }
-
-        // Apply ADSR, Velocity, and 8-Bit Crush frame-by-frame
-        let velocity_gain = (voice.velocity as f32) / 127.0;
         let crush_steps = self.bitcrush_resolution.get().max(2.0);
 
         for frame in buffer.chunks_exact_mut(channels as usize) {
             let env_level = voice.advance_envelope(dt, amp_envelope);
 
-            // If envelope finished, mark voice dead and stop processing this frame
             if !voice.is_active {
                 for ch in frame.iter_mut() {
                     *ch = 0.0;
@@ -86,16 +70,40 @@ impl MyRetroEngine {
                 continue;
             }
 
+            let velocity_gain = (voice.velocity as f32) / 127.0;
             let current_gain = velocity_gain * env_level;
+            
+            // We need a temporary buffer to hold the output of the oscillators
+            // BEFORE we apply the bitcrusher
+            let mut temp_sample = 0.0;
+
+            for (i, osc) in self.oscillators.iter().enumerate() {
+                if i >= voice.phase.len() {
+                    voice.phase.push(0.0);
+                }
+
+                let mut phase = voice.phase[i] as f64;
+                
+                // We create a tiny 1-sample mono buffer to extract the exact value
+                // of the oscillator at this exact phase
+                let mut osc_output = [0.0; 2];
+                osc.output_wave(&mut osc_output, sample_rate as u32, 2, base_freq, &mut phase);
+                
+                voice.phase[i] = phase as f32;
+                
+                // Mix the raw, uncrushed oscillators together
+                temp_sample += osc_output[0];
+            }
+
+            // Apply the bitcrush ONCE to the cleanly summed signal, 
+            // and apply the envelope GAIN *AFTER* the bitcrush!
+            // (If you apply gain before bitcrush, the envelope decay will sound zipper-y and broken)
+            
+            let crushed_sample = (temp_sample * crush_steps).round() / crush_steps;
+            let final_sample = crushed_sample * current_gain;
 
             for ch in frame.iter_mut() {
-                // Apply gain
-                let mut sample = *ch * current_gain;
-
-                // Apply Retro Bitcrushing (Quantize amplitude)
-                sample = (sample * crush_steps).round() / crush_steps;
-
-                *ch = sample;
+                *ch = final_sample;
             }
         }
     }

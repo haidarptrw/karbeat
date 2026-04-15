@@ -1602,8 +1602,6 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
                   selectedClipIds: selectedClipIds,
                   clipDragController: widget.clipDragController,
                   horizontalScrollController: widget.horizontalScrollController,
-
-                  // ✅ NEW
                   waveformMap: waveformMap,
                 );
               }).toList();
@@ -1715,7 +1713,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final double safeWidth = width < 1 ? 1 : width;
     const resizeEdgeSize = 20.0;
 
-    final isMoving = _currentAction == _DragAction.move;
+    // final isMoving = _currentAction == _DragAction.move;
 
     // final double top = 2 + _verticalDragDy;
 

@@ -48,7 +48,6 @@ impl Oscillator {
         base_freq: f64,
         current_phase: &mut f64
     ) {
-        // 1. Fetch block-level parameters ONCE for performance and thread-safety
         let current_mix = self.mix.get();
         if current_mix <= 0.0 || out_block.is_empty() {
             return;
@@ -58,31 +57,26 @@ impl Oscillator {
         let current_waveform = self.waveform.get();
         let current_pw = self.pulse_width.get() as f64;
 
-        // 2. Calculate DSP constants
         let actual_freq = base_freq * (2.0_f64).powf((current_detune as f64) / 12.0);
         let phase_inc = actual_freq / (sample_rate as f64);
 
-        // 3. Process the audio
-        if channels == 2 {
-            if let Some(frames) = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block) {
-                for frame in frames {
-                    let mut sample = Self::generate_raw_sample(
-                        current_waveform,
-                        current_pw,
-                        *current_phase
-                    );
+        // Process frame by frame, dynamically adapting to channel count
+        for frame in out_block.chunks_exact_mut(channels as usize) {
+            let sample = Self::generate_aa_sample(
+                current_waveform,
+                current_pw,
+                *current_phase,
+                phase_inc
+            );
 
-                    // Anti-Aliasing
-                    sample += Self::poly_blep(*current_phase, phase_inc);
+            let final_sample = (sample * (current_mix as f64)) as f32;
 
-                    let final_sample = (sample * (current_mix as f64)) as f32;
-
-                    frame[0] = frame[0].add_amp(final_sample); // Left
-                    frame[1] = frame[1].add_amp(final_sample); // Right
-
-                    *current_phase = (*current_phase + phase_inc).fract();
-                }
+            // Apply the sample to every channel in the frame (Mono = 1 loop, Stereo = 2 loops)
+            for ch in frame.iter_mut() {
+                *ch = ch.add_amp(final_sample);
             }
+
+            *current_phase = (*current_phase + phase_inc).fract();
         }
     }
 
@@ -110,29 +104,61 @@ impl Oscillator {
         let actual_freq = base_freq * (2.0_f64).powf((current_detune as f64) / 12.0);
         let phase_inc = actual_freq / (sample_rate as f64);
 
-        if channels == 2 {
-            let out_frames = slice
-                ::from_sample_slice_mut::<&mut [[f32; 2]], f32>(out_block)
-                .unwrap_or_default();
-            let mod_frames = slice
-                ::from_sample_slice::<&[[f32; 2]], f32>(mod_buffer)
-                .unwrap_or_default();
+        let channels_usize = channels as usize;
 
-            for (out_frame, mod_frame) in out_frames.iter_mut().zip(mod_frames.iter()) {
-                let modulation = (mod_frame[0] as f64) * fm_depth;
-                let modulated_phase = (*current_phase + modulation).rem_euclid(1.0);
+        // Zip the audio buffer chunks with the modulation buffer chunks
+        let out_frames = out_block.chunks_exact_mut(channels_usize);
+        let mod_frames = mod_buffer.chunks_exact(channels_usize);
 
-                let sample = Self::generate_raw_sample(
-                    current_waveform,
-                    current_pw,
-                    modulated_phase
-                );
-                let final_sample = (sample * (current_mix as f64)) as f32;
+        for (out_frame, mod_frame) in out_frames.zip(mod_frames) {
+            // Assume the modulation signal is mono-compatible (take the first channel)
+            let modulation = (mod_frame[0] as f64) * fm_depth;
+            let modulated_phase = (*current_phase + modulation).rem_euclid(1.0);
 
-                out_frame[0] = out_frame[0].add_amp(final_sample);
-                out_frame[1] = out_frame[1].add_amp(final_sample);
+            let sample = Self::generate_aa_sample(
+                current_waveform,
+                current_pw,
+                modulated_phase,
+                phase_inc
+            );
+            
+            let final_sample = (sample * (current_mix as f64)) as f32;
 
-                *current_phase = (*current_phase + phase_inc).fract();
+            // Apply to all channels in the frame
+            for ch in out_frame.iter_mut() {
+                *ch = ch.add_amp(final_sample);
+            }
+
+            *current_phase = (*current_phase + phase_inc).fract();
+        }
+    }
+
+    /// Generates a sample and applies Anti-Aliasing ONLY where mathematically required
+    #[inline(always)]
+    fn generate_aa_sample(waveform: Waveform, pulse_width: f64, phase: f64, phase_inc: f64) -> f64 {
+        match waveform {
+            // Continuous waves: No PolyBLEP needed!
+            Waveform::Sine => (phase * TAU).sin(),
+            Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
+            Waveform::Noise => fastrand::f64() * 2.0 - 1.0,
+            
+            // Discontinuous waves: Require PolyBLEP
+            Waveform::Saw => {
+                let naive = 2.0 * phase - 1.0;
+                // A rising saw jumps DOWN at phase 0, so we subtract the residual
+                naive - Self::poly_blep(phase, phase_inc)
+            },
+            Waveform::Square => {
+                let naive = if phase < pulse_width { 1.0 } else { -1.0 };
+                
+                // Jump 1: Upwards at phase 0
+                let blep_up = Self::poly_blep(phase, phase_inc);
+                
+                // Jump 2: Downwards at phase = pulse_width
+                let shifted_phase = (phase + 1.0 - pulse_width).fract();
+                let blep_down = Self::poly_blep(shifted_phase, phase_inc);
+                
+                naive + blep_up - blep_down
             }
         }
     }
