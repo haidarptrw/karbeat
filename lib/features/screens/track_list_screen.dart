@@ -699,7 +699,14 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         _buildCutHelperLine(context, state),
 
         // Batch drag overlays for all selected clips during move
-        ..._buildBatchDragOverlays(context),
+        _GroupedBatchOverlay(
+          trackIds: widget.trackIds,
+          headerWidth: widget.headerWidth,
+          itemHeight: widget.itemHeight,
+          horizontalScrollController: _trackContentController,
+          timelineController: _timelineController,
+          clipDragController: _clipDragController,
+        ),
         Positioned.fill(
           child: IgnorePointer(
             ignoring: false,
@@ -940,101 +947,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         ),
       ),
     );
-  }
-
-  /// Builds overlay widgets for all selected clips during a batch move operation
-  List<Widget> _buildBatchDragOverlays(BuildContext context) {
-    // Only show during batch move
-    if (_clipDragController.action != BatchDragAction.move) {
-      return [];
-    }
-
-    final state = ref.read(karbeatStateProvider);
-    final selectedClipIds = state.selectedClipIds;
-    final selectedTrackId = state.selectedTrackId;
-    if (selectedTrackId == null || selectedClipIds.isEmpty) return [];
-
-    // Get the track and its clips
-    final track = state.tracks[selectedTrackId];
-    if (track == null) return [];
-
-    // Calculate scroll offsets
-    double scrollX = 0;
-    double scrollY = 0;
-    if (_trackContentController.hasClients) {
-      scrollX = _trackContentController.offset;
-    }
-    if (_timelineController.hasClients) {
-      scrollY = _timelineController.offset;
-    }
-
-    // Find source track index
-    final sortedTracks = widget.trackIds..sort((a, b) => a.compareTo(b));
-    final trackIndex = sortedTracks.indexWhere((t) => t == selectedTrackId);
-    if (trackIndex < 0) return [];
-
-    // Calculate target track based on vertical delta
-    final rowOffset = _clipDragController.deltaRows.round();
-    final targetTrackIndex = (trackIndex + rowOffset).clamp(
-      0,
-      sortedTracks.length - 1,
-    );
-
-    final zoomLevel = state.horizontalZoomLevel;
-    final deltaSamples = _clipDragController.deltaSamples;
-
-    final List<Widget> overlays = [];
-
-    for (final clipId in selectedClipIds) {
-      final clip = track.clips.where((c) => c.id == clipId).firstOrNull;
-      if (clip == null) continue;
-
-      // Calculate new position with delta applied
-      final newStartTime = (clip.startTime + deltaSamples).clamp(
-        0,
-        double.maxFinite.toInt(),
-      );
-      final screenLeft =
-          (newStartTime / zoomLevel) - scrollX + widget.headerWidth;
-      final screenTop =
-          (targetTrackIndex * widget.itemHeight) - scrollY + 30 + 2;
-      final clipWidth = clip.loopLength / zoomLevel;
-
-      overlays.add(
-        Positioned(
-          left: screenLeft,
-          top: screenTop,
-          width: clipWidth < 1 ? 1 : clipWidth,
-          height: widget.itemHeight - 4,
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: 0.7,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.cyanAccent.withAlpha(100),
-                  border: Border.all(color: Colors.cyanAccent, width: 2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Center(
-                  child: Text(
-                    clip.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      shadows: [Shadow(color: Colors.black, blurRadius: 2)],
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return overlays;
   }
 
   Widget _buildAddButton() {
@@ -1749,30 +1661,29 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
   _DragAction _currentAction = _DragAction.none;
 
-  // Track vertical drag to determine target track
+  // Drag Math Tracking
+  double _accumulatedDeltaSamples = 0.0;
   double _verticalDragDy = 0.0;
+  int _previousSnappedDelta = 0;
+  int _leaderBaseStartTime = 0;
+  int _leaderBaseLoopLength = 0;
+
+  // Track vertical drag to determine target track
 
   /// Track dynamic cursor override
   MouseCursor? _cursorOverride;
 
-  // Overlay for global dragging
-  OverlayEntry? _overlayEntry;
-  final ValueNotifier<Offset> _overlayPosition = ValueNotifier(Offset.zero);
-
-  // Track base values for follower sync
-  int _baseStartTime = 0;
-  int _baseLoopLength = 0;
-  int _baseOffset = 0;
-
-  double _accumulatedDeltaSamples = 0.0;
-  int _previousSnappedDelta = 0;
+  // double _accumulatedDeltaSamples = 0.0;
 
   @override
   void initState() {
     super.initState();
     _syncModel();
-    // Listen to batch drag updates for follower visual sync
     widget.clipDragController.addListener(_onBatchDragUpdate);
+  }
+
+  void _onBatchDragUpdate() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -1784,131 +1695,16 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   @override
   void didUpdateWidget(covariant _InteractiveClip oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Re-attach listeners if controllers changed
-    if (oldWidget.clipDragController != widget.clipDragController) {
-      oldWidget.clipDragController.removeListener(_onBatchDragUpdate);
-      widget.clipDragController.addListener(_onBatchDragUpdate);
-    }
-    // Only overwrite local state from backend if we are NOT currently dragging
-    // and not in a batch drag as a follower
-    if (_currentAction == _DragAction.none && !_isFollower) {
+    if (_currentAction == _DragAction.none) {
       _syncModel();
     }
-  }
-
-  /// Check if this clip is a follower in a batch drag (selected but not leader)
-  bool get _isFollower {
-    final controller = widget.clipDragController;
-    return controller.isActive &&
-        widget.isSelected &&
-        controller.leaderClipId != widget.clip.id;
-  }
-
-  /// Handle batch drag updates for follower clips
-  void _onBatchDragUpdate() {
-    if (!_isFollower) return;
-
-    final controller = widget.clipDragController;
-
-    setState(() {
-      switch (controller.action) {
-        case BatchDragAction.move:
-          _visualStartTime = (_baseStartTime + controller.deltaSamples).clamp(
-            0,
-            double.maxFinite.toInt(),
-          );
-          break;
-        case BatchDragAction.resizeRight:
-          _visualLoopLength = (_baseLoopLength + controller.deltaSamples).clamp(
-            100,
-            double.maxFinite.toInt(),
-          );
-          break;
-        case BatchDragAction.resizeLeft:
-          final oldEnd = _baseStartTime + _baseLoopLength;
-          final newStart = (_baseStartTime + controller.deltaSamples).clamp(
-            0,
-            oldEnd - 100,
-          );
-          final moveAmount = newStart - _baseStartTime;
-          _visualStartTime = newStart;
-          _visualLoopLength = oldEnd - newStart;
-          _visualOffset = (_baseOffset + moveAmount).clamp(
-            0,
-            double.maxFinite.toInt(),
-          );
-          break;
-        case BatchDragAction.none:
-          // Reset to base when drag ends
-          _syncModel();
-          break;
-      }
-    });
   }
 
   void _syncModel() {
     _visualStartTime = widget.clip.startTime.toInt();
     _visualLoopLength = widget.clip.loopLength.toInt();
     _visualOffset = widget.clip.offsetStart.toInt();
-    _verticalDragDy = 0.0;
     // Store base values for follower calculations
-    _baseStartTime = _visualStartTime;
-    _baseLoopLength = _visualLoopLength;
-    _baseOffset = _visualOffset;
-  }
-
-  void _createOverlay(BuildContext context) {
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
-    final size = renderBox.size;
-    final initialGlobalPos = renderBox.localToGlobal(Offset.zero);
-    _overlayPosition.value = initialGlobalPos;
-
-    // Create entry
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        return ValueListenableBuilder<Offset>(
-          valueListenable: _overlayPosition,
-          builder: (context, offset, child) {
-            return Positioned(
-              left: offset.dx,
-              top: offset.dy,
-              width: size.width,
-              height: size.height,
-              child: Material(
-                color: Colors.transparent,
-                child: _ClipRenderer(
-                  clip: widget.clip,
-                  trackType: widget.trackType,
-                  color: Colors.cyanAccent.withAlpha((0.5 * 255).round()),
-                  zoomLevel: widget.zoomLevel,
-                  projectSampleRate: ref
-                      .read(karbeatStateProvider)
-                      .hardwareConfig
-                      .sampleRate,
-                  overrideOffset: _visualOffset.toDouble(),
-                  isSelected: widget.isSelected,
-                  scrollController: widget.horizontalScrollController,
-                  clipLeftOffset: _visualStartTime / widget.zoomLevel,
-                  waveformMap: widget.waveformMap,
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  void _updateOverlay(Offset delta) {
-    _overlayPosition.value += delta;
-  }
-
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
   }
 
   @override
@@ -1938,8 +1734,8 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     }
 
     // Check if this is a follower in a batch move (should be semi-transparent)
-    final isFollowerInBatchMove =
-        _isFollower && widget.clipDragController.action == BatchDragAction.move;
+    final isPartOfBatchDrag =
+        widget.isSelected && widget.clipDragController.isActive;
 
     return Positioned(
       left: left,
@@ -1948,61 +1744,148 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       width: safeWidth,
       child: Opacity(
         // Leader becomes invisible (has overlay), followers become semi-transparent
-        opacity: isMoving ? 0.0 : (isFollowerInBatchMove ? 0.4 : 1.0),
-        child: MouseRegion(
-          cursor: cursor,
-          // Detect Hover for Resize Cursors (only if not in Delete mode)
-          onHover: (event) {
-            if (widget.selectedTool != ToolSelection.resize) {
-              if (_cursorOverride != null) {
-                setState(() => _cursorOverride = null);
-              }
-              return;
-            }
-
-            final x = event.localPosition.dx;
-            if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
-              if (_cursorOverride != SystemMouseCursors.resizeLeftRight) {
-                setState(() {
-                  _cursorOverride = SystemMouseCursors.resizeLeftRight;
-                });
-              } else {
+        opacity: isPartOfBatchDrag ? 0.3 : 1.0,
+        child: IgnorePointer(
+          ignoring: widget.clipDragController.isActive,
+          child: MouseRegion(
+            cursor: cursor,
+            // Detect Hover for Resize Cursors (only if not in Delete mode)
+            onHover: (event) {
+              if (widget.selectedTool != ToolSelection.resize) {
                 if (_cursorOverride != null) {
+                  setState(() => _cursorOverride = null);
+                }
+                return;
+              }
+
+              final x = event.localPosition.dx;
+              if (x < resizeEdgeSize || x > safeWidth - resizeEdgeSize) {
+                if (_cursorOverride != SystemMouseCursors.resizeLeftRight) {
                   setState(() {
-                    _cursorOverride = null;
+                    _cursorOverride = SystemMouseCursors.resizeLeftRight;
                   });
+                } else {
+                  if (_cursorOverride != null) {
+                    setState(() {
+                      _cursorOverride = null;
+                    });
+                  }
                 }
               }
-            }
-          },
-          onExit: (event) {
-            if (_cursorOverride != null) {
-              setState(() {
-                _cursorOverride = null;
-              });
-            }
-          },
-          child: GestureDetector(
-            // Opaque ensures we catch taps even on transparent parts of waveform
-            behavior: HitTestBehavior.opaque,
+            },
+            onExit: (event) {
+              if (_cursorOverride != null) {
+                setState(() {
+                  _cursorOverride = null;
+                });
+              }
+            },
+            child: GestureDetector(
+              // Opaque ensures we catch taps even on transparent parts of waveform
+              behavior: HitTestBehavior.opaque,
 
-            onTapUp: (details) async {
-              if (widget.selectedTool == ToolSelection.delete) {
-                final state = ref.read(karbeatStateProvider);
-                // If this clip is selected and there are multiple selections, batch delete
-                if (widget.isSelected && widget.selectedClipIds.length > 1) {
-                  state.deleteSelectedClips();
-                } else {
-                  state.deleteClip(widget.trackId, widget.clip.id);
+              onTapUp: (details) async {
+                if (widget.selectedTool == ToolSelection.delete) {
+                  final state = ref.read(karbeatStateProvider);
+                  // If this clip is selected and there are multiple selections, batch delete
+                  if (widget.isSelected && widget.selectedClipIds.length > 1) {
+                    state.deleteSelectedClips();
+                  } else {
+                    state.deleteClip(widget.trackId, widget.clip.id);
+                  }
+                } else if (widget.selectedTool == ToolSelection.select) {
+                  final state = ref.read(karbeatStateProvider);
+                  // Get tap position for panel positioning
+                  final renderBox = context.findRenderObject() as RenderBox?;
+                  final tapPosition =
+                      renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+
+                  // If not already selected, select it first
+                  if (!widget.isSelected) {
+                    state.selectClip(
+                      trackId: widget.trackId,
+                      clipId: widget.clip.id,
+                    );
+                  }
+
+                  // Show interaction panel
+                  if (widget.isSelected && widget.selectedClipIds.length > 1) {
+                    state.showInteractionPanel(
+                      MultiClipInteraction(
+                        trackId: widget.trackId,
+                        clipIds: widget.selectedClipIds,
+                        tapPosition: tapPosition,
+                      ),
+                    );
+                  } else {
+                    state.showInteractionPanel(
+                      ClipInteraction(
+                        trackId: widget.trackId,
+                        clipId: widget.clip.id,
+                        tapPosition: tapPosition,
+                      ),
+                    );
+                  }
+                } else if (widget.selectedTool == ToolSelection.pointer) {
+                  ref
+                      .read(karbeatStateProvider)
+                      .selectClip(
+                        trackId: widget.trackId,
+                        clipId: widget.clip.id,
+                      );
+                } else if (widget.selectedTool == ToolSelection.cut) {
+                  final state = ref.read(karbeatStateProvider);
+
+                  // Calculate absolute sample position on the timeline
+                  int cutSample =
+                      widget.clip.startTime +
+                      (details.localPosition.dx * widget.zoomLevel).round();
+
+                  // Force the cut to match the snapped grid!
+                  if (state.snapToGrid) {
+                    cutSample = _snapTime(cutSample, state);
+                  }
+
+                  final result = await state.cutClip(
+                    widget.trackId,
+                    widget.clip.id,
+                    cutSample,
+                  );
+
+                  if (result.isErr()) {
+                    // Optional: Show error toast if cut fails (e.g. out of bounds)
+                  }
                 }
-              } else if (widget.selectedTool == ToolSelection.select) {
-                final state = ref.read(karbeatStateProvider);
-                // Get tap position for panel positioning
-                final renderBox = context.findRenderObject() as RenderBox?;
-                final tapPosition =
-                    renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+              },
 
-                // If not already selected, select it first
+              onPanStart: (details) {
+                if (widget.selectedTool != ToolSelection.move &&
+                    widget.selectedTool != ToolSelection.resize) {
+                  return;
+                }
+
+                _accumulatedDeltaSamples = 0.0;
+                _verticalDragDy = 0.0;
+                _previousSnappedDelta = 0;
+
+                final x = details.localPosition.dx;
+
+                if (widget.selectedTool == ToolSelection.resize) {
+                  if (x < resizeEdgeSize) {
+                    setState(() => _currentAction = _DragAction.resizeLeft);
+                  } else if (x > safeWidth - resizeEdgeSize) {
+                    setState(() => _currentAction = _DragAction.resizeRight);
+                  } else {
+                    // Clicked the middle of the clip with the resize tool -> do nothing
+                    return;
+                  }
+                } else if (widget.selectedTool == ToolSelection.move) {
+                  // Move tool grabs the clip no matter where you click
+                  setState(() => _currentAction = _DragAction.move);
+                }
+
+                // If the user starts dragging an UNSELECTED clip, select it first!
+                final state = ref.read(karbeatStateProvider);
                 if (!widget.isSelected) {
                   state.selectClip(
                     trackId: widget.trackId,
@@ -2010,84 +1893,17 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   );
                 }
 
-                // Show interaction panel
-                if (widget.isSelected && widget.selectedClipIds.length > 1) {
-                  state.showInteractionPanel(
-                    MultiClipInteraction(
-                      trackId: widget.trackId,
-                      clipIds: widget.selectedClipIds,
-                      tapPosition: tapPosition,
-                    ),
-                  );
-                } else {
-                  state.showInteractionPanel(
-                    ClipInteraction(
-                      trackId: widget.trackId,
-                      clipId: widget.clip.id,
-                      tapPosition: tapPosition,
-                    ),
-                  );
-                }
-              } else if (widget.selectedTool == ToolSelection.pointer) {
-                ref
-                    .read(karbeatStateProvider)
-                    .selectClip(
-                      trackId: widget.trackId,
-                      clipId: widget.clip.id,
-                    );
-              } else if (widget.selectedTool == ToolSelection.cut) {
-                final state = ref.read(karbeatStateProvider);
-
-                // Calculate absolute sample position on the timeline
-                int cutSample =
-                    widget.clip.startTime +
-                    (details.localPosition.dx * widget.zoomLevel).round();
-
-                // Force the cut to match the snapped grid!
-                if (state.snapToGrid) {
-                  cutSample = _snapTime(cutSample, state);
+                // Find the leader clip (the earliest one) to act as the snapping anchor
+                final currentSelectedIds = state.selectedClipIds;
+                final track = state.tracks[widget.trackId];
+                if (track != null && currentSelectedIds.isNotEmpty) {
+                  final leaderClip = track.clips
+                      .where((c) => currentSelectedIds.contains(c.id))
+                      .reduce((a, b) => a.startTime < b.startTime ? a : b);
+                  _leaderBaseStartTime = leaderClip.startTime.toInt();
+                  _leaderBaseLoopLength = leaderClip.loopLength.toInt();
                 }
 
-                final result = await state.cutClip(
-                  widget.trackId,
-                  widget.clip.id,
-                  cutSample,
-                );
-
-                if (result.isErr()) {
-                  // Optional: Show error toast if cut fails (e.g. out of bounds)
-                }
-              }
-            },
-
-            onPanStart: (details) {
-              if (widget.selectedTool != ToolSelection.move &&
-                  widget.selectedTool != ToolSelection.resize) {
-                return;
-              }
-
-              _accumulatedDeltaSamples = 0.0;
-              _previousSnappedDelta = 0;
-
-              final x = details.localPosition.dx;
-
-              if (widget.selectedTool == ToolSelection.resize) {
-                if (x < resizeEdgeSize) {
-                  setState(() => _currentAction = _DragAction.resizeLeft);
-                } else if (x > safeWidth - resizeEdgeSize) {
-                  setState(() => _currentAction = _DragAction.resizeRight);
-                } else {
-                  // Clicked the middle of the clip with the resize tool -> do nothing
-                  return;
-                }
-              } else if (widget.selectedTool == ToolSelection.move) {
-                // Move tool grabs the clip no matter where you click
-                setState(() => _currentAction = _DragAction.move);
-                _createOverlay(context);
-              }
-
-              // Start batch drag if this clip is selected and has siblings
-              if (widget.isSelected && widget.selectedClipIds.length > 1) {
                 final batchAction = _currentAction == _DragAction.move
                     ? BatchDragAction.move
                     : _currentAction == _DragAction.resizeLeft
@@ -2095,189 +1911,135 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                     : _currentAction == _DragAction.resizeRight
                     ? BatchDragAction.resizeRight
                     : BatchDragAction.none;
-                widget.clipDragController.startBatchDrag(
-                  widget.clip.id,
-                  batchAction,
-                );
-              }
-            },
 
-            onPanUpdate: (details) {
-              if (_currentAction == _DragAction.none) return;
-              final state = ref.read(karbeatStateProvider);
-              _accumulatedDeltaSamples += details.delta.dx * widget.zoomLevel;
-              int rawTotalDelta = _accumulatedDeltaSamples.round();
-              int snappedTotalDelta = rawTotalDelta;
+                widget.clipDragController.startBatchDrag(batchAction);
+              },
 
-              if (state.snapToGrid) {
-                if (_currentAction == _DragAction.move) {
-                  int rawStartTime = _baseStartTime + rawTotalDelta;
-                  int snappedStart = _snapTime(rawStartTime, state);
-                  snappedTotalDelta = snappedStart - _baseStartTime;
-                } else if (_currentAction == _DragAction.resizeRight) {
-                  int rawEndTime =
-                      _baseStartTime + _baseLoopLength + rawTotalDelta;
-                  int snappedEndTime = _snapTime(rawEndTime, state);
-                  snappedTotalDelta =
-                      snappedEndTime - (_baseStartTime + _baseLoopLength);
+              onPanUpdate: (details) {
+                if (_currentAction == _DragAction.none) return;
+
+                final state = ref.read(karbeatStateProvider);
+                final currentSelectedIds = state.selectedClipIds;
+                final track = state.tracks[widget.trackId];
+                if (track == null) return;
+
+                _accumulatedDeltaSamples += details.delta.dx * widget.zoomLevel;
+                _verticalDragDy += details.delta.dy;
+
+                int rawTotalDelta = _accumulatedDeltaSamples.round();
+
+                // Safety Clamp: Prevent shrinking past 100 samples
+                final minSamples = 100;
+                final shortestClip = track.clips
+                    .where((c) => currentSelectedIds.contains(c.id))
+                    .reduce((a, b) => a.loopLength < b.loopLength ? a : b);
+
+                if (_currentAction == _DragAction.resizeRight) {
+                  final maxShrink = -(shortestClip.loopLength - minSamples);
+                  if (rawTotalDelta < maxShrink)
+                    rawTotalDelta = maxShrink.toInt();
                 } else if (_currentAction == _DragAction.resizeLeft) {
-                  int rawStartTime = _baseStartTime + rawTotalDelta;
-                  int snappedStart = _snapTime(rawStartTime, state);
-                  snappedTotalDelta = snappedStart - _baseStartTime;
+                  final maxShrink = shortestClip.loopLength - minSamples;
+                  if (rawTotalDelta > maxShrink)
+                    rawTotalDelta = maxShrink.toInt();
                 }
-              }
 
-              int frameDeltaToApply = snappedTotalDelta - _previousSnappedDelta;
-              _previousSnappedDelta = snappedTotalDelta;
+                int snappedTotalDelta = rawTotalDelta;
 
-              if (widget.isSelected && widget.selectedClipIds.length > 1) {
-                widget.clipDragController.updateDelta(
-                  frameDeltaToApply,
-                  details.delta.dy / widget.height,
-                );
-              }
-
-              if (_currentAction == _DragAction.move) {
-                _updateOverlay(details.delta);
-
-                setState(() {
-                  _visualStartTime = (_baseStartTime + snappedTotalDelta)
-                      .clamp(0, double.infinity)
-                      .toInt();
-                  _verticalDragDy += details.delta.dy;
-                });
-              } else {
-                setState(() {
-                  if (_currentAction == _DragAction.resizeRight) {
-                    _visualLoopLength = (_baseLoopLength + snappedTotalDelta)
-                        .clamp(100, double.infinity)
-                        .toInt();
-                  } else if (_currentAction == _DragAction.resizeLeft) {
-                    final oldEnd = _visualStartTime + _visualLoopLength;
-                    final newStart = (_baseStartTime + snappedTotalDelta)
-                        .clamp(0, oldEnd - 100)
-                        .toInt();
-                    final moveAmount = newStart - _visualStartTime;
-
-                    _visualStartTime = newStart;
-                    _visualLoopLength = oldEnd - newStart;
-                    _visualOffset = (_baseOffset + moveAmount)
-                        .clamp(0, double.infinity)
-                        .toInt();
+                // Snapping Logic
+                if (state.snapToGrid) {
+                  if (_currentAction == _DragAction.move ||
+                      _currentAction == _DragAction.resizeLeft) {
+                    int rawStart = _leaderBaseStartTime + rawTotalDelta;
+                    snappedTotalDelta =
+                        _snapTime(rawStart, state) - _leaderBaseStartTime;
+                  } else if (_currentAction == _DragAction.resizeRight) {
+                    int rawEnd =
+                        _leaderBaseStartTime +
+                        _leaderBaseLoopLength +
+                        rawTotalDelta;
+                    snappedTotalDelta =
+                        _snapTime(rawEnd, state) -
+                        (_leaderBaseStartTime + _leaderBaseLoopLength);
                   }
-                });
-              }
-            },
+                }
 
-            onPanEnd: (_) {
-              if (_currentAction == _DragAction.none) return;
+                _previousSnappedDelta = snappedTotalDelta;
 
-              final state = ref.read(karbeatStateProvider);
-              final isBatchOperation =
-                  widget.isSelected && widget.selectedClipIds.length > 1;
-              final controller = widget.clipDragController;
+                // PUSH DATA TO THE OVERLAY
+                widget.clipDragController.updateDrag(
+                  snappedTotalDelta,
+                  _verticalDragDy,
+                );
+              },
 
-              if (_currentAction == _DragAction.move) {
-                _removeOverlay();
+              onPanEnd: (_) {
+                if (_currentAction == _DragAction.none) return;
+
+                final state = ref.read(karbeatStateProvider);
+                final currentSelectedIds = state.selectedClipIds;
+
                 int? newTrackId;
-
-                // Estimate row index offset based on drag distance and row height
                 final rowOffset = (_verticalDragDy / widget.height).round();
-
                 if (rowOffset != 0) {
-                  // Find target track ID from state list
-                  final sortedTracks = state.tracks.values.toList()
-                    ..sort((a, b) => a.id.compareTo(b.id));
-
+                  final sortedTracks = state.tracks.keys.toList()..sort();
                   final currentIndex = sortedTracks.indexWhere(
-                    (t) => t.id == widget.trackId,
+                    (id) => id == widget.trackId,
                   );
                   if (currentIndex != -1) {
                     final targetIndex = currentIndex + rowOffset;
                     if (targetIndex >= 0 && targetIndex < sortedTracks.length) {
-                      newTrackId = sortedTracks[targetIndex].id;
+                      newTrackId = sortedTracks[targetIndex];
                     }
                   }
                 }
 
-                if (isBatchOperation) {
-                  // Batch move using delta
+                // Send command to Rust backend
+                if (_currentAction == _DragAction.move) {
                   state.moveClipBatch(
                     widget.trackId,
-                    widget.selectedClipIds,
-                    controller.deltaSamples,
+                    currentSelectedIds,
+                    _previousSnappedDelta,
                     newTrackId: newTrackId,
                   );
-                } else {
-                  state.moveClip(
-                    widget.trackId,
-                    widget.clip.id,
-                    _visualStartTime,
-                    newTrackId: newTrackId,
-                  );
-                }
-              } else if (_currentAction == _DragAction.resizeRight) {
-                if (isBatchOperation) {
+                } else if (_currentAction == _DragAction.resizeRight) {
                   state.resizeClipBatch(
                     widget.trackId,
-                    widget.selectedClipIds,
+                    currentSelectedIds,
                     UiResizeEdge.right,
-                    controller.deltaSamples,
+                    _previousSnappedDelta,
                   );
-                } else {
-                  final newEndTime = _visualStartTime + _visualLoopLength;
-                  state.resizeClip(
-                    widget.trackId,
-                    widget.clip.id,
-                    UiResizeEdge.right,
-                    newEndTime,
-                  );
-                }
-              } else if (_currentAction == _DragAction.resizeLeft) {
-                if (isBatchOperation) {
+                } else if (_currentAction == _DragAction.resizeLeft) {
                   state.resizeClipBatch(
                     widget.trackId,
-                    widget.selectedClipIds,
+                    currentSelectedIds,
                     UiResizeEdge.left,
-                    controller.deltaSamples,
-                  );
-                } else {
-                  state.resizeClip(
-                    widget.trackId,
-                    widget.clip.id,
-                    UiResizeEdge.left,
-                    _visualStartTime,
+                    _previousSnappedDelta,
                   );
                 }
-              }
 
-              // Reset batch controller
-              if (isBatchOperation) {
-                controller.reset();
-              }
+                setState(() {
+                  _currentAction = _DragAction.none;
+                });
 
-              // Reset
-              setState(() {
-                _currentAction = _DragAction.none;
-                _verticalDragDy =
-                    0.0; // Snap back visually until state sync updates
-              });
-            },
+                widget.clipDragController.reset();
+              },
 
-            child: _ClipRenderer(
-              clip: widget.clip,
-              trackType: widget.trackType,
-              color: Colors.cyanAccent.withAlpha(47),
-              zoomLevel: widget.zoomLevel,
-              projectSampleRate: ref
-                  .read(karbeatStateProvider)
-                  .hardwareConfig
-                  .sampleRate,
-              overrideOffset: _visualOffset.toDouble(),
-              isSelected: widget.isSelected,
-              scrollController: widget.horizontalScrollController,
-              clipLeftOffset: left,
-              waveformMap: widget.waveformMap,
+              child: _ClipRenderer(
+                clip: widget.clip,
+                trackType: widget.trackType,
+                color: Colors.cyanAccent.withAlpha(47),
+                zoomLevel: widget.zoomLevel,
+                projectSampleRate: ref
+                    .read(karbeatStateProvider)
+                    .hardwareConfig
+                    .sampleRate,
+                overrideOffset: _visualOffset.toDouble(),
+                isSelected: widget.isSelected,
+                scrollController: widget.horizontalScrollController,
+                clipLeftOffset: left,
+                waveformMap: widget.waveformMap,
+              ),
             ),
           ),
         ),
@@ -2570,4 +2332,120 @@ int _snapTime(int samples, KarbeatState state) {
 
   // Round to the nearest grid interval
   return ((samples / samplesPerGridLine).round() * samplesPerGridLine).toInt();
+}
+
+class _GroupedBatchOverlay extends ConsumerWidget {
+  final List<int> trackIds;
+  final double headerWidth;
+  final double itemHeight;
+  final ScrollController horizontalScrollController;
+  final ScrollController timelineController;
+  final ClipDragController clipDragController;
+
+  const _GroupedBatchOverlay({
+    required this.trackIds,
+    required this.headerWidth,
+    required this.itemHeight,
+    required this.horizontalScrollController,
+    required this.timelineController,
+    required this.clipDragController,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AnimatedBuilder(
+      animation: clipDragController,
+      builder: (context, child) {
+        if (!clipDragController.isActive) return const SizedBox();
+
+        final state = ref.read(karbeatStateProvider);
+        final selectedClipIds = state.selectedClipIds;
+        final selectedTrackId = state.selectedTrackId;
+
+        if (selectedTrackId == null || selectedClipIds.isEmpty)
+          return const SizedBox();
+
+        final track = state.tracks[selectedTrackId];
+        if (track == null) return const SizedBox();
+
+        final zoomLevel = state.horizontalZoomLevel;
+        double scrollX = horizontalScrollController.hasClients
+            ? horizontalScrollController.offset
+            : 0;
+        double scrollY = timelineController.hasClients
+            ? timelineController.offset
+            : 0;
+
+        final sortedTracks = trackIds..sort((a, b) => a.compareTo(b));
+        final trackIndex = sortedTracks.indexWhere((t) => t == selectedTrackId);
+        if (trackIndex < 0) return const SizedBox();
+
+        // Pull the live math directly from the controller
+        final snappedDelta = clipDragController.snappedDeltaSamples;
+        final verticalDy = clipDragController.verticalDragDy;
+
+        Widget groupedClips = Stack(
+          clipBehavior: Clip.none,
+          children: selectedClipIds.map((clipId) {
+            final clip = track.clips.where((c) => c.id == clipId).firstOrNull;
+            if (clip == null) return const SizedBox();
+
+            final screenLeft =
+                (clip.startTime / zoomLevel) - scrollX + headerWidth;
+            final screenTop = (trackIndex * itemHeight) - scrollY + 30 + 2;
+            final clipWidth = clip.loopLength / zoomLevel;
+
+            double activeWidth = clipWidth;
+            double activeLeft = screenLeft;
+
+            if (clipDragController.action == BatchDragAction.resizeRight) {
+              activeWidth += (snappedDelta / zoomLevel);
+            } else if (clipDragController.action ==
+                BatchDragAction.resizeLeft) {
+              activeLeft += (snappedDelta / zoomLevel);
+              activeWidth -= (snappedDelta / zoomLevel);
+            }
+
+            return Positioned(
+              left: activeLeft,
+              top: screenTop,
+              width: activeWidth < 1 ? 1 : activeWidth,
+              height: itemHeight - 4,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.cyanAccent.withAlpha(150),
+                  border: Border.all(color: Colors.cyanAccent, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: Text(
+                    clip.name,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+
+        if (clipDragController.action == BatchDragAction.move) {
+          groupedClips = Transform.translate(
+            offset: Offset((snappedDelta / zoomLevel), verticalDy),
+            child: groupedClips,
+          );
+        }
+
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: groupedClips,
+          ),
+        );
+      },
+    );
+  }
 }

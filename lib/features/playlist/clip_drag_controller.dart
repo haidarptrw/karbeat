@@ -12,55 +12,29 @@ enum BatchDragAction { none, move, resizeLeft, resizeRight }
 /// 3. Other selected clips ("followers") listen to this controller and apply the same delta
 /// 4. On drag end, the leader calls [endBatchDrag] which triggers the batch API
 class ClipDragController extends ChangeNotifier {
-  BatchDragAction _action = BatchDragAction.none;
-  int? _leaderClipId;
-  int _deltaSamples = 0;
-  double _deltaRows = 0.0;
+  BatchDragAction action = BatchDragAction.none;
+  int snappedDeltaSamples = 0;
+  double verticalDragDy = 0.0;
 
-  /// Whether a batch drag is currently active
-  bool get isActive => _action != BatchDragAction.none;
+  bool get isActive => action != BatchDragAction.none;
 
-  /// The current action being performed
-  BatchDragAction get action => _action;
-
-  /// The ID of the clip leading the drag
-  int? get leaderClipId => _leaderClipId;
-
-  /// Cumulative horizontal delta in samples
-  int get deltaSamples => _deltaSamples;
-
-  /// Cumulative vertical delta in row units (for track switching)
-  double get deltaRows => _deltaRows;
-
-  /// Start a batch drag operation with the specified clip as the leader
-  void startBatchDrag(int clipId, BatchDragAction action) {
-    _leaderClipId = clipId;
-    _action = action;
-    _deltaSamples = 0;
-    _deltaRows = 0.0;
+  void startBatchDrag(BatchDragAction newAction) {
+    action = newAction;
+    snappedDeltaSamples = 0;
+    verticalDragDy = 0.0;
     notifyListeners();
   }
 
-  /// Update the cumulative delta during drag
-  void updateDelta(int dSamples, double dRows) {
-    _deltaSamples += dSamples;
-    _deltaRows += dRows;
+  void updateDrag(int deltaSamples, double dy) {
+    snappedDeltaSamples = deltaSamples;
+    verticalDragDy = dy;
     notifyListeners();
   }
 
-  /// End the batch drag operation
-  /// The leader should call the appropriate batch API after this
-  void endBatchDrag() {
-    _action = BatchDragAction.none;
-    notifyListeners();
-  }
-
-  /// Reset all state (called after API commit)
   void reset() {
-    _action = BatchDragAction.none;
-    _leaderClipId = null;
-    _deltaSamples = 0;
-    _deltaRows = 0.0;
+    action = BatchDragAction.none;
+    snappedDeltaSamples = 0;
+    verticalDragDy = 0.0;
     notifyListeners();
   }
 }
