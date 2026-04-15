@@ -2,7 +2,7 @@ use std::{any::Any, fmt::Debug};
 
 use indexmap::IndexMap;
 
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
 
 /// Trait that indicates an Effect plugin
@@ -41,7 +41,7 @@ pub trait KarbeatEffect: Send + Sync {
     fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
-    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
 
     /// Execute custom command if provided by implementer
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
@@ -83,7 +83,7 @@ pub trait KarbeatGenerator: Send + Sync {
     fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
-    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
 
     /// Execute custom command if provided by implementer
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
@@ -167,7 +167,7 @@ impl KarbeatPlugin {
     }
 
     /// Get parameter specifications for UI generation
-    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+    pub fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         match self {
             KarbeatPlugin::Effect(e) => e.get_parameter_specs(),
             KarbeatPlugin::Generator(g) => g.get_parameter_specs(),

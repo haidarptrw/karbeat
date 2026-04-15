@@ -5,7 +5,7 @@
 
 use indexmap::IndexMap;
 use karbeat_dsp::{envelope::{EnvelopeSettings, EnvelopeStage}, filter::SimpleFilterMode};
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 
 
 // ============================================================================
@@ -377,11 +377,11 @@ impl StandardSynthBase {
         map
     }
 
-    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+    pub fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         vec![
-            PluginParameter::new_float(0, "Master Gain", "Output", self.gain, 0.0, 1.0, 0.5),
+            ParameterSpec::new_float(0, "Master Gain", "Output", self.gain, 0.0, 1.0, 0.5),
             // Filter
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 1,
                 "Cutoff",
                 "Filter",
@@ -390,7 +390,7 @@ impl StandardSynthBase {
                 20000.0,
                 2000.0,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 2,
                 "Resonance",
                 "Filter",
@@ -399,7 +399,7 @@ impl StandardSynthBase {
                 0.95,
                 0.2,
             ),
-            PluginParameter::new_choice(
+            ParameterSpec::new_choice(
                 3,
                 "Mode",
                 "Filter",
@@ -413,7 +413,7 @@ impl StandardSynthBase {
                 0,
             ),
             // Envelope
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 4,
                 "Attack",
                 "Envelope",
@@ -422,7 +422,7 @@ impl StandardSynthBase {
                 5.0,
                 0.01,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 5,
                 "Decay",
                 "Envelope",
@@ -431,7 +431,7 @@ impl StandardSynthBase {
                 5.0,
                 0.2,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 6,
                 "Sustain",
                 "Envelope",
@@ -440,7 +440,7 @@ impl StandardSynthBase {
                 1.0,
                 0.7,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 7,
                 "Release",
                 "Envelope",

@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
-use karbeat_plugin_types::Param;
+use karbeat_plugin_types::{Param, ParameterSpec};
 use smallvec::SmallVec;
-use std::{ collections::{ HashMap, HashSet }, f32::NEG_INFINITY, sync::Arc };
+use std::{ collections::{ HashMap, HashSet }, sync::Arc };
 
 use serde::{ Deserialize, Serialize };
 use thiserror::Error;
@@ -180,7 +180,7 @@ pub struct MixerChannel {
 impl Default for MixerChannel {
     fn default() -> Self {
         Self {
-            volume: Param::new_float(1, "Volume", "MixerChannel", 0.0, NEG_INFINITY, 6.0), // 0 dB = unity gain
+            volume: Param::new_float(1, "Volume", "MixerChannel", 0.0, -60.0, 6.0), // 0 dB = unity gain
             pan: Param::new_float(2, "Pan", "MixerChannel", 0.0, -1.0,  1.0),
             mute: false,
             solo: false,
@@ -230,6 +230,14 @@ impl MixerChannel {
         self.effects.retain(|effect| effect.id != effect_id);
 
         Ok(())
+    }
+
+    pub fn get_channel_specs(&self) -> Vec<ParameterSpec> {
+        vec![
+            self.volume.to_spec(),
+            self.pan.to_spec(),
+            // Note: maybe I will change the bool parameter to Param<bool> too
+        ]
     }
 }
 

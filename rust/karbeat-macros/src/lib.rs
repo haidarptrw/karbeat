@@ -482,7 +482,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 #(#nested_clear_stmts)*
             }
 
-            fn auto_get_parameter_specs(&self) -> Vec<karbeat_plugin_types::parameter::PluginParameter> {
+            fn auto_get_parameter_specs(&self) -> Vec<karbeat_plugin_types::parameter::ParameterSpec> {
                 let mut specs = Vec::new();
                 #(#spec_pushes)*
                 #(#nested_spec_stmts)*
@@ -560,7 +560,7 @@ pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStrea
             #side_effect_call
         }
 
-        fn get_parameter_specs(&self) -> Vec<karbeat_plugin_types::PluginParameter> {
+        fn get_parameter_specs(&self) -> Vec<karbeat_plugin_types::ParameterSpec> {
             self.auto_get_parameter_specs()
         }
 

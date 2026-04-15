@@ -496,10 +496,16 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                   : plugin_api.UiEffectTarget.track(
                                       _selectedChannelId!,
                                     );
-                                    
-                              final availableEffects = ref.read(karbeatStateProvider).availableEffects;
-                              final registryId = availableEffects.firstWhere((p) => p.id == effect.registryId).id;
-                              final builder = EffectRegistry.getEffectBuilder(registryId);
+
+                              final availableEffects = ref
+                                  .read(karbeatStateProvider)
+                                  .availableEffects;
+                              final registryId = availableEffects
+                                  .firstWhere((p) => p.id == effect.registryId)
+                                  .id;
+                              final builder = EffectRegistry.getEffectBuilder(
+                                registryId,
+                              );
                               final screen = builder(effect.id, target);
 
                               Navigator.push(
@@ -926,12 +932,20 @@ class _PanKnob extends StatelessWidget {
               thumbColor: accentColor,
               overlayShape: SliderComponentShape.noOverlay,
             ),
-            child: FineGrainedInputWrapper(
+            child: ParameterInteractionWrapper<double>(
+              parameterName:
+                  "Pan", // REQUIRED: The name shown in the context menu
               value: value,
-              onChanged: onChanged,
-              step: 0.01,
+              defaultValue:
+                  0.0, // REQUIRED: The value applied when clicking "Reset to default"
               min: -1.0,
               max: 1.0,
+              step: 0.01,
+              onChanged: onChanged,
+              onAddAutomation: () {
+                // OPTIONAL: Trigger your automation lane creation here
+                // debugPrint("Create automation for Pan");
+              },
               child: Slider(
                 value: value,
                 min: -1.0,

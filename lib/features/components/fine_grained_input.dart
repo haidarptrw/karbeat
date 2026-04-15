@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/features/components/context_menu.dart';
 
 /// A widget wrapper class that enables a fine-grained input setter 
 /// (i.e., setting a specific value from a slider type input). When we
@@ -158,6 +159,99 @@ class _FineGrainedDialogState<T extends num> extends State<_FineGrainedDialog<T>
           child: const Text('OK'),
         ),
       ],
+    );
+  }
+}
+
+/// Opens the fine-grained input dialog programmatically.
+Future<void> showFineGrainedDialog<T extends num>({
+  required BuildContext context,
+  required T initialValue,
+  required T step,
+  required T min,
+  required T max,
+  required ValueChanged<T> onChanged,
+}) {
+  return showDialog(
+    context: context,
+    builder: (context) {
+      return _FineGrainedDialog<T>(
+        initialValue: initialValue,
+        step: step,
+        min: min,
+        max: max,
+        onChanged: onChanged,
+      );
+    },
+  );
+}
+
+/// A master wrapper for DAW parameters (knobs, sliders).
+/// It captures right-click/long-press to show a standardized Context Menu.
+/// Features:
+/// 1. Type in exact value (opens FineGrainedDialog)
+/// 2. Reset to default
+/// 3. Create automation clip (optional)
+class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
+  final Widget child;
+  final String parameterName;
+  final T value;
+  final T defaultValue;
+  final T min;
+  final T max;
+  final T step;
+  final ValueChanged<T> onChanged;
+  final VoidCallback? onAddAutomation;
+
+  const ParameterInteractionWrapper({
+    super.key,
+    required this.child,
+    required this.parameterName,
+    required this.value,
+    required this.defaultValue,
+    required this.min,
+    required this.max,
+    required this.step,
+    required this.onChanged,
+    this.onAddAutomation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ContextMenuWrapper(
+      title: parameterName,
+      actions: [
+        KarbeatContextAction(
+          title: "Type in value...",
+          icon: Icons.keyboard,
+          onTap: () {
+            // Because the ContextMenuWrapper automatically pops the context menu 
+            // dialog before calling onTap, we can safely open the new dialog here.
+            showFineGrainedDialog<T>(
+              context: context,
+              initialValue: value,
+              step: step,
+              min: min,
+              max: max,
+              onChanged: onChanged,
+            );
+          },
+        ),
+        KarbeatContextAction(
+          title: "Reset to default",
+          icon: Icons.refresh,
+          onTap: () {
+            onChanged(defaultValue);
+          },
+        ),
+        if (onAddAutomation != null)
+          KarbeatContextAction(
+            title: "Create automation clip",
+            icon: Icons.show_chart,
+            onTap: onAddAutomation!,
+          ),
+      ],
+      child: child,
     );
   }
 }

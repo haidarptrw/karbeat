@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use karbeat_plugin_types::ParameterSpec;
+
 use crate::{
     context::utils::broadcast_state_change,
     core::project::{
@@ -32,6 +34,23 @@ pub fn get_mixer_channel<T, F>(track_id: TrackId, mapper: F) -> anyhow::Result<T
     let mixer_state = &app.mixer;
     let channel = mixer_state.channels.get(&track_id);
     channel.ok_or_else(|| anyhow::anyhow!("Channel not found")).map(|c| mapper(c.as_ref()))
+}
+
+pub fn get_track_mixer_channel_specs(track_id: &TrackId) -> Option<Vec<ParameterSpec>> {
+    let app = get_app_read();
+    let mix_channel = app.mixer.channels.get(track_id)?;
+    Some(mix_channel.get_channel_specs())
+}
+
+pub fn get_bus_mixer_channel_specs(bus_id: &BusId) -> Option<Vec<ParameterSpec>>  {
+    let app = get_app_read();
+    let bus_channel = app.mixer.buses.get(bus_id)?;
+    Some(bus_channel.channel.get_channel_specs())
+}
+
+pub fn get_master_channel_specs() -> Vec<ParameterSpec> {
+    let app = get_app_read();
+    app.mixer.master_bus.get_channel_specs()
 }
 
 pub fn get_mixer_channel_populated<C, MC, EI, MixChanF, EffInstF>(

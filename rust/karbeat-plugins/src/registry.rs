@@ -1,7 +1,7 @@
 // src/core/plugin/registry.rs
 
 use hashbrown::HashMap;
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 
 // use crate::effect::compressor::create_compressor;
 use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
@@ -18,14 +18,14 @@ type EffectFactory = Box<dyn Fn() -> Box<dyn KarbeatEffect + Send + Sync> + Send
 struct RegisteredGenerator {
     name: String,
     factory: GeneratorFactory,
-    parameter_specs: Vec<PluginParameter>,
+    parameter_specs: Vec<ParameterSpec>,
 }
 
 /// Metadata stored for each registered effect
 struct RegisteredEffect {
     name: String,
     factory: EffectFactory,
-    parameter_specs: Vec<PluginParameter>,
+    parameter_specs: Vec<ParameterSpec>,
 }
 
 /// Information about a registered plugin (for UI display)
@@ -146,14 +146,14 @@ impl PluginRegistry {
     // =========================================================================
 
     /// Get cached parameter specs for a generator by registry ID
-    pub fn get_generator_parameter_specs_by_id(&self, id: u32) -> Option<Vec<PluginParameter>> {
+    pub fn get_generator_parameter_specs_by_id(&self, id: u32) -> Option<Vec<ParameterSpec>> {
         self.generators
             .get(&id)
             .map(|reg| reg.parameter_specs.clone())
     }
 
     /// Get cached parameter specs for an effect by registry ID
-    pub fn get_effect_parameter_specs_by_id(&self, id: u32) -> Option<Vec<PluginParameter>> {
+    pub fn get_effect_parameter_specs_by_id(&self, id: u32) -> Option<Vec<ParameterSpec>> {
         self.effects.get(&id).map(|reg| reg.parameter_specs.clone())
     }
 

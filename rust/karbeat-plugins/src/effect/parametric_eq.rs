@@ -322,7 +322,7 @@ impl AutoParams for KarbeatParametricEQFilterNode {
         }
     }
 
-    fn auto_get_parameter_specs(&self) -> Vec<PluginParameter> {
+    fn auto_get_parameter_specs(&self) -> Vec<ParameterSpec> {
         vec![
             self.freq.to_spec(),
             self.gain.to_spec(),

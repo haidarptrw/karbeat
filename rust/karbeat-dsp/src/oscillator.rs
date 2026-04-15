@@ -5,7 +5,7 @@ use dasp::{ Frame, slice };
 
 // Import your new universal parameter types
 use karbeat_macros::{ EnumParam };
-use karbeat_plugin_types::{ AutoParams, ParamType, parameter::{ Param, PluginParameter } };
+use karbeat_plugin_types::{ AutoParams, ParamType, parameter::{ Param, ParameterSpec } };
 
 // ============================================================================
 // OSCILLATOR
@@ -252,7 +252,7 @@ impl AutoParams for Oscillator {
         }
     }
 
-    fn auto_get_parameter_specs(&self) -> Vec<PluginParameter> {
+    fn auto_get_parameter_specs(&self) -> Vec<ParameterSpec> {
         vec![
             self.waveform.to_spec(),
             self.detune.to_spec(),

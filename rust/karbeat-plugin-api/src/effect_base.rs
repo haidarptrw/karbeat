@@ -3,7 +3,7 @@
 // Shared effect infrastructure for all effect plugins.
 // Use composition pattern: embed EffectBase in your effect struct.
 use indexmap::IndexMap;
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 
 pub trait EffectBase: Send + Sync + Clone {
     fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
@@ -18,7 +18,7 @@ pub trait EffectBase: Send + Sync + Clone {
     fn sample_rate(&self) -> f32;
 
     fn default_parameters() -> IndexMap<u32, f32>;
-    fn get_parameter_specs() -> Vec<PluginParameter>;
+    fn get_parameter_specs() -> Vec<ParameterSpec>;
 
     fn apply_automation(&mut self, id: u32, value: f32);
     fn clear_automation(&mut self, id: u32);
@@ -132,10 +132,10 @@ impl StandardEffectBase {
         map
     }
 
-    pub fn get_parameter_specs() -> Vec<PluginParameter> {
+    pub fn get_parameter_specs() -> Vec<ParameterSpec> {
         vec![
-            PluginParameter::new_bool(0, "Bypass", "General", false, false),
-            PluginParameter::new_float(1, "Mix", "General", 1.0, 0.0, 1.0, 1.0),
+            ParameterSpec::new_bool(0, "Bypass", "General", false, false),
+            ParameterSpec::new_float(1, "Mix", "General", 1.0, 0.0, 1.0, 1.0),
         ]
     }
 

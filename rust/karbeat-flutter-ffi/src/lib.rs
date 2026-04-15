@@ -15,8 +15,8 @@ pub(crate) use karbeat_core::{
 pub mod api;
 mod frb_generated;
 
-// Re-export context utilities for convenience
 pub use karbeat_core::context::{ctx as get_ctx, INIT_LOGGER as get_init};
+pub use karbeat_core::plugin_types::ParameterSpec;
 
 // ==================================================================
 // ================== Functions =====================================

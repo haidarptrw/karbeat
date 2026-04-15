@@ -10,9 +10,9 @@ pub enum ParameterValueType {
     Choice,
 }
 
-/// Generic description of a plugin parameter for UI generation
+/// Generic description of a parameter spec for UI generation
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PluginParameter {
+pub struct ParameterSpec {
     pub id: u32,
     pub name: String,
     pub group: String, // e.g., "Oscillator 1", "Master"
@@ -25,7 +25,7 @@ pub struct PluginParameter {
     pub choices: Vec<String>, // Labels for Choice type (index = value)
 }
 
-impl PluginParameter {
+impl ParameterSpec {
     /// Create a new float parameter
     pub fn new_float(
         id: u32,
@@ -244,8 +244,8 @@ impl<T: ParamType> Param<T> {
         self.current_value = self.base_value;
     }
 
-    pub fn to_spec(&self) -> PluginParameter {
-        PluginParameter {
+    pub fn to_spec(&self) -> ParameterSpec {
+        ParameterSpec {
             id: self.id,
             name: self.name.to_string(),
             group: self.group.to_string(),
@@ -371,5 +371,5 @@ pub trait AutoParams {
     fn auto_set_parameter(&mut self, id: u32, value: f32);
     fn auto_apply_automation(&mut self, id: u32, value: f32);
     fn auto_clear_automation(&mut self, id: u32);
-    fn auto_get_parameter_specs(&self) -> Vec<PluginParameter>;
+    fn auto_get_parameter_specs(&self) -> Vec<ParameterSpec>;
 }

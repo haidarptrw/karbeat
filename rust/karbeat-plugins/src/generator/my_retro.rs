@@ -224,7 +224,7 @@ impl RawSynthEngine for MyRetroEngine {
         self.auto_clear_automation(id);
     }
 
-    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         self.auto_get_parameter_specs()
     }
 

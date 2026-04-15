@@ -1,4 +1,4 @@
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 use parking_lot::Mutex;
 
@@ -109,7 +109,7 @@ pub fn get_generator_parameter_specs<F, T>(
     mapper: F,
 ) -> Result<Vec<T>, String>
 where
-    F: Fn(PluginParameter, f32) -> T,
+    F: Fn(ParameterSpec, f32) -> T,
 {
     let app = get_app_read();
     let generator_arc = app
@@ -160,7 +160,7 @@ pub fn get_effect_parameter_specs<F, T>(
     mapper: F,
 ) -> Result<Vec<T>, String>
 where
-    F: Fn(PluginParameter, f32) -> T,
+    F: Fn(ParameterSpec, f32) -> T,
 {
     let app = get_app_read();
 
