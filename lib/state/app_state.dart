@@ -135,6 +135,7 @@ class KarbeatState extends ChangeNotifier {
 
   // ================== OTHER STATES ====================
   bool _pendingPlayRequest = false;
+  bool _showFloatingMidiKeyboard = false;
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
@@ -217,6 +218,11 @@ class KarbeatState extends ChangeNotifier {
 
   void toggleSnapToGrid() {
     snapToGrid = !snapToGrid;
+    notifyListeners();
+  }
+
+  void toggleFloatingMidiKeyboard() {
+    _showFloatingMidiKeyboard = !_showFloatingMidiKeyboard;
     notifyListeners();
   }
 
@@ -314,6 +320,7 @@ class KarbeatState extends ChangeNotifier {
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
   mixer_api.UiMixerState get mixerState => _mixerState;
+  bool get showFloatingMidiKeyboard => _showFloatingMidiKeyboard;
 
   // Session state getters (frontend-only)
   int? get selectedTrackId => _selectedTrackId;

@@ -281,6 +281,14 @@ class DefaultControlPanel extends ConsumerWidget {
             isActive: state.snapToGrid,
             onTap: () => ref.read(karbeatStateProvider).toggleSnapToGrid(),
           ),
+          const SizedBox(width: 8),
+          ControlPanelToolbarItem(
+            name: "MIDI KB",
+            icon: Icons.piano,
+            color: Colors.deepPurpleAccent,
+            isActive: state.showFloatingMidiKeyboard,
+            onTap: () => ref.read(karbeatStateProvider).toggleFloatingMidiKeyboard(),
+          ),
         ],
       ),
     );

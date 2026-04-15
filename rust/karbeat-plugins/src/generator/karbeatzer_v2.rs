@@ -92,11 +92,23 @@ impl KarbeatzerEngine {
 
             for i in 0..3 {
                 let phase = voice.phase[i];
+                let dt_inc = phase_incs[i];
 
                 let osc_out = match wfs[i] {
                     Waveform::Sine => (phase * 2.0 * PI).sin(),
-                    Waveform::Saw => 2.0 * phase - 1.0,
-                    Waveform::Square => if phase < pws[i] { 1.0 } else { -1.0 }
+                    Waveform::Saw => {
+                        let naive = 2.0 * phase - 1.0;
+                        // Apply PolyBLEP for anti-aliasing
+                        naive - poly_blep(phase, dt_inc)
+                    },
+                    Waveform::Square => {
+                        let naive = if phase < pws[i] { 1.0 } else { -1.0 };
+                        // Apply PolyBLEP for anti-aliasing
+                        let mut blep = poly_blep(phase, dt_inc);
+                        let phase2 = (phase + 1.0 - pws[i]) % 1.0;
+                        blep -= poly_blep(phase2, dt_inc);
+                        naive - blep
+                    }
                     Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
                     Waveform::Noise => fastrand::f32() * 2.0 - 1.0,
                 };
@@ -255,6 +267,24 @@ impl RawSynthEngine for KarbeatzerEngine {
         }
 
         map
+    }
+}
+
+/// Calculates the Polynomial Band-Limited Step for anti-aliasing.
+/// `t` is the current phase (0.0 to 1.0)
+/// `dt` is the phase increment per sample
+#[inline(always)]
+fn poly_blep(mut t: f32, dt: f32) -> f32 {
+    if t < dt {
+        // At the start of the phase cycle
+        t /= dt;
+        t + t - t * t - 1.0
+    } else if t > 1.0 - dt {
+        // At the end of the phase cycle
+        t = (t - 1.0) / dt;
+        t * t + t + t + 1.0
+    } else {
+        0.0
     }
 }
 
