@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use proc_macro::TokenStream;
 use quote::{ format_ident, quote };
-use syn::{ Data, DeriveInput, Fields, Lit, Type, parse_macro_input };
+use syn::{ Data, DeriveInput, Fields, Lit, Type, parse_macro_input, ItemImpl };
 
 #[proc_macro_derive(EnumParam)]
 pub fn derive_enum_param(input: TokenStream) -> TokenStream {
@@ -410,19 +410,23 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                     };
 
-                    default_field_inits.push(quote! {
+                    default_field_inits.push(
+                        quote! {
                         #field_ident: #param_init
-                    });
+                    }
+                    );
                 } else {
                     // For #[nested] or standard fields, fallback to standard default
-                    default_field_inits.push(quote! {
+                    default_field_inits.push(
+                        quote! {
                         #field_ident: std::default::Default::default()
-                    });
+                    }
+                    );
                 }
             }
         }
     }
-    
+
     let expanded =
         quote! {
         #ast
@@ -486,5 +490,100 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
     };
+    TokenStream::from(expanded)
+}
+
+/// Inject auto implementation for parameter routing
+///
+/// ## Attributes
+/// To inject side effect for any value modification, you
+/// are able to inject it by specifying a side effect function
+/// in the struct implementation
+///
+/// For example:
+///
+/// ```rust, ignore
+/// impl WavetableSynthEngine {
+///     pub fn side_effect_func(&mut self) {
+///         do_something()
+///     }
+/// }
+///
+/// #[inject_plugin_routing(side_effect_func)]
+/// impl RawSynthEngine for WavetableSynthEngine {
+///     fn process() {
+///         // ...
+///     }
+/// }
+/// ```
+///
+/// With this, it will generate the implementation for parameter routing together with provided side effect
+#[proc_macro_attribute]
+pub fn inject_plugin_routing(attr: TokenStream, item: TokenStream) -> TokenStream {
+    // Check if the user provided a side-effect function (e.g., #[inject_plugin_routing(handle_side_effects)])
+    let mut side_effect_call = quote! {};
+    if !attr.is_empty() {
+        let ident = syn::parse_macro_input!(attr as syn::Ident);
+        // If they provided a function name, we generate the call: `self.function_name(id);`
+        side_effect_call = quote! { self.#ident(id); };
+    }
+
+    // Parse the trait impl block the user wrote
+    let item_impl = parse_macro_input!(item as ItemImpl);
+
+    let generics = &item_impl.generics;
+    let trait_path = &item_impl.trait_
+        .as_ref()
+        .expect("This macro must be applied to a trait implementation").1;
+    let self_ty = &item_impl.self_ty;
+    let items = &item_impl.items;
+
+    // Generate the boilerplate methods using their AutoParams implementation
+    let injected_code =
+        quote! {
+        fn set_custom_parameter(&mut self, id: u32, value: f32) {
+            self.auto_set_parameter(id, value);
+            #side_effect_call
+        }
+
+        fn get_custom_parameter(&self, id: u32) -> Option<f32> {
+            self.auto_get_parameter(id)
+        }
+
+        fn apply_automation(&mut self, id: u32, value: f32) {
+            self.auto_apply_automation(id, value);
+            #side_effect_call
+        }
+        
+        fn clear_automation(&mut self, id: u32) {
+            self.auto_clear_automation(id);
+            #side_effect_call
+        }
+
+        fn get_parameter_specs(&self) -> Vec<karbeat_plugin_types::PluginParameter> {
+            self.auto_get_parameter_specs()
+        }
+
+        fn custom_default_parameters() -> std::collections::HashMap<u32, f32> where Self: Sized {
+            let mut map = std::collections::HashMap::new();
+            for spec in Self::default().auto_get_parameter_specs() {
+                map.insert(spec.id, spec.default_value);
+            }
+            map
+        }
+    };
+
+    // Rebuild the impl block: Original User Methods + Injected Boilerplate
+    let expanded =
+        quote! {
+        impl #generics #trait_path for #self_ty {
+            // Keep the user's manual process(), name(), prepare(), etc.
+            #(#items)*
+            
+            // Inject the magic
+            #injected_code
+        }
+    };
+
     TokenStream::from(expanded)
 }

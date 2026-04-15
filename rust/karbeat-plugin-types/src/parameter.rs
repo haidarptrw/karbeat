@@ -290,8 +290,8 @@ impl<T: ParamType> Param<T> {
 impl Param<f32> {
     pub fn new_float(
         id: u32,
-        name: &'static str,
-        group: &'static str,
+        name: &str,
+        group: &str,
         default: f32,
         min: f32,
         max: f32
@@ -308,7 +308,7 @@ impl Param<f32> {
 }
 
 impl Param<bool> {
-    pub fn new_bool(id: u32, name: &'static str, group: &'static str, default: bool) -> Self {
+    pub fn new_bool(id: u32, name: &str, group: &str, default: bool) -> Self {
         Self {
             id,
             name: name.to_owned(),
@@ -323,10 +323,10 @@ impl Param<bool> {
 impl Param<usize> {
     pub fn new_choice(
         id: u32,
-        name: &'static str,
-        group: &'static str,
+        name: &str,
+        group: &str,
         default: usize,
-        labels: Vec<&'static str>
+        labels: Vec<&str>
     ) -> Self {
         Self {
             id,
@@ -347,7 +347,7 @@ impl Param<usize> {
 
 impl<T: EnumParam> Param<T> {
     /// Create a strictly typed Enum parameter. Labels and counts are extracted automatically!
-    pub fn new_enum(id: u32, name: &'static str, group: &'static str, default: T) -> Self {
+    pub fn new_enum(id: u32, name: &str, group: &str, default: T) -> Self {
         Self {
             id,
             name: name.to_owned(),

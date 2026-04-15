@@ -29,7 +29,11 @@ use crate::{
         },
     },
     commands::{
-        AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget, GeneratorParameterSnapshot
+        AudioCommand,
+        AudioFeedback,
+        EffectParameterSnapshot,
+        EffectTarget,
+        GeneratorParameterSnapshot,
     },
     core::project::{
         AudioWaveform,
@@ -624,7 +628,7 @@ impl AudioEngine {
                 // Since they are also needs to be updated to reflect this change.
                 // However because the logic in FFI assume that this is handled, we don't have to do it
             }
-            AudioCommand::AddTrackEffect{track_id, effect_id, mut effect } => {
+            AudioCommand::AddTrackEffect { track_id, effect_id, mut effect } => {
                 // Prepare the effect
                 let buf_size = self.current_state.graph.buffer_size.max(512);
                 effect.prepare(self.sample_rate as f32, self.num_channels as usize, buf_size);
@@ -1129,7 +1133,8 @@ impl AudioEngine {
             let default_channel = Arc::new(MixerChannel::default());
 
             let mut channel = self.current_state.graph.mixer_state.channels
-                .get(&track_id).cloned()
+                .get(&track_id)
+                .cloned()
                 .unwrap_or(default_channel);
 
             let channel_mut = Arc::make_mut(&mut channel);
@@ -1587,7 +1592,6 @@ impl AudioEngine {
                     }
                     TrackAutomationEvent::Pan(v) => {
                         track_pan.apply_automation(*v);
-
                     }
                     TrackAutomationEvent::PluginParam { effect_id, param_id, value } => {
                         if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
