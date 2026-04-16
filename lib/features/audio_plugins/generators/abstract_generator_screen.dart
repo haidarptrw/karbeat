@@ -5,6 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/plugin_parameter_widget.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api; // Import the universal widgets
 
+/// # Overview
+/// 
+/// **Abstract base class for generator plugin screens.**
+///
+/// Provides default implementations for:
+/// - Parameter polling (from audio thread feedback)
+/// - Loading parameter specs
+/// - Setting parameters (optimistic UI + backend)
+/// - Standard Scaffold/AppBar layout
+/// - Automatic Dynamic UI Generation based on Rust #[param] specs
+///
+/// Subclasses can override [buildGeneratorBody] to define a custom effect UI, 
+/// but it defaults to an automatically generated layout.
 abstract class AbstractGeneratorScreen extends ConsumerStatefulWidget {
   final int generatorId;
 

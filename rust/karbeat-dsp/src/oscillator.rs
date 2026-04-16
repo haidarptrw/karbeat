@@ -1,17 +1,17 @@
 // oscillator.rs (part of karbeat_dsp library)
 
 use std::f64::consts::TAU;
-use dasp::{ Frame, slice };
+use dasp::{ Frame };
 
 // Import your new universal parameter types
-use karbeat_macros::{ EnumParam };
-use karbeat_plugin_types::{ AutoParams, ParamType, parameter::{ Param, ParameterSpec } };
+use karbeat_macros::{ AutoParams, EnumParam };
+use karbeat_plugin_types::{ parameter::{ Param } };
 
 // ============================================================================
 // OSCILLATOR
 // ============================================================================
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, AutoParams)]
 pub struct Oscillator {
     pub waveform: Param<Waveform>,
     pub detune: Param<f32>,
@@ -175,120 +175,108 @@ impl Oscillator {
             0.0
         }
     }
-
-    /// Pure function to calculate the raw shape based on the current phase
-    #[inline(always)]
-    fn generate_raw_sample(waveform: Waveform, pulse_width: f64, phase: f64) -> f64 {
-        match waveform {
-            Waveform::Sine => (phase * TAU).sin(),
-            Waveform::Saw => 2.0 * phase - 1.0,
-            Waveform::Square => if phase < pulse_width { 1.0 } else { -1.0 }
-            Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
-            Waveform::Noise => fastrand::f64() * 2.0 - 1.0,
-        }
-    }
 }
 
-impl AutoParams for Oscillator {
-    fn auto_get_parameter(&self, id: u32) -> Option<f32> {
-        if self.waveform.id == id {
-            return Some(self.waveform.get_base().to_f32());
-        }
-        if self.detune.id == id {
-            return Some(self.detune.get_base().to_f32());
-        }
-        if self.phase_offset.id == id {
-            return Some(self.phase_offset.get_base().to_f32());
-        }
-        if self.mix.id == id {
-            return Some(self.mix.get_base().to_f32());
-        }
-        if self.pulse_width.id == id {
-            return Some(self.pulse_width.get_base().to_f32());
-        }
-        None
-    }
+// impl AutoParams for Oscillator {
+//     fn auto_get_parameter(&self, id: u32) -> Option<f32> {
+//         if self.waveform.id == id {
+//             return Some(self.waveform.get_base().to_f32());
+//         }
+//         if self.detune.id == id {
+//             return Some(self.detune.get_base().to_f32());
+//         }
+//         if self.phase_offset.id == id {
+//             return Some(self.phase_offset.get_base().to_f32());
+//         }
+//         if self.mix.id == id {
+//             return Some(self.mix.get_base().to_f32());
+//         }
+//         if self.pulse_width.id == id {
+//             return Some(self.pulse_width.get_base().to_f32());
+//         }
+//         None
+//     }
 
-    fn auto_set_parameter(&mut self, id: u32, value: f32) {
-        if self.waveform.id == id {
-            self.waveform.set_base(value);
-            return;
-        }
-        if self.detune.id == id {
-            self.detune.set_base(value);
-            return;
-        }
-        if self.phase_offset.id == id {
-            self.phase_offset.set_base(value);
-            return;
-        }
-        if self.mix.id == id {
-            self.mix.set_base(value);
-            return;
-        }
-        if self.pulse_width.id == id {
-            self.pulse_width.set_base(value);
-            return;
-        }
-    }
+//     fn auto_set_parameter(&mut self, id: u32, value: f32) {
+//         if self.waveform.id == id {
+//             self.waveform.set_base(value);
+//             return;
+//         }
+//         if self.detune.id == id {
+//             self.detune.set_base(value);
+//             return;
+//         }
+//         if self.phase_offset.id == id {
+//             self.phase_offset.set_base(value);
+//             return;
+//         }
+//         if self.mix.id == id {
+//             self.mix.set_base(value);
+//             return;
+//         }
+//         if self.pulse_width.id == id {
+//             self.pulse_width.set_base(value);
+//             return;
+//         }
+//     }
 
-    fn auto_apply_automation(&mut self, id: u32, value: f32) {
-        if self.waveform.id == id {
-            self.waveform.apply_automation(value);
-            return;
-        }
-        if self.detune.id == id {
-            self.detune.apply_automation(value);
-            return;
-        }
-        if self.phase_offset.id == id {
-            self.phase_offset.apply_automation(value);
-            return;
-        }
-        if self.mix.id == id {
-            self.mix.apply_automation(value);
-            return;
-        }
-        if self.pulse_width.id == id {
-            self.pulse_width.apply_automation(value);
-            return;
-        }
-    }
+//     fn auto_apply_automation(&mut self, id: u32, value: f32) {
+//         if self.waveform.id == id {
+//             self.waveform.apply_automation(value);
+//             return;
+//         }
+//         if self.detune.id == id {
+//             self.detune.apply_automation(value);
+//             return;
+//         }
+//         if self.phase_offset.id == id {
+//             self.phase_offset.apply_automation(value);
+//             return;
+//         }
+//         if self.mix.id == id {
+//             self.mix.apply_automation(value);
+//             return;
+//         }
+//         if self.pulse_width.id == id {
+//             self.pulse_width.apply_automation(value);
+//             return;
+//         }
+//     }
 
-    fn auto_clear_automation(&mut self, id: u32) {
-        if self.waveform.id == id {
-            self.waveform.clear_automation();
-            return;
-        }
-        if self.detune.id == id {
-            self.detune.clear_automation();
-            return;
-        }
-        if self.phase_offset.id == id {
-            self.phase_offset.clear_automation();
-            return;
-        }
-        if self.mix.id == id {
-            self.mix.clear_automation();
-            return;
-        }
-        if self.pulse_width.id == id {
-            self.pulse_width.clear_automation();
-            return;
-        }
-    }
+//     fn auto_clear_automation(&mut self, id: u32) {
+//         if self.waveform.id == id {
+//             self.waveform.clear_automation();
+//             return;
+//         }
+//         if self.detune.id == id {
+//             self.detune.clear_automation();
+//             return;
+//         }
+//         if self.phase_offset.id == id {
+//             self.phase_offset.clear_automation();
+//             return;
+//         }
+//         if self.mix.id == id {
+//             self.mix.clear_automation();
+//             return;
+//         }
+//         if self.pulse_width.id == id {
+//             self.pulse_width.clear_automation();
+//             return;
+//         }
+//     }
 
-    fn auto_get_parameter_specs(&self) -> Vec<ParameterSpec> {
-        vec![
-            self.waveform.to_spec(),
-            self.detune.to_spec(),
-            self.phase_offset.to_spec(),
-            self.mix.to_spec(),
-            self.pulse_width.to_spec()
-        ]
-    }
+//     fn auto_get_parameter_specs(&self) -> Vec<ParameterSpec> {
+//         vec![
+//             self.waveform.to_spec(),
+//             self.detune.to_spec(),
+//             self.phase_offset.to_spec(),
+//             self.mix.to_spec(),
+//             self.pulse_width.to_spec()
+//         ]
+//     }
 
-}
+// }
 
 // ============================================================================
 // WAVEFORM ENUM

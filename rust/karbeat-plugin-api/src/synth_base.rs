@@ -168,10 +168,10 @@ impl SynthVoice {
 
         match self.env_stage {
             EnvelopeStage::Attack => {
-                let rate = if settings.attack < 0.001 {
+                let rate = if settings.attack.get() < 0.001 {
                     1000.0
                 } else {
-                    1.0 / settings.attack
+                    1.0 / settings.attack.get()
                 };
                 self.env_level = (self.env_timer * rate).min(1.0);
                 if self.env_level >= 1.0 {
@@ -181,26 +181,26 @@ impl SynthVoice {
                 }
             }
             EnvelopeStage::Decay => {
-                let rate = if settings.decay < 0.001 {
+                let rate = if settings.decay.get() < 0.001 {
                     1000.0
                 } else {
-                    1.0 / settings.decay
+                    1.0 / settings.decay.get()
                 };
                 let progress = (self.env_timer * rate).min(1.0);
-                self.env_level = 1.0 - (progress * (1.0 - settings.sustain));
+                self.env_level = 1.0 - (progress * (1.0 - settings.sustain.get()));
                 if progress >= 1.0 {
-                    self.env_level = settings.sustain;
+                    self.env_level = settings.sustain.get();
                     self.env_stage = EnvelopeStage::Sustain;
                 }
             }
             EnvelopeStage::Sustain => {
-                self.env_level = settings.sustain;
+                self.env_level = settings.sustain.get();
             }
             EnvelopeStage::Release => {
-                let rate = if settings.release < 0.001 {
+                let rate = if settings.release.get() < 0.001 {
                     1000.0
                 } else {
-                    1.0 / settings.release
+                    1.0 / settings.release.get()
                 };
                 let progress = (self.env_timer * rate).min(1.0);
                 self.env_level = self.release_start_level * (1.0 - progress);
@@ -329,19 +329,19 @@ impl StandardSynthBase {
                 true
             }
             4 => {
-                self.amp_envelope.attack = value.clamp(0.001, 5.0);
+                self.amp_envelope.attack.set_base(value);
                 true
             }
             5 => {
-                self.amp_envelope.decay = value.clamp(0.001, 5.0);
+                self.amp_envelope.decay.set_base(value);
                 true
             }
             6 => {
-                self.amp_envelope.sustain = value.clamp(0.0, 1.0);
+                self.amp_envelope.sustain.set_base(value);
                 true
             }
             7 => {
-                self.amp_envelope.release = value.clamp(0.001, 10.0);
+                self.amp_envelope.release.set_base(value);
                 true
             }
             _ => false,
@@ -355,10 +355,10 @@ impl StandardSynthBase {
             1 => Some(self.filter.cutoff),
             2 => Some(self.filter.resonance),
             3 => Some(self.filter.mode as u32 as f32),
-            4 => Some(self.amp_envelope.attack),
-            5 => Some(self.amp_envelope.decay),
-            6 => Some(self.amp_envelope.sustain),
-            7 => Some(self.amp_envelope.release),
+            4 => Some(self.amp_envelope.attack.get()),
+            5 => Some(self.amp_envelope.decay.get()),
+            6 => Some(self.amp_envelope.sustain.get()),
+            7 => Some(self.amp_envelope.release.get()),
             _ => None,
         }
     }
@@ -417,7 +417,7 @@ impl StandardSynthBase {
                 4,
                 "Attack",
                 "Envelope",
-                self.amp_envelope.attack,
+                self.amp_envelope.attack.get(),
                 0.001,
                 5.0,
                 0.01,
@@ -426,7 +426,7 @@ impl StandardSynthBase {
                 5,
                 "Decay",
                 "Envelope",
-                self.amp_envelope.decay,
+                self.amp_envelope.decay.get(),
                 0.001,
                 5.0,
                 0.2,
@@ -435,7 +435,7 @@ impl StandardSynthBase {
                 6,
                 "Sustain",
                 "Envelope",
-                self.amp_envelope.sustain,
+                self.amp_envelope.sustain.get(),
                 0.0,
                 1.0,
                 0.7,
@@ -444,7 +444,7 @@ impl StandardSynthBase {
                 7,
                 "Release",
                 "Envelope",
-                self.amp_envelope.release,
+                self.amp_envelope.release.get(),
                 0.001,
                 10.0,
                 0.5,
@@ -458,10 +458,10 @@ impl StandardSynthBase {
             1 => self.filter.cutoff = value.clamp(20.0, 20000.0),
             2 => self.filter.resonance = value.clamp(0.0, 0.95),
             3 => self.filter.mode = SimpleFilterMode::from(value),
-            4 => self.amp_envelope.attack = value.clamp(0.001, 5.0),
-            5 => self.amp_envelope.decay = value.clamp(0.001, 5.0),
-            6 => self.amp_envelope.sustain = value.clamp(0.0, 1.0),
-            7 => self.amp_envelope.release = value.clamp(0.001, 10.0),
+            4 => self.amp_envelope.attack.set_base(value),
+            5 => self.amp_envelope.decay.set_base(value),
+            6 => self.amp_envelope.sustain.set_base(value),
+            7 => self.amp_envelope.release.set_base(value),
             _ => {},
         }
     }

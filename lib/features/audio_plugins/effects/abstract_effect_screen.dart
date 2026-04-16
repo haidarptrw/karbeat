@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/components/plugin_parameter_widget.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
 /// Abstract base class for effect plugin screens.
@@ -11,8 +12,10 @@ import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 /// - Loading parameter specs
 /// - Setting parameters (optimistic UI + backend)
 /// - Standard Scaffold/AppBar layout
+/// - Automatic Dynamic UI Generation based on Rust #[param] specs
 ///
-/// Subclasses must implement [buildEffectBody] to define the custom effect UI.
+/// Subclasses can override [buildEffectBody] to define a custom effect UI, 
+/// but it defaults to an automatically generated layout.
 abstract class AbstractEffectScreen extends ConsumerStatefulWidget {
   final plugin_api.UiEffectTarget target;
   final int effectId;
@@ -37,6 +40,18 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   /// Override this in subclasses to customize.
   String get effectName => 'Effect';
 
+  /// Helper getter to automatically group parameters by their Rust `group` string.
+  Map<String, List<plugin_api.UiPluginParameter>> get groupedParameters {
+    final map = <String, List<plugin_api.UiPluginParameter>>{};
+    for (final param in parameters) {
+      if (!map.containsKey(param.group)) {
+        map[param.group] = [];
+      }
+      map[param.group]!.add(param);
+    }
+    return map;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -51,7 +66,6 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   }
 
   /// Start polling for parameter feedback from the audio thread.
-  /// Sends an initial query, then polls every 50ms for updates.
   @protected
   void startParameterPolling() async {
     // Request initial parameter snapshot from audio thread
@@ -94,6 +108,7 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
               (p) => p.id == paramValue.paramId,
             );
             if (index != -1) {
+              // Copy all immutable fields but update the value
               parameters[index] = plugin_api.UiPluginParameter(
                 id: parameters[index].id,
                 name: parameters[index].name,
@@ -121,7 +136,6 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
   }
 
   /// Load parameter specs from the backend.
-  /// Override in subclasses if custom initialization is needed.
   @protected
   Future<void> loadParameterSpecs() async {
     try {
@@ -130,6 +144,8 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
         effectId: widget.effectId,
       );
       setState(() {
+        // Sort parameters by ID to maintain a consistent UI order
+        specs.sort((a, b) => a.id.compareTo(b.id));
         parameters = specs;
         isLoading = false;
       });
@@ -179,13 +195,137 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
     }
   }
 
+  @protected
+  double getParameter(int paramId, double fallback) {
+    try {
+      return parameters.firstWhere((p) => p.id == paramId).value;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
   /// Called when parameters are updated from backend or polling.
-  /// Subclasses can override to sync their custom UI state.
   @protected
   void onParametersUpdated() {}
 
-  /// Subclasses must implement this to define the custom effect UI.
-  Widget buildEffectBody(BuildContext context);
+  // ==========================================================================
+  // DYNAMIC UI GENERATION
+  // ==========================================================================
+
+  /// Builds a fully automatic UI based on the Rust ParameterSpecs.
+  Widget buildDynamicEffectBody(BuildContext context) {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (errorMessage != null) {
+      return Center(
+        child: Text(
+          errorMessage!,
+          style: const TextStyle(color: Colors.redAccent),
+        ),
+      );
+    }
+
+    final groups = groupedParameters;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: groups.entries.map((entry) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader(entry.key), // The group name
+              _buildSectionContainer(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: entry.value.map((param) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: buildParameterWidget(param),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// Automatically routes the parameter to the correct universal widget.
+  /// Subclasses can override this to inject custom UI for specific parameters.
+  @protected
+  Widget buildParameterWidget(plugin_api.UiPluginParameter param) {
+    switch (param.paramType) {
+      case plugin_api.UiParameterType.float:
+      case plugin_api.UiParameterType.int:
+        return KarbeatFloatParam(
+          paramId: param.id,
+          name: param.name,
+          value: param.value,
+          min: param.min,
+          max: param.max,
+          defaultValue: param.defaultValue,
+          step: param.step == 0.0 ? 0.01 : param.step,
+          onChanged: (val) => setParameter(param.id, val),
+        );
+      case plugin_api.UiParameterType.choice:
+        return KarbeatChoiceParam(
+          paramId: param.id,
+          name: param.name,
+          value: param.value,
+          choices: param.choices,
+          defaultValue: param.defaultValue,
+          onChanged: (val) => setParameter(param.id, val),
+        );
+      case plugin_api.UiParameterType.bool:
+        return KarbeatBoolParam(
+          paramId: param.id,
+          name: param.name,
+          value: param.value,
+          defaultValue: param.defaultValue,
+          onChanged: (val) => setParameter(param.id, val),
+        );
+    }
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.cyanAccent,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionContainer(Widget child) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16213E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade700.withAlpha(128)),
+      ),
+      child: child,
+    );
+  }
+
+  /// Subclasses can override this to provide a custom UI layout, 
+  /// but it defaults to the dynamic layout.
+  Widget buildEffectBody(BuildContext context) {
+    return buildDynamicEffectBody(context);
+  }
 
   @override
   Widget build(BuildContext context) {

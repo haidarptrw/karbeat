@@ -106,9 +106,6 @@ impl WindowableSlice for [[f32; 2]] {
     }
 }
 
-// ============================================================================
-// THE EXPOSED API
-// ============================================================================
 impl Windowing {
     /// Applies the selected window to a mutable slice of audio data natively using SIMD.
     #[inline(always)]
