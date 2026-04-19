@@ -1,9 +1,10 @@
-// src/plugin/generator/karbeatzer_v2.rs
+//! src/plugin/generator/karbeatzer_v2.rs
 
-use std::{collections::HashMap, f32::consts::PI};
+use std::{ collections::HashMap, f32::consts::PI };
 
 use karbeat_dsp::prelude::*;
-use karbeat_plugin_api::{prelude::*};
+use karbeat_macros::karbeat_plugin;
+use karbeat_plugin_api::{ prelude::* };
 use karbeat_plugin_types::*;
 
 // ============================================================================
@@ -14,14 +15,19 @@ use karbeat_plugin_types::*;
 /// Contains only synth-specific fields like oscillators and drive.
 /// The shared state (voices, filter, envelope) lives in SynthBase.
 #[derive(Clone)]
+#[karbeat_plugin]
 pub struct KarbeatzerEngine {
+    #[nested]
     oscillators: [Oscillator; 3],
-    drive: Param<f32>,
+    #[param(id = 8, name = "Drive", group = "Master", min = 0.0, max = 1.0, default = 0.0)]
+    drive: f32,
 }
 
 impl Default for KarbeatzerEngine {
     fn default() -> Self {
-       // Create baseline oscillators using our new constructor
+        // Get the perfectly initialized parameters from the macro
+        let mut engine = Self::base_default();
+
         let mut osc1 = Oscillator::new(10, "Oscillator 1");
         osc1.waveform.set_base(Waveform::Saw.to_index() as f32);
         osc1.mix.set_base(1.0);
@@ -36,10 +42,10 @@ impl Default for KarbeatzerEngine {
         osc3.detune.set_base(-12.0);
         osc3.mix.set_base(0.3);
 
-        Self {
-            oscillators: [osc1, osc2, osc3],
-            drive: Param::new_float(8, "Drive", "Master", 0.0, 0.0, 1.0),
-        }
+        // Override the uninitialized array
+        engine.oscillators = [osc1, osc2, osc3];
+
+        engine
     }
 }
 
@@ -50,10 +56,10 @@ impl KarbeatzerEngine {
         sample_rate: f32,
         amp_envelope: &EnvelopeSettings,
         voice: &mut SynthVoice,
-        buffer: &mut [f32],
+        buffer: &mut [f32]
     ) {
         let block_size = buffer.len();
-        let base_freq = 440.0 * 2.0_f32.powf((voice.note as f32 - 69.0) / 12.0);
+        let base_freq = 440.0 * (2.0_f32).powf(((voice.note as f32) - 69.0) / 12.0);
         let dt = 1.0 / sample_rate;
 
         // Pre-calculate phase increments
@@ -61,11 +67,11 @@ impl KarbeatzerEngine {
         let mut wfs = [Waveform::Sine; 3];
         let mut mixes = [0.0; 3];
         let mut pws = [0.5; 3];
-        
+
         for (i, osc) in oscillators.iter().enumerate() {
             let detune = osc.detune.get();
-            let freq = base_freq * 2.0_f32.powf(detune / 12.0);
-            
+            let freq = base_freq * (2.0_f32).powf(detune / 12.0);
+
             phase_incs[i] = freq / sample_rate;
             wfs[i] = osc.waveform.get();
             mixes[i] = osc.mix.get();
@@ -80,17 +86,29 @@ impl KarbeatzerEngine {
                 continue;
             }
 
-            let velocity_gain = voice.velocity as f32 / 127.0;
+            let velocity_gain = (voice.velocity as f32) / 127.0;
             let current_gain = velocity_gain * env_level;
             let mut sample_accum = 0.0;
 
             for i in 0..3 {
                 let phase = voice.phase[i];
+                let dt_inc = phase_incs[i];
 
                 let osc_out = match wfs[i] {
                     Waveform::Sine => (phase * 2.0 * PI).sin(),
-                    Waveform::Saw => 2.0 * phase - 1.0,
-                    Waveform::Square => if phase < pws[i] as f32 { 1.0 } else { -1.0 },
+                    Waveform::Saw => {
+                        let naive = 2.0 * phase - 1.0;
+                        // Apply PolyBLEP for anti-aliasing
+                        naive - poly_blep(phase, dt_inc)
+                    },
+                    Waveform::Square => {
+                        let naive = if phase < pws[i] { 1.0 } else { -1.0 };
+                        // Apply PolyBLEP for anti-aliasing
+                        let mut blep = poly_blep(phase, dt_inc);
+                        let phase2 = (phase + 1.0 - pws[i]) % 1.0;
+                        blep -= poly_blep(phase2, dt_inc);
+                        naive - blep
+                    }
                     Waveform::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
                     Waveform::Noise => fastrand::f32() * 2.0 - 1.0,
                 };
@@ -117,7 +135,7 @@ impl RawSynthEngine for KarbeatzerEngine {
         &mut self,
         base: &mut StandardSynthBase,
         output_buffer: &mut [f32],
-        midi_events: &[MidiEvent],
+        midi_events: &[MidiEvent]
     ) {
         output_buffer.fill(0.0);
 
@@ -129,7 +147,7 @@ impl RawSynthEngine for KarbeatzerEngine {
 
         while current_frame < total_frames {
             let next_event_frame = if event_idx < midi_events.len() {
-                midi_events[event_idx].sample_offset as usize
+                midi_events[event_idx].sample_offset
             } else {
                 total_frames
             };
@@ -156,7 +174,7 @@ impl RawSynthEngine for KarbeatzerEngine {
                         base.sample_rate,
                         &base.amp_envelope,
                         voice,
-                        scratch,
+                        scratch
                     );
 
                     // Mix mono voice into stereo output
@@ -184,8 +202,9 @@ impl RawSynthEngine for KarbeatzerEngine {
             }
 
             // Process MIDI events
-            while event_idx < midi_events.len()
-                && midi_events[event_idx].sample_offset as usize == end_frame
+            while
+                event_idx < midi_events.len() &&
+                (midi_events[event_idx].sample_offset as usize) == end_frame
             {
                 match midi_events[event_idx].data {
                     MidiMessage::NoteOn { key, velocity } => {
@@ -218,62 +237,54 @@ impl RawSynthEngine for KarbeatzerEngine {
     }
 
     fn set_custom_parameter(&mut self, id: u32, value: f32) {
-        if self.drive.id == id {
-            self.drive.set_base(value);
-            return;
-        }
-
-        // route to the child oscillators
-        for osc in &mut self.oscillators {
-            if osc.waveform.id == id { osc.waveform.set_base(value); return; }
-            if osc.detune.id == id { osc.detune.set_base(value); return; }
-            if osc.phase_offset.id == id { osc.phase_offset.set_base(value); return; }
-            if osc.mix.id == id { osc.mix.set_base(value); return; }
-            if osc.pulse_width.id == id { osc.pulse_width.set_base(value); return; }
-        }
+        self.auto_set_parameter(id, value);
     }
 
     fn get_custom_parameter(&self, id: u32) -> Option<f32> {
-        if self.drive.id == id { return Some(self.drive.get_base().to_f32()); }
-        
-        for osc in &self.oscillators {
-            if osc.waveform.id == id { return Some(osc.waveform.get_base().to_f32()); }
-            if osc.detune.id == id { return Some(osc.detune.get_base().to_f32()); }
-            if osc.phase_offset.id == id { return Some(osc.phase_offset.get_base().to_f32()); }
-            if osc.mix.id == id { return Some(osc.mix.get_base().to_f32()); }
-            if osc.pulse_width.id == id { return Some(osc.pulse_width.get_base().to_f32()); }
-        }
-        None
+        self.auto_get_parameter(id)
     }
 
-    fn custom_default_parameters() -> HashMap<u32, f32> {
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        self.auto_apply_automation(id, value);
+    }
+
+    fn clear_automation(&mut self, id: u32) {
+        self.auto_clear_automation(id);
+    }
+
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
+        self.auto_get_parameter_specs()
+    }
+
+    fn custom_default_parameters() -> HashMap<u32, f32> where Self: Sized {
         let mut map = HashMap::new();
         let default_engine = Self::default();
 
-        map.insert(default_engine.drive.id, default_engine.drive.get_base().to_f32());
-
-        for osc in &default_engine.oscillators {
-            map.insert(osc.waveform.id, osc.waveform.get_base().to_f32());
-            map.insert(osc.detune.id, osc.detune.get_base().to_f32());
-            map.insert(osc.phase_offset.id, osc.phase_offset.get_base().to_f32());
-            map.insert(osc.mix.id, osc.mix.get_base().to_f32());
-            map.insert(osc.pulse_width.id, osc.pulse_width.get_base().to_f32());
+        // You can either extract this via a macro helper if you build one later,
+        // or just use the specs vector to dynamically construct the defaults!
+        for spec in default_engine.auto_get_parameter_specs() {
+            map.insert(spec.id, spec.default_value);
         }
+
         map
     }
+}
 
-    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
-        let mut specs = vec![self.drive.to_spec()];
-        
-        for osc in &self.oscillators {
-            specs.push(osc.waveform.to_spec());
-            specs.push(osc.detune.to_spec());
-            specs.push(osc.phase_offset.to_spec());
-            specs.push(osc.mix.to_spec());
-            specs.push(osc.pulse_width.to_spec());
-        }
-        
-        specs
+/// Calculates the Polynomial Band-Limited Step for anti-aliasing.
+/// `t` is the current phase (0.0 to 1.0)
+/// `dt` is the phase increment per sample
+#[inline(always)]
+fn poly_blep(mut t: f32, dt: f32) -> f32 {
+    if t < dt {
+        // At the start of the phase cycle
+        t /= dt;
+        t + t - t * t - 1.0
+    } else if t > 1.0 - dt {
+        // At the end of the phase cycle
+        t = (t - 1.0) / dt;
+        t * t + t + t + 1.0
+    } else {
+        0.0
     }
 }
 
@@ -283,8 +294,3 @@ impl RawSynthEngine for KarbeatzerEngine {
 
 /// The full Karbeatzer V2 synth (Subtractive Synthesizer).
 pub type KarbeatzerV2 = RawSynthWrapper<KarbeatzerEngine>;
-
-/// Helper to create a new Karbeatzer instance
-pub fn create_karbeatzer(sample_rate: Option<f32>, channels: usize) -> KarbeatzerV2 {
-    RawSynthWrapper::new(KarbeatzerEngine::default(), sample_rate.unwrap_or(48000.0), channels)
-}

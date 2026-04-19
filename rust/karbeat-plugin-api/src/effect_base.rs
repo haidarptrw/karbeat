@@ -3,7 +3,7 @@
 // Shared effect infrastructure for all effect plugins.
 // Use composition pattern: embed EffectBase in your effect struct.
 use indexmap::IndexMap;
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 
 pub trait EffectBase: Send + Sync + Clone {
     fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
@@ -18,7 +18,10 @@ pub trait EffectBase: Send + Sync + Clone {
     fn sample_rate(&self) -> f32;
 
     fn default_parameters() -> IndexMap<u32, f32>;
-    fn get_parameter_specs() -> Vec<PluginParameter>;
+    fn get_parameter_specs() -> Vec<ParameterSpec>;
+
+    fn apply_automation(&mut self, id: u32, value: f32);
+    fn clear_automation(&mut self, id: u32);
 }
 
 // ============================================================================
@@ -129,11 +132,25 @@ impl StandardEffectBase {
         map
     }
 
-    pub fn get_parameter_specs() -> Vec<PluginParameter> {
+    pub fn get_parameter_specs() -> Vec<ParameterSpec> {
         vec![
-            PluginParameter::new_bool(0, "Bypass", "General", false, false),
-            PluginParameter::new_float(1, "Mix", "General", 1.0, 0.0, 1.0, 1.0),
+            ParameterSpec::new_bool(0, "Bypass", "General", false, false),
+            ParameterSpec::new_float(1, "Mix", "General", 1.0, 0.0, 1.0, 1.0),
         ]
+    }
+
+    pub fn apply_automation(&mut self, id: u32, value: f32) {
+        match id {
+            0 => self.bypass = value >= 0.5,
+            1 => self.mix = value.clamp(0.0, 1.0),
+            _ => {},
+        }
+    }
+
+    pub fn clear_automation(&mut self, id: u32) {
+        if let Some(&default_val) = Self::default_parameters().get(&id) {
+            self.set_parameter(id, default_val);
+        }
     }
 
     /// Base parameter IDs reserved by EffectBase (0-1)

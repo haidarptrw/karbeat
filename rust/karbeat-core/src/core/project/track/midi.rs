@@ -5,9 +5,7 @@ use serde::{ Deserialize, Serialize };
 use crate::core::project::ApplicationState;
 use crate::core::project::Note;
 use crate::core::project::NoteId;
-use karbeat_utils::define_id;
-
-define_id!(PatternId);
+use crate::shared::id::PatternId;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Pattern {
@@ -392,7 +390,7 @@ impl ApplicationState {
         let pattern_arc = self.pattern_pool
             .get_mut(&pattern_id)
             .ok_or_else(|| anyhow::anyhow!("Pattern {} not found", pattern_id.to_u32()))?;
-        let pattern = Arc::make_mut(pattern_arc);
+        let pattern: &mut Pattern = Arc::make_mut(pattern_arc);
 
         let note = pattern.add_note(key, start_tick, duration)?;
 

@@ -1,11 +1,8 @@
-use karbeat_utils::define_id;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::project::{plugin::instance::PluginInstance, ApplicationState};
-
-define_id!(GeneratorId);
+use crate::{core::project::{ApplicationState, plugin::instance::PluginInstance}, shared::id::GeneratorId};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct GeneratorInstance {

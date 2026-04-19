@@ -1,3 +1,6 @@
+pub mod automation_api;
+pub mod transport_api;
+pub mod audio_api;
 pub mod plugin_api;
 pub mod clipboard_api;
 pub mod project_api;

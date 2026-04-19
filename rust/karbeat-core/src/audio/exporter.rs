@@ -11,7 +11,8 @@ use crate::{
     },
     commands::AudioCommand,
     context::ctx,
-    core::project::{ ApplicationState, GeneratorId, TrackId, mixer::{ BusId, EffectId } },
+    core::project::{ ApplicationState, GeneratorId, TrackId },
+    shared::id::*
 };
 
 #[derive(Debug, Clone, Error)]

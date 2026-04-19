@@ -1,12 +1,12 @@
 // src/core/plugin/registry.rs
 
 use hashbrown::HashMap;
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 
 // use crate::effect::compressor::create_compressor;
-use crate::effect::parametric_eq::create_parametric_eq;
-use crate::generator::karbeatzer_v2::create_karbeatzer;
 use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
+
+use crate::{effect::parametric_eq::KarbeatParametricEQ, generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro}};
 
 /// A function pointer type that creates a new Generator instance
 type GeneratorFactory = Box<dyn Fn() -> Box<dyn KarbeatGenerator + Send + Sync> + Send + Sync>;
@@ -18,14 +18,14 @@ type EffectFactory = Box<dyn Fn() -> Box<dyn KarbeatEffect + Send + Sync> + Send
 struct RegisteredGenerator {
     name: String,
     factory: GeneratorFactory,
-    parameter_specs: Vec<PluginParameter>,
+    parameter_specs: Vec<ParameterSpec>,
 }
 
 /// Metadata stored for each registered effect
 struct RegisteredEffect {
     name: String,
     factory: EffectFactory,
-    parameter_specs: Vec<PluginParameter>,
+    parameter_specs: Vec<ParameterSpec>,
 }
 
 /// Information about a registered plugin (for UI display)
@@ -61,14 +61,11 @@ impl PluginRegistry {
         let mut registry = Self::new();
 
         // Karbeatzer V2 - our main synth
-        registry.register_generator("Karbeatzer V2", || {
-            // We pass None for sample_rate here because 'prepare()' will be called
-            // by the engine later with the correct rate.
-            Box::new(create_karbeatzer(None, 2))
-        });
+        registry.register_generator("Karbeatzer V2", || Box::new(KarbeatzerV2::build()));
+        registry.register_generator("My Retro", || Box::new(MyRetro::build()));
 
         // Parametric EQ
-        registry.register_effect("Parametric EQ", || Box::new(create_parametric_eq(None, 2)));
+        registry.register_effect("Parametric EQ", || Box::new(KarbeatParametricEQ::build()));
 
         registry
     }
@@ -150,14 +147,14 @@ impl PluginRegistry {
     // =========================================================================
 
     /// Get cached parameter specs for a generator by registry ID
-    pub fn get_generator_parameter_specs_by_id(&self, id: u32) -> Option<Vec<PluginParameter>> {
+    pub fn get_generator_parameter_specs_by_id(&self, id: u32) -> Option<Vec<ParameterSpec>> {
         self.generators
             .get(&id)
             .map(|reg| reg.parameter_specs.clone())
     }
 
     /// Get cached parameter specs for an effect by registry ID
-    pub fn get_effect_parameter_specs_by_id(&self, id: u32) -> Option<Vec<PluginParameter>> {
+    pub fn get_effect_parameter_specs_by_id(&self, id: u32) -> Option<Vec<ParameterSpec>> {
         self.effects.get(&id).map(|reg| reg.parameter_specs.clone())
     }
 

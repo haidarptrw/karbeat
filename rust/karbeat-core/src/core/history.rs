@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::core::project::{
-    track::midi::PatternId, ApplicationState, Clip, ClipId, Note, NoteId, TrackId,
-};
+use crate::{core::project::{
+     ApplicationState, Clip, ClipId, Note, NoteId, TrackId,
+}, shared::id::*};
 
 /// Every action to the projects that are stored in history
 #[derive(Debug, Clone)]
@@ -51,6 +51,9 @@ pub enum ProjectAction {
     },
     /// Groups multiple actions into one Undo/Redo step (e.g. Paste)
     Batch(Vec<ProjectAction>),
+
+    // TODO: Add history for creating or removing track
+    // TODO: Add history for adding automation
 }
 
 #[derive(Clone, Default)]
@@ -63,8 +66,8 @@ pub struct HistoryManager {
 impl HistoryManager {
     pub fn new() -> Self {
         Self {
-            undo_stack: Vec::new(),
-            redo_stack: Vec::new(),
+            undo_stack: Vec::with_capacity(100),
+            redo_stack: Vec::with_capacity(100),
             max_history: 100,
         }
     }

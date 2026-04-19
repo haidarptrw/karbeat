@@ -5,7 +5,7 @@
 
 use indexmap::IndexMap;
 use karbeat_dsp::{envelope::{EnvelopeSettings, EnvelopeStage}, filter::SimpleFilterMode};
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 
 
 // ============================================================================
@@ -168,10 +168,10 @@ impl SynthVoice {
 
         match self.env_stage {
             EnvelopeStage::Attack => {
-                let rate = if settings.attack < 0.001 {
+                let rate = if settings.attack.get() < 0.001 {
                     1000.0
                 } else {
-                    1.0 / settings.attack
+                    1.0 / settings.attack.get()
                 };
                 self.env_level = (self.env_timer * rate).min(1.0);
                 if self.env_level >= 1.0 {
@@ -181,26 +181,26 @@ impl SynthVoice {
                 }
             }
             EnvelopeStage::Decay => {
-                let rate = if settings.decay < 0.001 {
+                let rate = if settings.decay.get() < 0.001 {
                     1000.0
                 } else {
-                    1.0 / settings.decay
+                    1.0 / settings.decay.get()
                 };
                 let progress = (self.env_timer * rate).min(1.0);
-                self.env_level = 1.0 - (progress * (1.0 - settings.sustain));
+                self.env_level = 1.0 - (progress * (1.0 - settings.sustain.get()));
                 if progress >= 1.0 {
-                    self.env_level = settings.sustain;
+                    self.env_level = settings.sustain.get();
                     self.env_stage = EnvelopeStage::Sustain;
                 }
             }
             EnvelopeStage::Sustain => {
-                self.env_level = settings.sustain;
+                self.env_level = settings.sustain.get();
             }
             EnvelopeStage::Release => {
-                let rate = if settings.release < 0.001 {
+                let rate = if settings.release.get() < 0.001 {
                     1000.0
                 } else {
-                    1.0 / settings.release
+                    1.0 / settings.release.get()
                 };
                 let progress = (self.env_timer * rate).min(1.0);
                 self.env_level = self.release_start_level * (1.0 - progress);
@@ -329,19 +329,19 @@ impl StandardSynthBase {
                 true
             }
             4 => {
-                self.amp_envelope.attack = value.clamp(0.001, 5.0);
+                self.amp_envelope.attack.set_base(value);
                 true
             }
             5 => {
-                self.amp_envelope.decay = value.clamp(0.001, 5.0);
+                self.amp_envelope.decay.set_base(value);
                 true
             }
             6 => {
-                self.amp_envelope.sustain = value.clamp(0.0, 1.0);
+                self.amp_envelope.sustain.set_base(value);
                 true
             }
             7 => {
-                self.amp_envelope.release = value.clamp(0.001, 10.0);
+                self.amp_envelope.release.set_base(value);
                 true
             }
             _ => false,
@@ -355,10 +355,10 @@ impl StandardSynthBase {
             1 => Some(self.filter.cutoff),
             2 => Some(self.filter.resonance),
             3 => Some(self.filter.mode as u32 as f32),
-            4 => Some(self.amp_envelope.attack),
-            5 => Some(self.amp_envelope.decay),
-            6 => Some(self.amp_envelope.sustain),
-            7 => Some(self.amp_envelope.release),
+            4 => Some(self.amp_envelope.attack.get()),
+            5 => Some(self.amp_envelope.decay.get()),
+            6 => Some(self.amp_envelope.sustain.get()),
+            7 => Some(self.amp_envelope.release.get()),
             _ => None,
         }
     }
@@ -377,11 +377,11 @@ impl StandardSynthBase {
         map
     }
 
-    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+    pub fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         vec![
-            PluginParameter::new_float(0, "Master Gain", "Output", self.gain, 0.0, 1.0, 0.5),
+            ParameterSpec::new_float(0, "Master Gain", "Output", self.gain, 0.0, 1.0, 0.5),
             // Filter
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 1,
                 "Cutoff",
                 "Filter",
@@ -390,7 +390,7 @@ impl StandardSynthBase {
                 20000.0,
                 2000.0,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 2,
                 "Resonance",
                 "Filter",
@@ -399,7 +399,7 @@ impl StandardSynthBase {
                 0.95,
                 0.2,
             ),
-            PluginParameter::new_choice(
+            ParameterSpec::new_choice(
                 3,
                 "Mode",
                 "Filter",
@@ -413,43 +413,65 @@ impl StandardSynthBase {
                 0,
             ),
             // Envelope
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 4,
                 "Attack",
                 "Envelope",
-                self.amp_envelope.attack,
+                self.amp_envelope.attack.get(),
                 0.001,
                 5.0,
                 0.01,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 5,
                 "Decay",
                 "Envelope",
-                self.amp_envelope.decay,
+                self.amp_envelope.decay.get(),
                 0.001,
                 5.0,
                 0.2,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 6,
                 "Sustain",
                 "Envelope",
-                self.amp_envelope.sustain,
+                self.amp_envelope.sustain.get(),
                 0.0,
                 1.0,
                 0.7,
             ),
-            PluginParameter::new_float(
+            ParameterSpec::new_float(
                 7,
                 "Release",
                 "Envelope",
-                self.amp_envelope.release,
+                self.amp_envelope.release.get(),
                 0.001,
                 10.0,
                 0.5,
             ),
         ]
+    }
+
+    pub fn apply_automation(&mut self, id: u32, value: f32) {
+        match id {
+            0 => self.gain = value.clamp(0.0, 1.0),
+            1 => self.filter.cutoff = value.clamp(20.0, 20000.0),
+            2 => self.filter.resonance = value.clamp(0.0, 0.95),
+            3 => self.filter.mode = SimpleFilterMode::from(value),
+            4 => self.amp_envelope.attack.set_base(value),
+            5 => self.amp_envelope.decay.set_base(value),
+            6 => self.amp_envelope.sustain.set_base(value),
+            7 => self.amp_envelope.release.set_base(value),
+            _ => {},
+        }
+    }
+
+    pub fn clear_automation(&mut self, id: u32) {
+        // For base parameters, clearing automation means snapping back to the default value.
+        // We can reuse the logic from default_parameters().
+        if let Some(&default_val) = Self::default_parameters().get(&id) {
+            self.set_parameter(id, default_val);
+        }
     }
 
     /// Base parameter IDs reserved by SynthBase (0-7)

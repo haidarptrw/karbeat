@@ -149,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
+
+  @protected
   Int8List dco_decode_list_prim_i_8_strict(dynamic raw);
 
   @protected
@@ -259,6 +262,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  List<ParameterSpecDTO>? dco_decode_opt_list_parameter_spec_dto(dynamic raw);
+
+  @protected
+  ParameterSpecDTO dco_decode_parameter_spec_dto(dynamic raw);
+
+  @protected
+  ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw);
 
   @protected
   (int, AudioWaveformUiForClip)
@@ -566,6 +578,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -704,6 +721,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  List<ParameterSpecDTO>? sse_decode_opt_list_parameter_spec_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ParameterSpecDTO sse_decode_parameter_spec_dto(SseDeserializer deserializer);
+
+  @protected
+  ParameterValueTypeDTO sse_decode_parameter_value_type_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   (int, AudioWaveformUiForClip)
@@ -1070,6 +1100,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_parameter_spec_dto(
+    List<ParameterSpecDTO> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_i_8_strict(Int8List self, SseSerializer serializer);
 
   @protected
@@ -1233,6 +1269,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_list_parameter_spec_dto(
+    List<ParameterSpecDTO>? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_parameter_spec_dto(
+    ParameterSpecDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_parameter_value_type_dto(
+    ParameterValueTypeDTO self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_record_u_32_audio_waveform_ui_for_clip(

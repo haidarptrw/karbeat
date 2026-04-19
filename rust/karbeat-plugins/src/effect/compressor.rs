@@ -5,7 +5,7 @@ use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
 
 #[derive(Clone)]
-pub struct KarbeatCompressor {
+pub struct KarbeatCompressorEngine {
     /// ======================================
     /// User Parameters (automatable via Param<f32>)
     /// IDs start at 2 to avoid collision with base effect IDs (0=Bypass, 1=Mix)
@@ -25,14 +25,14 @@ pub struct KarbeatCompressor {
     release_coeff: f32,
 }
 
-impl Default for KarbeatCompressor {
+impl Default for KarbeatCompressorEngine {
     fn default() -> Self {
         let mut comp = Self {
-            threshold: Param::new_float(2, "Threshold", "Compressor", -20.0, -60.0, 0.0),
-            ratio: Param::new_float(3, "Ratio", "Compressor", 4.0, 1.0, 20.0),
-            attack: Param::new_float(4, "Attack", "Compressor", 10.0, 0.1, 100.0),
-            release: Param::new_float(5, "Release", "Compressor", 100.0, 1.0, 1000.0),
-            makeup_gain: Param::new_float(6, "Makeup Gain", "Compressor", 0.0, -24.0, 24.0),
+            threshold: Param::new_float(2, "Threshold", "Compressor", -20.0, -60.0, 0.0, 0.1),
+            ratio: Param::new_float(3, "Ratio", "Compressor", 4.0, 1.0, 20.0, 0.1),
+            attack: Param::new_float(4, "Attack", "Compressor", 10.0, 0.1, 100.0, 0.1),
+            release: Param::new_float(5, "Release", "Compressor", 100.0, 1.0, 1000.0, 1.0),
+            makeup_gain: Param::new_float(6, "Makeup Gain", "Compressor", 0.0, -24.0, 24.0, 0.1),
 
             sample_rate: 48000.0,
             current_gr_db: 0.0,
@@ -44,7 +44,7 @@ impl Default for KarbeatCompressor {
     }
 }
 
-impl KarbeatCompressor {
+impl KarbeatCompressorEngine {
     /// Recalculates the 1-pole filter coefficients when sample rate or time params change
     fn recalculate_coefficients(&mut self) {
         // Convert ms to seconds
@@ -58,7 +58,7 @@ impl KarbeatCompressor {
 }
 
 // Implement whatever trait your wrapper requires (e.g., `KarbeatEffect`)
-impl RawEffectEngine for KarbeatCompressor {
+impl RawEffectEngine for KarbeatCompressorEngine {
     fn prepare(&mut self, sample_rate: f32, _channels: usize, _buffer_size: usize) {
         self.sample_rate = sample_rate;
         self.recalculate_coefficients();
@@ -187,7 +187,7 @@ impl RawEffectEngine for KarbeatCompressor {
         map
     }
 
-    fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         vec![
             self.threshold.to_spec(),
             self.ratio.to_spec(),
@@ -203,14 +203,15 @@ impl RawEffectEngine for KarbeatCompressor {
     {
         "Karbeat Compressor"
     }
+
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        todo!()
+    }
+
+    fn clear_automation(&mut self, id: u32) {
+        todo!()
+    }
 }
 
-pub type KarbeatCompressorWrapper = RawEffectWrapper<KarbeatCompressor>;
-
-pub fn create_compressor(sample_rate: Option<f32>) -> RawEffectWrapper<KarbeatCompressor> {
-    RawEffectWrapper::new(
-        KarbeatCompressor::default(),
-        sample_rate.unwrap_or(48000.0),
-        2,
-    )
-}
+/// A simple Compressor effect plugin
+pub type KarbeatCompressor = RawEffectWrapper<KarbeatCompressorEngine>;

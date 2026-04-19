@@ -12,3 +12,6 @@ dasp.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true
 serde_json.workspace = true
+
+[lints]
+workspace = true

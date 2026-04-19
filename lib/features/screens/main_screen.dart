@@ -5,6 +5,8 @@ import 'package:karbeat/features/side_panel/side_panel.dart';
 import 'package:karbeat/features/side_panel/sidebar.dart';
 import 'package:karbeat/state/app_state.dart';
 
+import 'package:karbeat/features/components/floating_midi_keyboard.dart';
+
 class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
 
@@ -12,6 +14,9 @@ class MainScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentContext = ref.watch(
       karbeatStateProvider.select((s) => s.currentToolbarContext),
+    );
+    final showMidiKeyboard = ref.watch(
+      karbeatStateProvider.select((s) => s.showFloatingMidiKeyboard),
     );
 
     return Scaffold(
@@ -32,6 +37,9 @@ class MainScreen extends ConsumerWidget {
               bottom: 0,
               child: _buildContextPanel(context, ref, currentContext),
             ),
+          
+          if (showMidiKeyboard)
+            const FloatingMidiKeyboard(),
         ],
       ),
     );

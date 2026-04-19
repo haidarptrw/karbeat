@@ -8,3 +8,6 @@ description = "3rd-party plugin hosting implementation for Karbeat, including VS
 karbeat-core.workspace = true
 karbeat-plugin-api.workspace = true
 log.workspace = true
+
+[lints]
+workspace = true

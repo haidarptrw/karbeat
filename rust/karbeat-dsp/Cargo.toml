@@ -14,3 +14,8 @@ fastrand.workspace = true
 derive_builder.workspace = true
 karbeat-macros.workspace = true
 karbeat-plugin-types.workspace = true
+num-traits.workspace = true
+wide.workspace = true
+
+[lints]
+workspace = true

@@ -8,11 +8,9 @@ use karbeat_core::api::{
     pattern_api,
 };
 use karbeat_core::core::project::{ NoteId, PatternId };
-use karbeat_core::core::project::{
-    clip::ClipId,
-    clipboard::ClipboardContent,
-    track::TrackId,
-};
+use karbeat_core::core::project::{ clipboard::ClipboardContent };
+
+use karbeat_core::shared::id::*;
 
 // =======================================
 // Data type definition
@@ -33,17 +31,11 @@ impl From<&ClipboardContent> for UiClipboardContent {
         match clipboard {
             ClipboardContent::Empty => UiClipboardContent::Empty,
             ClipboardContent::Notes(notes) => {
-                let ui_notes = notes
-                    .iter()
-                    .map(|note| UiNote::from(note))
-                    .collect();
+                let ui_notes = notes.iter().map(UiNote::from).collect();
                 UiClipboardContent::Notes(ui_notes)
             }
             ClipboardContent::Clips(clips) => {
-                let ui_clips = clips
-                    .iter()
-                    .map(|note| UiClip::from(note))
-                    .collect();
+                let ui_clips = clips.iter().map(UiClip::from).collect();
                 UiClipboardContent::Clips(ui_clips)
             }
         }
@@ -94,10 +86,7 @@ pub fn cut_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), Stri
 /// Paste: Reads clipboard, creates new notes, creates Batch Add action
 pub fn paste_pattern_notes(target_pattern_id: u32, playhead_tick: u64) -> Result<(), String> {
     note_api
-        ::paste_notes(
-            karbeat_core::core::project::track::midi::PatternId::from(target_pattern_id),
-            playhead_tick
-        )
+        ::paste_notes(PatternId::from(target_pattern_id), playhead_tick)
         .map_err(|e| format!("{}", e))?;
     Ok(())
 }
@@ -109,10 +98,7 @@ pub fn delete_pattern_notes(pattern_id: u32, note_ids: Vec<u32>) -> Result<(), S
         .map(karbeat_core::core::project::NoteId::from)
         .collect();
     note_api
-        ::delete_notes_batch(
-            karbeat_core::core::project::track::midi::PatternId::from(pattern_id),
-            note_ids_typed
-        )
+        ::delete_notes_batch(PatternId::from(pattern_id), note_ids_typed)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())
@@ -148,10 +134,7 @@ pub fn cut_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
 /// Clips are offset relative to the earliest clip's start time.
 pub fn paste_clips(target_track_id: u32, paste_start_time: u32) -> Result<(), String> {
     clip_api
-        ::paste_clips(
-            karbeat_core::core::project::track::TrackId::from(target_track_id),
-            paste_start_time
-        )
+        ::paste_clips(TrackId::from(target_track_id), paste_start_time)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())
@@ -159,15 +142,9 @@ pub fn paste_clips(target_track_id: u32, paste_start_time: u32) -> Result<(), St
 
 /// Delete specified clips from a track with history support.
 pub fn delete_clips(track_id: u32, clip_ids: Vec<u32>) -> Result<(), String> {
-    let clip_ids_typed = clip_ids
-        .into_iter()
-        .map(karbeat_core::core::project::clip::ClipId::from)
-        .collect();
+    let clip_ids_typed = clip_ids.into_iter().map(ClipId::from).collect();
     clip_api
-        ::batch_delete_clips(
-            karbeat_core::core::project::track::TrackId::from(track_id),
-            clip_ids_typed
-        )
+        ::batch_delete_clips(TrackId::from(track_id), clip_ids_typed)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())
@@ -182,9 +159,9 @@ pub fn move_clip(
 ) -> Result<(), String> {
     clip_api
         ::move_clip(
-            karbeat_core::core::project::track::TrackId::from(old_track_id),
-            karbeat_core::core::project::track::TrackId::from(new_track_id),
-            karbeat_core::core::project::clip::ClipId::from(clip_id),
+            TrackId::from(old_track_id),
+            TrackId::from(new_track_id),
+            ClipId::from(clip_id),
             new_start_time
         )
         .map_err(|e| format!("{}", e))?;
@@ -201,12 +178,7 @@ pub fn resize_clip(
     new_time_val: u32
 ) -> Result<(), String> {
     clip_api
-        ::resize_clip(
-            karbeat_core::core::project::track::TrackId::from(track_id),
-            karbeat_core::core::project::clip::ClipId::from(clip_id),
-            edge.into(),
-            new_time_val
-        )
+        ::resize_clip(TrackId::from(track_id), ClipId::from(clip_id), edge.into(), new_time_val)
         .map_err(|e| format!("{}", e))?;
 
     Ok(())

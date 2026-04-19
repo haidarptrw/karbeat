@@ -2,7 +2,7 @@ use std::{any::Any, fmt::Debug};
 
 use indexmap::IndexMap;
 
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
 
 /// Trait that indicates an Effect plugin
@@ -30,11 +30,18 @@ pub trait KarbeatEffect: Send + Sync {
     /// Get a parameter value
     fn get_parameter(&self, id: u32) -> f32;
 
+    /// Apply an automated value from the sequencer.
+    /// Modifies the DSP's current value WITHOUT overwriting the user's base value.
+    fn apply_automation(&mut self, id: u32, value: f32);
+
+    /// Clear active automation for a specific parameter, snapping it back to its base value.
+    fn clear_automation(&mut self, id: u32);
+
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
-    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
 
     /// Execute custom command if provided by implementer
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
@@ -65,11 +72,18 @@ pub trait KarbeatGenerator: Send + Sync {
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
 
+    /// Apply an automated value from the sequencer.
+    /// Modifies the DSP's current value WITHOUT overwriting the user's base value.
+    fn apply_automation(&mut self, id: u32, value: f32);
+
+    /// Clear active automation for a specific parameter, snapping it back to its base value.
+    fn clear_automation(&mut self, id: u32);
+
     /// Get the default values for all parameters supported by this plugin
     fn default_parameters(&self) -> IndexMap<u32, f32>;
 
     /// Get parameter specifications for UI generation
-    fn get_parameter_specs(&self) -> Vec<PluginParameter>;
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
 
     /// Execute custom command if provided by implementer
     fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
@@ -130,6 +144,20 @@ impl KarbeatPlugin {
         }
     }
 
+    pub fn apply_automation(&mut self, id: u32, value: f32) {
+        match self {
+            KarbeatPlugin::Effect(e) => e.apply_automation(id, value),
+            KarbeatPlugin::Generator(g) => g.apply_automation(id, value),
+        }
+    }
+
+    pub fn clear_automation(&mut self, id: u32) {
+        match self {
+            KarbeatPlugin::Effect(e) => e.clear_automation(id),
+            KarbeatPlugin::Generator(g) => g.clear_automation(id),
+        }
+    }
+
     /// Get a parameter from the plugin
     pub fn get_parameter(&self, id: u32) -> f32 {
         match self {
@@ -139,7 +167,7 @@ impl KarbeatPlugin {
     }
 
     /// Get parameter specifications for UI generation
-    pub fn get_parameter_specs(&self) -> Vec<PluginParameter> {
+    pub fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         match self {
             KarbeatPlugin::Effect(e) => e.get_parameter_specs(),
             KarbeatPlugin::Generator(g) => g.get_parameter_specs(),

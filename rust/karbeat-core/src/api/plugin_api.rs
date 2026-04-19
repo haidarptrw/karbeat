@@ -1,4 +1,4 @@
-use karbeat_plugin_types::PluginParameter;
+use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 use parking_lot::Mutex;
 
@@ -7,10 +7,11 @@ use crate::{
     context::ctx,
     core::project::{
         generator::GeneratorInstanceType,
-        mixer::{EffectId, EffectInstance},
+        mixer::{EffectInstance},
         GeneratorId, GeneratorInstance, TrackId,
     },
     lock::{get_app_read, get_app_write, get_plugin_registry_read},
+    shared::id::*
 };
 
 use std::sync::Arc;
@@ -108,7 +109,7 @@ pub fn get_generator_parameter_specs<F, T>(
     mapper: F,
 ) -> Result<Vec<T>, String>
 where
-    F: Fn(PluginParameter, f32) -> T,
+    F: Fn(ParameterSpec, f32) -> T,
 {
     let app = get_app_read();
     let generator_arc = app
@@ -159,7 +160,7 @@ pub fn get_effect_parameter_specs<F, T>(
     mapper: F,
 ) -> Result<Vec<T>, String>
 where
-    F: Fn(PluginParameter, f32) -> T,
+    F: Fn(ParameterSpec, f32) -> T,
 {
     let app = get_app_read();
 

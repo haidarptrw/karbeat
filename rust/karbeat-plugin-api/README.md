@@ -46,213 +46,66 @@ wiring your implemented logic with the API
 
 **Example of implementation.**
 
-```rs
-use dasp::slice;
-use std::f32::consts::E;
+To see examples of implementation you can see it [here](../karbeat-plugins/)
 
-use karbeat_plugin_api::wrapper::{PluginParameter, RawEffectEngine, RawEffectWrapper};
+### 4. Macro
 
+Implementing this with all the boilerplate might be tedious. So, we have prepared an macro
+to help implementing the macro (see more at [karbeat_macros](../karbeat-macros/src/lib.rs))
+
+Example:
+
+```rust
 #[derive(Clone)]
-pub struct KarbeatCompressor {
-    // User Parameters
-    threshold_db: f32,
-    ratio: f32,
-    attack_ms: f32,
-    release_ms: f32,
-    makeup_gain_db: f32,
-
-    // Internal State
-    sample_rate: f32,
-    current_gr_db: f32,
-    attack_coeff: f32,
-    release_coeff: f32,
+#[karbeat_plugin]
+pub struct KarbeatzerEngine {
+    // IMPORTANT: Oscillator needs to implement AutoParams to make this work. 
+    // it depends on `karbeat-plugin-types` crate, so you have to include it in the Cargo.toml
+    #[nested]
+    oscillators: [Oscillator; 3], 
+    #[param(id = 8, name = "Drive", group = "Master", min = 0.0, max = 1.0, default = 0.0)]
+    drive: f32,
 }
 
-impl Default for KarbeatCompressor {
-    fn default() -> Self {
-        let mut comp = Self {
-            threshold_db: -20.0,
-            ratio: 4.0,
-            attack_ms: 10.0,
-            release_ms: 100.0,
-            makeup_gain_db: 0.0,
-
-            sample_rate: 48000.0,
-            current_gr_db: 0.0,
-            attack_coeff: 0.0,
-            release_coeff: 0.0,
-        };
-        comp.recalculate_coefficients();
-        comp
-    }
-}
-
-impl KarbeatCompressor {
-    /// Recalculates the 1-pole filter coefficients when sample rate or time params change
-    fn recalculate_coefficients(&mut self) {
-        // Convert ms to seconds
-        let attack_sec = (self.attack_ms / 1000.0).max(0.001); // Prevent div by 0
-        let release_sec = (self.release_ms / 1000.0).max(0.001);
-
-        // Standard 1-pole smoothing coefficients
-        self.attack_coeff = E.powf(-1.0 / (attack_sec * self.sample_rate));
-        self.release_coeff = E.powf(-1.0 / (release_sec * self.sample_rate));
-    }
-}
-
-// This will make the struct implements RawEffectEngine, which can be used
-// for RawEffectWrapper generic trait bound which turns 
-// the KarbeatCompressor to a struct that
-// implements dyn KarbeatEffect + Send + Sync (required for safe concurrency)
-impl RawEffectEngine for KarbeatCompressor {
-    fn prepare(&mut self, sample_rate: f32, _buffer_size: usize) {
-        self.sample_rate = sample_rate;
-        self.recalculate_coefficients();
+// This will generate the auto implementation for boilerplate parameter manipulation.
+// you can just call it like this
+impl RawSynthEngine for KarbeatzerEngine {
+    fn set_custom_parameter(&mut self, id: u32, value: f32) {
+        self.auto_set_parameter(id, value);
     }
 
-    fn process(
-        &mut self,
-        _base: &mut karbeat_plugin_api::effect_base::StandardEffectBase,
-        buffer: &mut [f32],
-    ) {
-        if let Some(frames) = slice::from_sample_slice_mut::<&mut [[f32; 2]], f32>(buffer) {
-            for frame in frames.iter_mut() {
-                // Stereo-linked Detector (use the loudest channel)
-                let max_abs = frame[0].abs().max(frame[1].abs());
-
-                // Convert linear amplitude to Decibels (cap at -120dB to prevent log(0) -Infinity)
-                let level_db = if max_abs > 0.000001 {
-                    20.0 * max_abs.log10()
-                } else {
-                    -120.0
-                };
-
-                // Calculate target gain reduction
-                let mut target_gr_db = 0.0;
-                if level_db > self.threshold_db {
-                    let overshoot = level_db - self.threshold_db;
-                    // Example: if overshoot is 20dB and ratio is 4:1.
-                    // target_gr_db = 20 * (1/4 - 1) = 20 * (-0.75) = -15dB reduction.
-                    target_gr_db = overshoot * (1.0 / self.ratio - 1.0);
-                }
-
-                // Smooth the gain reduction using Attack/Release envelope
-                // Note: GR is a negative number. So target < current means we are compressing MORE (Attack).
-                let coeff = if target_gr_db < self.current_gr_db {
-                    self.attack_coeff
-                } else {
-                    self.release_coeff
-                };
-
-                // Apply 1-pole filter
-                self.current_gr_db =
-                    (target_gr_db - self.current_gr_db) * (1.0 - coeff) + self.current_gr_db;
-
-                // Convert GR dB and Makeup Gain dB back to a linear multiplier
-                let total_gain_db = self.current_gr_db + self.makeup_gain_db;
-                let linear_gain = 10.0_f32.powf(total_gain_db / 20.0);
-
-                // Apply the gain to the audio signal
-                frame[0] *= linear_gain;
-                frame[1] *= linear_gain;
-            }
-        }
+    fn get_custom_parameter(&self, id: u32) -> Option<f32> {
+        self.auto_get_parameter(id)
     }
 
-    fn set_custom_parameter(&mut self, param_id: u32, value: f32) {
-        match param_id {
-            0 => self.threshold_db = value,
-            1 => self.ratio = value,
-            2 => {
-                self.attack_ms = value;
-                self.recalculate_coefficients();
-            }
-            3 => {
-                self.release_ms = value;
-                self.recalculate_coefficients();
-            }
-            4 => self.makeup_gain_db = value,
-            _ => {}
-        }
+    fn apply_automation(&mut self, id: u32, value: f32) {
+        self.auto_apply_automation(id, value);
     }
 
-    fn get_custom_parameter(&self, param_id: u32) -> Option<f32> {
-        match param_id {
-            0 => Some(self.threshold_db),
-            1 => Some(self.ratio),
-            2 => Some(self.attack_ms),
-            3 => Some(self.release_ms),
-            4 => Some(self.makeup_gain_db),
-            _ => None,
-        }
-    }
-
-    fn reset(&mut self) {
-        self.current_gr_db = 0.0;
-    }
-
-    fn custom_default_parameters() -> std::collections::HashMap<u32, f32>
-    where
-        Self: Sized,
-    {
-        let mut map = std::collections::HashMap::new();
-        let default = Self::default();
-        map.insert(0, default.threshold_db);
-        map.insert(1, default.ratio);
-        map.insert(2, default.attack_ms);
-        map.insert(3, default.release_ms);
-        map.insert(4, default.makeup_gain_db);
-        map
+    fn clear_automation(&mut self, id: u32) {
+        self.auto_clear_automation(id);
     }
 
     fn get_parameter_specs(&self) -> Vec<PluginParameter> {
-        vec![
-            PluginParameter::new_float(
-                0,
-                "Threshold",
-                "Compressor",
-                self.threshold_db,
-                -60.0,
-                0.0,
-                -20.0,
-            ),
-            PluginParameter::new_float(1, "Ratio", "Compressor", self.ratio, 1.0, 20.0, 4.0),
-            PluginParameter::new_float(2, "Attack", "Compressor", self.attack_ms, 0.1, 100.0, 10.0),
-            PluginParameter::new_float(
-                3,
-                "Release",
-                "Compressor",
-                self.release_ms,
-                1.0,
-                1000.0,
-                100.0,
-            ),
-            PluginParameter::new_float(
-                4,
-                "Makeup Gain",
-                "Compressor",
-                self.makeup_gain_db,
-                -24.0,
-                24.0,
-                0.0,
-            ),
-        ]
+        self.auto_get_parameter_specs()
     }
+}
+```
 
-    fn name() -> &'static str
-    where
-        Self: Sized,
-    {
-        "Karbeat Compressor"
+### 5. Adding to Registry
+
+To add it to registry, the inner struct must implement Default so that the registry
+can call the builder
+
+```rust
+impl Default for PluginEngine {
+    fn default() -> Self {
+        // ...Your default implementation
     }
 }
 
-// Wrappers which turns the implementation into a compatible struct for the audio engine
-pub type KarbeatCompressorWrapper = RawEffectWrapper<KarbeatCompressor>;
-
-pub fn create_compressor(sample_rate: Option<f32>) -> RawEffectWrapper<KarbeatCompressor> {
-    RawEffectWrapper::new(KarbeatCompressor::default(), sample_rate.unwrap_or(48000.0))
-}
+// This will generate YourAwesomePlugin::build() Automatically
+pub type YourAwesomePlugin = RawSynthWrapper<PluginEngine>;
 
 ```
 

@@ -1,15 +1,16 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_core::context::utils::broadcast_state_change;
-use karbeat_core::core::project::TrackId;
+pub use karbeat_core::{
+    core::project::TrackId,
+    plugin_types::{ ParameterSpec, ParameterValueType },
+};
+use karbeat_core::shared::id::*;
 
 use crate::frb_generated::StreamSink;
-use karbeat_core::lock::{ get_app_read, get_app_write };
 use karbeat_core::{
     context::{ ctx, MixerParamEvent },
     core::project::mixer::{
-        BusId,
         EffectInstance,
         MixerBus,
         MixerChannel,
@@ -50,14 +51,14 @@ pub struct UiMixerParamEvent {
     pub solo: Option<bool>,
 }
 
-impl Into<UiMixerParamEvent> for MixerParamEvent {
-    fn into(self) -> UiMixerParamEvent {
-        UiMixerParamEvent {
-            track_id: self.track_id,
-            volume: self.volume,
-            pan: self.pan,
-            mute: self.mute,
-            solo: self.solo,
+impl From<MixerParamEvent> for UiMixerParamEvent {
+    fn from(value: MixerParamEvent) -> Self {
+        Self {
+            track_id: value.track_id,
+            volume: value.volume,
+            pan: value.pan,
+            mute: value.mute,
+            solo: value.solo,
         }
     }
 }
@@ -66,8 +67,8 @@ impl From<&MixerChannel> for UiMixerChannel {
     fn from(value: &MixerChannel) -> Self {
         Self {
             // Volume is in dB (both UI and backend use dB)
-            volume: value.volume,
-            pan: value.pan,
+            volume: value.volume.get(),
+            pan: value.pan.get(),
             mute: value.mute,
             solo: value.solo,
             inverted_phase: value.inverted_phase,
@@ -137,9 +138,9 @@ impl From<&RoutingNode> for UiRoutingNode {
     }
 }
 
-impl Into<RoutingNode> for &UiRoutingNode {
-    fn into(self) -> RoutingNode {
-        match self {
+impl From<&UiRoutingNode> for RoutingNode {
+    fn from(value: &UiRoutingNode) -> Self {
+        match value {
             UiRoutingNode::Track(id) => RoutingNode::Track((*id).into()),
             UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(*id)),
             UiRoutingNode::Master => RoutingNode::Master,
@@ -221,34 +222,85 @@ pub enum UiMixerChannelParams {
     Solo(bool),
 }
 
-impl Into<UiMixerChannelParams> for &MixerChannelParams {
-    fn into(self) -> UiMixerChannelParams {
-        match self {
-            MixerChannelParams::Volume(value) => UiMixerChannelParams::Volume(*value),
-            MixerChannelParams::Pan(value) => UiMixerChannelParams::Pan(*value),
-            MixerChannelParams::Mute(value) => UiMixerChannelParams::Mute(*value),
-            MixerChannelParams::InvertedPhase(value) => UiMixerChannelParams::InvertedPhase(*value),
-            MixerChannelParams::Solo(value) => UiMixerChannelParams::Solo(*value),
+impl From<&MixerChannelParams> for UiMixerChannelParams {
+    fn from(params: &MixerChannelParams) -> Self {
+        match params {
+            MixerChannelParams::Volume(value) => Self::Volume(*value),
+            MixerChannelParams::Pan(value) => Self::Pan(*value),
+            MixerChannelParams::Mute(value) => Self::Mute(*value),
+            MixerChannelParams::InvertedPhase(value) => Self::InvertedPhase(*value),
+            MixerChannelParams::Solo(value) => Self::Solo(*value),
         }
     }
 }
 
-impl Into<MixerChannelParams> for &UiMixerChannelParams {
-    fn into(self) -> MixerChannelParams {
-        match self {
+impl From<&UiMixerChannelParams> for MixerChannelParams {
+    fn from(params: &UiMixerChannelParams) -> Self {
+        match params {
             // Volume is in dB (both UI and backend use dB)
-            UiMixerChannelParams::Volume(value) => MixerChannelParams::Volume(*value),
-            UiMixerChannelParams::Pan(value) => MixerChannelParams::Pan(*value),
-            UiMixerChannelParams::Mute(value) => MixerChannelParams::Mute(*value),
-            UiMixerChannelParams::InvertedPhase(value) => MixerChannelParams::InvertedPhase(*value),
-            UiMixerChannelParams::Solo(value) => MixerChannelParams::Solo(*value),
+            UiMixerChannelParams::Volume(value) => Self::Volume(*value),
+            UiMixerChannelParams::Pan(value) => Self::Pan(*value),
+            UiMixerChannelParams::Mute(value) => Self::Mute(*value),
+            UiMixerChannelParams::InvertedPhase(value) => Self::InvertedPhase(*value),
+            UiMixerChannelParams::Solo(value) => Self::Solo(*value),
         }
     }
 }
 
-/// ======================================
-/// STREAM
-/// ======================================
+#[derive(Clone, Debug)]
+pub enum ParameterValueTypeDTO {
+    Float,
+    Int,
+    Bool,
+    Choice,
+}
+
+// 2. Mirror the Struct
+#[derive(Clone, Debug)]
+pub struct ParameterSpecDTO {
+    pub id: u32,
+    pub name: String,
+    pub group: String,
+    pub value: f32,
+    pub min: f32,
+    pub max: f32,
+    pub default_value: f32,
+    pub step: f32,
+    pub value_type: ParameterValueTypeDTO,
+    pub choices: Vec<String>,
+}
+
+impl From<ParameterValueType> for ParameterValueTypeDTO {
+    fn from(val: ParameterValueType) -> Self {
+        match val {
+            ParameterValueType::Float => ParameterValueTypeDTO::Float,
+            ParameterValueType::Int => ParameterValueTypeDTO::Int,
+            ParameterValueType::Bool => ParameterValueTypeDTO::Bool,
+            ParameterValueType::Choice => ParameterValueTypeDTO::Choice,
+        }
+    }
+}
+
+impl From<&ParameterSpec> for ParameterSpecDTO {
+    fn from(spec: &ParameterSpec) -> Self {
+        Self {
+            id: spec.id,
+            name: spec.name.clone(),
+            group: spec.group.clone(),
+            value: spec.value,
+            min: spec.min,
+            max: spec.max,
+            default_value: spec.default_value,
+            step: spec.step,
+            value_type: spec.value_type.into(), // Automatically uses the enum mapping above
+            choices: spec.choices.clone(),
+        }
+    }
+}
+
+// ======================================
+// STREAM
+// ======================================
 
 /// Create the Rust → Flutter event stream for mixer param changes.
 pub fn create_mixer_event_stream(sink: StreamSink<UiMixerParamEvent>) -> Result<(), String> {
@@ -269,9 +321,9 @@ fn push_mixer_event(event: MixerParamEvent) {
     }
 }
 
-/// ======================================
-/// GETTERS
-/// ======================================
+// ======================================
+// GETTERS
+// ======================================
 
 /// **GETTER: Fetch the mixer state**
 pub fn get_mixer_state() -> UiMixerState {
@@ -290,50 +342,51 @@ pub fn get_mixer_channel(track_id: u32) -> Result<UiMixerChannel, String> {
 pub fn get_mixer_channel_populated(
     track_id: u32
 ) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    let channel = mixer_state.channels.get(&TrackId::from(track_id));
-    let channel = channel.ok_or("Channel not found".to_owned())?;
-    let ui_channel: UiMixerChannel = channel.as_ref().into();
-    let effects = channel.effects
-        .iter()
-        .map(|e| e.into())
-        .collect();
-    Ok((ui_channel, effects))
+    mixer_api
+        ::get_mixer_channel_populated(
+            TrackId::from(track_id),
+            |channel| UiMixerChannel::from(channel),
+            |effect| UiEffectInstance::from(effect)
+        )
+        .map_err(|e| e.to_string())
 }
 
 /// **GETTER: Fetch the master bus**
 pub fn get_master_bus() -> UiMixerChannel {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    mixer_state.master_bus.as_ref().into()
+    mixer_api::get_master_bus().as_ref().into()
 }
 
 pub fn get_master_bus_populated() -> Vec<UiEffectInstance> {
-    let app = get_app_read();
-    let mixer_state = &app.mixer;
-    mixer_state.master_bus.effects
-        .iter()
-        .map(|e| e.into())
-        .collect()
+    mixer_api::get_master_bus_populated(|e| UiEffectInstance::from(e))
 }
 
 /// **GETTER: Fetch all buses**
 pub fn get_buses() -> HashMap<u32, UiBus> {
-    let app = get_app_read();
-    app.mixer.buses
-        .iter()
-        .map(|(i, b)| (i.to_u32(), b.as_ref().into()))
-        .collect()
+    mixer_api::get_buses(|id, bus| { (id.to_u32(), UiBus::from(bus)) })
 }
 
 /// **GETTER: Fetch the routing matrix**
 pub fn get_routing_matrix() -> Vec<UiRoutingConnection> {
-    let app = get_app_read();
-    app.mixer.routing
-        .iter()
-        .map(|c| c.into())
-        .collect()
+    mixer_api::get_routing_matrix(|conn| { UiRoutingConnection::from(conn) })
+}
+
+/// Get track channel's parameter specs
+pub fn get_track_mixer_channel_specs(track_id: u32) -> Option<Vec<ParameterSpecDTO>> {
+    mixer_api::get_track_mixer_channel_specs(&TrackId(track_id), |param_spec|
+        ParameterSpecDTO::from(param_spec)
+    )
+}
+
+/// Get bus channel's parameter specs
+pub fn get_bus_mixer_channel_specs(bus_id: u32) -> Option<Vec<ParameterSpecDTO>> {
+    mixer_api::get_bus_mixer_channel_specs(&BusId(bus_id), |param_spec|
+        ParameterSpecDTO::from(param_spec)
+    )
+}
+
+/// get master channel's parameter specs
+pub fn get_master_channel_specs() -> Vec<ParameterSpecDTO> {
+    mixer_api::get_master_channel_specs(|param_spec| ParameterSpecDTO::from(param_spec))
 }
 
 // ======================================
@@ -341,18 +394,11 @@ pub fn get_routing_matrix() -> Vec<UiRoutingConnection> {
 // ======================================
 
 pub fn set_master_bus_params(params: Vec<UiMixerChannelParams>) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        let mixer_state = &mut app.mixer;
-        let params_legit: Vec<MixerChannelParams> = params
-            .iter()
-            .map(|p| p.into())
-            .collect();
-        mixer_state.set_params_master_bus(&params_legit).map_err(|e| e.message)?;
-    } // drop write lock before broadcast
-
-    broadcast_state_change();
+    let params_legit: Vec<MixerChannelParams> = params
+        .iter()
+        .map(|p| p.into())
+        .collect();
+    mixer_api::set_master_bus_params(&params_legit).map_err(|e| e.to_string())?;
 
     // Push event to Flutter stream
     let mut event = MixerParamEvent {
@@ -388,20 +434,13 @@ pub fn set_mixer_channel_params(
     track_id: u32,
     params: Vec<UiMixerChannelParams>
 ) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        let mixer_state = &mut app.mixer;
-        let params_legit: Vec<MixerChannelParams> = params
-            .iter()
-            .map(|p| p.into())
-            .collect();
-        mixer_state
-            .set_params_mixer_channel(&track_id.into(), &params_legit)
-            .map_err(|e| e.message)?;
-    } // drop write lock before broadcast
-
-    broadcast_state_change();
+    let params_legit: Vec<MixerChannelParams> = params
+        .iter()
+        .map(|p| p.into())
+        .collect();
+    mixer_api
+        ::set_mixer_channel_params(TrackId::from(track_id), &params_legit)
+        .map_err(|e| e.to_string())?;
 
     // Push event to Flutter stream
     let mut event = MixerParamEvent {
@@ -435,16 +474,10 @@ pub fn set_mixer_channel_params(
 
 /// Add an effect to a mixer channel by its registry ID (preferred method).
 pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        let mixer_state = &mut app.mixer;
-        mixer_state
-            .add_effect_descriptor_by_id(&track_id.into(), registry_id)
-            .map_err(|e| format!("{}", e))?;
-        log::info!("Added effect with registry ID {} to track {}", registry_id, track_id);
-    }
-    broadcast_state_change();
+    mixer_api
+        ::add_effect_to_mixer_channel_by_id(TrackId::from(track_id), registry_id)
+        .map_err(|e| e.to_string())?;
+    log::info!("Added effect with registry ID {} to track {}", registry_id, track_id);
     Ok(())
 }
 
@@ -452,40 +485,27 @@ pub fn remove_effect_from_mixer_channel(
     track_id: u32,
     effect_instance_id: u32
 ) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        let mixer_state = &mut app.mixer;
-        mixer_state
-            .remove_effect_by_id(&track_id.into(), effect_instance_id.into())
-            .map_err(|e| format!("{}", e))?;
-        log::info!("Removed effect instance ID {} from track {}", effect_instance_id, track_id);
-    }
-    broadcast_state_change();
+    mixer_api
+        ::remove_effect_from_mixer_channel(
+            TrackId::from(track_id),
+            EffectId::from(effect_instance_id)
+        )
+        .map_err(|e| e.to_string())?;
+    log::info!("Removed effect instance ID {} from track {}", effect_instance_id, track_id);
     Ok(())
 }
 
 pub fn add_effect_to_master_bus(registry_id: u32) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        app.mixer.add_effect_to_master_bus(registry_id).map_err(|e| format!("{}", e))?;
-        log::info!("Added effect with registry ID {} to master bus", registry_id);
-    }
-    broadcast_state_change();
+    mixer_api::add_effect_to_master_bus(registry_id).map_err(|e| e.to_string())?;
+    log::info!("Added effect with registry ID {} to master bus", registry_id);
     Ok(())
 }
 
 pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        app.mixer
-            .remove_effect_from_master_bus(effect_instance_id.into())
-            .map_err(|e| format!("{}", e))?;
-        log::info!("Removed effect instance ID {} from master bus", effect_instance_id);
-    }
-    broadcast_state_change();
+    mixer_api
+        ::remove_effect_from_master_bus(EffectId::from(effect_instance_id))
+        .map_err(|e| e.to_string())?;
+    log::info!("Removed effect instance ID {} from master bus", effect_instance_id);
     Ok(())
 }
 
@@ -496,40 +516,22 @@ pub fn remove_effect_from_master_bus(effect_instance_id: u32) -> Result<(), Stri
 /// Create a new mixer bus and return its ID.
 pub fn create_bus(name: String) -> Result<u32, String> {
     // TODO: Refactor this to Core's API
-    let bus_id = {
-        let mut app = get_app_write();
-        let bus_id = app.mixer.create_bus(name.clone());
-
-        bus_id
-    };
-    broadcast_state_change();
-    Ok(bus_id.to_u32())
+    let bus_id = mixer_api::create_bus(name);
+    Ok(bus_id.into())
 }
 
 /// Delete a mixer bus.
 pub fn delete_bus(bus_id: u32) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        app.mixer.remove_bus(bus_id.into())?;
-    }
-    broadcast_state_change();
-    Ok(())
+    mixer_api::delete_bus(BusId::from(bus_id)).map_err(|e| e.to_string())
 }
 
 /// Set bus channel parameters (volume, pan, mute).
 pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        let params_legit: Vec<MixerChannelParams> = params
-            .iter()
-            .map(|p| p.into())
-            .collect();
-        app.mixer.set_params_bus(&bus_id.into(), &params_legit)?;
-    }
-    broadcast_state_change();
-    Ok(())
+    let params_legit: Vec<MixerChannelParams> = params
+        .iter()
+        .map(|p| p.into())
+        .collect();
+    mixer_api::set_bus_params(BusId::from(bus_id), &params_legit).map_err(|e| e.to_string())
 }
 
 // ======================================
@@ -538,24 +540,13 @@ pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<
 
 /// Add an effect to a bus by its registry ID.
 pub fn add_effect_to_bus(bus_id: u32, registry_id: u32) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        app.mixer.add_effect_to_bus(bus_id.into(), registry_id).map_err(|e| format!("{}", e))?;
-        log::info!("Added effect with registry ID {} to bus {}", registry_id, bus_id);
-    }
-    broadcast_state_change();
+    mixer_api::add_effect_to_bus(BusId::from(bus_id), registry_id).map_err(|e| e.to_string())?;
+    log::info!("Added effect with registry ID {} to bus {}", registry_id, bus_id);
     Ok(())
 }
 
 pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        app.mixer.rename_bus(bus_id.into(), &new_name)?;
-    }
-    broadcast_state_change();
-    Ok(())
+    mixer_api::rename_bus(BusId::from(bus_id), &new_name).map_err(|e| e.to_string())
 }
 
 // TODO: Implement remove_effect_from_bus when the Audio Engine already
@@ -572,23 +563,14 @@ pub fn set_routing(
     send_level: f32,
     is_send: bool
 ) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        let source: RoutingNode = (&source).into();
-        let destination: RoutingNode = (&destination).into();
+    let conn = RoutingConnection {
+        source: (&source).into(),
+        destination: (&destination).into(),
+        send_level,
+        is_send,
+    };
 
-        let conn = RoutingConnection {
-            source,
-            destination,
-            send_level,
-            is_send,
-        };
-
-        app.mixer.add_routing(conn)?;
-    }
-    broadcast_state_change();
-    Ok(())
+    mixer_api::set_routing(conn).map_err(|e| e.to_string())
 }
 
 /// Remove a routing connection.
@@ -597,14 +579,7 @@ pub fn remove_routing(
     destination: UiRoutingNode,
     is_send: bool
 ) -> Result<(), String> {
-    // TODO: Refactor this to Core's API
-    {
-        let mut app = get_app_write();
-        let source: RoutingNode = (&source).into();
-        let destination: RoutingNode = (&destination).into();
-
-        app.mixer.remove_routing(source, destination, is_send)?;
-    }
-    broadcast_state_change();
-    Ok(())
+    mixer_api
+        ::remove_routing((&source).into(), (&destination).into(), is_send)
+        .map_err(|e| e.to_string())
 }

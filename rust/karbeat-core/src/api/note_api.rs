@@ -1,6 +1,6 @@
 use crate::context::utils::broadcast_state_change;
 use crate::core::history::ProjectAction;
-use crate::core::project::track::midi::PatternId;
+use crate::shared::id::*;
 use crate::core::project::{ clipboard::ClipboardContent, Note, NoteId };
 use crate::lock::{ get_app_write, get_history_lock };
 use std::sync::Arc;

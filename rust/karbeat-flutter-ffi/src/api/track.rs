@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::api::project::{ AudioWaveformUiForClip, UiClip, UiTrack };
 use karbeat_core::core::project::AudioSourceId;
 use karbeat_core::core::project::clip::ResizeEdge;
-use karbeat_core::core::project::{ clip::ClipId, track::TrackId };
+use karbeat_core::shared::id::*;
 use karbeat_core::api::{
     clip_api as clip_api,
     audio_waveform_api as audio_waveform_api,
@@ -22,9 +22,9 @@ pub enum UiResizeEdge {
     Right,
 }
 
-impl Into<UiResizeEdge> for ResizeEdge {
-    fn into(self) -> UiResizeEdge {
-        match self {
+impl From<ResizeEdge> for UiResizeEdge {
+    fn from(value: ResizeEdge) -> Self {
+        match value {
             ResizeEdge::Left => UiResizeEdge::Left,
             ResizeEdge::Right => UiResizeEdge::Right,
         }
@@ -186,12 +186,6 @@ pub fn add_midi_track_with_generator_id(registry_id: u32) -> Result<UiTrack, Str
     Ok(UiTrack::from(res.as_ref()))
 }
 
-/// Add a MIDI track with a generator by name (backwards compatible).
-pub fn add_midi_track_with_generator(generator_name: String) -> Result<UiTrack, String> {
-    let res = track_api::add_midi_track_with_generator(&generator_name).map_err(|e| e.to_string())?;
-    Ok(UiTrack::from(res.as_ref()))
-}
-
 pub fn get_clip(track_id: u32, clip_id: u32) -> Result<UiClip, String> {
     clip_api
         ::get_clip(TrackId::from(track_id), ClipId::from(clip_id), |c| UiClip::from(c))
@@ -225,7 +219,7 @@ pub fn move_clip_batch(
     Ok(
         res
             .iter()
-            .map(|c| UiClip::from(c))
+            .map(UiClip::from)
             .collect()
     )
 }
@@ -247,7 +241,7 @@ pub fn resize_clip_batch(
     Ok(
         res
             .iter()
-            .map(|c| UiClip::from(c))
+            .map(UiClip::from)
             .collect()
     )
 }

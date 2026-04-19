@@ -1,5 +1,6 @@
 use indexmap::IndexMap;
-use karbeat_utils::define_id;
+use karbeat_plugin_types::{Param, ParameterSpec};
+use smallvec::SmallVec;
 use std::{ collections::{ HashMap, HashSet }, sync::Arc };
 
 use serde::{ Deserialize, Serialize };
@@ -8,11 +9,9 @@ use thiserror::Error;
 use crate::{
     commands::AudioCommand,
     context::{ ctx, utils::send_audio_command },
-    core::project::{ ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect },
+    core::project::{ ApplicationState, PluginInstance, TrackId, plugin::KarbeatEffect }, shared::{BusId, EffectId},
 };
 
-define_id!(EffectId);
-define_id!(BusId);
 
 // =============================================================================
 // Routing Matrix Types
@@ -70,10 +69,7 @@ impl Default for MixerBus {
         Self {
             id: BusId::from(0),
             name: String::new(),
-            channel: MixerChannel {
-                volume: 1.0,
-                ..Default::default()
-            },
+            channel: MixerChannel::default(),
         }
     }
 }
@@ -83,10 +79,7 @@ impl MixerBus {
         Self {
             id,
             name: name.to_string(),
-            channel: MixerChannel {
-                volume: 1.0,
-                ..Default::default()
-            },
+            channel: MixerChannel::default()
         }
     }
 }
@@ -172,8 +165,8 @@ pub struct MixerState {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MixerChannel {
-    pub volume: f32, // 0.0 to 1.0 (or dB)
-    pub pan: f32, // -1.0 to 1.0
+    pub volume: Param<f32>, //dB
+    pub pan: Param<f32>, // -1.0 to 1.0
     pub mute: bool,
     pub solo: bool,
     pub inverted_phase: bool,
@@ -181,19 +174,19 @@ pub struct MixerChannel {
     pub effect_counter: u32,
 
     // The effects chain (EQ, Compressor) comes AFTER the generator
-    pub effects: Vec<EffectInstance>,
+    pub effects: SmallVec<[EffectInstance; 9]>,
 }
 
 impl Default for MixerChannel {
     fn default() -> Self {
         Self {
-            volume: 0.0, // 0 dB = unity gain
-            pan: 0.0,
-            mute: Default::default(),
-            solo: Default::default(),
+            volume: Param::new_float(1, "Volume", "MixerChannel", 0.0, -60.0, 6.0, 0.1), // 0 dB = unity gain
+            pan: Param::new_float(2, "Pan", "MixerChannel", 0.0, -1.0,  1.0, 0.01),
+            mute: false,
+            solo: false,
             effect_counter: 0,
-            inverted_phase: Default::default(),
-            effects: Vec::with_capacity(16),
+            inverted_phase: false,
+            effects: SmallVec::new(),
         }
     }
 }
@@ -238,6 +231,16 @@ impl MixerChannel {
 
         Ok(())
     }
+
+
+    /// Get parameter specs of channel's parameter
+    pub fn get_channel_specs(&self) -> Vec<ParameterSpec> {
+        vec![
+            self.volume.to_spec(),
+            self.pan.to_spec(),
+            // Note: maybe I will change the bool parameter to Param<bool> too
+        ]
+    }
 }
 
 impl MixerState {
@@ -259,10 +262,12 @@ impl MixerState {
         for param in params.iter() {
             match param {
                 MixerChannelParams::Volume(value) => {
-                    channel.volume = *value;
+                    // channel.volume = *value;
+                    channel.volume.set_base(*value);
                 }
                 MixerChannelParams::Pan(value) => {
-                    channel.pan = *value;
+                    // channel.pan = *value;
+                    channel.pan.set_base(*value);
                 }
                 MixerChannelParams::Mute(value) => {
                     channel.mute = *value;
@@ -289,10 +294,10 @@ impl MixerState {
         for param in params.iter() {
             match param {
                 MixerChannelParams::Volume(value) => {
-                    channel.volume = *value;
+                    channel.volume.set_base(*value);
                 }
                 MixerChannelParams::Pan(value) => {
-                    channel.pan = *value;
+                    channel.pan.set_base(*value);
                 }
                 MixerChannelParams::Mute(value) => {
                     channel.mute = *value;
@@ -379,7 +384,7 @@ impl MixerState {
 
         // Clone and modify the channel
         let channel = Arc::make_mut(&mut mixer_channel_arc);
-        Ok(channel.effects.clone())
+        Ok(channel.effects.to_vec())
     }
 
     pub fn add_effect_to_master_bus(&mut self, registry_id: u32) -> anyhow::Result<()> {
@@ -428,9 +433,9 @@ impl MixerState {
     }
 
     /// Remove a bus and all routing connections to/from it
-    pub fn remove_bus(&mut self, bus_id: BusId) -> Result<(), String> {
+    pub fn remove_bus(&mut self, bus_id: BusId) -> anyhow::Result<()> {
         if !self.buses.contains_key(&bus_id) {
-            return Err(format!("Bus {:?} not found", bus_id));
+            return Err(anyhow::anyhow!("Bus {:?} not found", bus_id));
         }
 
         // Remove the bus
@@ -457,19 +462,19 @@ impl MixerState {
         &mut self,
         bus_id: &BusId,
         params: &[MixerChannelParams]
-    ) -> Result<Arc<MixerBus>, String> {
+    ) -> anyhow::Result<Arc<MixerBus>> {
         let bus_arc = self.buses
             .get_mut(bus_id)
-            .ok_or_else(|| format!("Bus {:?} not found", bus_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
         let bus = Arc::make_mut(bus_arc);
         for param in params.iter() {
             match param {
                 MixerChannelParams::Volume(value) => {
-                    bus.channel.volume = *value;
+                    bus.channel.volume.set_base(*value);
                 }
                 MixerChannelParams::Pan(value) => {
-                    bus.channel.pan = *value;
+                    bus.channel.pan.set_base(*value);
                 }
                 MixerChannelParams::Mute(value) => {
                     bus.channel.mute = *value;
@@ -486,10 +491,10 @@ impl MixerState {
         Ok(bus_arc.clone())
     }
 
-    pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> Result<(), String> {
+    pub fn rename_bus(&mut self, bus_id: BusId, new_name: &str) -> anyhow::Result<()> {
         let bus_arc = self.buses
             .get_mut(&bus_id)
-            .ok_or_else(|| format!("Bus {:?} not found", bus_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Bus {:?} not found", bus_id))?;
 
         let bus = Arc::make_mut(bus_arc);
         let old_name = bus.name.clone();
@@ -548,15 +553,15 @@ impl MixerState {
     // =========================================================================
 
     /// Add a routing connection. Returns error if it would create a cycle.
-    pub fn add_routing(&mut self, connection: RoutingConnection) -> Result<(), String> {
+    pub fn add_routing(&mut self, connection: RoutingConnection) -> anyhow::Result<()> {
         // Validate: source cannot be Master
         if connection.source == RoutingNode::Master {
-            return Err("Master cannot be a routing source".to_string());
+            return Err(anyhow::anyhow!("Master cannot be a routing source"));
         }
 
         // Validate: destination cannot be a Track
         if matches!(connection.destination, RoutingNode::Track(_)) {
-            return Err("Tracks cannot be routing destinations".to_string());
+            return Err(anyhow::anyhow!("Tracks cannot be routing destinations"));
         }
 
         // Check for duplicate
@@ -568,14 +573,14 @@ impl MixerState {
                     c.is_send == connection.is_send
             });
         if exists {
-            return Err("Routing connection already exists".to_string());
+            return Err(anyhow::anyhow!("Routing connection already exists"));
         }
 
         // Temporarily add and check for cycles
         self.routing.push(connection.clone());
         if self.has_routing_cycle() {
             self.routing.pop();
-            return Err("Routing would create a cycle".to_string());
+            return Err(anyhow::anyhow!("Routing would create a cycle"));
         }
 
         // Sync routing to audio thread
@@ -592,14 +597,14 @@ impl MixerState {
         source: RoutingNode,
         destination: RoutingNode,
         is_send: bool
-    ) -> Result<(), String> {
+    ) -> anyhow::Result<()> {
         let original_len = self.routing.len();
         self.routing.retain(|c| {
             !(c.source == source && c.destination == destination && c.is_send == is_send)
         });
 
         if self.routing.len() == original_len {
-            return Err("Routing connection not found".to_string());
+            return Err(anyhow::anyhow!("Routing connection not found"));
         }
 
         // Sync routing to audio thread

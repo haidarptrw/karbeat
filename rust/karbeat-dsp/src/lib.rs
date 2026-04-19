@@ -1,3 +1,5 @@
+pub mod windowing;
+pub mod interpolation;
 pub mod envelope;
 pub mod oscillator;
 pub mod bit_crush;

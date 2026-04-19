@@ -401,12 +401,14 @@ class KarbeatParametricEqState
                     enabledThumbRadius: 8,
                   ),
                 ),
-                child: FineGrainedInputWrapper<double>(
+                child: ParameterInteractionWrapper<double>(
                   value: masterGain,
                   min: minGain,
                   max: maxGain,
                   step: 0.1,
                   onChanged: _updateMasterGain,
+                  parameterName: 'Gain',
+                  defaultValue: 0.0,
                   child: Slider(
                     value: masterGain,
                     min: minGain,
@@ -592,12 +594,14 @@ class KarbeatParametricEqState
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
           ),
-          child: FineGrainedInputWrapper<double>(
+          child: ParameterInteractionWrapper<double>(
             value: val,
             min: min,
             max: max,
             step: isLog ? 1.0 : 0.1,
             onChanged: onChanged,
+            parameterName: '', 
+            defaultValue: 40.0,
             child: Slider(
               value: (isLog ? log(val) / ln10 : val).clamp(
                 isLog ? log(min) / ln10 : min,

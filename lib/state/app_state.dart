@@ -25,16 +25,7 @@ final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
   return KarbeatState();
 });
 
-enum ToolSelection {
-  pointer,
-  cut,
-  draw,
-  move,
-  delete,
-  zoom,
-  select,
-  resize,
-}
+enum ToolSelection { pointer, cut, draw, move, delete, zoom, select, resize }
 
 /// Piano roll specific tool selection (independent from main toolbar)
 enum PianoRollToolSelection { pointer, draw, delete, select, slice }
@@ -144,6 +135,7 @@ class KarbeatState extends ChangeNotifier {
 
   // ================== OTHER STATES ====================
   bool _pendingPlayRequest = false;
+  bool _showFloatingMidiKeyboard = false;
 
   // ================ CONSTRUCTOR ==================
   KarbeatState() {
@@ -226,6 +218,11 @@ class KarbeatState extends ChangeNotifier {
 
   void toggleSnapToGrid() {
     snapToGrid = !snapToGrid;
+    notifyListeners();
+  }
+
+  void toggleFloatingMidiKeyboard() {
+    _showFloatingMidiKeyboard = !_showFloatingMidiKeyboard;
     notifyListeners();
   }
 
@@ -323,6 +320,7 @@ class KarbeatState extends ChangeNotifier {
   int? get editingPatternId => _editingPatternId;
   InteractionTarget? get interactionTarget => _interactionTarget;
   mixer_api.UiMixerState get mixerState => _mixerState;
+  bool get showFloatingMidiKeyboard => _showFloatingMidiKeyboard;
 
   // Session state getters (frontend-only)
   int? get selectedTrackId => _selectedTrackId;
@@ -640,9 +638,9 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
-  Future<Result<void>> addTrack(UiTrackType type) async {
+  Future<Result<void>> addAudioTrack() async {
     try {
-      await addNewTrack(trackType: type);
+      await addNewAudioTrack();
       notifyBackendChange(ProjectEvent.tracksChanged);
       return Result.ok(null);
     } catch (e) {
@@ -657,21 +655,6 @@ class KarbeatState extends ChangeNotifier {
       await track_api.addMidiTrackWithGeneratorId(registryId: registryId);
       notifyBackendChange(ProjectEvent.tracksChanged);
       notifyBackendChange(ProjectEvent.generatorListChanged);
-      return Result.ok(null);
-    } catch (e) {
-      KarbeatLogger.error("Failed to add midi track: $e");
-      return Result.error(Exception("$e"));
-    }
-  }
-
-  /// Add a MIDI track with a generator by name (backwards compatible).
-  Future<Result<void>> addMidiTrackWithGenerator(String generatorName) async {
-    try {
-      await track_api.addMidiTrackWithGenerator(generatorName: generatorName);
-      notifyCustomBackendChange(() async {
-        await syncTracksState();
-        await syncGeneratorList();
-      });
       return Result.ok(null);
     } catch (e) {
       KarbeatLogger.error("Failed to add midi track: $e");

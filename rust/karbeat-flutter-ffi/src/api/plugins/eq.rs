@@ -1,5 +1,6 @@
 use flutter_rust_bridge::frb;
-use karbeat_core::{core::project::{TrackId, mixer::{BusId, EffectId}}, lock::{get_app_read, get_plugin_registry_read}};
+use karbeat_core::{core::project::{TrackId}, lock::{get_app_read, get_plugin_registry_read}};
+use karbeat_core::shared::id::*;
 use karbeat_plugins::effect::parametric_eq::KarbeatParametricEQ;
 
 use crate::api::plugin::UiEffectTarget;
