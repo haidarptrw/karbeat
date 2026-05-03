@@ -103,7 +103,22 @@ class KarbeatToolbarMenuGroupFactory {
     icon: Icons.work,
     title: "Project",
     actions: [
-      KarbeatToolbarMenuAction('New project'),
+      KarbeatToolbarMenuAction('New project', shortcut: 'Ctrl + N', callback: (context, state) async {
+        final _ = await state.newBlankProject();
+        // newBlankProject never throws error, it just load the new project
+        // Reset file path in state
+              state.currentFilePath = null;
+              
+              // Safely update window title back to default
+              if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+                try {
+                  await windowManager.setTitle('Karbeat — Untitled');
+                } catch (e) {
+                  debugPrint("Failed to set window title: $e");
+                }
+              }
+
+      }),
       KarbeatToolbarMenuAction(
         'Open project',
         shortcut: 'Ctrl+O',

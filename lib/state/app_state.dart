@@ -9,6 +9,7 @@ import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/project.dart' as project_api;
+import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -134,7 +135,7 @@ class KarbeatState extends ChangeNotifier {
   double get zoomLevelTick => _zoomLevelTick;
 
   set zoomLevelTick(double value) {
-    _zoomLevelTick = value.clamp(0.1, 10);
+    _zoomLevelTick = value.clamp(0.01, 10);
   }
 
   Set<int> _selectedNoteIds = {};
@@ -650,16 +651,7 @@ class KarbeatState extends ChangeNotifier {
       final service = SerializerService();
       final uiState = await service.loadProject(pathName: path);
 
-      _metadata = uiState.metadata;
-      _transportState = uiState.transport;
-      _hardwareConfig = uiState.hardwareConfig;
-
-      _tracks = Map.from(uiState.tracks);
-      _generators = Map.from(uiState.generators);
-      _patterns = Map.from(uiState.patterns);
-
-      _mixerState = uiState.mixer;
-      maxSamplesIndex = uiState.maxSampleIndex;
+      _populateState(uiState);
       // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
 
       notifyListeners();
@@ -672,12 +664,20 @@ class KarbeatState extends ChangeNotifier {
     }
   }
 
+  Future<void> newBlankProject() async {
+    final newApp = await serialization_api.newBlankProject();
+    _populateState(newApp);
+    notifyListeners();
+    KarbeatLogger.info("New blank project created");
+  }
+
   Stream<double> exportProject({
     required String path,
     required String soundfileName,
     required SupportedAudioFormat format,
     required SampleRate sampleRate,
     BitPerSample? bitPerSample,
+    numberOfChannels = 2,
     int? bitrate,
     required TailHandling tailHandling,
   }) async* {
@@ -699,6 +699,7 @@ class KarbeatState extends ChangeNotifier {
       sampleRate: sampleRate.value,
       bitPerSample: bpsValue,
       tailHandling: tailHandlingDto,
+      channels: numberOfChannels
     );
   }
 
@@ -2111,6 +2112,21 @@ class KarbeatState extends ChangeNotifier {
       KarbeatLogger.error(e.toString());
       return Result.error(Exception("$e"));
     }
+  }
+
+  /// Populate spreading state of UiApplication from provider new state
+  void _populateState(UiApplicationState state) {
+    _metadata = state.metadata;
+    _transportState = state.transport;
+    _hardwareConfig = state.hardwareConfig;
+
+    _tracks = Map.from(state.tracks);
+    _generators = Map.from(state.generators);
+    _patterns = Map.from(state.patterns);
+
+    _mixerState = state.mixer;
+    maxSamplesIndex = state.maxSampleIndex;
+    // Depending on if `audioSources` is stored in the UI state: currently we have `syncAudioSourceList()` commented out.
   }
 }
 

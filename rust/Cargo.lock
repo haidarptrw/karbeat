@@ -1382,6 +1382,7 @@ name = "karbeat-plugin-api"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "hashbrown 0.17.0",
  "heck",
  "indexmap",
  "karbeat-dsp",
@@ -1389,6 +1390,7 @@ dependencies = [
  "karbeat-plugin-types",
  "karbeat-utils",
  "log",
+ "rmp-serde",
  "serde",
  "serde_json",
  "smallvec",
@@ -1416,6 +1418,7 @@ dependencies = [
  "karbeat-utils",
  "log",
  "num-complex",
+ "rmp-serde",
  "rustfft",
  "serde",
  "serde_json",

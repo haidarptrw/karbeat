@@ -21,6 +21,7 @@ serde_json.workspace = true
 indexmap.workspace = true
 rustfft.workspace = true
 num-complex.workspace = true
+rmp-serde.workspace = true
 
 [lints]
 workspace = true

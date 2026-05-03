@@ -1,215 +1,99 @@
 use std::{any::Any, fmt::Debug};
 
-use indexmap::IndexMap;
+use hashbrown::HashMap;
 
 use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
 
-/// Trait that provides the parameter specs of plugin
-pub trait AudioPluginMeta {
-    fn get_parameter_specs() -> Vec<ParameterSpec>;
-}
+use crate::types::{PluginCategory, ProcessContext};
 
-/// Trait that indicates an Effect plugin
-/// Requires Send + Sync so it can be moved between UI and Audio threads
-pub trait KarbeatEffect: Send + Sync {
-    /// Returns the unique name of the plugin
+// ============================================================================
+// CONTEXTS & TYPES
+// ============================================================================
+
+pub trait KarbeatPlugin: Send + Sync {
     fn name(&self) -> &str;
 
-    /// Prepare the plugin for playback (allocate buffers, set sample rate and number of channels)
-    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
+    /// Tells the host what kind of plugin this is for track routing
+    fn category(&self) -> PluginCategory;
 
-    /// Reset internal state (clear delay lines, reverb tails, etc.)
-    /// Called when playback stops or seeks.
+    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
     fn reset(&mut self);
 
-    /// Process a block of audio.
-    /// Typically modifies the buffer in-place.
-    ///
-    /// * `buffer` - Interleaved stereo buffer [L, R, L, R...]
-    fn process(&mut self, buffer: &mut [f32]);
+    /// The universal process block.
+    /// - Instruments will ignore the incoming audio in the buffer and overwrite it.
+    /// - Effects will modify the audio in the buffer.
+    fn process(&mut self, buffer: &mut [f32], context: &ProcessContext);
 
-    /// Set a parameter value (0.0 to 1.0)
+    // --- State & Automation ---
     fn set_parameter(&mut self, id: u32, value: f32);
-
-    /// Get a parameter value
     fn get_parameter(&self, id: u32) -> f32;
-
-    /// Apply an automated value from the sequencer.
-    /// Modifies the DSP's current value WITHOUT overwriting the user's base value.
     fn apply_automation(&mut self, id: u32, value: f32);
-
-    /// Clear active automation for a specific parameter, snapping it back to its base value.
     fn clear_automation(&mut self, id: u32);
-
-    /// Get the default values for all parameters supported by this plugin
-    fn default_parameters(&self) -> IndexMap<u32, f32>;
+    fn default_parameters(&self) -> HashMap<u32, f32>;
 
     fn static_parameter_specs() -> Vec<ParameterSpec>
     where
         Self: Sized;
-    /// Get parameter specifications for UI generation
     fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
 
-    /// Execute custom command if provided by implementer
-    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
-        None
+    /// Get state of plugin when loading preset
+    fn get_state(&self) -> Vec<u8> {
+        let mut current_params: HashMap<u32, f32> = HashMap::new();
+
+        let specs = self.get_parameter_specs();
+        for spec in specs {
+            current_params.insert(spec.id, self.get_parameter(spec.id));
+        }
+
+        rmp_serde::to_vec(&current_params).unwrap_or_else(|err| {
+            log::error!("Failed to serialize MyRetro state: {}", err);
+            Vec::new()
+        })
     }
+    
+    /// Set state of plugin when saving plugin state
+    fn set_state(&mut self, state: &[u8]) {
+        if state.is_empty() {
+            return;
+        }
 
-    // Helper for downcasting if you need concrete access later
-    fn as_any(&self) -> &dyn Any;
-}
-
-pub trait KarbeatGenerator: Send + Sync {
-    /// Get the name of the generator
-    fn name(&self) -> &str;
-
-    /// Prepare the plugin for playback (allocate buffers, set sample rate and number of channels)
-    fn prepare(&mut self, sample_rate: f32, channels: usize, max_buffer_size: usize);
-
-    /// Reset the parameters of the plugin
-    fn reset(&mut self);
-
-    /// Process a block of audio.
-    /// Unlike effects, this generates audio into an empty (or zeroed) buffer.
-    ///
-    /// * `output_buffer` - Interleaved stereo buffer to write to.
-    /// * `midi_events` - List of events (Note On/Off) for this specific buffer block.
-    fn process(&mut self, output_buffer: &mut [f32], midi_events: &[MidiEvent]);
-
-    fn set_parameter(&mut self, id: u32, value: f32);
-    fn get_parameter(&self, id: u32) -> f32;
-
-    /// Apply an automated value from the sequencer.
-    /// Modifies the DSP's current value WITHOUT overwriting the user's base value.
-    fn apply_automation(&mut self, id: u32, value: f32);
-
-    /// Clear active automation for a specific parameter, snapping it back to its base value.
-    fn clear_automation(&mut self, id: u32);
-
-    /// Get the default values for all parameters supported by this plugin
-    fn default_parameters(&self) -> IndexMap<u32, f32>;
-
-    fn static_parameter_specs() -> Vec<ParameterSpec>
-    where
-        Self: Sized;
-
-    /// Get parameter specifications for UI generation
-    fn get_parameter_specs(&self) -> Vec<ParameterSpec>;
-
-    /// Execute custom command if provided by implementer
-    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
-        None
-    }
-
-    fn as_any(&self) -> &dyn Any;
-}
-
-// Simple struct to pass midi to the generator process loop
-pub struct MidiEvent {
-    /// Offset in samples within the current buffer (0 to buffer_size)
-    pub sample_offset: usize,
-    pub data: MidiMessage,
-}
-
-pub enum MidiMessage {
-    NoteOn { key: u8, velocity: u8 },
-    NoteOff { key: u8 },
-    ControlChange { controller: u8, value: u8 },
-}
-
-pub enum KarbeatPlugin {
-    /// Effect plugin (DSP of audio properties)
-    Effect(Box<dyn KarbeatEffect + Send + Sync>),
-    /// Generator plugin (Wave generator or synth)
-    Generator(Box<dyn KarbeatGenerator + Send + Sync>),
-}
-
-impl KarbeatPlugin {
-    /// Helper to run the process loop regardless of type
-    pub fn process_audio(&mut self, buffer: &mut [f32], events: &[MidiEvent]) {
-        match self {
-            KarbeatPlugin::Effect(e) => {
-                // Effects ignore MIDI usually, just process audio
-                e.process(buffer);
+        match rmp_serde::from_slice::<HashMap<u32, f32>>(state) {
+            Ok(saved_params) => {
+                for (id, value) in saved_params {
+                    self.set_parameter(id, value);
+                }
             }
-            KarbeatPlugin::Generator(g) => {
-                // Generators overwrite the buffer with new sound
-                // (Or add to it if you implement mixing logic inside)
-                g.process(buffer, events);
+            Err(err) => {
+                log::error!("Failed to deserialize MyRetro state: {}", err);
             }
         }
     }
 
-    pub fn default_parameters(&self) -> IndexMap<u32, f32> {
-        match self {
-            KarbeatPlugin::Effect(e) => e.default_parameters(),
-            KarbeatPlugin::Generator(g) => g.default_parameters(),
-        }
+    /// Report the latency of the plugin to the audio engine in samples
+    fn latency_samples(&self) -> u32 {
+        0
     }
 
-    /// Set a parameter on the plugin (works for both Effects and Generators)
-    pub fn set_parameter(&mut self, id: u32, value: f32) {
-        match self {
-            KarbeatPlugin::Effect(e) => e.set_parameter(id, value),
-            KarbeatPlugin::Generator(g) => g.set_parameter(id, value),
-        }
+    /// Report the tail of the plugin to the audio engine in samples
+    fn tail_samples(&self) -> u32 {
+        0
     }
 
-    pub fn apply_automation(&mut self, id: u32, value: f32) {
-        match self {
-            KarbeatPlugin::Effect(e) => e.apply_automation(id, value),
-            KarbeatPlugin::Generator(g) => g.apply_automation(id, value),
-        }
+    /// Execute a custom command
+    fn execute_custom_command(&mut self, _command: &str, _payload: &Value) -> Option<Value> {
+        None
     }
 
-    pub fn clear_automation(&mut self, id: u32) {
-        match self {
-            KarbeatPlugin::Effect(e) => e.clear_automation(id),
-            KarbeatPlugin::Generator(g) => g.clear_automation(id),
-        }
-    }
-
-    /// Get a parameter from the plugin
-    pub fn get_parameter(&self, id: u32) -> f32 {
-        match self {
-            KarbeatPlugin::Effect(e) => e.get_parameter(id),
-            KarbeatPlugin::Generator(g) => g.get_parameter(id),
-        }
-    }
-
-    /// Get parameter specifications for UI generation
-    pub fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
-        match self {
-            KarbeatPlugin::Effect(e) => e.get_parameter_specs(),
-            KarbeatPlugin::Generator(g) => g.get_parameter_specs(),
-        }
-    }
-
-    /// Execute a custom command on the plugin (works for both Effects and Generators)
-    pub fn execute_custom_command(&mut self, command: &str, payload: &Value) -> Option<Value> {
-        match self {
-            KarbeatPlugin::Effect(e) => e.execute_custom_command(command, payload),
-            KarbeatPlugin::Generator(g) => g.execute_custom_command(command, payload),
-        }
-    }
+    /// An helper to enable downcasting
+    fn as_any(&self) -> &dyn Any;
 }
 
-// We implement Debug manually for the Trait Objects.
-// We use the `name()` method (which every plugin must implement) to identify it.
-
-impl Debug for dyn KarbeatEffect + Send + Sync {
+impl Debug for dyn KarbeatPlugin + Send + Sync {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KarbeatEffect")
+        f.debug_struct("KarbeatPlugin")
             .field("name", &self.name())
-            .finish()
-    }
-}
-
-impl Debug for dyn KarbeatGenerator + Send + Sync {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("KarbeatGenerator")
-            .field("name", &self.name())
+            .field("category", &self.category())
             .finish()
     }
 }

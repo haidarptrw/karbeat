@@ -1,4 +1,4 @@
-use indexmap::IndexMap;
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// Define a plugin instance descriptor.
@@ -24,7 +24,10 @@ pub struct PluginInstance {
     /// Whether this plugin is bypassed
     pub bypass: bool,
     /// Plugin parameters for persistence (Param ID -> Value)
-    pub parameters: IndexMap<u32, f32>,
+    pub parameters: HashMap<u32, f32>,
+
+    #[serde(default)]
+    pub plugin_state: Vec<u8>,
 }
 
 impl PluginInstance {
@@ -34,7 +37,8 @@ impl PluginInstance {
             registry_id: 0,
             name: name.to_string(),
             bypass: false,
-            parameters: IndexMap::new(),
+            parameters: HashMap::new(),
+            plugin_state: Vec::new(),
         }
     }
 
@@ -44,17 +48,19 @@ impl PluginInstance {
             registry_id,
             name: name.to_string(),
             bypass: false,
-            parameters: IndexMap::new(),
+            parameters: HashMap::new(),
+            plugin_state: Vec::new(),
         }
     }
 
     /// Create a new plugin instance with registry ID, name, and default parameters
-    pub fn new_with_params(registry_id: u32, name: &str, parameters: IndexMap<u32, f32>) -> Self {
+    pub fn new_with_params(registry_id: u32, name: &str, parameters: HashMap<u32, f32>) -> Self {
         Self {
             registry_id,
             name: name.to_string(),
             bypass: false,
             parameters,
+            plugin_state: Vec::new(),
         }
     }
 }

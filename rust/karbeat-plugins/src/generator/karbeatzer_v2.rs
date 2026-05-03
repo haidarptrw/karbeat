@@ -2,13 +2,10 @@
 
 use std::{any::Any, f32::consts::PI};
 
+use hashbrown::HashMap;
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_api::{
-    manifest::{Manifestable, PluginManifest},
-    prelude::*,
-    traits::{AudioPluginBuilder, KarbeatGenerator},
-};
+use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
 
 #[derive(Clone)]
@@ -175,7 +172,7 @@ impl KarbeatzerV2 {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
-impl KarbeatGenerator for KarbeatzerV2 {
+impl KarbeatPlugin for KarbeatzerV2 {
     fn name(&self) -> &str {
         "Karbeatzer V2"
     }
@@ -192,12 +189,13 @@ impl KarbeatGenerator for KarbeatzerV2 {
         self.filter.reset_state();
     }
 
-    fn process(&mut self, output_buffer: &mut [f32], midi_events: &[MidiEvent]) {
+    fn process(&mut self, output_buffer: &mut [f32], context: &ProcessContext) {
         output_buffer.fill(0.0);
 
         let current_drive = self.drive.get();
         let master_gain = self.gain.get();
         let total_frames = output_buffer.len() / self.channels;
+        let midi_events = context.midi_events;
 
         let mut current_frame = 0;
         let mut event_idx = 0;
@@ -329,7 +327,7 @@ impl KarbeatGenerator for KarbeatzerV2 {
         }
     }
 
-    fn default_parameters(&self) -> indexmap::IndexMap<u32, f32> {
+    fn default_parameters(&self) -> HashMap<u32, f32> {
         self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
             .into_iter()
             .map(|spec| (spec.id, spec.default_value))
@@ -349,6 +347,31 @@ impl KarbeatGenerator for KarbeatzerV2 {
         Self: Sized,
     {
         Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
+    }
+
+    fn category(&self) -> PluginCategory {
+        PluginCategory::Instrument
+    }
+
+    fn latency_samples(&self) -> u32 {
+        0
+    }
+
+    fn tail_samples(&self) -> u32 {
+        let release_ms = self.amp_envelope.release_ms.get();
+        let tail_in_samples = (release_ms / 1000.0) * self.sample_rate;
+
+        // Add a tiny safety buffer (e.g., 64 samples) to guarantee the
+        // envelope has definitively hit absolute 0.0 before the engine culls it.
+        (tail_in_samples as u32) + 64
+    }
+
+    fn execute_custom_command(
+        &mut self,
+        _command: &str,
+        _payload: &serde_json::Value,
+    ) -> Option<serde_json::Value> {
+        None
     }
 }
 

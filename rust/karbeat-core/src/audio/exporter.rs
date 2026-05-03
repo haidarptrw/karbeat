@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
+use karbeat_plugin_api::traits::KarbeatPlugin;
 use rtrb::RingBuffer;
 use thiserror::Error;
 
@@ -7,7 +7,7 @@ use crate::{
     audio::{
         engine::AudioEngine,
         render_state::AudioRenderState,
-        writer::{AudioFormatBuilder, AudioWriter, BitPerSample},
+        writer::{AudioFormat, AudioWriter},
     },
     commands::AudioCommand,
     context::ctx,
@@ -45,8 +45,7 @@ pub enum TailHandling {
 pub fn export_project<F>(
     app_state: &ApplicationState,
     output_path: &str,
-    sample_rate: u32,
-    bit_per_sample: BitPerSample,
+    audio_format: AudioFormat,
     mut writer: impl AudioWriter + 'static,
     tail_handling: TailHandling,
     mut progress_callback: F,
@@ -56,15 +55,9 @@ where
 {
     log::info!("Starting offline render to: {}", output_path);
 
-    let channels = 2; // Stereo
+    let sample_rate = audio_format.sample_rate;
+    let channels = audio_format.channels; // Stereo
     let block_size = 4096; // Faster offline rendering
-
-    let _audio_format = AudioFormatBuilder::default()
-        .channels(channels)
-        .bit_per_sample(bit_per_sample)
-        .sample_rate(sample_rate)
-        .build()
-        .map_err(|e| AudioExportError::new("Format", format!("Builder error: {}", e)))?;
 
     // Create a static snapshot of the Render State
     let render_state = AudioRenderState::from(app_state);
@@ -90,15 +83,15 @@ where
     // Hydrate the Engine (Load fresh plugin clones)
     let registry = ctx().plugin_registry.read();
 
-    let mut generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>> =
+    let mut generators: IndexMap<GeneratorId, Box<dyn KarbeatPlugin + Send + Sync>> =
         IndexMap::new();
     let mut track_effects: IndexMap<
         TrackId,
-        IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>,
+        IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>,
     > = IndexMap::new();
-    let mut bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> =
+    let mut bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>> =
         IndexMap::new();
-    let mut master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> =
+    let mut master_effects: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>> =
         IndexMap::new();
 
     // Instantiate Generators
@@ -300,35 +293,80 @@ where
     // Detects when the reverb/delay naturally dies out
     // ========================================================================
     if matches!(tail_handling, TailHandling::LeaveRemainder) {
-        log::info!("Rendering dynamic tail (LeaveRemainder)...");
-        let max_tail_samples = sample_rate * 60; // Hard fallback cap at 60 seconds
-        let silence_threshold = 10f32.powf(-90.0 / 20.0); // True silence at -90dB
-        let required_silence_samples = sample_rate; // Require 1 full second of absolute silence to stop
+        log::info!("Calculating exact plugin tail (LeaveRemainder)...");
 
-        let mut current_silence_samples = 0;
-        let mut tail_processed = 0;
+        // We must stop the transport first! This triggers the engine's internal 
+        // "stop_all_active_generators" logic which queues NoteOffs, 
+        // effectively starting the final ADSR release phase.
+        cmd_producer
+            .push(AudioCommand::SetPlaying(false))
+            .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
+            
+        // Process one empty block just to let the engine digest the SetPlaying(false) command
+        // and initialize the track_tails in its internal state.
+        offline_engine.process(&mut mix_buffer[..block_size * channels as usize]);
+        if tx.send(mix_buffer[..block_size * channels as usize].to_vec()).is_err() {
+            return Ok(());
+        }
 
-        while tail_processed < max_tail_samples {
-            let frames_to_process = block_size;
-            let samples_to_process = frames_to_process * (channels as usize);
-            let active_slice = &mut mix_buffer[..samples_to_process];
+        // Query all loaded plugins for their tail size
+        let mut max_tail_samples: u32 = 0;
 
-            offline_engine.process(active_slice);
+        let plugin_state = offline_engine.plugin_state();
+        // 1. Check Master Effects
+        for effect in &plugin_state.master_effects {
+            max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
+        }
 
-            // Silence detection loop
-            let mut is_silent = true;
-            for &sample in active_slice.iter() {
-                if sample.abs() > silence_threshold {
-                    is_silent = false;
-                    break;
+        // 2. Check Bus Effects
+        for bus_chain in plugin_state.bus_effects.iter() {
+            for effect in bus_chain.iter() {
+                max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
+            }
+        }
+
+        // 3. Check Track Effects
+        for track_chain in plugin_state.track_effects.iter() {
+            for effect in track_chain.iter() {
+                max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
+            }
+        }
+
+        // 4. Check Generators (for internal synth ADSR release tails)
+        for gen in plugin_state.generators.iter() {
+            if let Some(ref gen_instance) = gen {
+
+                let tail = gen_instance.plugin.tail_samples();
+                // Synths often return u32::MAX for infinite sustain until NoteOff. 
+                // Since we just sent a NoteOff by stopping transport, we clamp this 
+                // to a reasonable default if it hasn't properly 
+                // calculated a finite release tail yet.
+                if tail == u32::MAX {
+                    max_tail_samples = max_tail_samples.max(sample_rate * 20); 
+                } else {
+                    max_tail_samples = max_tail_samples.max(tail);
                 }
             }
+        }
 
-            if is_silent {
-                current_silence_samples += frames_to_process as u32;
-            } else {
-                current_silence_samples = 0; // Reset if the delay suddenly spikes
-            }
+        // Hard fallback cap at 60 seconds just in case a plugin reports something insane
+        max_tail_samples = max_tail_samples.min(sample_rate * 60);
+
+        log::info!("Maximum tail calculated as {} samples", max_tail_samples);
+
+        // Now simply render exactly that many samples!
+        let mut tail_processed = 0;
+        
+        while tail_processed < max_tail_samples {
+            let remaining = max_tail_samples - tail_processed;
+            let frames_to_process = std::cmp::min(block_size as u32, remaining) as usize;
+            let samples_to_process = frames_to_process * (channels as usize);
+
+            let active_slice = &mut mix_buffer[..samples_to_process];
+
+            // Because transport is stopped, the engine will just pull from 
+            // the ringing effects and fading synths without advancing the sequencer.
+            offline_engine.process(active_slice);
 
             if tx.send(active_slice.to_vec()).is_err() {
                 break;
@@ -338,15 +376,8 @@ where
             while let Ok(_) = _feedback_consumer.pop() {}
 
             tail_processed += frames_to_process as u32;
-
-            if current_silence_samples >= required_silence_samples {
-                log::info!(
-                    "Silence detected. Tail cleanly finished after {} samples.",
-                    tail_processed
-                );
-                break;
-            }
         }
+        log::info!("Tail rendering complete.");
     }
 
     progress_callback(1.0);

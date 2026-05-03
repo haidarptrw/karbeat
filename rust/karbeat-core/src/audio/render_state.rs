@@ -7,7 +7,7 @@ use crate::{
     core::project::{
         automation::{AutomationPoint, AutomationTarget, CurveType},
         mixer::MixerState,
-        plugin::{KarbeatEffect, KarbeatGenerator},
+        plugin::KarbeatPlugin,
         track::{midi::Pattern, KarbeatTrack},
         ApplicationState, AssetLibrary, GeneratorId, GeneratorInstanceType, TrackId,
     },
@@ -24,12 +24,12 @@ use karbeat_utils::math::is_power_of_two;
 pub struct AudioGeneratorInstance {
     pub id: GeneratorId,
     pub track_id: TrackId,
-    pub plugin: Box<dyn KarbeatGenerator + Send + Sync>,
+    pub plugin: Box<dyn KarbeatPlugin + Send + Sync>,
 }
 
 pub struct AudioEffectInstance {
     pub id: EffectId,
-    pub plugin: Box<dyn KarbeatEffect + Send + Sync>,
+    pub plugin: Box<dyn KarbeatPlugin + Send + Sync>,
 }
 
 /// Audio thread's owned plugin instances - NO locks required for access
@@ -303,7 +303,7 @@ pub fn broadcast_plugin_state_loading() {
     let registry = get_plugin_registry_read();
 
     // get current generator
-    let generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>> = app_state
+    let generators: IndexMap<GeneratorId, Box<dyn KarbeatPlugin + Send + Sync>> = app_state
         .generator_pool
         .iter()
         .filter_map(|(id, arc)| {
@@ -329,8 +329,8 @@ pub fn broadcast_plugin_state_loading() {
     let track_chan = &mixer_state.channels;
 
     // As usual, doing the same thing but for track_channels
-    // Turn it to IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>
-    let track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> =
+    // Turn it to IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>
+    let track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>> =
         track_chan
             .iter()
             .map(|(track_id, arc_mixer_chan)| {
@@ -338,7 +338,7 @@ pub fn broadcast_plugin_state_loading() {
 
                 // iterate through effects
                 // Use filter_map here because the inner registry lookup can fail (return None)
-                let effects_map: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> =
+                let effects_map: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>> =
                     mix_chan
                         .effects
                         .iter()
@@ -362,13 +362,13 @@ pub fn broadcast_plugin_state_loading() {
     // Do the same for bus_channels
     let bus_chan = &mixer_state.buses;
 
-    let bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>> =
+    let bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>> =
         bus_chan
             .iter()
             .map(|(id, arc_mixer_channel)| {
                 let mix_bus = arc_mixer_channel.deref().to_owned();
 
-                let effect_maps: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> = mix_bus
+                let effect_maps: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>> = mix_bus
                     .channel
                     .effects
                     .iter()
@@ -389,7 +389,7 @@ pub fn broadcast_plugin_state_loading() {
             .collect();
 
     let master_channel = mixer_state.master_bus.as_ref();
-    let master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>> = master_channel
+    let master_effects: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>> = master_channel
         .effects
         .iter()
         .filter_map(|eff| {

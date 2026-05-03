@@ -275,21 +275,14 @@ impl AdsrProcessor {
     pub fn note_on(&mut self) {
         self.state = EnvelopeState::Attack;
         self.phase_time = 0.0;
-        // Notice we do NOT reset current_level to 0.0.
-        // This prevents clicking if a note is re-triggered during its release tail.
     }
 
     pub fn note_off(&mut self) {
         self.state = EnvelopeState::Release;
         self.phase_time = 0.0;
-
-        // FIX: Capture the exact level we were at when the key was released.
-        // Whether we were fully sustained, or halfway through the attack phase,
-        // the release phase will now gracefully fade down from this specific point.
         self.release_start_level = self.current_level;
     }
 
-    // Process is now generic over any struct that implements the Envelope trait
     pub fn process<T: Envelope>(&mut self, settings: &T) -> f32 {
         let dt = 1.0 / self.sample_rate;
         self.phase_time += dt;

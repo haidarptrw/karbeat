@@ -47,6 +47,7 @@ app.*.map.json
 # VSCode Workspace
 *.code-workspace
 .agents/
+opencode.json
 
 # ENVs and Secrets
 .env

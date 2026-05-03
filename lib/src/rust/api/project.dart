@@ -86,11 +86,13 @@ Stream<double> exportProjectFlutter({
   required String outputPath,
   required int sampleRate,
   required int bitPerSample,
+  required int channels,
   required TailHandlingDTO tailHandling,
 }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
   outputPath: outputPath,
   sampleRate: sampleRate,
   bitPerSample: bitPerSample,
+  channels: channels,
   tailHandling: tailHandling,
 );
 

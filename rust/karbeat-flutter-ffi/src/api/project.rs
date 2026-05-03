@@ -576,6 +576,7 @@ pub fn export_project_flutter(
     output_path: String,
     sample_rate: u32,
     bit_per_sample: u16,
+    channels: u16,
     tail_handling: TailHandlingDTO,
     progress_sink: StreamSink<f32>,
 ) -> Result<(), String> {
@@ -587,6 +588,7 @@ pub fn export_project_flutter(
         &output_path,
         sample_rate,
         bps,
+        channels as u32,
         tail_handling.into(),
         |progress| {
             // If the sink successfully adds the value, return true to keep rendering.

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/features/components/scrollable_virtual_keyboard.dart';
-import 'package:karbeat/features/playlist/playhead.dart';
 import 'package:karbeat/models/grid.dart';
 import 'package:karbeat/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -111,7 +110,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
   void _handleZoom(double scale) {
     final state = ref.read(karbeatStateProvider);
-    final newZoom = (state.zoomLevelTick * scale).clamp(0.1, 5.0);
+    final newZoom =
+        state.zoomLevelTick *
+        scale; // we not clamp here because the zoomLevelTick setter already handle clamping
 
     // Only update if the value actually changed
     if (state.zoomLevelTick != newZoom) {
@@ -728,39 +729,6 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     ),
                                                   ),
                                                 ),
-
-                                              // LAYER E: Playhead Overlay (top)
-                                              Positioned.fill(
-                                                child: IgnorePointer(
-                                                  ignoring: false,
-                                                  child: PlayheadOverlay(
-                                                    offsetAdjustment: 0,
-                                                    scrollController:
-                                                        _gridHorizontalController,
-                                                    onSeek: (int newSamples) {
-                                                      // We currently don't support seeking inside pattern playback.
-                                                      // TODO: Add pattern playback seek implementation
-                                                    },
-                                                    isInteracting:
-                                                        isInteracting,
-                                                    zoomLevel: 1.0 / zoomX,
-                                                    sampleSelector: (pos) {
-                                                      if (pos.isPatternMode) {
-                                                        // Convert samples to ticks: ticks = samples * (PPQ * bpm) / (60 * sampleRate)
-                                                        const ppq = 960;
-                                                        final ticks =
-                                                            (pos.patternSamples *
-                                                                ppq *
-                                                                pos.tempo) /
-                                                            (60.0 *
-                                                                pos.sampleRate);
-                                                        return ticks.round();
-                                                      }
-                                                      return 0;
-                                                    },
-                                                  ),
-                                                ),
-                                              ),
                                             ],
                                           ),
                                         ),
@@ -826,6 +794,16 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                               },
                               title: "${selectedNoteIds.length} Note(s)",
                             ),
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              ignoring: true,
+                              child: PianoRollPlayheadOverlay(
+                                scrollController: _gridHorizontalController,
+                                zoomX: zoomX,
+                                isInteracting: isInteracting,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1801,6 +1779,137 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
           }).toList(),
         ),
       ),
+    );
+  }
+}
+
+class _PianoRollPlayheadPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      // Using orange to match your pattern play button theme
+      ..color = Colors.orangeAccent
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(0, 0); // Top Left
+    path.lineTo(size.width, 0); // Top Right
+    path.lineTo(size.width / 2, size.height); // Bottom Center
+    path.close();
+
+    canvas.drawPath(path, paint);
+    canvas.drawShadow(path, Colors.black, 2.0, false);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class PianoRollPlayheadOverlay extends ConsumerStatefulWidget {
+  final ScrollController scrollController;
+  final double zoomX; // Pixels per tick
+  final bool isInteracting;
+
+  const PianoRollPlayheadOverlay({
+    super.key,
+    required this.scrollController,
+    required this.zoomX,
+    this.isInteracting = false,
+  });
+
+  @override
+  ConsumerState<PianoRollPlayheadOverlay> createState() =>
+      _PianoRollPlayheadOverlayState();
+}
+
+class _PianoRollPlayheadOverlayState
+    extends ConsumerState<PianoRollPlayheadOverlay> {
+  late Stream<UiTransportFeedback> _positionStream;
+  int _lastKnownTicks = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _positionStream = ref.read(karbeatStateProvider).positionStream;
+  }
+
+  int _getTicksFromFeedback(UiTransportFeedback pos) {
+    if (!pos.isPatternMode || pos.sampleRate <= 0) return 0;
+
+    // Convert samples directly to ticks safely
+    const ppq = 960;
+    final ticks =
+        (pos.patternSamples * ppq * pos.tempo) / (60.0 * pos.sampleRate);
+    return ticks.round();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportWidth = constraints.maxWidth;
+
+        return StreamBuilder<UiTransportFeedback>(
+          stream: _positionStream,
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              _lastKnownTicks = _getTicksFromFeedback(snapshot.data!);
+            }
+
+            // Calculate exact pixel position on the internal grid
+            final playheadAbsoluteX = _lastKnownTicks * widget.zoomX;
+
+            return AnimatedBuilder(
+              animation: widget.scrollController,
+              builder: (context, child) {
+                double scrollOffset = 0;
+                if (widget.scrollController.hasClients) {
+                  scrollOffset = widget.scrollController.offset;
+                }
+
+                // Map grid position to screen viewport position
+                final double left = playheadAbsoluteX - scrollOffset;
+
+                // Optimization: Cull rendering if off-screen to save CPU
+                if (left < -20 || left > viewportWidth + 20) {
+                  return const SizedBox.shrink();
+                }
+
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      left: left - 7.5, // Center the 15px wide playhead
+                      top: 0,
+                      bottom: 0,
+                      width: 15,
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: 10,
+                            width: 15,
+                            child: CustomPaint(
+                              painter: _PianoRollPlayheadPainter(),
+                            ),
+                          ),
+                          Expanded(
+                            child: Container(
+                              width: 1.5,
+                              color: Colors.orangeAccent.withAlpha(
+                                widget.isInteracting ? 100 : 204,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
     );
   }
 }

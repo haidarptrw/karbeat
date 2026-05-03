@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::{
     commands::AudioCommand,
     context::{ctx, utils::send_audio_command},
-    core::project::{plugin::KarbeatEffect, ApplicationState, PluginInstance, TrackId},
+    core::project::{plugin::KarbeatPlugin, ApplicationState, PluginInstance, TrackId},
     shared::{BusId, EffectId},
 };
 
@@ -141,6 +141,8 @@ pub enum MixerChannelParams {
 pub struct EffectInstance {
     pub id: EffectId,
     pub instance: Arc<PluginInstance>,
+    #[serde(default)]
+    pub plugin_state: Vec<u8>,
 }
 
 impl EffectInstance {
@@ -148,6 +150,7 @@ impl EffectInstance {
         Self {
             id,
             instance: Arc::new(instance),
+            plugin_state: Vec::new(),
         }
     }
 }
@@ -198,7 +201,7 @@ impl MixerChannel {
     pub fn add_effect(
         &mut self,
         effect_registry_id: u32,
-    ) -> anyhow::Result<(Box<dyn KarbeatEffect + Send + Sync>, String, EffectId)> {
+    ) -> anyhow::Result<(Box<dyn KarbeatPlugin + Send + Sync>, String, EffectId)> {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
         let (effect_plugin, effect_name, default_params) = {

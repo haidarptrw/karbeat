@@ -3,9 +3,7 @@ use indexmap::IndexMap;
 use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
-        mixer::RoutingConnection,
-        plugin::{KarbeatEffect, KarbeatGenerator},
-        track::audio_waveform::AudioWaveform,
+        mixer::RoutingConnection, plugin::KarbeatPlugin, track::audio_waveform::AudioWaveform,
         GeneratorId,
     },
     shared::{
@@ -52,7 +50,7 @@ pub enum AudioCommand {
     AddGenerator {
         generator_id: GeneratorId,
         track_id: TrackId,
-        plugin: Box<dyn KarbeatGenerator + Send>,
+        plugin: Box<dyn KarbeatPlugin + Send>,
     },
     /// Remove a generator plugin from the audio thread
     RemoveGenerator {
@@ -81,7 +79,7 @@ pub enum AudioCommand {
     AddTrackEffect {
         track_id: TrackId,
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send + Sync>,
+        effect: Box<dyn KarbeatPlugin + Send + Sync>,
     },
     /// Remove an effect from a track's effect chain
     RemoveTrackEffect {
@@ -107,7 +105,7 @@ pub enum AudioCommand {
     /// Add an effect to the master bus
     AddMasterEffect {
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send + Sync>,
+        effect: Box<dyn KarbeatPlugin + Send + Sync>,
     },
     /// Remove an effect from the master bus
     RemoveMasterEffect {
@@ -147,7 +145,7 @@ pub enum AudioCommand {
     AddBusEffect {
         bus_id: BusId,
         effect_id: EffectId,
-        effect: Box<dyn KarbeatEffect + Send + Sync>,
+        effect: Box<dyn KarbeatPlugin + Send + Sync>,
     },
     /// Remove effect from a bus
     RemoveBusEffect {
@@ -172,10 +170,10 @@ pub enum AudioCommand {
     },
     /// Prepare all of plugins from ApplicationState to AudioEngine (upon loading project)
     PreparePlugin {
-        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
-        master_effects: IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>,
-        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatEffect + Send + Sync>>>,
-        generators: IndexMap<GeneratorId, Box<dyn KarbeatGenerator + Send + Sync>>,
+        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>,
+        master_effects: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>,
+        generators: IndexMap<GeneratorId, Box<dyn KarbeatPlugin + Send + Sync>>,
     },
     SetMetronomeActive(bool),
 
@@ -186,6 +184,21 @@ pub enum AudioCommand {
         command: String,
         payload: serde_json::Value,
         request_id: u32,
+    },
+
+    //////////////////////////////////////////
+    // Load and Save related commands
+    /////////////////////////////////////////
+    /// Tell a specific plugin to overwrite its internal state
+    SetPluginState {
+        target: PluginTarget,
+        state: Vec<u8>,
+    },
+
+    /// Ask the engine to provide the latest state of a specific plugin
+    QueryPluginState {
+        target: PluginTarget,
+        request_id: u32, // To track the response in the UI
     },
 }
 
@@ -236,21 +249,28 @@ pub struct EffectParameterSnapshot {
 /// Messages from audio thread to UI thread
 #[derive(Clone, Debug)]
 pub enum AudioFeedback {
-    // --- Generator Feedback ---
+    // Generator Feedback
     /// Single parameter changed (e.g., automation moved it)
     GeneratorParameterChanged(GeneratorParameterUpdate),
     /// Full parameter snapshot in response to query
     GeneratorParameterSnapshot(GeneratorParameterSnapshot),
 
-    // --- Effect Feedback ---
+    // Effect Feedback
     /// Single parameter changed on an effect (e.g., automation moved it)
     EffectParameterChanged(EffectParameterUpdate),
     /// Full parameter snapshot for an effect in response to query
     EffectParameterSnapshot(EffectParameterSnapshot),
 
-    // --- Command Response Feedback
+    // Command Response Feedback
     PluginCommandResponse {
         request_id: u32,
         response: serde_json::Value,
+    },
+
+    /// The engine returning the requested state blob
+    PluginStateSnapshot {
+        target: PluginTarget,
+        state: Vec<u8>,
+        request_id: u32,
     },
 }

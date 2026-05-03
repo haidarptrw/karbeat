@@ -72,6 +72,7 @@ pub enum AudioSourceAutomationEvent {
     Volume(f32),
 }
 
+#[derive(Debug, Clone)]
 pub enum PluginTarget {
     Generator(GeneratorId),
     TrackEffect(TrackId, EffectId),

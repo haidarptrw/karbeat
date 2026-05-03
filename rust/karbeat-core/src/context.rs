@@ -98,7 +98,9 @@ pub fn ctx() -> &'static KarbeatContext<'static> {
 }
 
 pub mod utils {
-    use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
+    // use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
+
+    use karbeat_plugin_api::traits::KarbeatPlugin;
 
     use crate::{
         audio::render_state::AudioRenderState, commands::AudioCommand, context::ctx,
@@ -122,7 +124,7 @@ pub mod utils {
         Ok(())
     }
 
-    pub fn get_effect_plugin_box(registry_id: u32) -> Option<Box<dyn KarbeatEffect + Send + Sync>> {
+    pub fn get_effect_plugin_box(registry_id: u32) -> Option<Box<dyn KarbeatPlugin + Send + Sync>> {
         let registry = ctx().plugin_registry.read();
         let Some((plugin, _)) = registry.create_effect_by_id(registry_id) else {
             return None;
@@ -133,7 +135,7 @@ pub mod utils {
 
     pub fn get_synth_plugin_box(
         registry_id: u32,
-    ) -> std::option::Option<Box<dyn KarbeatGenerator + Send + Sync>> {
+    ) -> std::option::Option<Box<dyn KarbeatPlugin + Send + Sync>> {
         let registry = ctx().plugin_registry.read();
         let Some((plugin, _)) = registry.create_generator_by_id(registry_id) else {
             return None;

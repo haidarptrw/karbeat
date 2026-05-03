@@ -1298,6 +1298,7 @@ fn wire__crate__api__project__export_project_flutter_impl(
             let api_output_path = <String>::sse_decode(&mut deserializer);
             let api_sample_rate = <u32>::sse_decode(&mut deserializer);
             let api_bit_per_sample = <u16>::sse_decode(&mut deserializer);
+            let api_channels = <u16>::sse_decode(&mut deserializer);
             let api_tail_handling =
                 <crate::api::project::TailHandlingDTO>::sse_decode(&mut deserializer);
             let api_progress_sink =
@@ -1310,6 +1311,7 @@ fn wire__crate__api__project__export_project_flutter_impl(
                     api_output_path,
                     api_sample_rate,
                     api_bit_per_sample,
+                    api_channels,
                     api_tail_handling,
                     api_progress_sink,
                 )?;

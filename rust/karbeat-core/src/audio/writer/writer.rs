@@ -61,6 +61,16 @@ pub trait AudioWriter: Send {
     fn finalize(&mut self) -> Result<()>;
 }
 
+impl AudioWriter for Box<dyn AudioWriter> {
+    fn write(&mut self, buffer: &[f32]) -> anyhow::Result<()> {
+        (**self).write(buffer)
+    }
+
+    fn finalize(&mut self) -> anyhow::Result<()> {
+        (**self).finalize()
+    }
+}
+
 /// Factory function to create the appropriate writer based on file extension
 pub fn create_writer(path: &Path, format: AudioFormat) -> Result<Box<dyn AudioWriter>> {
     let ext = path
@@ -71,9 +81,9 @@ pub fn create_writer(path: &Path, format: AudioFormat) -> Result<Box<dyn AudioWr
 
     match ext.as_str() {
         "wav" => Ok(Box::new(wav::WavAudioWriter::new(path, format)?)),
-        "mp3" => todo!("Add MP3 Audio Writer here"),
-        "flac" => todo!("Add FLAC Audio Writer here"),
-        "ogg" => todo!("Add OGG Audio Writer here"),
+        // "mp3" => todo!("Add MP3 Audio Writer here"),
+        // "flac" => todo!("Add FLAC Audio Writer here"),
+        // "ogg" => todo!("Add OGG Audio Writer here"),
         _ => Err(anyhow!("Unsupported file extension: .{}", ext)),
     }
 }

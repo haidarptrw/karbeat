@@ -250,6 +250,7 @@ abstract class RustLibApi extends BaseApi {
     required String outputPath,
     required int sampleRate,
     required int bitPerSample,
+    required int channels,
     required TailHandlingDTO tailHandling,
   });
 
@@ -1842,6 +1843,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String outputPath,
     required int sampleRate,
     required int bitPerSample,
+    required int channels,
     required TailHandlingDTO tailHandling,
   }) {
     final progressSink = RustStreamSink<double>();
@@ -1852,6 +1854,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(outputPath, serializer);
           sse_encode_u_32(sampleRate, serializer);
           sse_encode_u_16(bitPerSample, serializer);
+          sse_encode_u_16(channels, serializer);
           sse_encode_tail_handling_dto(tailHandling, serializer);
           sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
           return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
@@ -1865,6 +1868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           outputPath,
           sampleRate,
           bitPerSample,
+          channels,
           tailHandling,
           progressSink,
         ],
@@ -1881,6 +1885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "outputPath",
           "sampleRate",
           "bitPerSample",
+          "channels",
           "tailHandling",
           "progressSink",
         ],
