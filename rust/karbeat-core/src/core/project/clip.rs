@@ -11,7 +11,7 @@ pub enum ResizeEdge {
 
 use crate::core::project::track::midi::Pattern;
 use crate::core::project::ClipboardContent;
-use crate::core::project::{track::TrackType, ApplicationState, KarbeatSource};
+use crate::core::project::{track::TrackType, ApplicationState, DawSource};
 use crate::shared::id::{ClipId, TrackId};
 use crate::shared::{AudioSourceId, PatternId};
 
@@ -128,7 +128,7 @@ pub struct Clip {
     /// Clip ID
     pub id: ClipId,
     /// Source of the clip
-    pub source: KarbeatSource,
+    pub source: DawSource,
     /// Timeline position and length — explicit units via enum
     pub time: ClipTimeUnit,
 }
@@ -163,7 +163,7 @@ impl ApplicationState {
         match self.tracks.get_mut(&track_id) {
             Some(track_arc) => {
                 // COW: Get mutable track
-                let track: &mut super::KarbeatTrack = Arc::make_mut(track_arc);
+                let track: &mut super::AudioTrack = Arc::make_mut(track_arc);
 
                 // Add Clip & Check bounds
                 // We pass the Clip by value. The track takes ownership and wraps it in Arc.
@@ -250,7 +250,7 @@ impl ApplicationState {
                 .tracks
                 .get_mut(&target_track_id)
                 .ok_or("Target track not found")?;
-            let track: &mut super::KarbeatTrack = Arc::make_mut(track_arc);
+            let track: &mut super::AudioTrack = Arc::make_mut(track_arc);
 
             track
                 .add_clip(modified_clip.clone())
@@ -479,7 +479,7 @@ impl ApplicationState {
                 let clip = Clip {
                     name: audio_source.name.clone(),
                     id: new_clip_id,
-                    source: KarbeatSource::Audio(source_id),
+                    source: DawSource::Audio(source_id),
                     time: ClipTimeUnit::Samples {
                         start_time: start_time_samples,
                         loop_length: timeline_length_samples,
@@ -529,7 +529,7 @@ impl ApplicationState {
                 let clip = Clip {
                     name: pattern_name,
                     id: new_clip_id,
-                    source: KarbeatSource::Midi(pattern_id),
+                    source: DawSource::Midi(pattern_id),
                     time: ClipTimeUnit::Ticks {
                         start_time,
                         loop_length: timeline_length,
@@ -608,8 +608,8 @@ impl ApplicationState {
                     {
                         // Check compatibility
                         let is_compatible = match (&target_type, &clip.source) {
-                            (TrackType::Audio, KarbeatSource::Audio(_)) => true,
-                            (TrackType::Midi, KarbeatSource::Midi(_)) => true,
+                            (TrackType::Audio, DawSource::Audio(_)) => true,
+                            (TrackType::Midi, DawSource::Midi(_)) => true,
                             _ => false,
                         };
                         if !is_compatible {

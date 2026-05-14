@@ -16,6 +16,10 @@ class NewNotePayload {
   });
 }
 
-// class DeleteNotePayload {
-//   final int 
-// }
+/// Local representation of an EQ point
+class CurvePoint {
+  final double frequency;
+  final double magnitudeDb;
+
+  CurvePoint({required this.frequency, required this.magnitudeDb});
+}

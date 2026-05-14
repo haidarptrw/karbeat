@@ -12,6 +12,13 @@ use crate::{
     context::ctx,
 };
 
+#[allow(unused)]
+fn host_has_output_device(host: &cpal::Host) -> bool {
+    host.output_devices()
+        .map(|mut devices| devices.next().is_some())
+        .unwrap_or(false)
+}
+
 struct AudioContext {
     engine: AudioEngine,
     producer: rtrb::Producer<f32>,
@@ -88,19 +95,28 @@ macro_rules! run_stream {
 /// - Other platforms: default host
 fn set_host() -> cpal::Host {
     #[allow(unused_assignments)]
+    #[allow(unused_mut)]
     let mut host = cpal::default_host();
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
-            host = asio_host;
-            log::info!("Connected to ASIO Host");
-        } else if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
-            host = wasapi_host;
-            log::info!("Connected to WASAPI Host");
+          if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
+            if host_has_output_device(&asio_host) {
+                log::info!("Connected to ASIO Host");
+                return asio_host;
+            } else {
+                log::warn!("ASIO host found but no output devices were available; falling back to WASAPI");
+            }
         } else {
-            log::warn!("Neither ASIO nor WASAPI available, falling back to default host");
+            log::warn!("ASIO host not available; falling back to WASAPI");
         }
+
+        if let Ok(wasapi_host) = cpal::host_from_id(cpal::HostId::Wasapi) {
+            log::info!("Connected to WASAPI Host");
+            return wasapi_host;
+        }
+
+        log::warn!("WASAPI not available; falling back to default host");
     }
 
     #[cfg(target_os = "android")]
@@ -169,15 +185,30 @@ pub fn start_audio_stream(
     };
     log::info!("Output device: {}", device_name);
 
+    // Ask the OS for its preferred/native audio configuration
+    let default_config = device.default_output_config()
+        .context("no default output config available")?;
+    let native_sample_rate = default_config.sample_rate();
+
     let supported_configs_range = device
         .supported_output_configs()
         .map_err(|e| anyhow!("error querying configs: {e}"))?;
 
+    // Find a config that supports F32, 2 Channels, AND the OS's native sample rate
     let supported_config = supported_configs_range
         .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
-        .next()
-        .map(|c| c.with_max_sample_rate())
-        .context("device does not support f32 samples")?;
+        .find(|c| c.min_sample_rate() <= native_sample_rate && c.max_sample_rate() >= native_sample_rate)
+        .map(|c| c.with_sample_rate(native_sample_rate))
+        // Fallback: If native rate isn't found in F32, try forcing a standard 48000 Hz
+        .or_else(|| {
+            device.supported_output_configs().ok()?.find(|c| {
+                c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2
+            }).map(|c| {
+                let clamped_rate = 48000.clamp(c.min_sample_rate(), c.max_sample_rate());
+                c.with_sample_rate(clamped_rate)
+            })
+        })
+        .context("device does not support f32 samples with 2 channels")?;
 
     // This prevents PipeWire/JACK from resizing the buffer dynamically.
     let buffer_size = match supported_config.buffer_size() {
@@ -242,7 +273,7 @@ pub fn start_audio_stream(
         initial_state,
     );
 
-    let ring_buffer_capacity = 4096;
+    let ring_buffer_capacity = 8192;
     let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
 
     let engine_block_size = 512;

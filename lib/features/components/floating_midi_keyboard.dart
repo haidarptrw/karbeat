@@ -11,7 +11,8 @@ class FloatingMidiKeyboard extends ConsumerStatefulWidget {
   const FloatingMidiKeyboard({super.key});
 
   @override
-  ConsumerState<FloatingMidiKeyboard> createState() => _FloatingMidiKeyboardState();
+  ConsumerState<FloatingMidiKeyboard> createState() =>
+      _FloatingMidiKeyboardState();
 }
 
 class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
@@ -32,10 +33,13 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
 
   @override
   Widget build(BuildContext context) {
-    final generators = ref.watch(karbeatStateProvider.select((s) => s.generators));
+    final generators = ref.watch(
+      globalStateProvider.select((s) => s.generators),
+    );
 
     // Ensure selected generator is still valid, else pick first available
-    if (_selectedGeneratorId != null && !generators.containsKey(_selectedGeneratorId)) {
+    if (_selectedGeneratorId != null &&
+        !generators.containsKey(_selectedGeneratorId)) {
       _selectedGeneratorId = null;
     }
     if (_selectedGeneratorId == null && generators.isNotEmpty) {
@@ -71,166 +75,231 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
           color: Colors.transparent,
           elevation: 12,
           borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 520,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E), // Hardware synth look
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade700),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black54,
-                blurRadius: 10,
-                offset: Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Draggable Top Bar
-              GestureDetector(
-                onPanUpdate: (details) {
-                  setState(() {
-                    _x += details.delta.dx;
-                    _y += details.delta.dy;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade900,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                    border: Border(bottom: BorderSide(color: Colors.grey.shade800)),
+          child: Container(
+            width: 520,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E), // Hardware synth look
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade700),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black54,
+                  blurRadius: 10,
+                  offset: Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Draggable Top Bar
+                GestureDetector(
+                  onPanUpdate: (details) {
+                    setState(() {
+                      _x += details.delta.dx;
+                      _y += details.delta.dy;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade900,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(8),
+                      ),
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey.shade800),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.drag_indicator,
+                          color: Colors.grey,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          "MIDI CONTROLLER",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => ref
+                              .read(globalStateProvider)
+                              .toggleFloatingMidiKeyboard(),
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.grey,
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                ),
+
+                // Synth Control Panel
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  color: const Color(0xFF232323),
                   child: Row(
                     children: [
-                      const Icon(Icons.drag_indicator, color: Colors.grey, size: 16),
-                      const SizedBox(width: 8),
-                      const Text(
-                        "MIDI CONTROLLER",
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                        ),
+                      _buildControlKnob(
+                        "BASE KEY",
+                        numToMidiKey(_baseKey),
+                        () {
+                          setState(() {
+                            _baseKey = (_baseKey - 1).clamp(0, 127 - _keyRange);
+                          });
+                        },
+                        () {
+                          setState(() {
+                            _baseKey = (_baseKey + 1).clamp(0, 127 - _keyRange);
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 20),
+                      _buildControlKnob(
+                        "RANGE",
+                        "+$_keyRange",
+                        () {
+                          setState(() {
+                            _keyRange = (_keyRange - 1).clamp(1, 19);
+                          });
+                        },
+                        () {
+                          setState(() {
+                            _keyRange = (_keyRange + 1).clamp(1, 19);
+                          });
+                        },
                       ),
                       const Spacer(),
-                      InkWell(
-                        onTap: () => ref.read(karbeatStateProvider).toggleFloatingMidiKeyboard(),
-                        child: const Icon(Icons.close, color: Colors.grey, size: 16),
+                      Container(
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          border: Border.all(color: Colors.red.shade900),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            value: _selectedGeneratorId,
+                            hint: const Text(
+                              "Select Synth",
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontSize: 12,
+                              ),
+                            ),
+                            dropdownColor: Colors.black,
+                            icon: const Icon(
+                              Icons.arrow_drop_down,
+                              color: Colors.redAccent,
+                            ),
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 12,
+                              fontFamily: 'monospace',
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedGeneratorId = val;
+                              });
+                            },
+                            items: generators.entries.map((e) {
+                              return DropdownMenuItem(
+                                value: e.key,
+                                child: Text(_getGeneratorName(e.value)),
+                              );
+                            }).toList(),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              
-              // Synth Control Panel
-              Container(
-                padding: const EdgeInsets.all(12),
-                color: const Color(0xFF232323),
-                child: Row(
-                  children: [
-                    _buildControlKnob(
-                      "BASE KEY", 
-                      numToMidiKey(_baseKey), 
-                      () {
-                         setState(() { _baseKey = (_baseKey - 1).clamp(0, 127 - _keyRange); });
-                      },
-                      () {
-                         setState(() { _baseKey = (_baseKey + 1).clamp(0, 127 - _keyRange); });
-                      }
-                    ),
-                    const SizedBox(width: 20),
-                    _buildControlKnob(
-                      "RANGE", 
-                      "+$_keyRange", 
-                      () {
-                         setState(() { _keyRange = (_keyRange - 1).clamp(1, 19); });
-                      },
-                      () {
-                         setState(() { _keyRange = (_keyRange + 1).clamp(1, 19); });
-                      }
-                    ),
-                    const Spacer(),
-                    Container(
-                      height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        border: Border.all(color: Colors.red.shade900),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int>(
-                          value: _selectedGeneratorId,
-                          hint: const Text("Select Synth", style: TextStyle(color: Colors.redAccent, fontSize: 12)),
-                          dropdownColor: Colors.black,
-                          icon: const Icon(Icons.arrow_drop_down, color: Colors.redAccent),
-                          style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontFamily: 'monospace'),
-                          onChanged: (val) {
-                            setState(() { _selectedGeneratorId = val; });
-                          },
-                          items: generators.entries.map((e) {
-                            return DropdownMenuItem(
-                              value: e.key,
-                              child: Text(_getGeneratorName(e.value)),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                  ],
+
+                // Keyboard Area
+                SizedBox(
+                  height: 120,
+                  child: _CustomVirtualKeyboard(
+                    startNote: _baseKey,
+                    totalKeys: _keyRange,
+                    activeNotes: _activeNotes,
+                    onNoteOn: _handleNoteOn,
+                    onNoteOff: _handleNoteOff,
+                  ),
                 ),
-              ),
-              
-              // Keyboard Area
-              SizedBox(
-                height: 120,
-                child: _CustomVirtualKeyboard(
-                  startNote: _baseKey,
-                  totalKeys: _keyRange,
-                  activeNotes: _activeNotes,
-                  onNoteOn: _handleNoteOn,
-                  onNoteOff: _handleNoteOff,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
 
-  Widget _buildControlKnob(String label, String value, VoidCallback onDec, VoidCallback onInc) {
+  Widget _buildControlKnob(
+    String label,
+    String value,
+    VoidCallback onDec,
+    VoidCallback onInc,
+  ) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.grey,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 4),
         Row(
           children: [
             InkWell(
               onTap: onDec,
-              child: const Icon(Icons.remove_circle_outline, color: Colors.grey, size: 20),
+              child: const Icon(
+                Icons.remove_circle_outline,
+                color: Colors.grey,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 8),
             Container(
               width: 50,
               alignment: Alignment.center,
               child: Text(
-                value, 
-                style: const TextStyle(color: Colors.cyanAccent, fontFamily: 'monospace', fontSize: 16, fontWeight: FontWeight.bold)
+                value,
+                style: const TextStyle(
+                  color: Colors.cyanAccent,
+                  fontFamily: 'monospace',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(width: 8),
             InkWell(
               onTap: onInc,
-              child: const Icon(Icons.add_circle_outline, color: Colors.grey, size: 20),
+              child: const Icon(
+                Icons.add_circle_outline,
+                color: Colors.grey,
+                size: 20,
+              ),
             ),
           ],
-        )
+        ),
       ],
     );
   }
@@ -301,9 +370,9 @@ class _CustomVirtualKeyboard extends StatelessWidget {
             whiteKeyCount++;
           }
         }
-        
+
         if (whiteKeyCount == 0) whiteKeyCount = 1; // Prevent division by zero
-        
+
         double whiteKeyWidth = constraints.maxWidth / whiteKeyCount;
 
         List<Widget> whiteKeys = [];
@@ -334,9 +403,9 @@ class _CustomVirtualKeyboard extends StatelessWidget {
             // the `whiteIndex` holds the index of the next white key in the array.
             // A black key sits between `whiteIndex - 1` and `whiteIndex`.
             // So we position it anchored to `whiteIndex * whiteKeyWidth` offset to the left.
-            
+
             double left = (whiteIndex * whiteKeyWidth) - (whiteKeyWidth * 0.35);
-            
+
             // Protect against left clamping if sequence starts precisely with a black key
             if (left < 0) left = 0;
 
@@ -427,11 +496,11 @@ class _PianoKeyState extends State<_PianoKey> {
           ),
           boxShadow: [
             if (!isActive && widget.isBlack)
-               const BoxShadow(
+              const BoxShadow(
                 color: Colors.black54,
                 offset: Offset(1, 1),
                 blurRadius: 1,
-              )
+              ),
           ],
         ),
         child: Align(

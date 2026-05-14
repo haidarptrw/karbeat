@@ -31,7 +31,7 @@ pub struct MixerParamEvent {
 /// Centralized application context containing all shared state.
 ///
 /// Access via the [`ctx()`] function to get a reference to the global instance.
-pub struct KarbeatContext<'a> {
+pub struct DawContext<'a> {
     /// Main application state (UI/editing source of truth)
     pub app_state: Arc<RwLock<ApplicationState>>,
 
@@ -63,7 +63,7 @@ pub struct KarbeatContext<'a> {
     pub mixer_event_sink: Mutex<Option<Box<dyn Fn(MixerParamEvent) + Send + Sync + 'a>>>,
 }
 
-impl<'a> KarbeatContext<'a> {
+impl<'a> DawContext<'a> {
     fn new() -> Self {
         Self {
             app_state: Arc::new(RwLock::new(ApplicationState::default())),
@@ -84,7 +84,7 @@ impl<'a> KarbeatContext<'a> {
 pub static INIT_LOGGER: Once = Once::new();
 
 /// Global context instance
-static CONTEXT: Lazy<KarbeatContext> = Lazy::new(KarbeatContext::new);
+static CONTEXT: Lazy<DawContext> = Lazy::new(DawContext::new);
 
 /// Access the global context.
 ///
@@ -93,14 +93,12 @@ static CONTEXT: Lazy<KarbeatContext> = Lazy::new(KarbeatContext::new);
 /// let app = ctx().app_state.read();
 /// ```
 #[inline]
-pub fn ctx() -> &'static KarbeatContext<'static> {
+pub fn ctx() -> &'static DawContext<'static> {
     &CONTEXT
 }
 
 pub mod utils {
-    // use karbeat_plugin_api::traits::{KarbeatEffect, KarbeatGenerator};
-
-    use karbeat_plugin_api::traits::KarbeatPlugin;
+    use karbeat_plugin_api::traits::AudioPlugin;
 
     use crate::{
         audio::render_state::AudioRenderState, commands::AudioCommand, context::ctx,
@@ -124,7 +122,7 @@ pub mod utils {
         Ok(())
     }
 
-    pub fn get_effect_plugin_box(registry_id: u32) -> Option<Box<dyn KarbeatPlugin + Send + Sync>> {
+    pub fn get_effect_plugin_box(registry_id: u32) -> Option<Box<dyn AudioPlugin + Send + Sync>> {
         let registry = ctx().plugin_registry.read();
         let Some((plugin, _)) = registry.create_effect_by_id(registry_id) else {
             return None;
@@ -135,7 +133,7 @@ pub mod utils {
 
     pub fn get_synth_plugin_box(
         registry_id: u32,
-    ) -> std::option::Option<Box<dyn KarbeatPlugin + Send + Sync>> {
+    ) -> std::option::Option<Box<dyn AudioPlugin + Send + Sync>> {
         let registry = ctx().plugin_registry.read();
         let Some((plugin, _)) = registry.create_generator_by_id(registry_id) else {
             return None;

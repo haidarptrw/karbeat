@@ -7,7 +7,7 @@ class KarbeatApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Karbeat — Untitled',
+      title: 'DigiDAW',
       theme: ThemeData.dark(),
       home: const MainScreen(),
     );

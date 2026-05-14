@@ -8,7 +8,21 @@ use karbeat_core::plugin_types::ParameterValueType;
 use karbeat_core::shared::id::*;
 use karbeat_plugins::registry::PluginInfo;
 use karbeat_utils::parser::FromPluginCommand;
+pub use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::Duration;
+
+#[frb(opaque)]
+pub struct PluginBufferHandle(Arc<Mutex<Vec<f32>>>);
+
+impl PluginBufferHandle {
+    /// Reads the current buffer state directly into a Dart Float32List.
+    /// This bypasses JSON entirely and takes less than a microsecond.
+    #[frb(sync)]
+    pub fn read(&self) -> Vec<f32> {
+        self.0.lock().clone()
+    }
+}
 
 // ============================================================================
 // UI TYPES FOR FLUTTER RUST BRIDGE

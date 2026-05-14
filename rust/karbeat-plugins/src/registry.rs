@@ -4,18 +4,18 @@ use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
 
 // use crate::effect::compressor::create_compressor;
-use karbeat_plugin_api::traits::{AudioPluginBuilder, KarbeatPlugin};
+use karbeat_plugin_api::traits::{AudioPluginBuilder, AudioPlugin};
 
 use crate::{
-    effect::parametric_eq::KarbeatParametricEQ,
+    effect::parametric_eq::DigiParametricEQ,
     generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
 };
 
 /// A function pointer type that creates a new Generator instance
-type GeneratorFactory = Box<dyn Fn() -> Box<dyn KarbeatPlugin + Send + Sync> + Send + Sync>;
+type GeneratorFactory = Box<dyn Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync>;
 
 /// A function pointer type that creates a new Effect instance
-type EffectFactory = Box<dyn Fn() -> Box<dyn KarbeatPlugin + Send + Sync> + Send + Sync>;
+type EffectFactory = Box<dyn Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync>;
 
 /// Metadata stored for each registered generator
 struct RegisteredGenerator {
@@ -68,7 +68,7 @@ impl PluginRegistry {
         registry.register_generator("My Retro", || Box::new(MyRetro::build()));
 
         // Parametric EQ
-        registry.register_effect("Parametric EQ", || Box::new(KarbeatParametricEQ::build()));
+        registry.register_effect("Parametric EQ", || Box::new(DigiParametricEQ::build()));
 
         registry
     }
@@ -77,7 +77,7 @@ impl PluginRegistry {
     /// Returns the assigned registry ID.
     pub fn register_generator<F>(&mut self, name: &str, factory: F) -> u32
     where
-        F: Fn() -> Box<dyn KarbeatPlugin + Send + Sync> + Send + Sync + 'static,
+        F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
     {
         let id = self.generator_id_counter;
         self.generator_id_counter += 1;
@@ -100,7 +100,7 @@ impl PluginRegistry {
     /// Returns the assigned registry ID.
     pub fn register_effect<F>(&mut self, name: &str, factory: F) -> u32
     where
-        F: Fn() -> Box<dyn KarbeatPlugin + Send + Sync> + Send + Sync + 'static,
+        F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
     {
         let id = self.effect_id_counter;
         self.effect_id_counter += 1;
@@ -127,7 +127,7 @@ impl PluginRegistry {
     pub fn create_generator_by_id(
         &self,
         id: u32,
-    ) -> Option<(Box<dyn KarbeatPlugin + Send + Sync>, String)> {
+    ) -> Option<(Box<dyn AudioPlugin + Send + Sync>, String)> {
         self.generators.get(&id).map(|reg| {
             let plugin = (reg.factory)();
             (plugin, reg.name.clone())
@@ -138,7 +138,7 @@ impl PluginRegistry {
     pub fn create_effect_by_id(
         &self,
         id: u32,
-    ) -> Option<(Box<dyn KarbeatPlugin + Send + Sync>, String)> {
+    ) -> Option<(Box<dyn AudioPlugin + Send + Sync>, String)> {
         self.effects.get(&id).map(|reg| {
             let plugin = (reg.factory)();
             (plugin, reg.name.clone())
@@ -183,14 +183,14 @@ impl PluginRegistry {
 
     /// Create an instance of a generator by name (backwards compatibility).
     /// Returns the plugin instance and its name.
-    pub fn create_generator(&self, name: &str) -> Option<Box<dyn KarbeatPlugin + Send + Sync>> {
+    pub fn create_generator(&self, name: &str) -> Option<Box<dyn AudioPlugin + Send + Sync>> {
         self.get_generator_id_by_name(name)
             .and_then(|id| self.create_generator_by_id(id))
             .map(|(plugin, _)| plugin)
     }
 
     /// Create an instance of an effect by name (backwards compatibility).
-    pub fn create_effect(&self, name: &str) -> Option<Box<dyn KarbeatPlugin + Send + Sync>> {
+    pub fn create_effect(&self, name: &str) -> Option<Box<dyn AudioPlugin + Send + Sync>> {
         self.get_effect_id_by_name(name)
             .and_then(|id| self.create_effect_by_id(id))
             .map(|(plugin, _)| plugin)

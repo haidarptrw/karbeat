@@ -287,7 +287,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
     switch (param.paramType) {
       case plugin_api.UiParameterType.float:
       case plugin_api.UiParameterType.int:
-        return KarbeatFloatParam(
+        return DawFloatParam(
           paramId: param.id,
           name: param.name,
           value: param.value,
@@ -298,7 +298,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
           onChanged: (val) => setParameter(param.id, val),
         );
       case plugin_api.UiParameterType.choice:
-        return KarbeatChoiceParam(
+        return DawChoiceParam(
           paramId: param.id,
           name: param.name,
           value: param.value,
@@ -307,7 +307,7 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
           onChanged: (val) => setParameter(param.id, val),
         );
       case plugin_api.UiParameterType.bool:
-        return KarbeatBoolParam(
+        return DawBoolParam(
           paramId: param.id,
           name: param.name,
           value: param.value,

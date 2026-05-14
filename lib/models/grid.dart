@@ -7,6 +7,7 @@ enum GridSize {
   quarter(4),
   sixth(6),
   eighth(8),
+  twelfth(12),
   sixteenth(16),
   thirtysecond(32),
   sixtyfourth(64),
@@ -22,11 +23,14 @@ enum MusicalBeatSize {
   two(2),
   one(1),
   half(0.5),
-  quarter(0.25),
-  eighth(0.125),
-  sixteenth(0.0625),
-  thirtysecond(0.03125),
-  sixtyfourth(0.015625),
+  third(1 / 3),
+  quarter(1 / 4),
+  sixth(1 / 6),
+  eighth(1 / 8),
+  twelfth(1 / 12),
+  sixteenth(1 / 16),
+  thirtysecond(1 / 32),
+  sixtyfourth(1 / 64),
   none(0); // this means one tick size
 
   final double value;

@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 pub use super::clip::Clip;
 pub use super::clipboard::ClipboardContent;
 pub use super::generator::{GeneratorInstance, GeneratorInstanceType};
-pub use super::plugin::{instance::PluginInstance, KarbeatPlugin};
-pub use super::track::{audio_waveform::AudioWaveform, midi::Pattern, KarbeatTrack, TrackType};
+pub use super::plugin::{instance::PluginInstance, AudioPlugin};
+pub use super::track::{audio_waveform::AudioWaveform, midi::Pattern, AudioTrack, TrackType};
 pub use super::transport::TransportState;
 
 use crate::core::project::{
@@ -45,7 +45,7 @@ pub struct ApplicationState {
     pub generator_counter: u32,
 
     // Tracks contain Clips, but Clips are just "Containers"
-    pub tracks: IndexMap<TrackId, Arc<KarbeatTrack>>,
+    pub tracks: IndexMap<TrackId, Arc<AudioTrack>>,
     pub track_counter: u32,
 
     // Automation lanes pool (lives at the same level as tracks/patterns/generators)
@@ -68,7 +68,7 @@ pub struct ApplicationState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum KarbeatSource {
+pub enum DawSource {
     /// Points to an AudioWaveform
     Audio(AudioSourceId),
 

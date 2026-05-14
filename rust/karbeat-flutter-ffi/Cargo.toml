@@ -6,6 +6,7 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+
 [dependencies]
 karbeat-core.workspace = true
 karbeat-plugin-api.workspace = true
@@ -13,7 +14,7 @@ karbeat-utils.workspace = true
 
 anyhow.workspace = true
 env_logger.workspace = true
-flutter_rust_bridge.workspace = true
+flutter_rust_bridge = "=2.11.1"
 log.workspace = true
 serde.workspace = true
 thiserror.workspace = true
@@ -25,6 +26,10 @@ memmap2.workspace = true
 bytemuck.workspace = true
 chrono.workspace = true
 serde_json.workspace = true
+parking_lot.workspace = true
+once_cell.workspace = true
+ndk-context = {version = "0.1.1"}
+jni = {version = "0.22.4"}
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

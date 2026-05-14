@@ -4,7 +4,7 @@ use crate::{
     context::utils::broadcast_state_change,
     core::{
         file_manager::audio_loader::AudioLoader,
-        project::{AudioSourceId, AudioWaveform, KarbeatSource, TrackId, TrackType},
+        project::{AudioSourceId, AudioWaveform, DawSource, TrackId, TrackType},
     },
     lock::{get_app_read, get_app_write},
 };
@@ -55,7 +55,7 @@ where
         .iter()
         .filter_map(|c| {
             // Get source Id from clip
-            let KarbeatSource::Audio(id) = c.source else {
+            let DawSource::Audio(id) = c.source else {
                 return None;
             };
 
@@ -81,7 +81,7 @@ where
         .filter(|t| matches!(t.track_type, TrackType::Audio))
         .flat_map(|t| t.clips().iter())
         .filter_map(|clip| {
-            if let KarbeatSource::Audio(id) = clip.source {
+            if let DawSource::Audio(id) = clip.source {
                 let id_u32 = id.to_u32();
                 if processed.insert(id_u32) {
                     // Prevents duplicate IDs natively

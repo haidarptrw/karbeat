@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/waveform.dart';
 
 class AudioPropertiesScreen extends ConsumerWidget {
   final int sourceId;
@@ -44,6 +47,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
         ),
 
         data: (props) {
+          final handle = props.id != null ? getWaveformHandle(sourceId: props.id!) : null;
           return Column(
             children: [
               // HEADER
@@ -66,7 +70,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: CustomPaint(
                         painter: StereoWaveformPainter(
-                          samples: props.previewBuffer,
+                          samples: handle != null ? createZeroCopyWaveformView(handle) : Float32List(0),
                           color: Colors.cyanAccent,
                         ),
                       ),

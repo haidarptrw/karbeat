@@ -8,12 +8,13 @@ import 'api/mixer.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
 import 'api/plugins/eq.dart';
+import 'api/plugins/opaque.dart';
 import 'api/project.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
-import 'api/simple.dart';
 import 'api/track.dart';
 import 'api/transport.dart';
+import 'api/waveform.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -76,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -477973831;
+  int get rustContentHash => -979679671;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -87,6 +88,169 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
+  WaveformHandle
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetBufferHandle({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetChannels({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  double
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetDuration({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  String
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFilePath({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFineTune({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  int? crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetId({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  bool
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetIsLooping({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  bool crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetMuted({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  String crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetName({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  bool
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetNormalized({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetRootNote({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  int
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetSampleRate({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimEnd({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimStart({
+    required AudioWaveformUiForAudioProperties that,
+  });
+
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetBufferHandle({
+    required AudioWaveformUiForAudioProperties that,
+    required WaveformHandle bufferHandle,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetChannels({
+    required AudioWaveformUiForAudioProperties that,
+    required int channels,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetDuration({
+    required AudioWaveformUiForAudioProperties that,
+    required double duration,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFilePath({
+    required AudioWaveformUiForAudioProperties that,
+    required String filePath,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFineTune({
+    required AudioWaveformUiForAudioProperties that,
+    required int fineTune,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetId({
+    required AudioWaveformUiForAudioProperties that,
+    int? id,
+  });
+
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetIsLooping({
+    required AudioWaveformUiForAudioProperties that,
+    required bool isLooping,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetMuted({
+    required AudioWaveformUiForAudioProperties that,
+    required bool muted,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetName({
+    required AudioWaveformUiForAudioProperties that,
+    required String name,
+  });
+
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetNormalized({
+    required AudioWaveformUiForAudioProperties that,
+    required bool normalized,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetRootNote({
+    required AudioWaveformUiForAudioProperties that,
+    required int rootNote,
+  });
+
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetSampleRate({
+    required AudioWaveformUiForAudioProperties that,
+    required int sampleRate,
+  });
+
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimEnd({
+    required AudioWaveformUiForAudioProperties that,
+    required int trimEnd,
+  });
+
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimStart({
+    required AudioWaveformUiForAudioProperties that,
+    required int trimStart,
+  });
+
+  Float32List crateApiPluginPluginBufferHandleRead({
+    required PluginBufferHandle that,
+  });
+
+  int crateApiWaveformWaveformHandleGetChannels({required WaveformHandle that});
+
+  int crateApiWaveformWaveformHandleGetLen({required WaveformHandle that});
+
+  int crateApiWaveformWaveformHandleGetPointer({required WaveformHandle that});
+
+  int crateApiWaveformWaveformHandleGetSampleRate({
+    required WaveformHandle that,
+  });
+
+  BufferDataType crateApiPluginsOpaqueZeroCopyHandleDataType({
+    required ZeroCopyHandle that,
+  });
+
+  int crateApiPluginsOpaqueZeroCopyHandleLengthElements({
+    required ZeroCopyHandle that,
+  });
+
+  int crateApiPluginsOpaqueZeroCopyHandleMemoryAddress({
+    required ZeroCopyHandle that,
+  });
+
   Future<int> crateApiProjectAddAudioSource({required String filePath});
 
   Future<void> crateApiMixerAddEffectToBus({
@@ -215,6 +379,8 @@ abstract class RustLibApi extends BaseApi {
     required List<int> noteIds,
   });
 
+  Future<String> crateApiTrackDeleteTrack({required int trackId});
+
   Future<String> crateApiPluginExecuteEffectInstanceCommand({
     required UiEffectTarget target,
     required int effectId,
@@ -262,21 +428,6 @@ abstract class RustLibApi extends BaseApi {
 
   Future<Map<int, AudioWaveformUiForSourceList>?>
   crateApiProjectGetAudioSourceList();
-
-  Future<Map<int, AudioWaveformUiForClip>>
-  crateApiTrackGetAudioWaveformClipsData();
-
-  Future<AudioWaveformUiForClip> crateApiTrackGetAudioWaveformForClip({
-    required int audioSourceId,
-  });
-
-  Future<Map<int, AudioWaveformUiForClip>>
-  crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
-
-  Future<Map<int, AudioWaveformUiForClip>>
-  crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack({
-    required int trackId,
-  });
 
   Future<List<UiPluginInfo>> crateApiPluginGetAvailableEffectsWithIds();
 
@@ -369,7 +520,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<UiTransportState> crateApiProjectGetTransportState();
 
-  String crateApiSimpleGreet({required String name});
+  WaveformHandle? crateApiWaveformGetWaveformHandle({required int sourceId});
+
+  Map<int, WaveformHandle> crateApiWaveformGetWaveformHandlesForTrack({
+    required int trackId,
+  });
 
   Future<void> crateApiSimpleInitApp();
 
@@ -629,6 +784,51 @@ abstract class RustLibApi extends BaseApi {
   Future<UiTransportState> crateApiProjectUiTransportStateDefault();
 
   Future<void> crateApiSessionUndo();
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_AudioWaveformUiForAudioProperties;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_AudioWaveformUiForAudioProperties;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_AudioWaveformUiForAudioPropertiesPtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_BufferDataType;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_BufferDataType;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_BufferDataTypePtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_PluginBufferHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_PluginBufferHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_PluginBufferHandlePtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_WaveformHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_WaveformHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_WaveformHandlePtr;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ZeroCopyHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ZeroCopyHandle;
+
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_ZeroCopyHandlePtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -640,6 +840,1242 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
+  WaveformHandle
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetBufferHandle({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetBufferHandleConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetBufferHandleConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_buffer_handle",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetChannels({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_16,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetChannelsConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetChannelsConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_channels",
+        argNames: ["that"],
+      );
+
+  @override
+  double
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetDuration({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_f_64,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetDurationConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetDurationConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_duration",
+        argNames: ["that"],
+      );
+
+  @override
+  String
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFilePath({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFilePathConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFilePathConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_file_path",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFineTune({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_16,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFineTuneConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFineTuneConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_fine_tune",
+        argNames: ["that"],
+      );
+
+  @override
+  int? crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetId({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetIdConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetIdConstMeta =>
+      const TaskConstMeta(
+        debugName: "AudioWaveformUiForAudioProperties_auto_accessor_get_id",
+        argNames: ["that"],
+      );
+
+  @override
+  bool
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetIsLooping({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetIsLoopingConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetIsLoopingConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_is_looping",
+        argNames: ["that"],
+      );
+
+  @override
+  bool crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetMuted({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetMutedConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetMutedConstMeta =>
+      const TaskConstMeta(
+        debugName: "AudioWaveformUiForAudioProperties_auto_accessor_get_muted",
+        argNames: ["that"],
+      );
+
+  @override
+  String crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetName({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetNameConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetNameConstMeta =>
+      const TaskConstMeta(
+        debugName: "AudioWaveformUiForAudioProperties_auto_accessor_get_name",
+        argNames: ["that"],
+      );
+
+  @override
+  bool
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetNormalized({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetNormalizedConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetNormalizedConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_normalized",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetRootNote({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_8,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetRootNoteConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetRootNoteConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_root_note",
+        argNames: ["that"],
+      );
+
+  @override
+  int
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetSampleRate({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetSampleRateConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetSampleRateConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_sample_rate",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimEnd({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimEndConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimEndConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_trim_end",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimStart({
+    required AudioWaveformUiForAudioProperties that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimStartConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimStartConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_get_trim_start",
+        argNames: ["that"],
+      );
+
+  @override
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetBufferHandle({
+    required AudioWaveformUiForAudioProperties that,
+    required WaveformHandle bufferHandle,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+            bufferHandle,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetBufferHandleConstMeta,
+        argValues: [that, bufferHandle],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetBufferHandleConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_buffer_handle",
+        argNames: ["that", "bufferHandle"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetChannels({
+    required AudioWaveformUiForAudioProperties that,
+    required int channels,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_u_16(channels, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetChannelsConstMeta,
+        argValues: [that, channels],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetChannelsConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_channels",
+        argNames: ["that", "channels"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetDuration({
+    required AudioWaveformUiForAudioProperties that,
+    required double duration,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_f_64(duration, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetDurationConstMeta,
+        argValues: [that, duration],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetDurationConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_duration",
+        argNames: ["that", "duration"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFilePath({
+    required AudioWaveformUiForAudioProperties that,
+    required String filePath,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_String(filePath, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFilePathConstMeta,
+        argValues: [that, filePath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFilePathConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_file_path",
+        argNames: ["that", "filePath"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFineTune({
+    required AudioWaveformUiForAudioProperties that,
+    required int fineTune,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_i_16(fineTune, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFineTuneConstMeta,
+        argValues: [that, fineTune],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFineTuneConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_fine_tune",
+        argNames: ["that", "fineTune"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetId({
+    required AudioWaveformUiForAudioProperties that,
+    int? id,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_opt_box_autoadd_u_32(id, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetIdConstMeta,
+        argValues: [that, id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetIdConstMeta =>
+      const TaskConstMeta(
+        debugName: "AudioWaveformUiForAudioProperties_auto_accessor_set_id",
+        argNames: ["that", "id"],
+      );
+
+  @override
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetIsLooping({
+    required AudioWaveformUiForAudioProperties that,
+    required bool isLooping,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_bool(isLooping, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetIsLoopingConstMeta,
+        argValues: [that, isLooping],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetIsLoopingConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_is_looping",
+        argNames: ["that", "isLooping"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetMuted({
+    required AudioWaveformUiForAudioProperties that,
+    required bool muted,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_bool(muted, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetMutedConstMeta,
+        argValues: [that, muted],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetMutedConstMeta =>
+      const TaskConstMeta(
+        debugName: "AudioWaveformUiForAudioProperties_auto_accessor_set_muted",
+        argNames: ["that", "muted"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetName({
+    required AudioWaveformUiForAudioProperties that,
+    required String name,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_String(name, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetNameConstMeta,
+        argValues: [that, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetNameConstMeta =>
+      const TaskConstMeta(
+        debugName: "AudioWaveformUiForAudioProperties_auto_accessor_set_name",
+        argNames: ["that", "name"],
+      );
+
+  @override
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetNormalized({
+    required AudioWaveformUiForAudioProperties that,
+    required bool normalized,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_bool(normalized, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetNormalizedConstMeta,
+        argValues: [that, normalized],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetNormalizedConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_normalized",
+        argNames: ["that", "normalized"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetRootNote({
+    required AudioWaveformUiForAudioProperties that,
+    required int rootNote,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_u_8(rootNote, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetRootNoteConstMeta,
+        argValues: [that, rootNote],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetRootNoteConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_root_note",
+        argNames: ["that", "rootNote"],
+      );
+
+  @override
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetSampleRate({
+    required AudioWaveformUiForAudioProperties that,
+    required int sampleRate,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_u_32(sampleRate, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetSampleRateConstMeta,
+        argValues: [that, sampleRate],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetSampleRateConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_sample_rate",
+        argNames: ["that", "sampleRate"],
+      );
+
+  @override
+  void crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimEnd({
+    required AudioWaveformUiForAudioProperties that,
+    required int trimEnd,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_u_32(trimEnd, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimEndConstMeta,
+        argValues: [that, trimEnd],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimEndConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_trim_end",
+        argNames: ["that", "trimEnd"],
+      );
+
+  @override
+  void
+  crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimStart({
+    required AudioWaveformUiForAudioProperties that,
+    required int trimStart,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            that,
+            serializer,
+          );
+          sse_encode_u_32(trimStart, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimStartConstMeta,
+        argValues: [that, trimStart],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimStartConstMeta =>
+      const TaskConstMeta(
+        debugName:
+            "AudioWaveformUiForAudioProperties_auto_accessor_set_trim_start",
+        argNames: ["that", "trimStart"],
+      );
+
+  @override
+  Float32List crateApiPluginPluginBufferHandleRead({
+    required PluginBufferHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_f_32_strict,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginPluginBufferHandleReadConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPluginPluginBufferHandleReadConstMeta =>
+      const TaskConstMeta(
+        debugName: "PluginBufferHandle_read",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiWaveformWaveformHandleGetChannels({
+    required WaveformHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_16,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiWaveformWaveformHandleGetChannelsConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWaveformWaveformHandleGetChannelsConstMeta =>
+      const TaskConstMeta(
+        debugName: "WaveformHandle_get_channels",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiWaveformWaveformHandleGetLen({required WaveformHandle that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_CastedPrimitive_usize,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiWaveformWaveformHandleGetLenConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWaveformWaveformHandleGetLenConstMeta =>
+      const TaskConstMeta(
+        debugName: "WaveformHandle_get_len",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiWaveformWaveformHandleGetPointer({required WaveformHandle that}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_CastedPrimitive_usize,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiWaveformWaveformHandleGetPointerConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWaveformWaveformHandleGetPointerConstMeta =>
+      const TaskConstMeta(
+        debugName: "WaveformHandle_get_pointer",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiWaveformWaveformHandleGetSampleRate({
+    required WaveformHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiWaveformWaveformHandleGetSampleRateConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWaveformWaveformHandleGetSampleRateConstMeta =>
+      const TaskConstMeta(
+        debugName: "WaveformHandle_get_sample_rate",
+        argNames: ["that"],
+      );
+
+  @override
+  BufferDataType crateApiPluginsOpaqueZeroCopyHandleDataType({
+    required ZeroCopyHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginsOpaqueZeroCopyHandleDataTypeConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPluginsOpaqueZeroCopyHandleDataTypeConstMeta =>
+      const TaskConstMeta(
+        debugName: "ZeroCopyHandle_data_type",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiPluginsOpaqueZeroCopyHandleLengthElements({
+    required ZeroCopyHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_CastedPrimitive_usize,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginsOpaqueZeroCopyHandleLengthElementsConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiPluginsOpaqueZeroCopyHandleLengthElementsConstMeta =>
+      const TaskConstMeta(
+        debugName: "ZeroCopyHandle_length_elements",
+        argNames: ["that"],
+      );
+
+  @override
+  int crateApiPluginsOpaqueZeroCopyHandleMemoryAddress({
+    required ZeroCopyHandle that,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+            that,
+            serializer,
+          );
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_CastedPrimitive_usize,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPluginsOpaqueZeroCopyHandleMemoryAddressConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiPluginsOpaqueZeroCopyHandleMemoryAddressConstMeta =>
+      const TaskConstMeta(
+        debugName: "ZeroCopyHandle_memory_address",
+        argNames: ["that"],
+      );
+
+  @override
   Future<int> crateApiProjectAddAudioSource({required String filePath}) {
     return handler.executeNormal(
       NormalTask(
@@ -649,7 +2085,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 1,
+            funcId: 37,
             port: port_,
           );
         },
@@ -684,7 +2120,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 38,
             port: port_,
           );
         },
@@ -715,7 +2151,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 39,
             port: port_,
           );
         },
@@ -750,7 +2186,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 40,
             port: port_,
           );
         },
@@ -783,7 +2219,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 41,
             port: port_,
           );
         },
@@ -813,7 +2249,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 42,
             port: port_,
           );
         },
@@ -849,7 +2285,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 43,
             port: port_,
           );
         },
@@ -886,7 +2322,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 44,
             port: port_,
           );
         },
@@ -913,7 +2349,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 45)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_ui_audio_hardware_config,
@@ -946,7 +2382,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_32(sampleRate, serializer);
           sse_encode_u_32(bufferSize, serializer);
           sse_encode_f_32(cpuLoad, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_ui_audio_hardware_config,
@@ -999,7 +2435,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 47,
             port: port_,
           );
         },
@@ -1048,7 +2484,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 48,
             port: port_,
           );
         },
@@ -1083,7 +2519,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 49,
             port: port_,
           );
         },
@@ -1118,7 +2554,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 50,
             port: port_,
           );
         },
@@ -1152,7 +2588,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 51,
             port: port_,
           );
         },
@@ -1183,7 +2619,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 52,
             port: port_,
           );
         },
@@ -1219,7 +2655,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 53,
             port: port_,
           );
         },
@@ -1251,7 +2687,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 18,
+              funcId: 54,
               port: port_,
             );
           },
@@ -1289,7 +2725,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 19,
+              funcId: 55,
               port: port_,
             );
           },
@@ -1324,7 +2760,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 20,
+              funcId: 56,
               port: port_,
             );
           },
@@ -1361,7 +2797,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 57,
             port: port_,
           );
         },
@@ -1395,7 +2831,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 58,
             port: port_,
           );
         },
@@ -1426,7 +2862,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 59,
             port: port_,
           );
         },
@@ -1458,7 +2894,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 60,
             port: port_,
           );
         },
@@ -1492,7 +2928,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 61,
             port: port_,
           );
         },
@@ -1527,7 +2963,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 62,
             port: port_,
           );
         },
@@ -1561,7 +2997,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 63,
             port: port_,
           );
         },
@@ -1595,7 +3031,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 64,
             port: port_,
           );
         },
@@ -1630,7 +3066,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 65,
             port: port_,
           );
         },
@@ -1652,6 +3088,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<String> crateApiTrackDeleteTrack({required int trackId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 66,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiTrackDeleteTrackConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTrackDeleteTrackConstMeta =>
+      const TaskConstMeta(debugName: "delete_track", argNames: ["trackId"]);
+
+  @override
   Future<String> crateApiPluginExecuteEffectInstanceCommand({
     required UiEffectTarget target,
     required int effectId,
@@ -1669,7 +3133,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 67,
             port: port_,
           );
         },
@@ -1706,7 +3170,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 68,
             port: port_,
           );
         },
@@ -1743,7 +3207,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 69,
             port: port_,
           );
         },
@@ -1780,7 +3244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 70,
             port: port_,
           );
         },
@@ -1817,7 +3281,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 71,
             port: port_,
           );
         },
@@ -1857,7 +3321,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_16(channels, serializer);
           sse_encode_tail_handling_dto(tailHandling, serializer);
           sse_encode_StreamSink_f_32_Sse(progressSink, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 72)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
@@ -1900,7 +3364,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 73,
             port: port_,
           );
         },
@@ -1930,13 +3394,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 74,
             port: port_,
           );
         },
         codec: SseCodec(
           decodeSuccessData:
-              sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties,
+              sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiAudioGetAudioPropertiesConstMeta,
@@ -1959,7 +3423,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 75,
             port: port_,
           );
         },
@@ -1979,142 +3443,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_audio_source_list", argNames: []);
 
   @override
-  Future<Map<int, AudioWaveformUiForClip>>
-  crateApiTrackGetAudioWaveformClipsData() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 39,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrackGetAudioWaveformClipsDataConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiTrackGetAudioWaveformClipsDataConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_audio_waveform_clips_data",
-        argNames: [],
-      );
-
-  @override
-  Future<AudioWaveformUiForClip> crateApiTrackGetAudioWaveformForClip({
-    required int audioSourceId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(audioSourceId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 40,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_audio_waveform_ui_for_clip,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiTrackGetAudioWaveformForClipConstMeta,
-        argValues: [audioSourceId],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiTrackGetAudioWaveformForClipConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_audio_waveform_for_clip",
-        argNames: ["audioSourceId"],
-      );
-
-  @override
-  Future<Map<int, AudioWaveformUiForClip>>
-  crateApiTrackGetAudioWaveformForClipAllAvailableInTracks() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 41,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta:
-            kCrateApiTrackGetAudioWaveformForClipAllAvailableInTracksConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateApiTrackGetAudioWaveformForClipAllAvailableInTracksConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_audio_waveform_for_clip_all_available_in_tracks",
-        argNames: [],
-      );
-
-  @override
-  Future<Map<int, AudioWaveformUiForClip>>
-  crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack({
-    required int trackId,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(trackId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 42,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData:
-              sse_decode_Map_u_32_audio_waveform_ui_for_clip_None,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta:
-            kCrateApiTrackGetAudioWaveformForClipOnlyInSpecificTrackConstMeta,
-        argValues: [trackId],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta
-  get kCrateApiTrackGetAudioWaveformForClipOnlyInSpecificTrackConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_audio_waveform_for_clip_only_in_specific_track",
-        argNames: ["trackId"],
-      );
-
-  @override
   Future<List<UiPluginInfo>> crateApiPluginGetAvailableEffectsWithIds() {
     return handler.executeNormal(
       NormalTask(
@@ -2123,7 +3451,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 76,
             port: port_,
           );
         },
@@ -2153,7 +3481,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 77,
             port: port_,
           );
         },
@@ -2186,7 +3514,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 78,
             port: port_,
           );
         },
@@ -2216,7 +3544,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 79,
             port: port_,
           );
         },
@@ -2248,7 +3576,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 80,
             port: port_,
           );
         },
@@ -2277,7 +3605,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 81,
             port: port_,
           );
         },
@@ -2309,7 +3637,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 82,
             port: port_,
           );
         },
@@ -2341,7 +3669,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 83,
             port: port_,
           );
         },
@@ -2376,7 +3704,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 51,
+            funcId: 84,
             port: port_,
           );
         },
@@ -2409,7 +3737,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 85,
             port: port_,
           );
         },
@@ -2446,7 +3774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 53,
+            funcId: 86,
             port: port_,
           );
         },
@@ -2479,7 +3807,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 87,
             port: port_,
           );
         },
@@ -2508,7 +3836,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 55,
+            funcId: 88,
             port: port_,
           );
         },
@@ -2540,7 +3868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 89,
             port: port_,
           );
         },
@@ -2573,7 +3901,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 57,
+            funcId: 90,
             port: port_,
           );
         },
@@ -2603,7 +3931,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 58,
+            funcId: 91,
             port: port_,
           );
         },
@@ -2630,7 +3958,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 59,
+            funcId: 92,
             port: port_,
           );
         },
@@ -2657,7 +3985,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 60,
+            funcId: 93,
             port: port_,
           );
         },
@@ -2684,7 +4012,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 61,
+            funcId: 94,
             port: port_,
           );
         },
@@ -2711,7 +4039,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 62,
+            funcId: 95,
             port: port_,
           );
         },
@@ -2739,7 +4067,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 63,
+            funcId: 96,
             port: port_,
           );
         },
@@ -2771,7 +4099,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 64,
+            funcId: 97,
             port: port_,
           );
         },
@@ -2802,7 +4130,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 65,
+            funcId: 98,
             port: port_,
           );
         },
@@ -2830,7 +4158,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 66,
+            funcId: 99,
             port: port_,
           );
         },
@@ -2857,7 +4185,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 100,
             port: port_,
           );
         },
@@ -2884,7 +4212,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 68,
+            funcId: 101,
             port: port_,
           );
         },
@@ -2911,7 +4239,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 69,
+            funcId: 102,
             port: port_,
           );
         },
@@ -2939,7 +4267,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 103,
             port: port_,
           );
         },
@@ -2969,7 +4297,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 71,
+            funcId: 104,
             port: port_,
           );
         },
@@ -2999,7 +4327,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 105,
             port: port_,
           );
         },
@@ -3026,7 +4354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 73,
+            funcId: 106,
             port: port_,
           );
         },
@@ -3045,27 +4373,68 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_transport_state", argNames: []);
 
   @override
-  String crateApiSimpleGreet({required String name}) {
+  WaveformHandle? crateApiWaveformGetWaveformHandle({required int sourceId}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(name, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 74)!;
+          sse_encode_u_32(sourceId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 107,
+          )!;
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
+          decodeSuccessData:
+              sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiSimpleGreetConstMeta,
-        argValues: [name],
+        constMeta: kCrateApiWaveformGetWaveformHandleConstMeta,
+        argValues: [sourceId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSimpleGreetConstMeta =>
-      const TaskConstMeta(debugName: "greet", argNames: ["name"]);
+  TaskConstMeta get kCrateApiWaveformGetWaveformHandleConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_waveform_handle",
+        argNames: ["sourceId"],
+      );
+
+  @override
+  Map<int, WaveformHandle> crateApiWaveformGetWaveformHandlesForTrack({
+    required int trackId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(trackId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 108,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Map_u_32_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle_None,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiWaveformGetWaveformHandlesForTrackConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWaveformGetWaveformHandlesForTrackConstMeta =>
+      const TaskConstMeta(
+        debugName: "get_waveform_handles_for_track",
+        argNames: ["trackId"],
+      );
 
   @override
   Future<void> crateApiSimpleInitApp() {
@@ -3076,7 +4445,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 75,
+            funcId: 109,
             port: port_,
           );
         },
@@ -3106,7 +4475,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 110,
             port: port_,
           );
         },
@@ -3142,7 +4511,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 111,
             port: port_,
           );
         },
@@ -3180,7 +4549,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 112,
             port: port_,
           );
         },
@@ -3218,7 +4587,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 113,
             port: port_,
           );
         },
@@ -3256,7 +4625,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 114,
             port: port_,
           );
         },
@@ -3293,7 +4662,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 115,
             port: port_,
           );
         },
@@ -3323,7 +4692,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 116,
             port: port_,
           );
         },
@@ -3350,7 +4719,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(jsonStr, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 83)!;
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 117,
+          )!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_ui_response_curve_point,
@@ -3385,7 +4758,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 84,
+            funcId: 118,
             port: port_,
           );
         },
@@ -3421,7 +4794,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 85,
+            funcId: 119,
             port: port_,
           );
         },
@@ -3456,7 +4829,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 86,
+            funcId: 120,
             port: port_,
           );
         },
@@ -3495,7 +4868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 87,
+            funcId: 121,
             port: port_,
           );
         },
@@ -3534,7 +4907,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 88,
+            funcId: 122,
             port: port_,
           );
         },
@@ -3565,7 +4938,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 89,
+            funcId: 123,
             port: port_,
           );
         },
@@ -3593,7 +4966,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 90,
+            funcId: 124,
             port: port_,
           );
         },
@@ -3624,7 +4997,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 91,
+            funcId: 125,
             port: port_,
           );
         },
@@ -3651,7 +5024,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 92)!;
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 126,
+          )!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_ui_project_metadata,
@@ -3681,7 +5058,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 93,
+            funcId: 127,
             port: port_,
           );
         },
@@ -3714,7 +5091,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 94,
+            funcId: 128,
             port: port_,
           );
         },
@@ -3744,7 +5121,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 95,
+            funcId: 129,
             port: port_,
           );
         },
@@ -3774,7 +5151,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 96,
+            funcId: 130,
             port: port_,
           );
         },
@@ -3809,7 +5186,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 97,
+            funcId: 131,
             port: port_,
           );
         },
@@ -3846,7 +5223,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 98,
+            funcId: 132,
             port: port_,
           );
         },
@@ -3880,7 +5257,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 99,
+            funcId: 133,
             port: port_,
           );
         },
@@ -3918,7 +5295,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 100,
+            funcId: 134,
             port: port_,
           );
         },
@@ -3956,7 +5333,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 101,
+            funcId: 135,
             port: port_,
           );
         },
@@ -3994,7 +5371,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 102,
+            funcId: 136,
             port: port_,
           );
         },
@@ -4031,7 +5408,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 103,
+            funcId: 137,
             port: port_,
           );
         },
@@ -4068,7 +5445,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 104,
+            funcId: 138,
             port: port_,
           );
         },
@@ -4099,7 +5476,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 105,
+            funcId: 139,
             port: port_,
           );
         },
@@ -4127,7 +5504,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 106,
+            funcId: 140,
             port: port_,
           );
         },
@@ -4159,7 +5536,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 107,
+            funcId: 141,
             port: port_,
           );
         },
@@ -4197,7 +5574,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 108,
+            funcId: 142,
             port: port_,
           );
         },
@@ -4234,7 +5611,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 109,
+            funcId: 143,
             port: port_,
           );
         },
@@ -4265,7 +5642,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 110,
+            funcId: 144,
             port: port_,
           );
         },
@@ -4295,7 +5672,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 111,
+            funcId: 145,
             port: port_,
           );
         },
@@ -4326,7 +5703,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 112,
+            funcId: 146,
           )!;
         },
         codec: SseCodec(
@@ -4360,7 +5737,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 113,
+            funcId: 147,
             port: port_,
           );
         },
@@ -4391,7 +5768,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 114,
+            funcId: 148,
             port: port_,
           );
         },
@@ -4419,7 +5796,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 115,
+            funcId: 149,
             port: port_,
           );
         },
@@ -4455,7 +5832,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 116,
+            funcId: 150,
             port: port_,
           );
         },
@@ -4491,7 +5868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 117,
+            funcId: 151,
             port: port_,
           );
         },
@@ -4520,7 +5897,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 118,
+            funcId: 152,
             port: port_,
           );
         },
@@ -4547,7 +5924,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 119,
+            funcId: 153,
             port: port_,
           );
         },
@@ -4579,7 +5956,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 120,
+            funcId: 154,
             port: port_,
           );
         },
@@ -4609,7 +5986,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 121,
+            funcId: 155,
             port: port_,
           );
         },
@@ -4639,7 +6016,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 122,
+            funcId: 156,
             port: port_,
           );
         },
@@ -4672,7 +6049,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 123,
+            funcId: 157,
             port: port_,
           );
         },
@@ -4708,7 +6085,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 124,
+            funcId: 158,
             port: port_,
           );
         },
@@ -4743,7 +6120,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 125,
+            funcId: 159,
             port: port_,
           );
         },
@@ -4776,7 +6153,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 126,
+            funcId: 160,
             port: port_,
           );
         },
@@ -4806,7 +6183,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 127,
+            funcId: 161,
           )!;
         },
         codec: SseCodec(
@@ -4837,7 +6214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 128,
+            funcId: 162,
           )!;
         },
         codec: SseCodec(
@@ -4866,7 +6243,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 129,
+            funcId: 163,
             port: port_,
           );
         },
@@ -4896,7 +6273,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 130,
+            funcId: 164,
           )!;
         },
         codec: SseCodec(
@@ -4931,7 +6308,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 131,
+            funcId: 165,
           )!;
         },
         codec: SseCodec(
@@ -4961,7 +6338,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 132,
+            funcId: 166,
             port: port_,
           );
         },
@@ -4988,7 +6365,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 133,
+            funcId: 167,
             port: port_,
           );
         },
@@ -5018,7 +6395,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 134,
+            funcId: 168,
             port: port_,
           );
         },
@@ -5048,7 +6425,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 135,
+            funcId: 169,
             port: port_,
           );
         },
@@ -5066,10 +6443,146 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiSessionUndoConstMeta =>
       const TaskConstMeta(debugName: "undo", argNames: []);
 
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_AudioWaveformUiForAudioProperties => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_AudioWaveformUiForAudioProperties => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_BufferDataType => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_BufferDataType => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_PluginBufferHandle => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_PluginBufferHandle => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_WaveformHandle => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_WaveformHandle => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle;
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_ZeroCopyHandle => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_ZeroCopyHandle => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle;
+
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return AnyhowException(raw as String);
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
+  @protected
+  BufferDataType
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return BufferDataTypeImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  PluginBufferHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PluginBufferHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  WaveformHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return WaveformHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ZeroCopyHandle
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ZeroCopyHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
+  @protected
+  PluginBufferHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PluginBufferHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  WaveformHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return WaveformHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ZeroCopyHandle
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ZeroCopyHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
   }
 
   @protected
@@ -5097,11 +6610,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<int, AudioWaveformUiForClip>
-  dco_decode_Map_u_32_audio_waveform_ui_for_clip_None(dynamic raw) {
+  Map<int, WaveformHandle>
+  dco_decode_Map_u_32_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle_None(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return Map.fromEntries(
-      dco_decode_list_record_u_32_audio_waveform_ui_for_clip(
+      dco_decode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
         raw,
       ).map((e) => MapEntry(e.$1, e.$2)),
     );
@@ -5179,6 +6694,53 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AudioWaveformUiForAudioProperties
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalDcoDecode(
+      raw as List<dynamic>,
+    );
+  }
+
+  @protected
+  BufferDataType
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return BufferDataTypeImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  PluginBufferHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PluginBufferHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  WaveformHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return WaveformHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  ZeroCopyHandle
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ZeroCopyHandleImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
   RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     throw UnimplementedError();
@@ -5212,45 +6774,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  AudioWaveformUiForAudioProperties
-  dco_decode_audio_waveform_ui_for_audio_properties(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
-    return AudioWaveformUiForAudioProperties(
-      previewBuffer: dco_decode_list_prim_i_8_strict(arr[0]),
-      filePath: dco_decode_String(arr[1]),
-      name: dco_decode_String(arr[2]),
-      sampleRate: dco_decode_u_32(arr[3]),
-      channels: dco_decode_u_16(arr[4]),
-      duration: dco_decode_f_64(arr[5]),
-      rootNote: dco_decode_u_8(arr[6]),
-      fineTune: dco_decode_i_16(arr[7]),
-      trimStart: dco_decode_u_32(arr[8]),
-      trimEnd: dco_decode_u_32(arr[9]),
-      isLooping: dco_decode_bool(arr[10]),
-      normalized: dco_decode_bool(arr[11]),
-      muted: dco_decode_bool(arr[12]),
-    );
-  }
-
-  @protected
-  AudioWaveformUiForClip dco_decode_audio_waveform_ui_for_clip(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return AudioWaveformUiForClip(
-      name: dco_decode_String(arr[0]),
-      previewBuffer: dco_decode_list_prim_i_8_strict(arr[1]),
-      sampleRate: dco_decode_u_32(arr[2]),
-      channels: dco_decode_u_16(arr[3]),
-      duration: dco_decode_f_64(arr[4]),
-    );
-  }
-
-  @protected
   AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
     dynamic raw,
   ) {
@@ -5273,9 +6796,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   AudioWaveformUiForAudioProperties
-  dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(dynamic raw) {
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_audio_waveform_ui_for_audio_properties(raw);
+    return dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+      raw,
+    );
+  }
+
+  @protected
+  WaveformHandle
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+      raw,
+    );
   }
 
   @protected
@@ -5405,9 +6943,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Int8List dco_decode_list_prim_i_8_strict(dynamic raw) {
+  Float32List dco_decode_list_prim_f_32_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as Int8List;
+    return raw as Float32List;
   }
 
   @protected
@@ -5429,20 +6967,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(int, AudioWaveformUiForClip)>
-  dco_decode_list_record_u_32_audio_waveform_ui_for_clip(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_record_u_32_audio_waveform_ui_for_clip)
-        .toList();
-  }
-
-  @protected
   List<(int, AudioWaveformUiForSourceList)>
   dco_decode_list_record_u_32_audio_waveform_ui_for_source_list(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
         .map(dco_decode_record_u_32_audio_waveform_ui_for_source_list)
+        .toList();
+  }
+
+  @protected
+  List<(int, WaveformHandle)>
+  dco_decode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(
+          dco_decode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle,
+        )
         .toList();
   }
 
@@ -5642,13 +7184,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   AudioWaveformUiForAudioProperties?
-  dco_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null
         ? null
-        : dco_decode_box_autoadd_audio_waveform_ui_for_audio_properties(raw);
+        : dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+            raw,
+          );
+  }
+
+  @protected
+  WaveformHandle?
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+            raw,
+          );
   }
 
   @protected
@@ -5724,20 +7281,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (int, AudioWaveformUiForClip)
-  dco_decode_record_u_32_audio_waveform_ui_for_clip(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2) {
-      throw Exception('Expected 2 elements, got ${arr.length}');
-    }
-    return (
-      dco_decode_u_32(arr[0]),
-      dco_decode_audio_waveform_ui_for_clip(arr[1]),
-    );
-  }
-
-  @protected
   (int, AudioWaveformUiForSourceList)
   dco_decode_record_u_32_audio_waveform_ui_for_source_list(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -5748,6 +7291,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (
       dco_decode_u_32(arr[0]),
       dco_decode_audio_waveform_ui_for_source_list(arr[1]),
+    );
+  }
+
+  @protected
+  (int, WaveformHandle)
+  dco_decode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (
+      dco_decode_u_32(arr[0]),
+      dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+        arr[1],
+      ),
     );
   }
 
@@ -6462,6 +8023,126 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AudioWaveformUiForAudioProperties
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  BufferDataType
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return BufferDataTypeImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  PluginBufferHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return PluginBufferHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  WaveformHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return WaveformHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ZeroCopyHandle
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ZeroCopyHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  AudioWaveformUiForAudioProperties
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  PluginBufferHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return PluginBufferHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  WaveformHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return WaveformHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ZeroCopyHandle
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ZeroCopyHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   int sse_decode_CastedPrimitive_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_64(deserializer);
@@ -6483,14 +8164,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Map<int, AudioWaveformUiForClip>
-  sse_decode_Map_u_32_audio_waveform_ui_for_clip_None(
+  Map<int, WaveformHandle>
+  sse_decode_Map_u_32_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle_None(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_list_record_u_32_audio_waveform_ui_for_clip(
-      deserializer,
-    );
+    var inner =
+        sse_decode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+          deserializer,
+        );
     return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
   }
 
@@ -6559,6 +8241,66 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AudioWaveformUiForAudioProperties
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return AudioWaveformUiForAudioPropertiesImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  BufferDataType
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return BufferDataTypeImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  PluginBufferHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return PluginBufferHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  WaveformHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return WaveformHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  ZeroCopyHandle
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return ZeroCopyHandleImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   RustStreamSink<double> sse_decode_StreamSink_f_32_Sse(
     SseDeserializer deserializer,
   ) {
@@ -6599,61 +8341,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  AudioWaveformUiForAudioProperties
-  sse_decode_audio_waveform_ui_for_audio_properties(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_previewBuffer = sse_decode_list_prim_i_8_strict(deserializer);
-    var var_filePath = sse_decode_String(deserializer);
-    var var_name = sse_decode_String(deserializer);
-    var var_sampleRate = sse_decode_u_32(deserializer);
-    var var_channels = sse_decode_u_16(deserializer);
-    var var_duration = sse_decode_f_64(deserializer);
-    var var_rootNote = sse_decode_u_8(deserializer);
-    var var_fineTune = sse_decode_i_16(deserializer);
-    var var_trimStart = sse_decode_u_32(deserializer);
-    var var_trimEnd = sse_decode_u_32(deserializer);
-    var var_isLooping = sse_decode_bool(deserializer);
-    var var_normalized = sse_decode_bool(deserializer);
-    var var_muted = sse_decode_bool(deserializer);
-    return AudioWaveformUiForAudioProperties(
-      previewBuffer: var_previewBuffer,
-      filePath: var_filePath,
-      name: var_name,
-      sampleRate: var_sampleRate,
-      channels: var_channels,
-      duration: var_duration,
-      rootNote: var_rootNote,
-      fineTune: var_fineTune,
-      trimStart: var_trimStart,
-      trimEnd: var_trimEnd,
-      isLooping: var_isLooping,
-      normalized: var_normalized,
-      muted: var_muted,
-    );
-  }
-
-  @protected
-  AudioWaveformUiForClip sse_decode_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_name = sse_decode_String(deserializer);
-    var var_previewBuffer = sse_decode_list_prim_i_8_strict(deserializer);
-    var var_sampleRate = sse_decode_u_32(deserializer);
-    var var_channels = sse_decode_u_16(deserializer);
-    var var_duration = sse_decode_f_64(deserializer);
-    return AudioWaveformUiForClip(
-      name: var_name,
-      previewBuffer: var_previewBuffer,
-      sampleRate: var_sampleRate,
-      channels: var_channels,
-      duration: var_duration,
-    );
-  }
-
-  @protected
   AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
   ) {
@@ -6676,11 +8363,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   AudioWaveformUiForAudioProperties
-  sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_audio_waveform_ui_for_audio_properties(deserializer));
+    return (sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+      deserializer,
+    ));
+  }
+
+  @protected
+  WaveformHandle
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+      deserializer,
+    ));
   }
 
   @protected
@@ -6841,10 +8541,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  Int8List sse_decode_list_prim_i_8_strict(SseDeserializer deserializer) {
+  Float32List sse_decode_list_prim_f_32_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
-    return deserializer.buffer.getInt8List(len_);
+    return deserializer.buffer.getFloat32List(len_);
   }
 
   @protected
@@ -6869,21 +8569,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<(int, AudioWaveformUiForClip)>
-  sse_decode_list_record_u_32_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <(int, AudioWaveformUiForClip)>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_record_u_32_audio_waveform_ui_for_clip(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
   List<(int, AudioWaveformUiForSourceList)>
   sse_decode_list_record_u_32_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
@@ -6895,6 +8580,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(
         sse_decode_record_u_32_audio_waveform_ui_for_source_list(deserializer),
+      );
+    }
+    return ans_;
+  }
+
+  @protected
+  List<(int, WaveformHandle)>
+  sse_decode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(int, WaveformHandle)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(
+        sse_decode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+          deserializer,
+        ),
       );
     }
     return ans_;
@@ -7248,13 +8952,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   AudioWaveformUiForAudioProperties?
-  sse_decode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_audio_waveform_ui_for_audio_properties(
+      return (sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  WaveformHandle?
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
         deserializer,
       ));
     } else {
@@ -7376,17 +9096,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  (int, AudioWaveformUiForClip)
-  sse_decode_record_u_32_audio_waveform_ui_for_clip(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_field0 = sse_decode_u_32(deserializer);
-    var var_field1 = sse_decode_audio_waveform_ui_for_clip(deserializer);
-    return (var_field0, var_field1);
-  }
-
-  @protected
   (int, AudioWaveformUiForSourceList)
   sse_decode_record_u_32_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
@@ -7394,6 +9103,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_field0 = sse_decode_u_32(deserializer);
     var var_field1 = sse_decode_audio_waveform_ui_for_source_list(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
+  (int, WaveformHandle)
+  sse_decode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_u_32(deserializer);
+    var var_field1 =
+        sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+          deserializer,
+        );
     return (var_field0, var_field1);
   }
 
@@ -8187,6 +9910,142 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as AudioWaveformUiForAudioPropertiesImpl).frbInternalSseEncode(
+        move: true,
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
+    BufferDataType self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as BufferDataTypeImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    PluginBufferHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as PluginBufferHandleImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as WaveformHandleImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    ZeroCopyHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ZeroCopyHandleImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as AudioWaveformUiForAudioPropertiesImpl).frbInternalSseEncode(
+        move: false,
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as AudioWaveformUiForAudioPropertiesImpl).frbInternalSseEncode(
+        move: false,
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    PluginBufferHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as PluginBufferHandleImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as WaveformHandleImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    ZeroCopyHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ZeroCopyHandleImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_CastedPrimitive_i_64(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(sseEncodeCastedPrimitiveI64(self), serializer);
@@ -8205,12 +10064,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_Map_u_32_audio_waveform_ui_for_clip_None(
-    Map<int, AudioWaveformUiForClip> self,
+  void
+  sse_encode_Map_u_32_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle_None(
+    Map<int, WaveformHandle> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_record_u_32_audio_waveform_ui_for_clip(
+    sse_encode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
       self.entries.map((e) => (e.key, e.value)).toList(),
       serializer,
     );
@@ -8301,6 +10161,73 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+    AudioWaveformUiForAudioProperties self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as AudioWaveformUiForAudioPropertiesImpl).frbInternalSseEncode(
+        move: null,
+      ),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerBufferDataType(
+    BufferDataType self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as BufferDataTypeImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerPluginBufferHandle(
+    PluginBufferHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as PluginBufferHandleImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as WaveformHandleImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    ZeroCopyHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as ZeroCopyHandleImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_StreamSink_f_32_Sse(
     RustStreamSink<double> self,
     SseSerializer serializer,
@@ -8375,40 +10302,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_audio_waveform_ui_for_audio_properties(
-    AudioWaveformUiForAudioProperties self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_prim_i_8_strict(self.previewBuffer, serializer);
-    sse_encode_String(self.filePath, serializer);
-    sse_encode_String(self.name, serializer);
-    sse_encode_u_32(self.sampleRate, serializer);
-    sse_encode_u_16(self.channels, serializer);
-    sse_encode_f_64(self.duration, serializer);
-    sse_encode_u_8(self.rootNote, serializer);
-    sse_encode_i_16(self.fineTune, serializer);
-    sse_encode_u_32(self.trimStart, serializer);
-    sse_encode_u_32(self.trimEnd, serializer);
-    sse_encode_bool(self.isLooping, serializer);
-    sse_encode_bool(self.normalized, serializer);
-    sse_encode_bool(self.muted, serializer);
-  }
-
-  @protected
-  void sse_encode_audio_waveform_ui_for_clip(
-    AudioWaveformUiForClip self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.name, serializer);
-    sse_encode_list_prim_i_8_strict(self.previewBuffer, serializer);
-    sse_encode_u_32(self.sampleRate, serializer);
-    sse_encode_u_16(self.channels, serializer);
-    sse_encode_f_64(self.duration, serializer);
-  }
-
-  @protected
   void sse_encode_audio_waveform_ui_for_source_list(
     AudioWaveformUiForSourceList self,
     SseSerializer serializer,
@@ -8426,12 +10319,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
+  void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
     AudioWaveformUiForAudioProperties self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_audio_waveform_ui_for_audio_properties(self, serializer);
+    sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+      self,
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+      self,
+      serializer,
+    );
   }
 
   @protected
@@ -8597,13 +10507,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_prim_i_8_strict(
-    Int8List self,
+  void sse_encode_list_prim_f_32_strict(
+    Float32List self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
-    serializer.buffer.putInt8List(self);
+    serializer.buffer.putFloat32List(self);
   }
 
   @protected
@@ -8639,18 +10549,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_record_u_32_audio_waveform_ui_for_clip(
-    List<(int, AudioWaveformUiForClip)> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_record_u_32_audio_waveform_ui_for_clip(item, serializer);
-    }
-  }
-
-  @protected
   void sse_encode_list_record_u_32_audio_waveform_ui_for_source_list(
     List<(int, AudioWaveformUiForSourceList)> self,
     SseSerializer serializer,
@@ -8659,6 +10557,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_record_u_32_audio_waveform_ui_for_source_list(
+        item,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void
+  sse_encode_list_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    List<(int, WaveformHandle)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
         item,
         serializer,
       );
@@ -8968,7 +10882,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_audio_waveform_ui_for_audio_properties(
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
     AudioWaveformUiForAudioProperties? self,
     SseSerializer serializer,
   ) {
@@ -8976,7 +10891,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
-      sse_encode_box_autoadd_audio_waveform_ui_for_audio_properties(
+      sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerAudioWaveformUiForAudioProperties(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    WaveformHandle? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
         self,
         serializer,
       );
@@ -9083,16 +11015,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_record_u_32_audio_waveform_ui_for_clip(
-    (int, AudioWaveformUiForClip) self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_32(self.$1, serializer);
-    sse_encode_audio_waveform_ui_for_clip(self.$2, serializer);
-  }
-
-  @protected
   void sse_encode_record_u_32_audio_waveform_ui_for_source_list(
     (int, AudioWaveformUiForSourceList) self,
     SseSerializer serializer,
@@ -9100,6 +11022,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.$1, serializer);
     sse_encode_audio_waveform_ui_for_source_list(self.$2, serializer);
+  }
+
+  @protected
+  void
+  sse_encode_record_u_32_auto_owned_rust_opaque_flutter_rust_bridgefor_generated_rust_auto_opaque_inner_waveform_handle(
+    (int, WaveformHandle) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.$1, serializer);
+    sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+      self.$2,
+      serializer,
+    );
   }
 
   @protected
@@ -9739,4 +11675,305 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putBigUint64(self);
   }
+}
+
+@sealed
+class AudioWaveformUiForAudioPropertiesImpl extends RustOpaque
+    implements AudioWaveformUiForAudioProperties {
+  // Not to be used by end users
+  AudioWaveformUiForAudioPropertiesImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  AudioWaveformUiForAudioPropertiesImpl.frbInternalSseDecode(
+    BigInt ptr,
+    int externalSizeOnNative,
+  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount: RustLib
+        .instance
+        .api
+        .rust_arc_increment_strong_count_AudioWaveformUiForAudioProperties,
+    rustArcDecrementStrongCount: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_AudioWaveformUiForAudioProperties,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_AudioWaveformUiForAudioPropertiesPtr,
+  );
+
+  WaveformHandle get bufferHandle => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetBufferHandle(
+        that: this,
+      );
+
+  int get channels => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetChannels(
+        that: this,
+      );
+
+  double get duration => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetDuration(
+        that: this,
+      );
+
+  String get filePath => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFilePath(
+        that: this,
+      );
+
+  int get fineTune => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetFineTune(
+        that: this,
+      );
+
+  int? get id => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetId(
+        that: this,
+      );
+
+  bool get isLooping => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetIsLooping(
+        that: this,
+      );
+
+  bool get muted => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetMuted(
+        that: this,
+      );
+
+  String get name => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetName(
+        that: this,
+      );
+
+  bool get normalized => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetNormalized(
+        that: this,
+      );
+
+  int get rootNote => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetRootNote(
+        that: this,
+      );
+
+  int get sampleRate => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetSampleRate(
+        that: this,
+      );
+
+  int get trimEnd => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimEnd(
+        that: this,
+      );
+
+  int get trimStart => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorGetTrimStart(
+        that: this,
+      );
+
+  set bufferHandle(WaveformHandle bufferHandle) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetBufferHandle(
+        that: this,
+        bufferHandle: bufferHandle,
+      );
+
+  set channels(int channels) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetChannels(
+        that: this,
+        channels: channels,
+      );
+
+  set duration(double duration) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetDuration(
+        that: this,
+        duration: duration,
+      );
+
+  set filePath(String filePath) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFilePath(
+        that: this,
+        filePath: filePath,
+      );
+
+  set fineTune(int fineTune) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetFineTune(
+        that: this,
+        fineTune: fineTune,
+      );
+
+  set id(int? id) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetId(
+        that: this,
+        id: id,
+      );
+
+  set isLooping(bool isLooping) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetIsLooping(
+        that: this,
+        isLooping: isLooping,
+      );
+
+  set muted(bool muted) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetMuted(
+        that: this,
+        muted: muted,
+      );
+
+  set name(String name) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetName(
+        that: this,
+        name: name,
+      );
+
+  set normalized(bool normalized) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetNormalized(
+        that: this,
+        normalized: normalized,
+      );
+
+  set rootNote(int rootNote) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetRootNote(
+        that: this,
+        rootNote: rootNote,
+      );
+
+  set sampleRate(int sampleRate) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetSampleRate(
+        that: this,
+        sampleRate: sampleRate,
+      );
+
+  set trimEnd(int trimEnd) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimEnd(
+        that: this,
+        trimEnd: trimEnd,
+      );
+
+  set trimStart(int trimStart) => RustLib.instance.api
+      .crateApiProjectAudioWaveformUiForAudioPropertiesAutoAccessorSetTrimStart(
+        that: this,
+        trimStart: trimStart,
+      );
+}
+
+@sealed
+class BufferDataTypeImpl extends RustOpaque implements BufferDataType {
+  // Not to be used by end users
+  BufferDataTypeImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  BufferDataTypeImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_BufferDataType,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_BufferDataType,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_BufferDataTypePtr,
+  );
+}
+
+@sealed
+class PluginBufferHandleImpl extends RustOpaque implements PluginBufferHandle {
+  // Not to be used by end users
+  PluginBufferHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  PluginBufferHandleImpl.frbInternalSseDecode(
+    BigInt ptr,
+    int externalSizeOnNative,
+  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_PluginBufferHandle,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_PluginBufferHandle,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_PluginBufferHandlePtr,
+  );
+
+  /// Reads the current buffer state directly into a Dart Float32List.
+  /// This bypasses JSON entirely and takes less than a microsecond.
+  Float32List read() =>
+      RustLib.instance.api.crateApiPluginPluginBufferHandleRead(that: this);
+}
+
+@sealed
+class WaveformHandleImpl extends RustOpaque implements WaveformHandle {
+  // Not to be used by end users
+  WaveformHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  WaveformHandleImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_WaveformHandle,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_WaveformHandle,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_WaveformHandlePtr,
+  );
+
+  /// Returns the number of channels in the audio waveform (1 = mono, 2 = stereo).
+  int getChannels() => RustLib.instance.api
+      .crateApiWaveformWaveformHandleGetChannels(that: this);
+
+  /// Returns the total number of f32 samples in the buffer (frames × channels).
+  int getLen() =>
+      RustLib.instance.api.crateApiWaveformWaveformHandleGetLen(that: this);
+
+  /// Returns the raw memory address of the f32 interleaved sample buffer.
+  /// Returns 0 if the waveform has no loaded buffer (e.g. not yet mmap-ed).
+  int getPointer() =>
+      RustLib.instance.api.crateApiWaveformWaveformHandleGetPointer(that: this);
+
+  /// Returns the sample rate of the audio waveform (e.g. 44100, 48000).
+  int getSampleRate() => RustLib.instance.api
+      .crateApiWaveformWaveformHandleGetSampleRate(that: this);
+}
+
+@sealed
+class ZeroCopyHandleImpl extends RustOpaque implements ZeroCopyHandle {
+  // Not to be used by end users
+  ZeroCopyHandleImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  ZeroCopyHandleImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_ZeroCopyHandle,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_ZeroCopyHandle,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_ZeroCopyHandlePtr,
+  );
+
+  /// Tells Dart what kind of TypedList to create
+  BufferDataType dataType() => RustLib.instance.api
+      .crateApiPluginsOpaqueZeroCopyHandleDataType(that: this);
+
+  /// Gets the number of elements (NOT bytes, making Dart's job easier)
+  int lengthElements() => RustLib.instance.api
+      .crateApiPluginsOpaqueZeroCopyHandleLengthElements(that: this);
+
+  /// Gets the raw memory address
+  int memoryAddress() => RustLib.instance.api
+      .crateApiPluginsOpaqueZeroCopyHandleMemoryAddress(that: this);
 }

@@ -48,6 +48,9 @@ pub struct KarbeatzerV2 {
     pub active_voices: Vec<SynthVoice>,
     pub sample_rate: f32,
     pub channels: usize,
+
+    #[serde(skip)]
+    pub scratch_buffer: Vec<f32>,
 }
 
 impl Default for KarbeatzerV2 {
@@ -82,6 +85,8 @@ impl Default for KarbeatzerV2 {
         engine.active_voices = Vec::with_capacity(16);
         engine.sample_rate = 48000.0;
         engine.channels = 2;
+
+        engine.scratch_buffer = vec![0.0; 4096];
 
         engine
     }
@@ -172,7 +177,7 @@ impl KarbeatzerV2 {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
-impl KarbeatPlugin for KarbeatzerV2 {
+impl AudioPlugin for KarbeatzerV2 {
     fn name(&self) -> &str {
         "Karbeatzer V2"
     }
@@ -200,8 +205,10 @@ impl KarbeatPlugin for KarbeatzerV2 {
         let mut current_frame = 0;
         let mut event_idx = 0;
 
-        // A temporary scratch buffer for mono voice rendering
-        let mut scratch = vec![0.0; total_frames];
+        // Ensure our persistent scratch buffer is large enough for this block
+        if self.scratch_buffer.len() < total_frames {
+            self.scratch_buffer.resize(total_frames, 0.0);
+        }
 
         while current_frame < total_frames {
             let next_event_frame = if event_idx < midi_events.len() {
@@ -216,7 +223,6 @@ impl KarbeatPlugin for KarbeatzerV2 {
             if block_len > 0 {
                 let out_slice =
                     &mut output_buffer[current_frame * self.channels..end_frame * self.channels];
-                let scratch_slice = &mut scratch[0..block_len];
 
                 // Destructure `self` to separate the mutable voices from the immutable components!
                 let KarbeatzerV2 {
@@ -224,8 +230,11 @@ impl KarbeatPlugin for KarbeatzerV2 {
                     oscillators,
                     amp_envelope,
                     sample_rate,
+                    scratch_buffer,
                     ..
                 } = self;
+
+                let scratch_slice = &mut scratch_buffer[0..block_len];
 
                 // 1. Render all active voices
                 for voice in active_voices.iter_mut() {

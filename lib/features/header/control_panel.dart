@@ -100,6 +100,12 @@ class ControlPanelToolbarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
+    final double containerHeight = isSmallScreen ? 40.0 : 50.0;
+    final double hPadding = isSmallScreen ? 8.0 : 12.0;
+    final double iconSize = isSmallScreen ? 16.0 : 20.0;
+    final double fontSize = isSmallScreen ? 8.0 : 10.0;
+
     return Tooltip(
       message: name,
       child: Material(
@@ -108,8 +114,8 @@ class ControlPanelToolbarItem extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(4),
           child: Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            height: containerHeight,
+            padding: EdgeInsets.symmetric(horizontal: hPadding),
             decoration: isActive
                 ? BoxDecoration(
                     color: Colors.white.withAlpha(25),
@@ -123,14 +129,14 @@ class ControlPanelToolbarItem extends StatelessWidget {
                 Icon(
                   icon,
                   color: isActive ? color : color.withAlpha(165),
-                  size: 20,
+                  size: iconSize,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   name,
                   style: TextStyle(
                     color: isActive ? color : color.withAlpha(165),
-                    fontSize: 10,
+                    fontSize: fontSize,
                   ),
                 ),
               ],
@@ -161,6 +167,12 @@ class ControlPanelDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
+    final double containerHeight = isSmallScreen ? 40.0 : 50.0;
+    final double iconSize = isSmallScreen ? 16.0 : 20.0;
+    final double fontSize = isSmallScreen ? 8.0 : 10.0;
+    final double dropdownArrowSize = isSmallScreen ? 14 : 16;
+
     return PopupMenuButton<T>(
       tooltip: name,
       color: const Color(0xFF2A2A2A), // Dark popup background to match theme
@@ -169,7 +181,7 @@ class ControlPanelDropdown<T> extends StatelessWidget {
       onSelected: onSelected,
       itemBuilder: (context) => items,
       child: Container(
-        height: 50,
+        height: containerHeight,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -177,13 +189,20 @@ class ControlPanelDropdown<T> extends StatelessWidget {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: color, size: 20),
+                Icon(icon, color: color, size: iconSize),
                 const SizedBox(height: 2),
-                Text(name, style: TextStyle(color: color, fontSize: 10)),
+                Text(
+                  name,
+                  style: TextStyle(color: color, fontSize: fontSize),
+                ),
               ],
             ),
             const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, color: color.withAlpha(150), size: 16),
+            Icon(
+              Icons.arrow_drop_down,
+              color: color.withAlpha(150),
+              size: dropdownArrowSize,
+            ),
           ],
         ),
       ),
@@ -196,7 +215,7 @@ class DefaultControlPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(karbeatStateProvider);
+    final state = ref.watch(globalStateProvider);
     final builder = ControlPanelBuilder();
 
     // 1. Screen Navigation Dropdown
@@ -205,7 +224,7 @@ class DefaultControlPanel extends ConsumerWidget {
         name: _getViewName(state.currentView),
         icon: _getViewIcon(state.currentView),
         color: Colors.cyanAccent,
-        onSelected: (view) => ref.read(karbeatStateProvider).navigateTo(view),
+        onSelected: (view) => ref.read(globalStateProvider).navigateTo(view),
         items: const [
           PopupMenuItem(
             value: WorkspaceView.trackList,
@@ -251,7 +270,7 @@ class DefaultControlPanel extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           StreamBuilder(
-            stream: ref.read(karbeatStateProvider).positionStream,
+            stream: ref.read(globalStateProvider).positionStream,
             builder: (context, asyncSnapshot) {
               final pos = asyncSnapshot.data;
 
@@ -269,7 +288,7 @@ class DefaultControlPanel extends ConsumerWidget {
                       playbackMode: const PlaybackModeDto.song(),
                     );
                   } catch (e) {
-                    KarbeatLogger.error("Failed to toggle playback: $e");
+                    AppLogger.error("Failed to toggle playback: $e");
                   }
                 },
               );
@@ -279,14 +298,14 @@ class DefaultControlPanel extends ConsumerWidget {
             name: "Stop",
             icon: Icons.stop,
             color: Colors.redAccent,
-            onTap: () => ref.read(karbeatStateProvider).stop(),
+            onTap: () => ref.read(globalStateProvider).stop(),
           ),
           ControlPanelToolbarItem(
             name: "Loop",
             icon: Icons.loop,
             color: Colors.orangeAccent,
             isActive: state.isLooping,
-            onTap: () => ref.read(karbeatStateProvider).toggleLoop(),
+            onTap: () => ref.read(globalStateProvider).toggleLoop(),
           ),
         ],
       ),
@@ -300,7 +319,7 @@ class DefaultControlPanel extends ConsumerWidget {
             icon: Icons.grid_on,
             color: Colors.blueAccent,
             isActive: state.snapToGrid,
-            onTap: () => ref.read(karbeatStateProvider).toggleSnapToGrid(),
+            onTap: () => ref.read(globalStateProvider).toggleSnapToGrid(),
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
@@ -308,7 +327,7 @@ class DefaultControlPanel extends ConsumerWidget {
             icon: MdiIcons.metronome,
             color: Colors.blueAccent,
             isActive: state.isMetronomeActive,
-            onTap: () => ref.read(karbeatStateProvider).toggleMetronomeActive(),
+            onTap: () => ref.read(globalStateProvider).toggleMetronomeActive(),
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
@@ -317,7 +336,7 @@ class DefaultControlPanel extends ConsumerWidget {
             color: Colors.deepPurpleAccent,
             isActive: state.showFloatingMidiKeyboard,
             onTap: () =>
-                ref.read(karbeatStateProvider).toggleFloatingMidiKeyboard(),
+                ref.read(globalStateProvider).toggleFloatingMidiKeyboard(),
           ),
         ],
       ),
@@ -337,7 +356,7 @@ class DefaultControlPanel extends ConsumerWidget {
         color: state.selectedTool == ToolSelection.delete
             ? Colors.red
             : Colors.blueAccent,
-        onSelected: (tool) => ref.read(karbeatStateProvider).selectTool(tool),
+        onSelected: (tool) => ref.read(globalStateProvider).selectTool(tool),
         items: const [
           PopupMenuItem(
             value: ToolSelection.pointer,
@@ -476,8 +495,12 @@ class DefaultControlPanel extends ConsumerWidget {
   }
 
   Widget _buildInfoDisplay(BuildContext context, WidgetRef ref) {
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
+    final double dividerWidth = isSmallScreen ? 8.0 : 20.0;
+    final horizontalPadding = isSmallScreen ? 8.0 : 12.0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.black54,
         borderRadius: BorderRadius.circular(4),
@@ -485,7 +508,7 @@ class DefaultControlPanel extends ConsumerWidget {
       ),
       child: IntrinsicHeight(
         child: StreamBuilder<UiTransportFeedback>(
-          stream: ref.read(karbeatStateProvider).positionStream,
+          stream: ref.read(globalStateProvider).positionStream,
           builder: (context, asyncSnapshot) {
             final pos = asyncSnapshot.data;
             final bar = pos?.bar ?? 0;
@@ -494,18 +517,19 @@ class DefaultControlPanel extends ConsumerWidget {
             final sampleRate = pos?.sampleRate ?? 44100;
             return Row(
               children: [
-                _buildInfoText("BAR", bar.toString()),
-                const SizedBox(width: 10),
-                _buildInfoText("BEAT", beat.toString()),
-                const VerticalDivider(color: Colors.grey, width: 20),
+                _buildInfoText("BAR", bar.toString(), isSmallScreen),
+                SizedBox(width: isSmallScreen ? 6 : 10),
+                _buildInfoText("BEAT", beat.toString(), isSmallScreen),
+                VerticalDivider(color: Colors.grey, width: dividerWidth),
                 _buildInfoText(
                   "TIME",
                   formatTimeFromSamples(samples, sampleRate),
+                  isSmallScreen,
                 ),
-                const VerticalDivider(color: Colors.grey, width: 20),
+                VerticalDivider(color: Colors.grey, width: dividerWidth),
                 const BpmControl(),
-                const VerticalDivider(color: Colors.grey, width: 20),
-                _buildInfoText("SIG", "4/4"),
+                VerticalDivider(color: Colors.grey, width: dividerWidth),
+                _buildInfoText("SIG", "4/4", isSmallScreen),
               ],
             );
           },
@@ -514,24 +538,24 @@ class DefaultControlPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildInfoText(String label, String value) {
+  Widget _buildInfoText(String label, String value, bool isSmallScreen) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.grey,
-            fontSize: 8,
+            fontSize: isSmallScreen ? 6 : 8,
             fontWeight: FontWeight.bold,
           ),
         ),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.lightGreenAccent,
-            fontSize: 14,
+            fontSize: isSmallScreen ? 11 : 14,
             fontFamily: 'monospace',
           ),
         ),
@@ -545,7 +569,8 @@ class BpmControl extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bpm = ref.watch(karbeatStateProvider.select((s) => s.tempo));
+    final bpm = ref.watch(globalStateProvider.select((s) => s.tempo));
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
 
     return FineGrainedInputWrapper<double>(
       value: bpm,
@@ -576,19 +601,19 @@ class BpmControl extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "BPM",
                     style: TextStyle(
                       color: Colors.grey,
-                      fontSize: 8,
+                      fontSize: isSmallScreen ? 6 : 8,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     bpm.toStringAsFixed(1),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.orangeAccent,
-                      fontSize: 14,
+                      fontSize: isSmallScreen ? 11 : 14,
                       fontFamily: 'monospace',
                     ),
                   ),
@@ -603,6 +628,6 @@ class BpmControl extends ConsumerWidget {
 
   void _updateBpm(WidgetRef ref, double newBpm) {
     final clamped = newBpm.clamp(10.0, 999.0);
-    ref.read(karbeatStateProvider).setBpm(clamped);
+    ref.read(globalStateProvider).setBpm(clamped);
   }
 }

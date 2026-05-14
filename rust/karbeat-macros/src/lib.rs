@@ -109,7 +109,8 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
         for field in fields.named.iter_mut() {
             let field_ident = field.ident.clone().unwrap();
             let mut is_param = false;
-
+            let mut is_nested = false;
+            let mut has_serde_skip = false;
             let mut macro_error: Option<syn::Error> = None;
 
             for attr in &field.attrs {
@@ -196,6 +197,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         default: p_default,
                     });
                 } else if attr.path().is_ident("nested") {
+                    is_nested = true;
                     let mut n_prefix = String::new();
 
                     // Parse prefix attribute if provided
@@ -221,6 +223,14 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         _ => false,
                     };
                     nested_fields.push((field_ident.clone(), is_iterable, n_prefix));
+                } else if attr.path().is_ident("serde") {
+                    // Check if the user manually added #[serde(skip)]
+                    let _ = attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("skip") {
+                            has_serde_skip = true;
+                        }
+                        Ok(())
+                    });
                 }
             }
 
@@ -230,8 +240,12 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             if is_param {
                 let orig_ty = &field.ty;
-                let new_ty: Type = syn::parse_quote!(Param<#orig_ty>);
+                let new_ty: Type = syn::parse_quote!(::karbeat_plugin_types::Param<#orig_ty>);
                 field.ty = new_ty;
+            }
+
+            if !is_param && !is_nested && !has_serde_skip {
+                field.attrs.push(syn::parse_quote!(#[serde(skip)]));
             }
 
             // Remove the custom attributes so the Rust compiler doesn't panic
@@ -468,6 +482,7 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let expanded = quote! {
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         #ast
 
         #[repr(u32)]

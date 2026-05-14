@@ -63,7 +63,7 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   @override
   void initState() {
     super.initState();
-    _positionStream = ref.read(karbeatStateProvider).positionStream;
+    _positionStream = ref.read(globalStateProvider).positionStream;
   }
 
   @override

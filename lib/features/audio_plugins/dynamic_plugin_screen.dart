@@ -36,7 +36,7 @@ class _DynamicPluginScreenState
     // Sync generator list so Flutter state matches backend
     if (mounted) {
       await ref
-          .read(karbeatStateProvider)
+          .read(globalStateProvider)
           .syncGenerator(generatorId: widget.generatorId);
     }
   }

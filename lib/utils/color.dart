@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 
+final List<Color> dawColors = [
+      Colors.redAccent, Colors.pinkAccent, Colors.purpleAccent, Colors.deepPurpleAccent,
+      Colors.indigoAccent, Colors.blueAccent, Colors.lightBlueAccent, Colors.cyanAccent,
+      Colors.tealAccent, Colors.greenAccent, Colors.lightGreenAccent, Colors.limeAccent,
+      Colors.yellowAccent, Colors.amberAccent, Colors.orangeAccent, Colors.deepOrangeAccent,
+      Colors.brown.shade400, Colors.grey.shade400, Colors.blueGrey.shade400, Colors.white70,
+    ];
+
 extension HexColorParsing on String {
   /// Converts a Rust/Web hex color string (#RRGGBB or #RRGGBBAA) to a Flutter Color
   Color toColor() {
@@ -22,4 +30,16 @@ extension HexColorParsing on String {
     // 4. Parse it as a radix 16 integer
     return Color(int.parse(hex, radix: 16));
   }
+}
+
+extension HexStringCast on Color {
+  /// transform the flutter Color type into RGGBA hex string representation
+  String toRGBA() {
+    final r = (this.r * 255).round().toRadixString(16).padLeft(2, '0');
+    final g = (this.g * 255).round().toRadixString(16).padLeft(2, '0');
+    final b = (this.b * 255).round().toRadixString(16).padLeft(2, '0');
+    final a = (this.a * 255).round().toRadixString(16).padLeft(2, '0');
+
+    return '$r$g$b$a'.toUpperCase();
+  } 
 }

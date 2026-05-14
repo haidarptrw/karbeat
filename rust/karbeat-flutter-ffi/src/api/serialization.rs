@@ -9,7 +9,7 @@ pub fn save_project(path_name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Load the `.karbeat` project.
+/// Load the `.karbeat` or `.dgdaw` project.
 pub fn load_project(path_name: &str) -> Result<crate::api::project::UiApplicationState, String> {
     let ui_state =
         project_api::load_project(path_name, |app| UiApplicationState::from(app.clone()))

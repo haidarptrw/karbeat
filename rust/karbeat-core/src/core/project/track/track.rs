@@ -10,7 +10,7 @@ use crate::{
         automation::{AutomationLane, AutomationTarget},
         clip::ClipTimeUnit,
         mixer::MixerChannel,
-        ApplicationState, Clip, GeneratorInstance, GeneratorInstanceType, KarbeatSource,
+        ApplicationState, Clip, GeneratorInstance, GeneratorInstanceType, DawSource,
         PluginInstance,
     },
     shared::{
@@ -21,7 +21,7 @@ use crate::{
 use karbeat_utils::color::Color;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct KarbeatTrack {
+pub struct AudioTrack {
     pub id: TrackId,
     pub name: String,
     pub color: Color,
@@ -31,7 +31,7 @@ pub struct KarbeatTrack {
     pub generator: Option<GeneratorInstance>,
 }
 
-impl Default for KarbeatTrack {
+impl Default for AudioTrack {
     fn default() -> Self {
         Self {
             id: Default::default(),
@@ -52,6 +52,8 @@ pub enum TrackType {
     Automation,
 }
 
+pub type RemovedTrackType = TrackType;
+
 impl std::str::FromStr for TrackType {
     type Err = String;
 
@@ -65,7 +67,7 @@ impl std::str::FromStr for TrackType {
     }
 }
 
-impl KarbeatTrack {
+impl AudioTrack {
     pub fn new(id: TrackId, name: &str, color: Color, track_type: TrackType) -> Self {
         Self {
             id,
@@ -98,9 +100,9 @@ impl KarbeatTrack {
     /// the clip type is incompatible with the track type
     pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u32> {
         let is_valid = match (&self.track_type, &clip.source) {
-            (TrackType::Audio, KarbeatSource::Audio(_)) => true,
-            (TrackType::Midi, KarbeatSource::Midi { .. }) => true,
-            (TrackType::Automation, KarbeatSource::Automation(_)) => true,
+            (TrackType::Audio, DawSource::Audio(_)) => true,
+            (TrackType::Midi, DawSource::Midi { .. }) => true,
+            (TrackType::Automation, DawSource::Automation(_)) => true,
             // Allow Automation on Audio/Midi tracks? usually yes, but strictly speaking:
             _ => false,
         };
@@ -164,15 +166,15 @@ impl KarbeatTrack {
         let clips_set = &mut self.clips;
 
         clips_set.retain(|clip_arc| match &clip_arc.source {
-            KarbeatSource::Audio(source_id) => {
+            DawSource::Audio(source_id) => {
                 if !is_generator {
                     source_id != &source_id_u32
                 } else {
                     true
                 }
             }
-            KarbeatSource::Midi { .. } => true,
-            KarbeatSource::Automation(_) => true,
+            DawSource::Midi { .. } => true,
+            DawSource::Automation(_) => true,
         });
     }
 
@@ -263,9 +265,9 @@ impl KarbeatTrack {
 }
 
 impl ApplicationState {
-    pub fn add_new_audio_track(&mut self) -> Arc<KarbeatTrack> {
+    pub fn add_new_audio_track(&mut self) -> Arc<AudioTrack> {
         let new_track_id = TrackId::next(&mut self.track_counter);
-        let new_track = KarbeatTrack {
+        let new_track = AudioTrack {
             track_type: TrackType::Audio,
             id: new_track_id,
             name: format!("Track {}", new_track_id),
@@ -286,7 +288,7 @@ impl ApplicationState {
     pub fn add_new_midi_track_with_generator_id(
         &mut self,
         registry_id: u32,
-    ) -> anyhow::Result<Arc<KarbeatTrack>> {
+    ) -> anyhow::Result<Arc<AudioTrack>> {
         let gen_id = GeneratorId::next(&mut self.generator_counter);
         let track_id = TrackId::next(&mut self.track_counter);
 
@@ -328,7 +330,7 @@ impl ApplicationState {
         self.generator_pool
             .insert(gen_id, Arc::new(generator.clone()));
 
-        let new_track = KarbeatTrack {
+        let new_track = AudioTrack {
             track_type: TrackType::Midi,
             id: track_id,
             name: generator_name.clone(),
@@ -420,7 +422,7 @@ impl ApplicationState {
         )?;
 
         // Create an automation track explicitly for the timeline (because it is a Bus target)
-        let mut new_track = KarbeatTrack {
+        let mut new_track = AudioTrack {
             track_type: TrackType::Automation,
             id: track_id,
             name: label.clone(),
@@ -432,7 +434,7 @@ impl ApplicationState {
         let automation_clip = Clip {
             id: ClipId::next(&mut self.clip_counter),
             name: label,
-            source: KarbeatSource::Automation(new_automation_lane.id),
+            source: DawSource::Automation(new_automation_lane.id),
             time: ClipTimeUnit::Ticks {
                 start_time: 0,
                 loop_length: end_sample,
@@ -450,7 +452,8 @@ impl ApplicationState {
     }
 
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
-    pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<()> {
+    pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
+        let mut deleted_track_type = RemovedTrackType::Audio;
         // Get the generator ID before removing the track
         let generator_id = self
             .tracks
@@ -471,6 +474,7 @@ impl ApplicationState {
         // Remove the generator from the pool if the track had one
         if let Some(gen_id) = generator_id {
             self.generator_pool.shift_remove(&gen_id);
+            deleted_track_type = RemovedTrackType::Midi;
         }
 
         // Remove all automation lanes for this track
@@ -478,6 +482,6 @@ impl ApplicationState {
 
         self.update_max_sample_index();
 
-        Ok(())
+        Ok(deleted_track_type)
     }
 }

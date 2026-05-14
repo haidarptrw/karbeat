@@ -46,6 +46,17 @@ pub struct MyRetro {
     )]
     pub gain: f32,
 
+    #[param(
+        id = "base_freq",
+        name = "Base frequency",
+        group = "Master",
+        min = 432.0,
+        max = 448.0,
+        default = 440.0,
+        step = 1.0,
+    )]
+    pub base_freq: f32,
+
     // Internal Decoupled State
     pub active_voices: Vec<SynthVoice>,
     pub sample_rate: f32,
@@ -92,10 +103,11 @@ impl MyRetro {
         channels: usize,
         voice: &mut SynthVoice,
         buffer: &mut [f32],
+        base_freq: f32,
     ) {
         buffer.fill(0.0);
 
-        let base_freq = 440.0 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
+        let base_freq = base_freq as f64 * (2.0_f64).powf(((voice.note as f64) - 69.0) / 12.0);
 
         for frame in buffer.chunks_exact_mut(channels) {
             if !voice.is_active {
@@ -150,7 +162,7 @@ impl MyRetro {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
-impl KarbeatPlugin for MyRetro {
+impl AudioPlugin for MyRetro {
     fn name(&self) -> &str {
         "My Retro"
     }
@@ -218,6 +230,7 @@ impl KarbeatPlugin for MyRetro {
                         *channels,
                         voice,
                         scratch_slice,
+                        self.base_freq.get()
                     );
 
                     // Mix the voice scratch buffer into the main output

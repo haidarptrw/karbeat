@@ -40,7 +40,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
 
   void startPlacement(int sourceId, {required UiSourceType type}) {
     state = ClipPlacementState(sourceId: sourceId, sourceType: type);
-    ref.read(karbeatStateProvider).navigateTo(WorkspaceView.trackList);
+    ref.read(globalStateProvider).navigateTo(WorkspaceView.trackList);
   }
 
   void updatePlacementTarget(int trackId, double timeSamples) {
@@ -53,7 +53,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
 
   Future<Result<void>> confirmPlacement() async {
     final s = state;
-    KarbeatLogger.info("CONFIRM Placement");
+    AppLogger.info("CONFIRM Placement");
     if (s.sourceId != null && s.sourceType != null && s.trackId != -1) {
       try {
         await createClip(
@@ -62,13 +62,13 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
           trackId: s.trackId,
           startTime: s.timeSamples.toInt(),
         );
-        ref.read(karbeatStateProvider).notifyCustomBackendChange(() async {
-          await ref.read(karbeatStateProvider).syncTrackState(s.trackId);
+        ref.read(globalStateProvider).notifyCustomBackendChange(() async {
+          await ref.read(globalStateProvider).syncTrackState(s.trackId);
         });
         state = const ClipPlacementState();
         return Result.ok(null);
       } catch (e) {
-        KarbeatLogger.error("Error creating clip: $e");
+        AppLogger.error("Error creating clip: $e");
         return Result.error(Exception("$e"));
       }
     }

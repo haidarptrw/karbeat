@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 pub struct MidiEvent {
     pub sample_offset: usize,
     pub data: MidiMessage,
@@ -28,4 +30,21 @@ pub struct ProcessContext<'a> {
     pub is_playing: bool,
     pub sample_position: u64,
     pub midi_events: &'a [MidiEvent],
+    pub aux_buffer: Option<&'a [f32]>,
+}
+
+
+/// Zero copy buffer used for FFI interoperability
+#[derive(Clone, Debug)]
+pub enum ZeroCopyBuffer {
+    Float32(Arc<Box<[f32]>>),
+    Uint8(Arc<Box<[u8]>>),
+    Int32(Arc<Box<[i32]>>),
+}
+
+/// Avalable Shared Buffer Data Type
+pub enum BufferDataType {
+    Float32,
+    Uint8,
+    Int32,
 }

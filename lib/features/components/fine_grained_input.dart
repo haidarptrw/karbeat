@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:karbeat/features/components/context_menu.dart';
 
-/// A widget wrapper class that enables a fine-grained input setter 
+/// A widget wrapper class that enables a fine-grained input setter
 /// (i.e., setting a specific value from a slider type input). When we
 /// trigger the activate button (long press), it will open a dialog that allows us to
 /// set the value directly using text input with a button to increment or decrement.
@@ -11,7 +11,7 @@ class FineGrainedInputWrapper<T extends num> extends StatelessWidget {
   final T step;
   final T min;
   final T max;
-  
+
   final ValueChanged<T> onChanged;
 
   const FineGrainedInputWrapper({
@@ -21,12 +21,12 @@ class FineGrainedInputWrapper<T extends num> extends StatelessWidget {
     required this.onChanged,
     required this.step,
     required this.min,
-    required this.max
+    required this.max,
   });
 
   @override
   Widget build(BuildContext context) {
-    // We use a GestureDetector to catch long presses (mobile) 
+    // We use a GestureDetector to catch long presses (mobile)
     // or right-clicks (desktop) without breaking normal Slider drag behavior.
     return GestureDetector(
       onLongPress: () => _showFineGrainedDialog(context),
@@ -70,7 +70,8 @@ class _FineGrainedDialog<T extends num> extends StatefulWidget {
   State<_FineGrainedDialog<T>> createState() => _FineGrainedDialogState<T>();
 }
 
-class _FineGrainedDialogState<T extends num> extends State<_FineGrainedDialog<T>> {
+class _FineGrainedDialogState<T extends num>
+    extends State<_FineGrainedDialog<T>> {
   late TextEditingController _controller;
   late T _currentValue;
 
@@ -80,7 +81,7 @@ class _FineGrainedDialogState<T extends num> extends State<_FineGrainedDialog<T>
     _currentValue = widget.initialValue;
     _controller = TextEditingController(text: _formatValue(_currentValue));
   }
-  
+
   String _formatValue(T val) {
     // Prevents endless decimal tails for doubles
     return val is double ? val.toStringAsFixed(2) : val.toString();
@@ -125,15 +126,15 @@ class _FineGrainedDialogState<T extends num> extends State<_FineGrainedDialog<T>
       content: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: const Icon(Icons.remove),
-            onPressed: _decrement,
-          ),
+          IconButton(icon: const Icon(Icons.remove), onPressed: _decrement),
           SizedBox(
             width: 80,
             child: TextField(
               controller: _controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: true,
+              ),
               textAlign: TextAlign.center,
               onSubmitted: (_) => _submit(),
               // Select all text automatically when tapped for easy overwriting
@@ -143,10 +144,7 @@ class _FineGrainedDialogState<T extends num> extends State<_FineGrainedDialog<T>
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _increment,
-          ),
+          IconButton(icon: const Icon(Icons.add), onPressed: _increment),
         ],
       ),
       actions: [
@@ -154,10 +152,7 @@ class _FineGrainedDialogState<T extends num> extends State<_FineGrainedDialog<T>
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        ElevatedButton(
-          onPressed: _submit,
-          child: const Text('OK'),
-        ),
+        ElevatedButton(onPressed: _submit, child: const Text('OK')),
       ],
     );
   }
@@ -221,11 +216,11 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
     return ContextMenuWrapper(
       title: parameterName,
       actions: [
-        KarbeatContextAction(
+        DawContextAction(
           title: "Type in value...",
           icon: Icons.keyboard,
           onTap: () {
-            // Because the ContextMenuWrapper automatically pops the context menu 
+            // Because the ContextMenuWrapper automatically pops the context menu
             // dialog before calling onTap, we can safely open the new dialog here.
             showFineGrainedDialog<T>(
               context: context,
@@ -237,7 +232,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
             );
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
           title: "Reset to default",
           icon: Icons.refresh,
           onTap: () {
@@ -245,7 +240,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
           },
         ),
         if (onAddAutomation != null)
-          KarbeatContextAction(
+          DawContextAction(
             title: "Create automation clip",
             icon: Icons.show_chart,
             onTap: onAddAutomation!,

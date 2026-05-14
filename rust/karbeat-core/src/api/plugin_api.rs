@@ -338,31 +338,12 @@ pub fn set_effect_parameter(
 ) -> Result<(), String> {
     let param_id = param_id.into_id();
     if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        match target {
-            EffectTarget::Track(track_id) => {
-                let _ = sender.push(AudioCommand::SetTrackEffectParameter {
-                    track_id: *track_id,
-                    effect_id: *effect_id,
-                    param_id,
-                    value,
-                });
-            }
-            EffectTarget::Bus(bus_id) => {
-                let _ = sender.push(AudioCommand::SetBusEffectParameter {
-                    bus_id: *bus_id,
-                    effect_id: *effect_id,
-                    param_id,
-                    value,
-                });
-            }
-            EffectTarget::Master => {
-                let _ = sender.push(AudioCommand::SetMasterEffectParameter {
-                    effect_id: *effect_id,
-                    param_id,
-                    value,
-                });
-            }
-        }
+        let _ = sender.push(AudioCommand::SetEffectParameter {
+            target: target.clone(),
+            effect_id: *effect_id,
+            param_id,
+            value,
+        });
     }
 
     {
@@ -421,25 +402,10 @@ pub fn query_generator_parameters(generator_id: &GeneratorId) -> Result<(), Stri
 
 pub fn query_effect_parameters(target: &EffectTarget, effect_id: &EffectId) -> Result<(), String> {
     if let Some(sender) = ctx().command_sender.lock().as_mut() {
-        match target {
-            EffectTarget::Track(track_id) => {
-                let _ = sender.push(AudioCommand::QueryTrackEffectParameters {
-                    track_id: *track_id,
-                    effect_id: *effect_id,
-                });
-            }
-            EffectTarget::Bus(bus_id) => {
-                let _ = sender.push(AudioCommand::QueryBusEffectParameters {
-                    bus_id: *bus_id,
-                    effect_id: *effect_id,
-                });
-            }
-            EffectTarget::Master => {
-                let _ = sender.push(AudioCommand::QueryMasterEffectParameters {
-                    effect_id: *effect_id,
-                });
-            }
-        }
+        let _ = sender.push(AudioCommand::QueryEffectParameters {
+            target: target.clone(),
+            effect_id: *effect_id,
+        });
         Ok(())
     } else {
         Err("Audio stream not initialized".to_string())

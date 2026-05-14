@@ -13,7 +13,7 @@ String _mapLogTypeToString(KarbeatLoggerLogType logType) {
   }
 }
 
-class KarbeatLogger {
+class AppLogger {
   static void log({
     required String message,
     KarbeatLoggerLogType logType = KarbeatLoggerLogType.info,
@@ -33,7 +33,7 @@ class KarbeatLogger {
   }
 
   static void info(String message) {
-    KarbeatLogger.log(
+    AppLogger.log(
       message: message,
       logType: KarbeatLoggerLogType.info,
       stackFrameOffset: 2,
@@ -41,7 +41,7 @@ class KarbeatLogger {
   }
 
   static void warn(String message) {
-    KarbeatLogger.log(
+    AppLogger.log(
       message: message,
       logType: KarbeatLoggerLogType.warn,
       stackFrameOffset: 2,
@@ -49,7 +49,7 @@ class KarbeatLogger {
   }
 
   static void error(String message) {
-    KarbeatLogger.log(
+    AppLogger.log(
       message: message,
       logType: KarbeatLoggerLogType.error,
       stackFrameOffset: 2,

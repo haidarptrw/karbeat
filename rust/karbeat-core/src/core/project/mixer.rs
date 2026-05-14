@@ -12,7 +12,7 @@ use thiserror::Error;
 use crate::{
     commands::AudioCommand,
     context::{ctx, utils::send_audio_command},
-    core::project::{plugin::KarbeatPlugin, ApplicationState, PluginInstance, TrackId},
+    core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
     shared::{BusId, EffectId},
 };
 
@@ -201,7 +201,7 @@ impl MixerChannel {
     pub fn add_effect(
         &mut self,
         effect_registry_id: u32,
-    ) -> anyhow::Result<(Box<dyn KarbeatPlugin + Send + Sync>, String, EffectId)> {
+    ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
         let (effect_plugin, effect_name, default_params) = {
@@ -335,8 +335,8 @@ impl MixerState {
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
         // Push to the audio thread
-        send_audio_command(AudioCommand::AddTrackEffect {
-            track_id: *track_id,
+        send_audio_command(AudioCommand::AddEffect {
+            target: crate::commands::EffectTarget::Track(*track_id),
             effect_id,
             effect: effect_plugin,
         });
@@ -366,8 +366,8 @@ impl MixerState {
         let channel = Arc::make_mut(mixer_channel_arc);
         channel.remove_effect(effect_id)?;
 
-        send_audio_command(AudioCommand::RemoveTrackEffect {
-            track_id: *track_id,
+        send_audio_command(AudioCommand::RemoveEffect {
+            target: crate::commands::EffectTarget::Track(*track_id),
             effect_id,
         });
 
@@ -394,7 +394,8 @@ impl MixerState {
         let channel = Arc::make_mut(&mut self.master_bus);
         let (effect_plugin, effect_name, effect_id) = channel.add_effect(registry_id)?;
 
-        send_audio_command(AudioCommand::AddMasterEffect {
+        send_audio_command(AudioCommand::AddEffect {
+            target: crate::commands::EffectTarget::Master,
             effect_id,
             effect: effect_plugin,
         });
@@ -412,7 +413,10 @@ impl MixerState {
         channel.remove_effect(effect_id)?;
 
         // Send master effect removal command to audio thread
-        send_audio_command(AudioCommand::RemoveMasterEffect { effect_id });
+        send_audio_command(AudioCommand::RemoveEffect {
+            target: crate::commands::EffectTarget::Master,
+            effect_id,
+        });
 
         Ok(())
     }
@@ -526,8 +530,8 @@ impl MixerState {
         let bus = Arc::make_mut(bus_arc);
         let (effect_plugin, effect_name, effect_id) = bus.channel.add_effect(registry_id)?;
 
-        send_audio_command(AudioCommand::AddBusEffect {
-            bus_id,
+        send_audio_command(AudioCommand::AddEffect {
+            target: crate::commands::EffectTarget::Bus(bus_id),
             effect_id,
             effect: effect_plugin,
         });

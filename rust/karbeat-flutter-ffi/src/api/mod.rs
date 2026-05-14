@@ -11,3 +11,4 @@ pub mod session;
 pub mod simple;
 pub mod track;
 pub mod transport;
+pub mod waveform;

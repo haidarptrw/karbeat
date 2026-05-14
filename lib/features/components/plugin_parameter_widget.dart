@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 // Make sure to import your ParameterInteractionWrapper here!
-import 'package:karbeat/features/components/fine_grained_input.dart'; 
+import 'package:karbeat/features/components/fine_grained_input.dart';
 
 // ============================================================================
 // FLOAT PARAMETER (Slider)
 // ============================================================================
-class KarbeatFloatParam extends StatelessWidget {
+class DawFloatParam extends StatelessWidget {
   final int paramId;
   final String name;
   final double value;
@@ -15,8 +15,9 @@ class KarbeatFloatParam extends StatelessWidget {
   final double step;
   final String suffix;
   final ValueChanged<double> onChanged;
+  final SliderInteraction sliderInteraction;
 
-  const KarbeatFloatParam({
+  const DawFloatParam({
     super.key,
     required this.paramId,
     required this.name,
@@ -27,11 +28,18 @@ class KarbeatFloatParam extends StatelessWidget {
     this.step = 0.01,
     this.suffix = '',
     required this.onChanged,
+    this.sliderInteraction = SliderInteraction.slideThumb,
   });
 
   @override
   Widget build(BuildContext context) {
     final displayValue = value.toStringAsFixed(2);
+
+    int? divisions;
+    if (step > 0) {
+      divisions = ((max - min) / step).round();
+      if (divisions <= 0) divisions = null;
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,6 +65,7 @@ class KarbeatFloatParam extends StatelessWidget {
             thumbColor: Colors.cyanAccent,
             overlayColor: Colors.cyanAccent.withAlpha(51),
             trackHeight: 4,
+            tickMarkShape: SliderTickMarkShape.noTickMark,
           ),
           child: ParameterInteractionWrapper<double>(
             parameterName: name,
@@ -74,7 +83,9 @@ class KarbeatFloatParam extends StatelessWidget {
               value: value.clamp(min, max),
               min: min,
               max: max,
+              divisions: divisions,
               onChanged: onChanged,
+              allowedInteraction: sliderInteraction,
             ),
           ),
         ),
@@ -86,7 +97,7 @@ class KarbeatFloatParam extends StatelessWidget {
 // ============================================================================
 // CHOICE PARAMETER (Chips)
 // ============================================================================
-class KarbeatChoiceParam extends StatelessWidget {
+class DawChoiceParam extends StatelessWidget {
   final int paramId;
   final String name;
   final double value;
@@ -94,7 +105,7 @@ class KarbeatChoiceParam extends StatelessWidget {
   final double defaultValue;
   final ValueChanged<double> onChanged;
 
-  const KarbeatChoiceParam({
+  const DawChoiceParam({
     super.key,
     required this.paramId,
     required this.name,
@@ -111,10 +122,7 @@ class KarbeatChoiceParam extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          name,
-          style: const TextStyle(color: Colors.grey, fontSize: 12),
-        ),
+        Text(name, style: const TextStyle(color: Colors.grey, fontSize: 12)),
         const SizedBox(height: 8),
         ParameterInteractionWrapper<double>(
           parameterName: name,
@@ -156,7 +164,9 @@ class KarbeatChoiceParam extends StatelessWidget {
                     choices[index],
                     style: TextStyle(
                       color: isSelected ? Colors.cyanAccent : Colors.white70,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ),
@@ -172,14 +182,14 @@ class KarbeatChoiceParam extends StatelessWidget {
 // ============================================================================
 // BOOL PARAMETER (Switch)
 // ============================================================================
-class KarbeatBoolParam extends StatelessWidget {
+class DawBoolParam extends StatelessWidget {
   final int paramId;
   final String name;
   final double value;
   final double defaultValue;
   final ValueChanged<double> onChanged;
 
-  const KarbeatBoolParam({
+  const DawBoolParam({
     super.key,
     required this.paramId,
     required this.name,
@@ -206,10 +216,7 @@ class KarbeatBoolParam extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            name,
-            style: const TextStyle(color: Colors.grey, fontSize: 14),
-          ),
+          Text(name, style: const TextStyle(color: Colors.grey, fontSize: 14)),
           Switch(
             value: isOn,
             activeThumbColor: Colors.cyanAccent,

@@ -14,7 +14,7 @@ fn main() {
     // Call the export function on all plugins
     MyRetro::export_manifest(&export_dir).unwrap();
     KarbeatzerV2::export_manifest(&export_dir).unwrap();
-    KarbeatParametricEQ::export_manifest(&export_dir).unwrap();
+    DigiParametricEQ::export_manifest(&export_dir).unwrap();
 
     println!("INFO: All manifests exported successfully to Flutter assets!");
 }

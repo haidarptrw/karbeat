@@ -27,18 +27,18 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(karbeatStateProvider).syncMixerState();
+      ref.read(globalStateProvider).syncMixerState();
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final mixerState = ref.watch(
-      karbeatStateProvider.select((s) => s.mixerState),
+      globalStateProvider.select((s) => s.mixerState),
     );
-    final tracks = ref.watch(karbeatStateProvider.select((s) => s.tracks));
+    final tracks = ref.watch(globalStateProvider.select((s) => s.tracks));
 
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
 
     // Channel entries: pair each track ID with its mixer channel data
     final channelEntries = <_ChannelEntry>[];
@@ -499,7 +499,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                                     );
 
                               final availableEffects = ref
-                                  .read(karbeatStateProvider)
+                                  .read(globalStateProvider)
                                   .availableEffects;
                               final registryId = availableEffects
                                   .firstWhere((p) => p.id == effect.registryId)
@@ -552,7 +552,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   }
 
   void _showEffectBrowser(BuildContext context) {
-    final availablePlugins = ref.read(karbeatStateProvider).availableEffects;
+    final availablePlugins = ref.read(globalStateProvider).availableEffects;
 
     showDialog(
       context: context,
@@ -656,17 +656,17 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
         }
 
         if (_selectedChannelId == -1 && !_isSelectedBus) {
-          ref.read(karbeatStateProvider).addEffectToMasterBus(plugin.id);
+          ref.read(globalStateProvider).addEffectToMasterBus(plugin.id);
           return;
         }
 
         if (_isSelectedBus) {
           ref
-              .read(karbeatStateProvider)
+              .read(globalStateProvider)
               .addEffectToBusChannel(_selectedChannelId!, plugin.id);
         } else {
           ref
-              .read(karbeatStateProvider)
+              .read(globalStateProvider)
               .addEffectToMixerChannel(_selectedChannelId!, plugin.id);
         }
       },
@@ -774,7 +774,9 @@ class _ChannelStripState extends State<_ChannelStrip> {
       } else if (widget.entry.isBus) {
         fetchedSpecs = await getBusMixerChannelSpecs(busId: widget.entry.id);
       } else {
-        fetchedSpecs = await getTrackMixerChannelSpecs(trackId: widget.entry.id);
+        fetchedSpecs = await getTrackMixerChannelSpecs(
+          trackId: widget.entry.id,
+        );
       }
     } catch (e) {
       debugPrint("Failed to load channel specs: $e");
@@ -787,33 +789,53 @@ class _ChannelStripState extends State<_ChannelStrip> {
     }
   }
 
-  // Safe fallback spec generators just in case the Future hasn't resolved yet 
+  // Safe fallback spec generators just in case the Future hasn't resolved yet
   // (Prevents the UI from glitching or throwing layout errors during the microsecond load)
   ParameterSpecDTO _getVolumeSpec() {
     if (_specs != null) {
-      return _specs!.firstWhere((s) => s.id == 1, orElse: () => _defaultVolumeSpec());
+      return _specs!.firstWhere(
+        (s) => s.id == 1,
+        orElse: () => _defaultVolumeSpec(),
+      );
     }
     return _defaultVolumeSpec();
   }
 
   ParameterSpecDTO _getPanSpec() {
     if (_specs != null) {
-      return _specs!.firstWhere((s) => s.id == 2, orElse: () => _defaultPanSpec());
+      return _specs!.firstWhere(
+        (s) => s.id == 2,
+        orElse: () => _defaultPanSpec(),
+      );
     }
     return _defaultPanSpec();
   }
 
   ParameterSpecDTO _defaultVolumeSpec() => const ParameterSpecDTO(
-        id: 1, name: 'Volume', group: 'MixerChannel', value: 0.0,
-        min: -100.0, max: 6.0, defaultValue: 0.0, step: 0.1,
-        valueType: ParameterValueTypeDTO.float, choices: [],
-      );
+    id: 1,
+    name: 'Volume',
+    group: 'MixerChannel',
+    value: 0.0,
+    min: -100.0,
+    max: 6.0,
+    defaultValue: 0.0,
+    step: 0.1,
+    valueType: ParameterValueTypeDTO.float,
+    choices: [],
+  );
 
   ParameterSpecDTO _defaultPanSpec() => const ParameterSpecDTO(
-        id: 2, name: 'Pan', group: 'MixerChannel', value: 0.0,
-        min: -1.0, max: 1.0, defaultValue: 0.0, step: 0.01,
-        valueType: ParameterValueTypeDTO.float, choices: [],
-      );
+    id: 2,
+    name: 'Pan',
+    group: 'MixerChannel',
+    value: 0.0,
+    min: -1.0,
+    max: 1.0,
+    defaultValue: 0.0,
+    step: 0.01,
+    valueType: ParameterValueTypeDTO.float,
+    choices: [],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -836,8 +858,8 @@ class _ChannelStripState extends State<_ChannelStrip> {
             color: widget.isSelected
                 ? accentColor
                 : (entry.isMaster
-                    ? Colors.amber.withValues(alpha: 0.3)
-                    : Colors.white.withValues(alpha: 0.06)),
+                      ? Colors.amber.withValues(alpha: 0.3)
+                      : Colors.white.withValues(alpha: 0.06)),
             width: widget.isSelected ? 2 : 1,
           ),
           boxShadow: widget.isSelected
@@ -1009,7 +1031,9 @@ class _PanKnob extends StatelessWidget {
               step: spec.step == 0.0 ? 0.01 : spec.step, // Safe fallback step
               onChanged: onChanged,
               onAddAutomation: () {
-                KarbeatLogger.info("Create automation for ${spec.name} (ID: ${spec.id})");
+                AppLogger.info(
+                  "Create automation for ${spec.name} (ID: ${spec.id})",
+                );
                 // TODO: Dispatch to state to create the lane
               },
               child: Slider(
@@ -1036,7 +1060,7 @@ class _PanKnob extends StatelessWidget {
 // =========================================================
 
 class _VolumeFader extends StatelessWidget {
-  final double value; 
+  final double value;
   final ParameterSpecDTO spec;
   final Color accentColor;
   final ValueChanged<double> onChanged;
@@ -1057,7 +1081,7 @@ class _VolumeFader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final sliderWidth = constraints.maxHeight;
-        
+
         // Ensure the visual slider stops at -60dB even if the internal `NEG_INFINITY` is lower
         final visualMin = spec.min < -60.0 ? -60.0 : spec.min;
 
@@ -1067,9 +1091,9 @@ class _VolumeFader extends StatelessWidget {
             parameterName: spec.name,
             value: value,
             defaultValue: spec.defaultValue,
-            min: visualMin, 
+            min: visualMin,
             max: spec.max,
-            step: spec.step == 0.0 ? 0.1 : spec.step, 
+            step: spec.step == 0.0 ? 0.1 : spec.step,
             onChanged: onChanged,
             onAddAutomation: () {
               debugPrint("Create automation for ${spec.name} (ID: ${spec.id})");

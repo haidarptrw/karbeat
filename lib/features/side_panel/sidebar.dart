@@ -8,7 +8,7 @@ class Sidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentContext = ref.watch(
-      karbeatStateProvider.select((s) => s.currentToolbarContext),
+      globalStateProvider.select((s) => s.currentToolbarContext),
     );
 
     return Container(
@@ -22,13 +22,13 @@ class Sidebar extends ConsumerWidget {
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.start,
-                  children: KarbeatState.menuGroups.map((group) {
+                  children: GlobalAppState.menuGroups.map((group) {
                     return SidebarItem(
                       icon: group.icon,
                       title: group.title,
                       isActive: currentContext == group.id,
                       onTap: () => ref
-                          .read(karbeatStateProvider)
+                          .read(globalStateProvider)
                           .toggleToolbarContext(group.id),
                     );
                   }).toList(),

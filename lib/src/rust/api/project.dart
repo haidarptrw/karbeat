@@ -8,10 +8,10 @@ import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'pattern.dart';
+import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `try_from_audio_waveform_with_target_sample_bin`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -96,106 +96,64 @@ Stream<double> exportProjectFlutter({
   tailHandling: tailHandling,
 );
 
-class AudioWaveformUiForAudioProperties {
-  final Int8List previewBuffer;
-  final String filePath;
-  final String name;
-  final int sampleRate;
-  final int channels;
-  final double duration;
-  final int rootNote;
-  final int fineTune;
-  final int trimStart;
-  final int trimEnd;
-  final bool isLooping;
-  final bool normalized;
-  final bool muted;
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AudioWaveformUiForAudioProperties>>
+abstract class AudioWaveformUiForAudioProperties
+    implements RustOpaqueInterface {
+  WaveformHandle get bufferHandle;
 
-  const AudioWaveformUiForAudioProperties({
-    required this.previewBuffer,
-    required this.filePath,
-    required this.name,
-    required this.sampleRate,
-    required this.channels,
-    required this.duration,
-    required this.rootNote,
-    required this.fineTune,
-    required this.trimStart,
-    required this.trimEnd,
-    required this.isLooping,
-    required this.normalized,
-    required this.muted,
-  });
+  int get channels;
 
-  @override
-  int get hashCode =>
-      previewBuffer.hashCode ^
-      filePath.hashCode ^
-      name.hashCode ^
-      sampleRate.hashCode ^
-      channels.hashCode ^
-      duration.hashCode ^
-      rootNote.hashCode ^
-      fineTune.hashCode ^
-      trimStart.hashCode ^
-      trimEnd.hashCode ^
-      isLooping.hashCode ^
-      normalized.hashCode ^
-      muted.hashCode;
+  double get duration;
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AudioWaveformUiForAudioProperties &&
-          runtimeType == other.runtimeType &&
-          previewBuffer == other.previewBuffer &&
-          filePath == other.filePath &&
-          name == other.name &&
-          sampleRate == other.sampleRate &&
-          channels == other.channels &&
-          duration == other.duration &&
-          rootNote == other.rootNote &&
-          fineTune == other.fineTune &&
-          trimStart == other.trimStart &&
-          trimEnd == other.trimEnd &&
-          isLooping == other.isLooping &&
-          normalized == other.normalized &&
-          muted == other.muted;
-}
+  String get filePath;
 
-class AudioWaveformUiForClip {
-  final String name;
-  final Int8List previewBuffer;
-  final int sampleRate;
-  final int channels;
-  final double duration;
+  int get fineTune;
 
-  const AudioWaveformUiForClip({
-    required this.name,
-    required this.previewBuffer,
-    required this.sampleRate,
-    required this.channels,
-    required this.duration,
-  });
+  int? get id;
 
-  @override
-  int get hashCode =>
-      name.hashCode ^
-      previewBuffer.hashCode ^
-      sampleRate.hashCode ^
-      channels.hashCode ^
-      duration.hashCode;
+  bool get isLooping;
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is AudioWaveformUiForClip &&
-          runtimeType == other.runtimeType &&
-          name == other.name &&
-          previewBuffer == other.previewBuffer &&
-          sampleRate == other.sampleRate &&
-          channels == other.channels &&
-          duration == other.duration;
+  bool get muted;
+
+  String get name;
+
+  bool get normalized;
+
+  int get rootNote;
+
+  int get sampleRate;
+
+  int get trimEnd;
+
+  int get trimStart;
+
+  set bufferHandle(WaveformHandle bufferHandle);
+
+  set channels(int channels);
+
+  set duration(double duration);
+
+  set filePath(String filePath);
+
+  set fineTune(int fineTune);
+
+  set id(int? id);
+
+  set isLooping(bool isLooping);
+
+  set muted(bool muted);
+
+  set name(String name);
+
+  set normalized(bool normalized);
+
+  set rootNote(int rootNote);
+
+  set sampleRate(int sampleRate);
+
+  set trimEnd(int trimEnd);
+
+  set trimStart(int trimStart);
 }
 
 class AudioWaveformUiForSourceList {

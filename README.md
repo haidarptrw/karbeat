@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🎵 Karbeat</h1>
+  <h1>🎵 DigiDAW</h1>
   <p><strong>A minimal, cross-platform Digital Audio Workstation (DAW) written in Flutter and Rust.</strong></p>
   <p>
     <a href="https://github.com/haidarptrw/karbeat/stargazers"><img src="https://img.shields.io/github/stars/haidarptrw/karbeat?style=for-the-badge&color=yellow" alt="Stars Badge"/></a>
@@ -11,9 +11,9 @@
 
 ---
 
-Karbeat is a clean, simple, and minimal Digital Audio Workstation (DAW) designed to be cross-platform. We prioritize delivering an effective mobile-first application
+DigiDAW (formerly "Karbeat") is a clean, simple, and minimal Digital Audio Workstation (DAW) designed to be cross-platform. We prioritize delivering an effective mobile-first application
 
-By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio processing and the versatile UI capabilities of [Flutter](https://flutter.dev/), Karbeat aims to provide a reliable environment for your musical creativity.
+By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio processing and the versatile UI capabilities of [Flutter](https://flutter.dev/), DigiDAW aims to provide a reliable environment for your musical creativity.
 
 ## Features
 
@@ -51,14 +51,15 @@ Thank you for your interest in Karbeat! Here are a few things to keep in mind:
 - **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment for faster development. We will focus to complete features to an usable state for users. Eventually we will fully focus on mobile devices support as it is our main priority in the first place
 - **Future Platforms**: Once the core application is near completion, we'll implement and optimize features for **Android**.
 - **Plugin Host Support**: We will add plugin host and support for VST3, CLAP, and LV2 for Windows, Linux, and MacOS version. As for android, we are still exploring the best fit and possibility of creating our own plugin format.
-- **Plugin Development**: Currently our plugin registry is very few. You can help to create a plugin by using the Karbeat Plugin API by implementing the `KarbeatPlugin` trait.
+- **Plugin Development**: Currently our plugin registry is very few. You can help to create a plugin by using the Karbeat Plugin API by implementing the `AudioPlugin` trait.
 
 ---
 
 ## Regarding the Future of the Project
 
-We plan to maintain Karbeat as a mobile-only DAW for the foreseeable future.
-Meanwhile, our desktop DAW, which will have a different name, will utilize a distinct frontend
+We decided to rename the project from Karbeat to DigiDAW. Originally, DigiDAW was going to be the name of the desktop version of the DAW, which would support VST, CLAP, and AU plugins. However, we decided to focus only on the mobile application for now. We are also planning to add an audio plugin interface that supports third-party plugins built as dynamic libraries on both Android and iOS.
+
+Meanwhile, our desktop DAW, will utilize a distinct frontend
 implementation and a modified backend to accommodate new technologies.
 We intend to build the desktop version entirely in Rust, though we are still researching the best framework for the task.
 This shift is necessary because the desktop version will include features incompatible with mobile platforms, such as

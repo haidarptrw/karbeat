@@ -13,7 +13,7 @@ import 'project.dart';
 Future<void> saveProject({required String pathName}) =>
     RustLib.instance.api.crateApiSerializationSaveProject(pathName: pathName);
 
-/// Load the `.karbeat` project.
+/// Load the `.karbeat` or `.dgdaw` project.
 Future<UiApplicationState> loadProject({required String pathName}) =>
     RustLib.instance.api.crateApiSerializationLoadProject(pathName: pathName);
 

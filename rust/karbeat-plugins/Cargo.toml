@@ -22,6 +22,7 @@ indexmap.workspace = true
 rustfft.workspace = true
 num-complex.workspace = true
 rmp-serde.workspace = true
+parking_lot.workspace = true
 
 [lints]
 workspace = true

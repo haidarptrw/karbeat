@@ -2,10 +2,11 @@
 //! Can be used for things such as Equalizer or Compressor
 
 use karbeat_macros::{karbeat_plugin, EnumParam};
-use karbeat_plugin_types::{EnumParam, Param};
+use karbeat_plugin_types::EnumParam;
+use serde::{Deserialize, Serialize};
 use smallvec::{smallvec, SmallVec};
+use wide::f32x4;
 
-const DEFAULT_CHANNELS: usize = 2;
 const DEFAULT_CASCADES: usize = 8;
 
 pub trait FilterMode: Copy + Default + PartialEq + EnumParam {
@@ -22,7 +23,7 @@ pub trait FilterMode: Copy + Default + PartialEq + EnumParam {
 }
 
 /// Options of Simple filter often used (LPF, HPF, and BPF)
-#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam, Deserialize, Serialize)]
 #[repr(usize)]
 pub enum SimpleFilterMode {
     #[default]
@@ -43,7 +44,7 @@ impl From<f32> for SimpleFilterMode {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam)]
+#[derive(Clone, Copy, PartialEq, Debug, Default, EnumParam, Deserialize, Serialize)]
 #[repr(usize)]
 pub enum BiquadFilterType {
     #[default]
@@ -231,6 +232,40 @@ pub struct BiquadCoefficients {
     pub a2: f32,
 }
 
+impl BiquadCoefficients {
+    /// Returns the magnitude response in dB at a given frequency for N cascaded stages.
+    ///
+    /// Uses the analytical H(e^jw) evaluation via the direct DFT form:
+    ///   H(z) = (b0 + b1*z^-1 + b2*z^-2) / (1 + a1*z^-1 + a2*z^-2)
+    /// evaluated at z = e^(j*w), where w = 2*pi*freq/sample_rate.
+    /// The single-stage power ratio is multiplied by `num_stages` in the dB domain
+    /// to reflect cascaded magnitude accumulation.
+    ///
+    /// Returns 0.0 if the denominator magnitude is degenerate (near zero).
+    pub fn magnitude_db_at(&self, freq: f32, sample_rate: f32, num_stages: usize) -> f32 {
+        let w = (2.0 * std::f32::consts::PI * freq) / sample_rate;
+        let cos_w = w.cos();
+        let cos_2w = (2.0 * w).cos();
+        let sin_w = w.sin();
+        let sin_2w = (2.0 * w).sin();
+
+        let num_re = self.b0 + self.b1 * cos_w + self.b2 * cos_2w;
+        let num_im = -(self.b1 * sin_w + self.b2 * sin_2w);
+        let num_mag_sq = num_re * num_re + num_im * num_im;
+
+        let den_re = 1.0 + self.a1 * cos_w + self.a2 * cos_2w;
+        let den_im = -(self.a1 * sin_w + self.a2 * sin_2w);
+        let den_mag_sq = den_re * den_re + den_im * den_im;
+
+        if den_mag_sq < 1e-20 {
+            return 0.0;
+        }
+
+        let single_stage_db = 10.0 * (num_mag_sq / den_mag_sq).max(1e-20).log10();
+        single_stage_db * num_stages as f32
+    }
+}
+
 /// The historical delay lines (x[n-1], x[n-2], y[n-1], y[n-2]) for ONE channel in ONE stage
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BiquadState {
@@ -291,6 +326,80 @@ impl SingleBiquadFilterStage {
     }
 }
 
+// ======================================
+// SIMD-wide biquad types
+// Process up to 4 channels simultaneously using f32x4.
+// All channels share the same coefficients — suitable for multi-channel EQ.
+// ======================================
+
+/// Delay lines for up to 4 channels simultaneously using f32x4 SIMD.
+/// Each SIMD lane corresponds to one audio channel (L=0, R=1, ...).
+/// Unused lanes must be zeroed by the caller; their outputs are discarded.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BiquadStateWide {
+    x1: f32x4,
+    x2: f32x4,
+    y1: f32x4,
+    y2: f32x4,
+}
+
+impl BiquadStateWide {
+    /// Broadcasts scalar coefficients across all SIMD lanes and evaluates
+    /// the Direct Form I biquad equation for all channels simultaneously.
+    #[inline(always)]
+    pub fn process(&mut self, inputs: f32x4, coeffs: &BiquadCoefficients) -> f32x4 {
+        let b0 = f32x4::splat(coeffs.b0);
+        let b1 = f32x4::splat(coeffs.b1);
+        let b2 = f32x4::splat(coeffs.b2);
+        let a1 = f32x4::splat(coeffs.a1);
+        let a2 = f32x4::splat(coeffs.a2);
+
+        let output = b0 * inputs + b1 * self.x1 + b2 * self.x2 - a1 * self.y1 - a2 * self.y2;
+
+        self.x2 = self.x1;
+        self.x1 = inputs;
+        self.y2 = self.y1;
+        self.y1 = output;
+
+        output
+    }
+}
+
+/// A filter chain for up to 4 channels simultaneously with N cascaded SIMD stages.
+/// Note: all channels share one set of biquad coefficients.
+#[derive(Clone, Debug, Default)]
+pub struct SingleBiquadFilterStageWide {
+    pub stages: SmallVec<[BiquadStateWide; DEFAULT_CASCADES]>,
+}
+
+impl SingleBiquadFilterStageWide {
+    pub fn new(num_cascades: usize) -> Self {
+        Self {
+            stages: smallvec![BiquadStateWide::default(); num_cascades],
+        }
+    }
+
+    /// Expands or shrinks the number of cascaded stages
+    pub fn resize_cascades(&mut self, num_cascades: usize) {
+        self.stages.resize(num_cascades, BiquadStateWide::default());
+    }
+
+    pub fn reset_state(&mut self) {
+        for stage in &mut self.stages {
+            *stage = BiquadStateWide::default();
+        }
+    }
+
+    /// Cascades the SIMD signal through all configured biquad stages
+    #[inline(always)]
+    pub fn process(&mut self, mut inputs: f32x4, coeffs: &BiquadCoefficients) -> f32x4 {
+        for stage in &mut self.stages {
+            inputs = stage.process(inputs, coeffs);
+        }
+        inputs
+    }
+}
+
 /// Biquad filter implemented from RBJ EQ Cookbook
 #[derive(Clone, Debug)]
 #[karbeat_plugin]
@@ -341,7 +450,21 @@ pub struct BiquadFilter<T: FilterMode + 'static> {
     num_of_channels: u8,
     sample_rate: f32,
     coeff: BiquadCoefficients,
-    channels: SmallVec<[SingleBiquadFilterStage; 2]>,
+
+    // Cache values to avoid recalculating when parameters are the same
+    last_freq: f32,
+    last_gain: f32,
+    last_q: f32,
+    last_cascades: f32,
+    last_filter_type: T,
+
+    // ======================================
+    // SIMD channel storage
+    // wide_stage covers channels 0..min(num_of_channels, 4) simultaneously.
+    // overflow_channels is a scalar fallback for channels 4+ (rare in practice).
+    // ======================================
+    wide_stage: SingleBiquadFilterStageWide,
+    overflow_channels: Vec<SingleBiquadFilterStage>,
 }
 
 impl<T: FilterMode + 'static> Default for BiquadFilter<T> {
@@ -350,7 +473,14 @@ impl<T: FilterMode + 'static> Default for BiquadFilter<T> {
         filter.num_of_channels = 2;
         filter.sample_rate = 44100.0;
         filter.coeff = BiquadCoefficients::default();
-        filter.channels = smallvec![SingleBiquadFilterStage::new(1); DEFAULT_CHANNELS];
+        filter.wide_stage = SingleBiquadFilterStageWide::new(1);
+        filter.overflow_channels = Vec::new();
+
+        filter.last_freq = -1.0;
+        filter.last_gain = -100.0;
+        filter.last_q = -1.0;
+        filter.last_cascades = -1.0;
+        filter.last_filter_type = T::default();
         filter
     }
 }
@@ -363,25 +493,34 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
         self.reset_state();
     }
 
-    /// Expands or shrinks the filter to handle N discrete channels
+    /// Expands or shrinks the filter to handle N discrete channels.
+    /// Channels 0-3 are covered by the SIMD wide stage; channels 4+ use scalar fallback.
     pub fn resize_channels(&mut self, new_channels: usize) {
         self.num_of_channels = new_channels as u8;
         let active_cascades = self.cascades.get().max(1.0) as usize;
-        self.channels
-            .resize(new_channels, SingleBiquadFilterStage::new(active_cascades));
+        self.wide_stage.resize_cascades(active_cascades);
+        if new_channels > 4 {
+            self.overflow_channels.resize_with(new_channels - 4, || {
+                SingleBiquadFilterStage::new(active_cascades)
+            });
+        } else {
+            self.overflow_channels.clear();
+        }
     }
 
     /// Expands or shrinks the filter's processing order (cascades)
     pub fn resize_cascades(&mut self, new_cascades: usize) {
-        for channel in &mut self.channels {
-            channel.resize_cascades(new_cascades);
+        self.wide_stage.resize_cascades(new_cascades);
+        for ch in &mut self.overflow_channels {
+            ch.resize_cascades(new_cascades);
         }
     }
 
     /// Clears all historical delay lines (prevents clicking when jumping playhead)
     pub fn reset_state(&mut self) {
-        for channel in &mut self.channels {
-            channel.reset_state();
+        self.wide_stage.reset_state();
+        for ch in &mut self.overflow_channels {
+            ch.reset_state();
         }
     }
 
@@ -397,34 +536,184 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
             return;
         }
 
-        // Dynamically resize cascades if the param changed
-        let active_cascades = self.cascades.get().max(1.0) as usize;
-        if self.channels.first().map_or(0, |ch| ch.stages.len()) != active_cascades {
-            self.resize_cascades(active_cascades);
-        }
-
         let freq = self.freq.get().clamp(20.0, self.sample_rate / 2.1); // Nyquist safety
         let q = self.q.get().max(0.01);
         let gain = self.gain.get();
+        let cascades = self.cascades.get();
+
+        // 🚀 THE FIX: Only do the math if the parameters actually changed!
+        if self.last_filter_type == filter_mode
+            && (self.last_freq - freq).abs() < 0.001
+            && (self.last_gain - gain).abs() < 0.001
+            && (self.last_q - q).abs() < 0.001
+            && (self.last_cascades - cascades).abs() < 0.001
+        {
+            return; // Skip the expensive math!
+        }
+
+        // Update the cache
+        self.last_filter_type = filter_mode;
+        self.last_freq = freq;
+        self.last_gain = gain;
+        self.last_q = q;
+        self.last_cascades = cascades;
+
+        // Dynamically resize cascades if the param changed
+        let active_cascades = cascades.max(1.0) as usize;
+        if self.wide_stage.stages.len() != active_cascades {
+            self.resize_cascades(active_cascades);
+        }
 
         self.coeff = filter_mode.get_coefficients(freq, q, gain, self.sample_rate);
     }
 
-    /// Process a single multi-channel frame of audio
+    /// Process a single multi-channel frame of audio.
+    /// Channels 0-3 are processed simultaneously via f32x4 SIMD.
+    /// Channels 4+ fall back to the scalar path (rare in practice).
     #[inline(always)]
     pub fn process_frame(&mut self, frame: &mut [f32]) {
         if !self.active.get() || self.filter_type.get().is_off() {
             return;
         }
 
-        for (ch_idx, sample) in frame
-            .iter_mut()
-            .enumerate()
-            .take(self.num_of_channels as usize)
-        {
-            if let Some(channel_filter) = self.channels.get_mut(ch_idx) {
-                *sample = channel_filter.process(*sample, &self.coeff);
+        let n = (self.num_of_channels as usize).min(frame.len());
+        if n == 0 {
+            return;
+        }
+
+        // ======================================
+        // SIMD path: pack up to 4 channels into f32x4, process, unpack
+        // ======================================
+        let wide_n = n.min(4);
+        let simd_input = f32x4::from([
+            frame[0],
+            if wide_n > 1 { frame[1] } else { 0.0 },
+            if wide_n > 2 { frame[2] } else { 0.0 },
+            if wide_n > 3 { frame[3] } else { 0.0 },
+        ]);
+        let out: [f32; 4] = self.wide_stage.process(simd_input, &self.coeff).into();
+        for i in 0..wide_n {
+            frame[i] = out[i];
+        }
+
+        // ======================================
+        // Scalar fallback: channels 4+ (e.g. 5.1, 7.1 surround)
+        // ======================================
+        for (ch_idx, scalar_ch) in self.overflow_channels.iter_mut().enumerate() {
+            let frame_idx = ch_idx + 4;
+            if frame_idx < frame.len() {
+                frame[frame_idx] = scalar_ch.process(frame[frame_idx], &self.coeff);
             }
         }
+    }
+
+    /// Returns the magnitude response in dB at the given frequency.
+    /// Reads the filter's own cached coefficients, cascade count, and active state.
+    ///
+    /// - Returns 0.0 dB if the filter is inactive or the filter type is `Off`.
+    /// - Relies on `calculate_coefficients()` having been called beforehand to
+    ///   ensure `self.coeff` reflects the current parameter values.
+    pub fn magnitude_db_at(&self, freq: f32) -> f32 {
+        if !self.active.get() || self.filter_type.get().is_off() {
+            return 0.0;
+        }
+
+        let num_stages = self.cascades.get().max(1.0) as usize;
+        self.coeff
+            .magnitude_db_at(freq, self.sample_rate, num_stages)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_biquad_coefficient_math() {
+        let filter_mode = BiquadFilterType::LowPass;
+        let freq = 1000.0;
+        let q = 0.707;
+        let gain = 0.0;
+        let sample_rate = 44100.0;
+
+        let coeffs = filter_mode.get_coefficients(freq, q, gain, sample_rate);
+
+        // Ensure coefficients are calculated and not NaNs
+        assert!(!coeffs.b0.is_nan());
+        assert!(!coeffs.b1.is_nan());
+        assert!(!coeffs.b2.is_nan());
+        assert!(!coeffs.a1.is_nan());
+        assert!(!coeffs.a2.is_nan());
+
+        // For a lowpass filter, response at DC (freq -> 0) should be around 0 dB (gain of 1.0)
+        let mag_db_dc = coeffs.magnitude_db_at(10.0, sample_rate, 1);
+        assert!(mag_db_dc.abs() < 0.1); // ~0 dB at low frequency
+
+        // Response above cutoff should be lower
+        let mag_db_high = coeffs.magnitude_db_at(10000.0, sample_rate, 1);
+        assert!(mag_db_high < -10.0); // significantly attenuated
+    }
+
+    #[test]
+    fn test_biquad_simd_and_scalar_fallback() {
+        let mut filter = BiquadFilter::<BiquadFilterType>::default();
+        // Set to 6 channels to test SIMD (4 channels) + Scalar (2 channels)
+        filter.prepare(6, 44100);
+        filter.active.set_base(1.0);
+        filter
+            .filter_type
+            .set_base(BiquadFilterType::LowPass as usize as f32);
+        filter.freq.set_base(1000.0);
+        filter.q.set_base(0.707);
+        filter.cascades.set_base(1.0);
+
+        filter.calculate_coefficients();
+
+        let mut frame = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        filter.process_frame(&mut frame);
+
+        // Output should not be 1.0 anymore since it's filtered
+        // Also it should not be NaN
+        for sample in frame.iter() {
+            assert!(!sample.is_nan());
+            assert!(*sample != 1.0);
+        }
+
+        // Since input is same for all channels, and all channels use same filter,
+        // the SIMD channels and Scalar channels should have the exact same output.
+        let val_simd = frame[0];
+        let val_scalar = frame[4];
+        assert!((val_simd - val_scalar).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_biquad_state_reset() {
+        let mut filter = BiquadFilter::<BiquadFilterType>::default();
+        filter.prepare(2, 44100);
+        filter.active.set_base(1.0);
+        filter
+            .filter_type
+            .set_base(BiquadFilterType::LowPass as usize as f32);
+        filter.freq.set_base(1000.0);
+        filter.cascades.set_base(1.0);
+
+        filter.calculate_coefficients();
+
+        // Feed an impulse to change state
+        let mut frame = [1.0, 1.0];
+        filter.process_frame(&mut frame);
+
+        // State should now be non-zero
+        let x1: [f32; 4] = filter.wide_stage.stages[0].x1.into();
+        assert!(x1[0] != 0.0);
+
+        // Reset state
+        filter.reset_state();
+
+        // State should be zero
+        let x1_reset: [f32; 4] = filter.wide_stage.stages[0].x1.into();
+        let y1_reset: [f32; 4] = filter.wide_stage.stages[0].y1.into();
+        assert_eq!(x1_reset[0], 0.0);
+        assert_eq!(y1_reset[0], 0.0);
     }
 }

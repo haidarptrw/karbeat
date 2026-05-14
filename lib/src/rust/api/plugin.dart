@@ -202,6 +202,13 @@ Future<int> executeRealtimePluginCommand({
 Stream<UiPluginCommandResponse> createPluginMessageStream() =>
     RustLib.instance.api.crateApiPluginCreatePluginMessageStream();
 
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>>
+abstract class PluginBufferHandle implements RustOpaqueInterface {
+  /// Reads the current buffer state directly into a Dart Float32List.
+  /// This bypasses JSON entirely and takes less than a microsecond.
+  Float32List read();
+}
+
 enum KarbeatPluginType { generator, effect }
 
 class UiEffectParameterSnapshot {

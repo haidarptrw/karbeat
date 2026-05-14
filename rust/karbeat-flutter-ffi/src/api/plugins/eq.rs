@@ -4,7 +4,7 @@ use karbeat_core::{
     core::project::TrackId,
     lock::{get_app_read, get_plugin_registry_read},
 };
-use karbeat_plugins::effect::parametric_eq::KarbeatParametricEQ;
+use karbeat_plugins::effect::parametric_eq::DigiParametricEQ;
 
 use crate::api::plugin::UiEffectTarget;
 
@@ -100,7 +100,7 @@ pub fn get_eq_response_curve(
     // Downcast to KarbeatParametricEQ to access compute_magnitude_response
     let eq = temp_plugin
         .as_any()
-        .downcast_ref::<KarbeatParametricEQ>()
+        .downcast_ref::<DigiParametricEQ>()
         .ok_or_else(|| "Effect is not a Parametric EQ".to_string())?;
 
     let response = eq.compute_magnitude_response(num_points as usize);

@@ -16,14 +16,14 @@ class MainScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentContext = ref.watch(
-      karbeatStateProvider.select((s) => s.currentToolbarContext),
+      globalStateProvider.select((s) => s.currentToolbarContext),
     );
     final showMidiKeyboard = ref.watch(
-      karbeatStateProvider.select((s) => s.showFloatingMidiKeyboard),
+      globalStateProvider.select((s) => s.showFloatingMidiKeyboard),
     );
 
     final showExportPanel = ref.watch(
-      karbeatStateProvider.select((s) => s.showExportPanel),
+      globalStateProvider.select((s) => s.showExportPanel),
     );
 
     return Scaffold(
@@ -63,7 +63,7 @@ class MainScreen extends ConsumerWidget {
             Positioned.fill(
               child: ProjectExportPanel(
                 onClose: () {
-                  ref.read(karbeatStateProvider).closeExportPanel();
+                  ref.read(globalStateProvider).closeExportPanel();
                 },
               ),
             ),
@@ -78,21 +78,21 @@ class MainScreen extends ConsumerWidget {
     WidgetRef ref,
     ToolbarMenuContextGroup currentContext,
   ) {
-    final group = KarbeatState.menuGroups.firstWhere(
+    final group = GlobalAppState.menuGroups.firstWhere(
       (g) => g.id == currentContext,
     );
 
     return ContextPanel(
       group: group,
       onAction: (action) {
-        final state = ref.read(karbeatStateProvider);
+        final state = ref.read(globalStateProvider);
         state.closeContextPanel();
         action.callback?.call(context, state);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Executed: ${action.title}')));
       },
-      onClose: () => ref.read(karbeatStateProvider).closeContextPanel(),
+      onClose: () => ref.read(globalStateProvider).closeContextPanel(),
     );
   }
 }

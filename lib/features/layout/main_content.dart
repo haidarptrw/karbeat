@@ -15,7 +15,7 @@ class MainContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentView = ref.watch(
-      karbeatStateProvider.select((s) => s.currentView),
+      globalStateProvider.select((s) => s.currentView),
     );
 
     return Container(
@@ -54,7 +54,7 @@ class MainContent extends ConsumerWidget {
   }
 
   Widget _buildPianoRoll(WidgetRef ref) {
-    final state = ref.watch(karbeatStateProvider);
+    final state = ref.watch(globalStateProvider);
 
     // Try to get pattern from focused clip (most recently selected)
     final clipId = state.focusClipId;
@@ -79,7 +79,7 @@ class MainContent extends ConsumerWidget {
     // Fallback: Use editingPatternId (from source list)
     resultPatternId ??= state.editingPatternId;
 
-    KarbeatLogger.info(
+    AppLogger.info(
       "Opening piano roll for pattern: $resultPatternId on track: $generatorId",
     );
 

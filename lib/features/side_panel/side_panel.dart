@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:karbeat/models/menu_group.dart';
 
 class ContextPanel extends StatelessWidget {
-  final KarbeatToolbarMenuGroup group;
-  final Function(KarbeatToolbarMenuAction) onAction;
+  final DawToolbarMenuGroup group;
+  final Function(DawToolbarMenuAction) onAction;
   final VoidCallback onClose;
 
   const ContextPanel({
@@ -13,7 +13,7 @@ class ContextPanel extends StatelessWidget {
     required this.onClose,
   });
 
- @override
+  @override
   Widget build(BuildContext context) {
     return Container(
       width: 240,
@@ -42,7 +42,7 @@ class ContextPanel extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Simple text list
           Expanded(
             child: ListView(
@@ -54,7 +54,10 @@ class ContextPanel extends StatelessWidget {
                     onTap: () => onAction(action),
                     borderRadius: BorderRadius.circular(4),
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       child: Row(
                         children: [
                           Expanded(
@@ -62,14 +65,19 @@ class ContextPanel extends StatelessWidget {
                               action.title,
                               style: TextStyle(
                                 fontSize: 14,
-                                color: action.isDestructive ? Colors.red : Colors.grey.shade800,
+                                color: action.isDestructive
+                                    ? Colors.red
+                                    : Colors.grey.shade800,
                               ),
                             ),
                           ),
                           if (action.shortcut != null)
                             Container(
                               margin: EdgeInsets.only(left: 8),
-                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(3),

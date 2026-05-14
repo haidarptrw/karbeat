@@ -19,7 +19,7 @@ class SourceListScreen extends ConsumerWidget {
 
     if (result != null && result.files.single.path != null) {
       String path = result.files.single.path!;
-      await ref.read(karbeatStateProvider).addAudioFile(path);
+      await ref.read(globalStateProvider).addAudioFile(path);
       ref.invalidate(audioSourcesProvider);
     }
   }
@@ -29,7 +29,7 @@ class SourceListScreen extends ConsumerWidget {
         ref,
       ) async {
         // Read the main state provider once to access the API
-        final appState = ref.read(karbeatStateProvider);
+        final appState = ref.read(globalStateProvider);
         final result = await appState.getLoadedAudioSources();
 
         if (result.isOk() && result.ok() != null) {
@@ -45,10 +45,10 @@ class SourceListScreen extends ConsumerWidget {
     final audioSourcesAsync = ref.watch(audioSourcesProvider);
 
     final generators = ref.watch(
-      karbeatStateProvider.select((s) => s.generators),
+      globalStateProvider.select((s) => s.generators),
     );
 
-    final patterns = ref.watch(karbeatStateProvider.select((s) => s.patterns));
+    final patterns = ref.watch(globalStateProvider.select((s) => s.patterns));
 
     return Scaffold(
       backgroundColor: Colors.grey.shade900,
@@ -114,7 +114,7 @@ class SourceListScreen extends ConsumerWidget {
                   Widget screen;
                   try {
                     final availableGenerators = ref
-                        .read(karbeatStateProvider)
+                        .read(globalStateProvider)
                         .availableGenerators;
                     final registryId = availableGenerators
                         .firstWhere((p) => p.id == genInstance?.registryId)
@@ -261,7 +261,7 @@ class SourceListScreen extends ConsumerWidget {
                 icon: Icons.music_note,
                 color: Colors.purpleAccent,
                 onTap: () {
-                  ref.read(karbeatStateProvider).openPattern(id);
+                  ref.read(globalStateProvider).openPattern(id);
                 },
                 onPlace: () => ref
                     .read(clipPlacementProvider.notifier)

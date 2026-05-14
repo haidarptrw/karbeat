@@ -76,7 +76,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
   void _handleNoteOn(int note) {
     final generatorId =
-        ref.read(karbeatStateProvider).previewGeneratorId ?? widget.generatorId;
+        ref.read(globalStateProvider).previewGeneratorId ?? widget.generatorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -86,14 +86,14 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
           isOn: true,
         );
       } catch (e) {
-        KarbeatLogger.error("Failed to play preview note: $e");
+        AppLogger.error("Failed to play preview note: $e");
       }
     }
   }
 
   void _handleNoteOff(int note) {
     final generatorId =
-        ref.read(karbeatStateProvider).previewGeneratorId ?? widget.generatorId;
+        ref.read(globalStateProvider).previewGeneratorId ?? widget.generatorId;
     if (generatorId != null) {
       try {
         playPreviewNoteGenerator(
@@ -103,13 +103,13 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
           isOn: false,
         );
       } catch (e) {
-        KarbeatLogger.error("Failed to play preview note: $e");
+        AppLogger.error("Failed to play preview note: $e");
       }
     }
   }
 
   void _handleZoom(double scale) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final newZoom =
         state.zoomLevelTick *
         scale; // we not clamp here because the zoomLevelTick setter already handle clamping
@@ -127,16 +127,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     return (960.0 * 4.0 / denom.value).round();
   }
 
-  // Helper to convert int back to GridSize for the setter
-  GridSize _intToGridSize(int val) {
-    return GridSize.values.firstWhere(
-      (e) => e.value == val.toDouble(),
-      orElse: () => GridSize.quarter, // Default fallback
-    );
-  }
-
   void _handleBrushAdd(Offset localPos) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final gridDenom = state.pianoRollGridDenom;
     final zoomX = state.zoomLevelTick;
 
@@ -159,7 +151,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   void _submitBrushAdd(int patternId) {
     if (_brushAddNotes.isNotEmpty) {
       ref
-          .read(karbeatStateProvider)
+          .read(globalStateProvider)
           .addPatternNoteBatch(
             patternId: patternId,
             notes: List.from(_brushAddNotes),
@@ -172,7 +164,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   }
 
   void _handleBrushDelete(Offset localPos, UiPattern pattern) {
-    final zoomX = ref.read(karbeatStateProvider).zoomLevelTick;
+    final zoomX = ref.read(globalStateProvider).zoomLevelTick;
     int tick = (localPos.dx / zoomX).round();
     int keyIndex = (localPos.dy / _keyHeight).floor();
     int midiKey = (127 - keyIndex).clamp(0, 127);
@@ -197,7 +189,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   void _submitBrushDelete(int patternId) {
     if (_brushDeleteNoteIds.isNotEmpty) {
       ref
-          .read(karbeatStateProvider)
+          .read(globalStateProvider)
           .deletePatternNoteBatch(
             patternId: patternId,
             noteIds: _brushDeleteNoteIds.toList(),
@@ -214,14 +206,46 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     _brushDeleteNoteIds.clear();
   }
 
+  void _handleHorizontalAutoScroll(double globalX) {
+    const double edgeThreshold = 50.0;
+    const double maxSpeed = 14.0;
+
+    // Width of the piano-key sidebar so we can compute the grid's screen rect
+    final double gridLeft = _keyWidth; // same constant used for SizedBox width
+    final double screenWidth = MediaQuery.of(context).size.width;
+
+    double dx = 0;
+    if (globalX < gridLeft + edgeThreshold) {
+      // Near / past left edge — scroll left, faster the closer to the edge
+      final ratio = ((gridLeft + edgeThreshold) - globalX) / edgeThreshold;
+      dx = -maxSpeed * ratio.clamp(0.0, 1.0);
+    } else if (globalX > screenWidth - edgeThreshold) {
+      // Near / past right edge — scroll right
+      final ratio = (globalX - (screenWidth - edgeThreshold)) / edgeThreshold;
+      dx = maxSpeed * ratio.clamp(0.0, 1.0);
+    }
+
+    if (dx != 0) {
+      if (_gridHorizontalController.hasClients) {
+        _gridHorizontalController.jumpTo(
+          (_gridHorizontalController.offset + dx).clamp(
+            0.0,
+            _gridHorizontalController.position.maxScrollExtent,
+          ),
+        );
+      }
+    }
+  }
+
   void _handleAutoScroll(Offset globalPos, Size screenSize) {
     const double edgeThreshold = 40.0;
     const double scrollSpeed = 10.0;
+    final double gridLeft = _keyWidth;
 
     double dx = 0;
     double dy = 0;
 
-    if (globalPos.dx < edgeThreshold) {
+    if (globalPos.dx < gridLeft + edgeThreshold) {
       dx = -scrollSpeed;
     } else if (globalPos.dx > screenSize.width - edgeThreshold) {
       dx = scrollSpeed;
@@ -272,7 +296,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   void _commitRangeSelection(UiPattern pattern) {
     if (_selectionStart == null || _selectionEnd == null) return;
 
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final zoomX = state.zoomLevelTick;
     final rect = Rect.fromPoints(_selectionStart!, _selectionEnd!);
 
@@ -314,7 +338,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
       );
     }
 
-    final state = ref.watch(karbeatStateProvider);
+    final state = ref.watch(globalStateProvider);
     final pattern = state.patterns[widget.patternId];
     final zoomX = state.zoomLevelTick;
     final selectedTool = state.pianoRollTool;
@@ -377,8 +401,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                 onGridDenomChanged: (val) {
                   if (val != null) {
                     setState(() {
-                      ref.read(karbeatStateProvider).pianoRollGridDenom =
-                          _intToGridSize(val);
+                      ref.read(globalStateProvider).pianoRollGridDenom = val;
                     });
                   }
                 },
@@ -418,7 +441,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       isOn: isOn,
                                     );
                                   } catch (e) {
-                                    KarbeatLogger.error(e.toString());
+                                    AppLogger.error(e.toString());
                                   }
                                 }
                               },
@@ -500,9 +523,23 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       setState(() {
                                         _selectionEnd = event.localPosition;
                                       });
+
+                                      _handleHorizontalAutoScroll(
+                                        event.position.dx, // global X
+                                      );
+
+                                      // Also handle vertical auto-scroll for selection
+                                      final screenSize = MediaQuery.of(
+                                        context,
+                                      ).size;
+                                      _handleAutoScroll(
+                                        event.position, // global Offset
+                                        screenSize,
+                                      );
                                     }
                                   },
                                   onPointerUp: (event) {
+                                    _stopAutoScroll();
                                     if (isInteracting) {
                                       setState(() => isInteracting = false);
                                     }
@@ -532,7 +569,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                         child: ContextMenuWrapper(
                                           title: "Actions",
                                           actions: [
-                                            KarbeatContextAction(
+                                            DawContextAction(
                                               title: "Paste",
                                               icon: Icons.paste,
                                               onTap: () {
@@ -562,7 +599,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                     snap;
 
                                                 ref
-                                                    .read(karbeatStateProvider)
+                                                    .read(globalStateProvider)
                                                     .pasteNotesFromClipboardToPattern(
                                                       pattern.id,
                                                       snappedTick,
@@ -620,6 +657,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                         globalPos,
                                                         screenSize,
                                                       );
+                                                      _handleHorizontalAutoScroll(
+                                                        globalPos.dx,
+                                                      );
                                                     }
                                                   },
                                                   onDragEnd: () {
@@ -667,6 +707,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       _handleAutoScroll(
                                                         globalPos,
                                                         screenSize,
+                                                      );
+                                                      _handleHorizontalAutoScroll(
+                                                        globalPos.dx,
                                                       );
                                                     }
                                                   },
@@ -742,28 +785,28 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                           if (selectedNoteIds.isNotEmpty)
                             FloatingContextPanel(
                               actions: [
-                                KarbeatContextAction(
+                                DawContextAction(
                                   title: "Delete",
                                   onTap: () {
                                     ref
-                                        .read(karbeatStateProvider)
+                                        .read(globalStateProvider)
                                         .deletePatternNoteBatch(
                                           patternId: pattern.id,
                                           noteIds: selectedNoteIds.toList(),
                                         );
                                     ref
-                                        .read(karbeatStateProvider)
+                                        .read(globalStateProvider)
                                         .clearNoteSelection();
                                   },
                                 ),
-                                KarbeatContextAction(
+                                DawContextAction(
                                   title: "Copy",
                                   onTap: () async {
                                     if (widget.patternId == null) {
                                       return;
                                     }
                                     await ref
-                                        .read(karbeatStateProvider)
+                                        .read(globalStateProvider)
                                         .copyNotesFromPattern(
                                           widget.patternId!,
                                           selectedNoteIds.toList(),
@@ -771,7 +814,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     // we do not clear because every DAW do this
                                   },
                                 ),
-                                KarbeatContextAction(
+                                DawContextAction(
                                   title: "Cut",
                                   onTap: () async {
                                     if (widget.patternId == null) {
@@ -779,7 +822,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     }
 
                                     await ref
-                                        .read(karbeatStateProvider)
+                                        .read(globalStateProvider)
                                         .cutNotesFromPattern(
                                           widget.patternId!,
                                           selectedNoteIds.toList(),
@@ -789,7 +832,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                               ],
                               onClose: () {
                                 ref
-                                    .read(karbeatStateProvider)
+                                    .read(globalStateProvider)
                                     .clearNoteSelection();
                               },
                               title: "${selectedNoteIds.length} Note(s)",
@@ -833,7 +876,7 @@ class _PianoRollToolbar extends ConsumerWidget {
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final GridSize gridDenom;
-  final ValueChanged<int?> onGridDenomChanged;
+  final ValueChanged<GridSize?> onGridDenomChanged;
 
   const _PianoRollToolbar({
     required this.patternId,
@@ -846,7 +889,7 @@ class _PianoRollToolbar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(karbeatStateProvider);
+    final state = ref.watch(globalStateProvider);
     final selectedTool = state.pianoRollTool;
     final generators = state.generators;
     final previewGeneratorId = state.previewGeneratorId;
@@ -863,7 +906,7 @@ class _PianoRollToolbar extends ConsumerWidget {
           children: [
             // Pattern transport
             StreamBuilder(
-              stream: ref.read(karbeatStateProvider).positionStream,
+              stream: ref.read(globalStateProvider).positionStream,
               builder: (context, asyncSnapshot) {
                 final feedback = asyncSnapshot.data;
                 final isPatternPlaying =
@@ -965,19 +1008,59 @@ class _PianoRollToolbar extends ConsumerWidget {
             const SizedBox(width: 8),
 
             // Grid dropdown
-            DropdownButton<int>(
-              value: gridDenom.value.toInt(),
+            DropdownButton<GridSize>(
+              value: gridDenom,
               dropdownColor: Colors.grey.shade800,
               style: const TextStyle(color: Colors.white, fontSize: 12),
               underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(value: 1, child: Text("1/1")),
-                DropdownMenuItem(value: 2, child: Text("1/2")),
-                DropdownMenuItem(value: 4, child: Text("1/4")),
-                DropdownMenuItem(value: 8, child: Text("1/8")),
-                DropdownMenuItem(value: 16, child: Text("1/16")),
-                DropdownMenuItem(value: 32, child: Text("1/32")),
-              ],
+              items: GridSize.values.map((element) {
+                String label = "";
+                switch (element) {
+                  case GridSize.oneBar:
+                    label = "4 Beats";
+                    break;
+                  case GridSize.twoBeat:
+                    label = "2 Beats";
+                    break;
+                  case GridSize.full:
+                    label = "1 Beat";
+                    break;
+                  case GridSize.half:
+                    label = "1/2 Beat";
+                    break;
+                  case GridSize.third:
+                    label = "1/3 Beat";
+                    break;
+                  case GridSize.quarter:
+                    label = "1/4 Beat";
+                    break;
+                  case GridSize.sixth:
+                    label = "1/6 Beat";
+                    break;
+                  case GridSize.eighth:
+                    label = "1/8 Beat";
+                  case GridSize.twelfth:
+                    label = "1/12 Beat";
+                    break;
+                  case GridSize.sixteenth:
+                    label = "1/16 Beat";
+                    break;
+                  case GridSize.thirtysecond:
+                    label = "1/32 Beat";
+                    break;
+                  case GridSize.sixtyfourth:
+                    label = "1/64 Beat";
+                    break;
+                  case GridSize.infinity:
+                    label = "None";
+                    break;
+                }
+
+                return DropdownMenuItem<GridSize>(
+                  value: element, // Set the value to the enum itself
+                  child: Text(label),
+                );
+              }).toList(),
               onChanged: onGridDenomChanged,
             ),
             const SizedBox(width: 8),
@@ -1022,7 +1105,7 @@ class _PianoRollToolbar extends ConsumerWidget {
                   try {
                     switchPatternGenerator(generatorId: value);
                   } catch (e) {
-                    KarbeatLogger.error("Failed to hot-swap generator: $e");
+                    AppLogger.error("Failed to hot-swap generator: $e");
                   }
                 }
               },
@@ -1044,7 +1127,7 @@ class _PianoRollToolbar extends ConsumerWidget {
         generatorId: generatorId,
       );
     } catch (e) {
-      KarbeatLogger.error('Pattern playback error: $e');
+      AppLogger.error('Pattern playback error: $e');
     }
   }
 }
@@ -1244,7 +1327,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
           isOn: on,
         );
       } catch (e) {
-        KarbeatLogger.error(e.toString());
+        AppLogger.error(e.toString());
       }
     }
   }
@@ -1279,7 +1362,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
               }
 
               if (widget.selectedTool == PianoRollToolSelection.delete) {
-                final state = ref.read(karbeatStateProvider);
+                final state = ref.read(globalStateProvider);
                 final selectedIds = state.selectedNoteIds;
                 if (selectedIds.length > 1 &&
                     selectedIds.contains(widget.noteId)) {
@@ -1302,7 +1385,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
               final localPos = renderBox.globalToLocal(details.globalPosition);
 
               // Hit test edge for resizing
-              const edgeThreshold = 10.0;
+              const edgeThreshold = 3.0;
 
               setState(() {
                 if (localPos.dx > _localWidth - edgeThreshold) {
@@ -1350,7 +1433,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
                 _currentPreviewKey = null;
               }
 
-              final state = ref.read(karbeatStateProvider);
+              final state = ref.read(globalStateProvider);
 
               if (widget.generatorId != null) {
                 try {
@@ -1361,7 +1444,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
                     isOn: false,
                   );
                 } catch (e) {
-                  KarbeatLogger.error(e.toString());
+                  AppLogger.error(e.toString());
                 }
               }
 
@@ -1589,7 +1672,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
           isOn: on,
         );
       } catch (e) {
-        KarbeatLogger.error(e.toString());
+        AppLogger.error(e.toString());
       }
     }
   }
@@ -1650,12 +1733,12 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                   onTap: () {
                     if (widget.selectedTool == PianoRollToolSelection.delete) {
                       ref
-                          .read(karbeatStateProvider)
+                          .read(globalStateProvider)
                           .deletePatternNoteBatch(
                             patternId: widget.patternId,
                             noteIds: widget.notes.map((e) => e.id).toList(),
                           );
-                      ref.read(karbeatStateProvider).clearNoteSelection();
+                      ref.read(globalStateProvider).clearNoteSelection();
                     }
                   },
                   onPanStart: (details) {
@@ -1699,7 +1782,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                       _currentPreviewKey = null;
                     }
 
-                    final state = ref.read(karbeatStateProvider);
+                    final state = ref.read(globalStateProvider);
                     int snap = widget.snapTicks;
 
                     if (_mode == _NoteDragMode.move) {
@@ -1830,7 +1913,7 @@ class _PianoRollPlayheadOverlayState
   @override
   void initState() {
     super.initState();
-    _positionStream = ref.read(karbeatStateProvider).positionStream;
+    _positionStream = ref.read(globalStateProvider).positionStream;
   }
 
   int _getTicksFromFeedback(UiTransportFeedback pos) {

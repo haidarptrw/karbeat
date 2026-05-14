@@ -1,17 +1,30 @@
-use std::{any::Any, fmt::Debug};
+use std::{any::Any, fmt::Debug, sync::Arc};
 
 use hashbrown::HashMap;
+use parking_lot::Mutex;
 
 use karbeat_plugin_types::ParameterSpec;
 use serde_json::Value;
 
-use crate::types::{PluginCategory, ProcessContext};
+use crate::types::{PluginCategory, ProcessContext, ZeroCopyBuffer};
 
 // ============================================================================
 // CONTEXTS & TYPES
 // ============================================================================
 
-pub trait KarbeatPlugin: Send + Sync {
+/// ## Overview
+///
+/// Interface or Trait every plugin should respect.
+/// If you want your plugin to work as intended,
+/// You should implement all the interface
+/// available in this trait
+///
+/// ## Note
+///
+/// We don't specify a certain way to implement this interface
+/// All the logic used is up to you, and the performance
+/// of the computation is your responsibility
+pub trait AudioPlugin: Send + Sync {
     fn name(&self) -> &str;
 
     /// Tells the host what kind of plugin this is for track routing
@@ -51,7 +64,7 @@ pub trait KarbeatPlugin: Send + Sync {
             Vec::new()
         })
     }
-    
+
     /// Set state of plugin when saving plugin state
     fn set_state(&mut self, state: &[u8]) {
         if state.is_empty() {
@@ -85,11 +98,16 @@ pub trait KarbeatPlugin: Send + Sync {
         None
     }
 
+    /// Allows the plugin to expose a shared memory buffer by name
+    fn get_zero_copy_buffer(&self, _name: &str) -> Option<ZeroCopyBuffer> {
+        None // Default implementation does nothing
+    }
+
     /// An helper to enable downcasting
     fn as_any(&self) -> &dyn Any;
 }
 
-impl Debug for dyn KarbeatPlugin + Send + Sync {
+impl Debug for dyn AudioPlugin + Send + Sync {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("KarbeatPlugin")
             .field("name", &self.name())

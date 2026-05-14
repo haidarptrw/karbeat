@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 /// Context action for an context menu available component
 /// 
 /// This is related to [ContextMenuWrapper].
-class KarbeatContextAction {
+class DawContextAction {
   final String title;
   final IconData? icon;
   final VoidCallback onTap;
   final bool isDestructive;
   final Color? color;
 
-  KarbeatContextAction({
+  DawContextAction({
     required this.title,
     required this.onTap,
     this.icon,
@@ -24,7 +24,7 @@ class ContextMenuWrapper extends StatelessWidget {
   final Widget child;
   final String? title;
   final Widget? header;
-  final List<KarbeatContextAction> actions;
+  final List<DawContextAction> actions;
 
   const ContextMenuWrapper({
     super.key,
@@ -96,9 +96,9 @@ class ContextMenuWrapper extends StatelessWidget {
 }
 
 /// A floating panel that displays context-specific actions at the bottom of the screen.
-/// Uses the shared [KarbeatContextAction] model.
+/// Uses the shared [DawContextAction] model.
 class FloatingContextPanel extends StatelessWidget {
-  final List<KarbeatContextAction> actions;
+  final List<DawContextAction> actions;
   final VoidCallback onClose;
   final String title;
 
@@ -164,7 +164,7 @@ class FloatingContextPanel extends StatelessWidget {
 }
 
 class _FloatingActionButtonItem extends StatelessWidget {
-  final KarbeatContextAction action;
+  final DawContextAction action;
 
   const _FloatingActionButtonItem({required this.action});
 

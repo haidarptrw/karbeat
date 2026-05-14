@@ -15,6 +15,7 @@ import 'package:karbeat/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
+import 'package:karbeat/src/rust/api/waveform.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:karbeat/state/clip_placement_state.dart';
 import 'package:karbeat/utils/clip_time_utils.dart';
@@ -24,6 +25,7 @@ import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:multi_split_view/multi_split_view.dart';
 
 class TrackListScreen extends ConsumerWidget {
   const TrackListScreen({super.key});
@@ -33,16 +35,19 @@ class TrackListScreen extends ConsumerWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final parentHeight = constraints.maxHeight;
+        final parentWidth = constraints.maxWidth;
         if (parentHeight.isInfinite) return const SizedBox();
 
         final calculatedHeight = parentHeight * 0.15;
         final double itemHeight = calculatedHeight.clamp(60.0, 150.0);
-        const double headerWidth = 220.0;
+        final double headerWidth = parentWidth > 600
+            ? 220.0
+            : parentWidth * 0.35;
 
         return Builder(
           builder: (context) {
             final trackIdsStr = ref.watch(
-              karbeatStateProvider.select((s) {
+              globalStateProvider.select((s) {
                 final keys = s.tracks.keys.toList()..sort();
                 return keys.join(',');
               }),
@@ -89,6 +94,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   late ScrollController _rulerController; // Controller 1: Top Ruler
   late ScrollController _trackContentController; // Controller 2: Bottom Content
 
+  late MultiSplitViewController _trackSplitViewController;
+
   // Local state for ghost clip
   Offset? _mousePos;
   Offset? _lastRightClickPos;
@@ -117,6 +124,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   @override
   void initState() {
     super.initState();
+    _trackSplitViewController = MultiSplitViewController(
+      areas: [
+        Area(size: widget.headerWidth, min: 80, data: 'header'),
+        Area(min: 200, data: 'timeline'),
+      ],
+    );
+
     // Initialize the Linked Group
     _verticalControllers = LinkedScrollControllerGroup();
     _headerController = _verticalControllers.addAndGet();
@@ -127,7 +141,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
 
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     _activeSampleRate = state.hardwareConfig.sampleRate > 0
         ? state.hardwareConfig.sampleRate
         : 44100;
@@ -148,6 +162,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   @override
   void dispose() {
+    _trackSplitViewController.dispose();
     _clipDragController.removeListener(_onBatchDragUpdate);
     _clipDragController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
@@ -198,10 +213,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  // FIXME: Make the pivot stay still even in small zoom so that 
-  // it does not shift the pivot position relative to tick position in the timeline
   void _updateZoom(double newZoom, double focalPointX) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final oldZoom = state.horizontalZoomLevel;
 
     final clampedZoom = newZoom.clamp(1.0, 1000.0);
@@ -245,13 +258,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     // the scrollbar exactly to the edge of the content when zooming out.
     double newTimelineWidth = math.max(contentWidth, requiredWindowWidth);
 
-    // 3. Update the state immediately
+    // Update the state immediately
     state.horizontalZoomLevel = clampedZoom;
     setState(() {
       _timelineWidth = newTimelineWidth;
     });
 
-    // 4. Synchronous Jump
+    // Synchronous Jump
     // Because we are using UnclampedNeverScrollableScrollPhysics, this jump will
     // bypass Flutter's 1-frame layout boundary check, guaranteeing a flawless pivot.
     if (controller.hasClients) {
@@ -259,12 +272,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  void _handleTimelineGesture(
-    BuildContext context,
-    Offset localPosition, {
-    bool isDrag = false,
-  }) {
-    final state = ref.read(karbeatStateProvider);
+  void _handleTimelineGesture(BuildContext context, Offset localPosition) {
+    final state = ref.read(globalStateProvider);
     double scrollX = 0;
     if (_trackContentController.hasClients) {
       scrollX = _trackContentController.offset;
@@ -337,7 +346,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   /// Confirms the range selection and selects all clips within the time range
-  void _confirmRangeSelect(KarbeatState state) {
+  void _confirmRangeSelect(GlobalAppState state) {
     if (!_isRangeSelecting ||
         _rangeSelectStart == null ||
         _rangeSelectEnd == null ||
@@ -402,7 +411,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   /// Helper method to build the cut helper line
-  Widget _buildCutHelperLine(BuildContext context, KarbeatState state) {
+  Widget _buildCutHelperLine(BuildContext context, GlobalAppState state) {
     if (_mousePos == null || state.selectedTool != ToolSelection.slice) {
       return const SizedBox();
     }
@@ -422,10 +431,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     ticks = _snapClipShiftTick(ticks.toInt(), state).toDouble();
 
     double snappedAbsoluteX = ticks / zoomLevel;
-    double left = widget.headerWidth + (snappedAbsoluteX - scrollX);
+    double left = snappedAbsoluteX - scrollX;
 
     // Hide if scrolled out of view to the left
-    if (left < widget.headerWidth) return const SizedBox();
+    if (left < 0) return const SizedBox();
 
     return Positioned(
       left: left - 12, // Center the 24px wide column exactly on the cut point
@@ -449,765 +458,637 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Calculate total height to ensure both lists have exactly same extent
-    // +1 for the Add Button row
-    final int itemCount = widget.trackIds.length + 1;
-    final state = ref.read(karbeatStateProvider);
+  Widget _buildToolbar() {
+    return Container(
+      height: 36,
+      color: Colors.grey.shade900,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            const Text(
+              "Snap to Grid",
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(width: 8),
+            DropdownButton<GridSize>(
+              value: ref.watch(globalStateProvider.select((s) => s.gridSize)),
+              dropdownColor: Colors.grey.shade800,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              underline: const SizedBox(),
+              items: GridSize.values.map((size) {
+                String label = "";
+                switch (size) {
+                  case GridSize.full:
+                    label = "1/1";
+                    break;
+                  case GridSize.half:
+                    label = "1/2";
+                    break;
+                  case GridSize.third:
+                    label = "1/3";
+                    break;
+                  case GridSize.quarter:
+                    label = "1/4";
+                    break;
+                  case GridSize.sixth:
+                    label = "1/6";
+                    break;
+                  case GridSize.eighth:
+                    label = "1/8";
+                    break;
+                  case GridSize.sixteenth:
+                    label = "1/16";
+                    break;
+                  case GridSize.thirtysecond:
+                    label = "1/32";
+                    break;
+                  case GridSize.sixtyfourth:
+                    label = "1/64";
+                    break;
+                  case GridSize.oneBar:
+                    label = "1 Bar";
+                    break;
+                  case GridSize.twoBeat:
+                    label = "2 Beats";
+                    break;
+                  case GridSize.infinity:
+                    label = "None";
+                    break;
+                  case GridSize.twelfth:
+                    label = "1/12";
+                    break;
+                }
+                return DropdownMenuItem<GridSize>(
+                  value: size,
+                  child: Text(label),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) ref.read(globalStateProvider).setGridSize(val);
+              },
+            ),
+            const SizedBox(width: 16),
+            const Text(
+              "Move Step",
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(width: 8),
+            DropdownButton<MusicalBeatSize>(
+              value: ref.watch(
+                globalStateProvider.select(
+                  (s) => s.horizontalClipShiftSizeDenom,
+                ),
+              ),
+              dropdownColor: Colors.grey.shade800,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              underline: const SizedBox(),
+              items: MusicalBeatSize.values.map((size) {
+                String label = "";
+                switch (size) {
+                  case MusicalBeatSize.four:
+                    label = "1 Bar";
+                    break;
+                  case MusicalBeatSize.three:
+                    label = "3 Beats";
+                    break;
+                  case MusicalBeatSize.two:
+                    label = "2 Beats";
+                    break;
+                  case MusicalBeatSize.one:
+                    label = "1 Beat";
+                    break;
+                  case MusicalBeatSize.half:
+                    label = "1/2 Step";
+                    break;
+                  case MusicalBeatSize.quarter:
+                    label = "1/4 Step";
+                    break;
+                  case MusicalBeatSize.eighth:
+                    label = "1/8 Step";
+                    break;
+                  case MusicalBeatSize.sixteenth:
+                    label = "1/16 Step";
+                    break;
+                  case MusicalBeatSize.thirtysecond:
+                    label = "1/32 Step";
+                    break;
+                  case MusicalBeatSize.sixtyfourth:
+                    label = "1/64 Step";
+                    break;
+                  case MusicalBeatSize.none:
+                    label = "None";
+                    break;
+                  case MusicalBeatSize.third:
+                    label = "1/3 Step";
+                    break;
+                  case MusicalBeatSize.sixth:
+                    label = "1/6 Step";
+                    break;
+                  case MusicalBeatSize.twelfth:
+                    label = "1/12 Step";
+                    break;
+                }
+                return DropdownMenuItem<MusicalBeatSize>(
+                  value: size,
+                  child: Text(label),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  ref.read(globalStateProvider).horizontalClipShiftSizeDenom =
+                      val;
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderArea(int itemCount) {
+    return Column(
+      children: [
+        Container(
+          height: 30,
+          color: Colors.grey.shade800,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(left: 10),
+          child: const Text(
+            "Tracks",
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            controller: _headerController,
+            padding: EdgeInsets.zero,
+            itemCount: itemCount,
+            itemBuilder: (context, index) {
+              if (index == widget.trackIds.length) {
+                return _buildAddButton();
+              }
+              return _TrackHeader(
+                trackId: widget.trackIds[index],
+                itemHeight: widget.itemHeight,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimelineArea(BuildContext context, int itemCount) {
+    final state = ref.read(globalStateProvider);
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
     );
     final selectedTool = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedTool),
+      globalStateProvider.select((s) => s.selectedTool),
     );
     final horizontalZoom = ref.watch(
-      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
+      globalStateProvider.select((s) => s.horizontalZoomLevel),
     );
     final selectedClipIds = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedClipIds),
+      globalStateProvider.select((s) => s.selectedClipIds),
     );
-    final currentTimelineWidth = _timelineWidth;
     final bool isZooming = _isCtrlPressed || selectedTool == ToolSelection.zoom;
 
-    handleCursor() {
-      if (isPlacing) {
-        return SystemMouseCursors.move;
-      }
-
-      if (selectedTool == ToolSelection.select) {
+    MouseCursor handleCursor() {
+      if (isPlacing) return SystemMouseCursors.move;
+      if (selectedTool == ToolSelection.select)
         return SystemMouseCursors.precise;
-      }
-
-      if (selectedTool == ToolSelection.slice) {
-        return SystemMouseCursors.text;
-      }
-
+      if (selectedTool == ToolSelection.slice) return SystemMouseCursors.text;
       return SystemMouseCursors.basic;
     }
 
-    return Column(
+    return Stack(
       children: [
-        // Top Toolbar containing the Dropdowns above the Tracks/Ruler
-        Container(
-          height: 36,
-          color: Colors.grey.shade900,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              const Text(
-                "Snap to Grid",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(width: 8),
-              DropdownButton<GridSize>(
-                value: ref.watch(
-                  karbeatStateProvider.select((s) => s.gridSize),
-                ),
-                dropdownColor: Colors.grey.shade800,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                underline: const SizedBox(),
-                items: GridSize.values.map((size) {
-                  String label = "";
-                  switch (size) {
-                    case GridSize.full:
-                      label = "1/1";
-                      break;
-                    case GridSize.half:
-                      label = "1/2";
-                      break;
-                    case GridSize.third:
-                      label = "1/3";
-                      break;
-                    case GridSize.quarter:
-                      label = "1/4";
-                      break;
-                    case GridSize.sixth:
-                      label = "1/6";
-                      break;
-                    case GridSize.eighth:
-                      label = "1/8";
-                      break;
-                    case GridSize.sixteenth:
-                      label = "1/16";
-                      break;
-                    case GridSize.thirtysecond:
-                      label = "1/32";
-                      break;
-                    case GridSize.sixtyfourth:
-                      label = "1/64";
-                      break;
-                    case GridSize.oneBar:
-                      label = "1 Bar";
-                      break;
-                    case GridSize.twoBeat:
-                      label = "2 Beats";
-                      break;
-                    case GridSize.infinity:
-                      label = "None";
-                      break;
-                  }
-                  return DropdownMenuItem<GridSize>(
-                    value: size,
-                    child: Text(label),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    ref.read(karbeatStateProvider).setGridSize(val);
-                  }
-                },
-              ),
-              const SizedBox(width: 16),
-              const Text(
-                "Move Step",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              const SizedBox(width: 8),
-              DropdownButton<MusicalBeatSize>(
-                value: ref.watch(
-                  karbeatStateProvider.select(
-                    (s) => s.horizontalClipShiftSizeDenom,
-                  ),
-                ),
-                dropdownColor: Colors.grey.shade800,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-                underline: const SizedBox(),
-                items: MusicalBeatSize.values.map((size) {
-                  String label = "";
-                  switch (size) {
-                    case MusicalBeatSize.four:
-                      label = "1 Bar";
-                      break;
-                    case MusicalBeatSize.three:
-                      label = "3 Beats";
-                      break;
-                    case MusicalBeatSize.two:
-                      label = "2 Beats";
-                      break;
-                    case MusicalBeatSize.one:
-                      label = "1 Beat";
-                      break;
-                    case MusicalBeatSize.half:
-                      label = "1/2 Step";
-                      break;
-                    case MusicalBeatSize.quarter:
-                      label = "1/4 Step";
-                      break;
-                    case MusicalBeatSize.eighth:
-                      label = "1/8 Step";
-                      break;
-                    case MusicalBeatSize.sixteenth:
-                      label = "1/16 Step";
-                      break;
-                    case MusicalBeatSize.thirtysecond:
-                      label = "1/32 Step";
-                      break;
-                    case MusicalBeatSize.sixtyfourth:
-                      label = "1/64 Step";
-                      break;
-                    case MusicalBeatSize.none:
-                      label = "None";
-                      break;
-                  }
-                  return DropdownMenuItem<MusicalBeatSize>(
-                    value: size,
-                    child: Text(label),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    ref
-                            .read(karbeatStateProvider)
-                            .horizontalClipShiftSizeDenom =
-                        val;
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Stack(
-            children: [
-              Row(
-                children: [
-                  // ======== LEFT: TRACK HEADERS ==========
-                  SizedBox(
-                    width: widget.headerWidth,
-                    child: Column(
-                      children: [
-                        Container(
-                          height: 30,
-                          color: Colors.grey.shade800,
-                          alignment: Alignment.centerLeft,
-                          padding: const EdgeInsets.only(left: 10),
-                          child: const Text(
-                            "Tracks",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: ListView.builder(
-                            controller: _headerController, // Controller 1
-                            padding: EdgeInsets.zero,
-                            itemCount: itemCount,
-                            itemBuilder: (context, index) {
-                              if (index == widget.trackIds.length) {
-                                return _buildAddButton();
-                              }
-                              return _TrackHeader(
-                                trackId: widget.trackIds[index],
-                                itemHeight: widget.itemHeight,
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+        Column(
+          children: [
+            GestureDetector(
+              onTapDown: (details) {
+                double scrollX = _rulerController.hasClients
+                    ? _rulerController.offset
+                    : 0;
+                double absoluteX = details.localPosition.dx + scrollX;
+                final ticks = absoluteX * state.horizontalZoomLevel;
+                final sampleRate = _activeSampleRate > 0
+                    ? _activeSampleRate
+                    : 48000;
+                final samples =
+                    (ticks * (60.0 / state.tempo) * (sampleRate / 960.0))
+                        .round();
+                state.seekTo(samples);
+              },
+              onPanUpdate: (details) {
+                double scrollX = _rulerController.hasClients
+                    ? _rulerController.offset
+                    : 0;
+                double absoluteX = details.localPosition.dx + scrollX;
+                final ticks = absoluteX * state.horizontalZoomLevel;
+                final sampleRate = _activeSampleRate > 0
+                    ? _activeSampleRate
+                    : 48000;
+                final samples =
+                    (ticks * (60.0 / state.tempo) * (sampleRate / 960.0))
+                        .round();
+                state.seekTo(samples);
+              },
+              child: Container(
+                height: 30,
+                color: Colors.grey.shade800,
+                width: double.infinity,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  controller: _rulerController,
+                  physics: isZooming
+                      ? const UnclampedNeverScrollableScrollPhysics()
+                      : const ClampingScrollPhysics(),
+                  child: SizedBox(
+                    width: _timelineWidth,
+                    height: 30,
+                    child: _TimelineRuler(
+                      scrollController: _rulerController,
+                      sampleRate: _activeSampleRate,
                     ),
                   ),
-
-                  Container(width: 1, color: Colors.black),
-
-                  // ============ RIGHT: TIMELINE ==============
-                  Expanded(
-                    child: MouseRegion(
-                      onHover: (event) {
-                        _lastRightClickPos = event.localPosition;
-
-                        // Placement preview is updated by tap / pan / ghost drag only — not
-                        // hover — to avoid the ghost following the cursor and flickering.
-                        if (selectedTool == ToolSelection.slice ||
-                            selectedTool == ToolSelection.draw) {
-                          setState(() => _mousePos = event.localPosition);
-                        }
-                      },
-                      onExit: (_) {
-                        if (isPlacing) return;
-                        if (_mousePos != null) {
-                          setState(() => _mousePos = null);
-                        }
-                      },
-                      child: Listener(
-                        onPointerDown: (event) {
-                          _lastRightClickPos = event.localPosition;
-                          _mousePos = event.localPosition;
-                          if (event.buttons == kSecondaryButton) {
-                            _lastRightClickPos = event.localPosition;
-                            // Clear selection on right-click of empty space to prep for pasting
-                            ref.read(karbeatStateProvider).deselectAllClips();
-                            setState(() {});
+                ),
+              ),
+            ),
+            Expanded(
+              child: MouseRegion(
+                cursor: handleCursor(),
+                onHover: (event) {
+                  _lastRightClickPos = event.localPosition;
+                  if (selectedTool == ToolSelection.slice ||
+                      selectedTool == ToolSelection.draw) {
+                    setState(() => _mousePos = event.localPosition);
+                  }
+                },
+                onExit: (_) {
+                  if (isPlacing) return;
+                  if (_mousePos != null) setState(() => _mousePos = null);
+                },
+                child: Listener(
+                  onPointerDown: (event) {
+                    _lastRightClickPos = event.localPosition;
+                    _mousePos = event.localPosition;
+                    if (event.buttons == kSecondaryButton) {
+                      _lastRightClickPos = event.localPosition;
+                      ref.read(globalStateProvider).deselectAllClips();
+                      setState(() {});
+                    }
+                  },
+                  onPointerSignal: (event) {
+                    if (event is PointerScrollEvent && _isCtrlPressed) {
+                      final currentZoom = ref
+                          .read(globalStateProvider)
+                          .horizontalZoomLevel;
+                      final double multiplier = event.scrollDelta.dy > 0
+                          ? 0.9
+                          : 1.1;
+                      _updateZoom(
+                        currentZoom * multiplier,
+                        event.localPosition.dx,
+                      );
+                    }
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onPanUpdate: (details) {
+                      if (selectedTool == ToolSelection.select) {
+                        _updateRangeSelect(details.localPosition);
+                        return;
+                      }
+                      if (selectedTool == ToolSelection.zoom) {
+                        final currentZoom = ref
+                            .read(globalStateProvider)
+                            .horizontalZoomLevel;
+                        final double multiplier = details.delta.dy > 0
+                            ? 0.9
+                            : 1.1;
+                        _updateZoom(
+                          currentZoom * multiplier,
+                          details.localPosition.dx,
+                        );
+                        return;
+                      }
+                      if (selectedTool == ToolSelection.draw || isPlacing) {
+                        setState(() => _mousePos = details.localPosition);
+                        _updatePlacementTarget();
+                      }
+                    },
+                    onTapDown: isPlacing
+                        ? (details) {
+                            setState(() => _mousePos = details.localPosition);
+                            _updatePlacementTarget();
                           }
-                        },
-                        onPointerSignal: (event) {
-                          if (event is PointerScrollEvent) {
-                            if (_isCtrlPressed) {
-                              final currentZoom = ref
-                                  .read(karbeatStateProvider)
-                                  .horizontalZoomLevel;
-                              final double multiplier = event.scrollDelta.dy > 0
-                                  ? 0.9
-                                  : 1.1;
-
-                              _updateZoom(
-                                currentZoom * multiplier,
-                                event.localPosition.dx,
-                              );
-                            }
-                          }
-                        },
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onTapDown: (details) => _handleTimelineGesture(
+                        : (details) => _handleTimelineGesture(
                             context,
                             details.localPosition,
-                            isDrag: false,
                           ),
-                          onPanStart: (details) {
-                            // Start range selection when select tool is active
-                            if (selectedTool == ToolSelection.select) {
-                              _startRangeSelect(details.localPosition);
-                            }
-                          },
-                          onPanUpdate: (details) {
-                            // Handle range selection updates
-                            if (selectedTool == ToolSelection.select) {
-                              _updateRangeSelect(details.localPosition);
-                              return;
-                            }
-                            if (selectedTool == ToolSelection.zoom) {
-                              final currentZoom = ref
-                                  .read(karbeatStateProvider)
-                                  .horizontalZoomLevel;
-                              final double multiplier = details.delta.dy > 0
-                                  ? 0.9
-                                  : 1.1;
-                              _updateZoom(
-                                currentZoom * multiplier,
-                                details.localPosition.dx,
-                              );
-                              return;
-                            }
-                            if (selectedTool == ToolSelection.draw ||
-                                isPlacing) {
-                              setState(() => _mousePos = details.localPosition);
-                              _updatePlacementTarget();
-                            }
-                          },
-                          onPanEnd: (details) {
-                            // Confirm range selection when select tool is active
-                            if (selectedTool == ToolSelection.select &&
-                                _isRangeSelecting) {
-                              _confirmRangeSelect(state);
-                            }
-                          },
-                          child: Column(
-                            children: [
-                              GestureDetector(
-                                onTapDown: (details) {
-                                  double scrollX = _rulerController.hasClients
-                                      ? _rulerController.offset
-                                      : 0;
-                                  double absoluteX =
-                                      details.localPosition.dx + scrollX;
-                                  final ticks =
-                                      absoluteX * state.horizontalZoomLevel;
-                                  final sampleRate = _activeSampleRate > 0
-                                      ? _activeSampleRate
-                                      : 48000;
-                                  final samples =
-                                      (ticks *
-                                              (60.0 / state.tempo) *
-                                              (sampleRate / 960.0))
-                                          .round();
-                                  state.seekTo(samples);
-                                },
-                                onPanUpdate: (details) {
-                                  double scrollX = _rulerController.hasClients
-                                      ? _rulerController.offset
-                                      : 0;
-                                  double absoluteX =
-                                      details.localPosition.dx + scrollX;
-                                  final ticks =
-                                      absoluteX * state.horizontalZoomLevel;
-                                  final sampleRate = _activeSampleRate > 0
-                                      ? _activeSampleRate
-                                      : 48000;
-                                  final samples =
-                                      (ticks *
-                                              (60.0 / state.tempo) *
-                                              (sampleRate / 960.0))
-                                          .round();
-                                  state.seekTo(samples);
-                                },
-                                child: Container(
-                                  height: 30,
-                                  color: Colors.grey.shade800,
-                                  width: double.infinity,
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    controller: _rulerController,
-                                    physics: isZooming
-                                        ? const UnclampedNeverScrollableScrollPhysics()
-                                        : const ClampingScrollPhysics(),
-                                    child: SizedBox(
-                                      width: currentTimelineWidth,
-                                      height: 30,
-                                      child: _TimelineRuler(
-                                        scrollController: _rulerController,
-                                        sampleRate: _activeSampleRate,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: MouseRegion(
-                                  cursor: handleCursor(),
-                                  onHover: null,
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.translucent,
-                                    onPanUpdate: null,
-                                    onTapDown: isPlacing
-                                        ? (details) {
-                                            setState(() {
-                                              _mousePos = details.localPosition;
-                                            });
-                                            _updatePlacementTarget();
-                                          }
-                                        : null,
-                                    child: ScrollConfiguration(
-                                      // Only allow Mouse Drag scrolling when using Pointer
-                                      behavior:
-                                          (selectedTool ==
-                                              ToolSelection.pointer)
-                                          ? DragScrollBehavior()
-                                          : ScrollConfiguration.of(
-                                              context,
-                                            ).copyWith(
-                                              dragDevices: {
-                                                PointerDeviceKind.touch,
-                                                PointerDeviceKind.trackpad,
-                                              },
-                                            ),
-                                      child: Scrollbar(
-                                        controller: _trackContentController,
-                                        thumbVisibility: true,
-                                        trackVisibility: true,
-                                        child: SingleChildScrollView(
-                                          scrollDirection: Axis.horizontal,
-                                          controller: _trackContentController,
-                                          physics: isZooming
-                                              ? const UnclampedNeverScrollableScrollPhysics()
-                                              : const ClampingScrollPhysics(),
-                                          child: SizedBox(
-                                            width: currentTimelineWidth,
-                                            child: ContextMenuWrapper(
-                                              title: "Track Options",
-                                              actions: [
-                                                KarbeatContextAction(
-                                                  title: "Paste",
-                                                  icon: Icons.paste,
-                                                  onTap: () async {
-                                                    final targetPos =
-                                                        _lastRightClickPos;
-                                                    // debugPrint(
-                                                    //   targetPos.toString(),
-                                                    // );
-                                                    if (targetPos == null) {
-                                                      return;
-                                                    }
-                                                    final currentState = ref
-                                                        .read(
-                                                          karbeatStateProvider,
-                                                        );
+                    onPanStart: (details) {
+                      if (selectedTool == ToolSelection.select)
+                        _startRangeSelect(details.localPosition);
+                    },
+                    onPanEnd: (details) {
+                      if (selectedTool == ToolSelection.select &&
+                          _isRangeSelecting) {
+                        _confirmRangeSelect(state);
+                      }
+                    },
+                    child: ScrollConfiguration(
+                      behavior: (selectedTool == ToolSelection.pointer)
+                          ? DragScrollBehavior()
+                          : ScrollConfiguration.of(context).copyWith(
+                              dragDevices: {
+                                PointerDeviceKind.touch,
+                                PointerDeviceKind.trackpad,
+                              },
+                            ),
+                      child: Scrollbar(
+                        controller: _trackContentController,
+                        thumbVisibility: true,
+                        trackVisibility: true,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          controller: _trackContentController,
+                          physics: isZooming
+                              ? const UnclampedNeverScrollableScrollPhysics()
+                              : const ClampingScrollPhysics(),
+                          child: SizedBox(
+                            width: _timelineWidth,
+                            child: ContextMenuWrapper(
+                              title: "Track Options",
+                              actions: [
+                                DawContextAction(
+                                  title: "Paste",
+                                  icon: Icons.paste,
+                                  onTap: () async {
+                                    final targetPos = _lastRightClickPos;
+                                    if (targetPos == null) return;
 
-                                                    // 1. Calculate Target Track
-                                                    double scrollY =
-                                                        _timelineController
-                                                            .hasClients
-                                                        ? _timelineController
-                                                              .offset
-                                                        : 0;
-                                                    double absoluteY =
-                                                        targetPos.dy + scrollY;
-                                                    int trackIndex =
-                                                        (absoluteY /
-                                                                widget
-                                                                    .itemHeight)
-                                                            .floor();
-                                                    trackIndex = trackIndex
-                                                        .clamp(
-                                                          0,
-                                                          widget
-                                                                  .trackIds
-                                                                  .length -
-                                                              1,
-                                                        );
+                                    final currentState = ref.read(
+                                      globalStateProvider,
+                                    );
+                                    double scrollY =
+                                        _timelineController.hasClients
+                                        ? _timelineController.offset
+                                        : 0;
+                                    double absoluteY = targetPos.dy + scrollY;
+                                    int trackIndex =
+                                        (absoluteY / widget.itemHeight).floor();
+                                    trackIndex = trackIndex.clamp(
+                                      0,
+                                      widget.trackIds.length - 1,
+                                    );
 
-                                                    final targetTrackId = widget
-                                                        .trackIds[trackIndex];
-                                                    final targetTrack =
-                                                        currentState
-                                                            .tracks[targetTrackId];
-                                                    if (targetTrack == null) {
-                                                      return;
-                                                    }
+                                    final targetTrackId =
+                                        widget.trackIds[trackIndex];
+                                    final targetTrack =
+                                        currentState.tracks[targetTrackId];
+                                    if (targetTrack == null) return;
 
-                                                    // 2. Calculate Target Time
-                                                    double scrollX =
-                                                        _trackContentController
-                                                            .hasClients
-                                                        ? _trackContentController
-                                                              .offset
-                                                        : 0;
-                                                    double absoluteX =
-                                                        (targetPos.dx + scrollX)
-                                                            .clamp(
-                                                              0,
-                                                              double.infinity,
-                                                            );
-                                                    double ticks =
-                                                        absoluteX *
-                                                        currentState
-                                                            .horizontalZoomLevel;
+                                    double scrollX =
+                                        _trackContentController.hasClients
+                                        ? _trackContentController.offset
+                                        : 0;
+                                    double absoluteX = (targetPos.dx + scrollX)
+                                        .clamp(0, double.infinity);
+                                    double ticks =
+                                        absoluteX *
+                                        currentState.horizontalZoomLevel;
 
-                                                    if (currentState
-                                                        .snapToGrid) {
-                                                      ticks = _snapTick(
-                                                        ticks.toInt(),
-                                                        currentState,
-                                                      ).toDouble();
-                                                    }
+                                    if (currentState.snapToGrid) {
+                                      ticks = _snapTick(
+                                        ticks.toInt(),
+                                        currentState,
+                                      ).toDouble();
+                                    }
 
-                                                    // Determine whether to paste using raw Ticks or Samples based on track type
-                                                    int pasteStartTime;
-                                                    if (targetTrack.trackType ==
-                                                        UiTrackType.audio) {
-                                                      final sr =
-                                                          currentState
-                                                                  .hardwareConfig
-                                                                  .sampleRate >
-                                                              0
-                                                          ? currentState
-                                                                .hardwareConfig
-                                                                .sampleRate
-                                                          : 48000;
-                                                      pasteStartTime =
-                                                          ticksToSamples(
-                                                            ticks.toInt(),
-                                                            currentState.tempo,
-                                                            sr,
-                                                          );
-                                                    } else {
-                                                      pasteStartTime = ticks
-                                                          .toInt();
-                                                    }
+                                    int pasteStartTime;
+                                    if (targetTrack.trackType ==
+                                        UiTrackType.audio) {
+                                      final sr =
+                                          currentState
+                                                  .hardwareConfig
+                                                  .sampleRate >
+                                              0
+                                          ? currentState
+                                                .hardwareConfig
+                                                .sampleRate
+                                          : 48000;
+                                      pasteStartTime = ticksToSamples(
+                                        ticks.toInt(),
+                                        currentState.tempo,
+                                        sr,
+                                      );
+                                    } else {
+                                      pasteStartTime = ticks.toInt();
+                                    }
 
-                                                    // 3. Call Paste API
-                                                    final result =
-                                                        await currentState
-                                                            .pasteClips(
-                                                              targetTrackId:
-                                                                  targetTrackId,
-                                                              pasteStartTime:
-                                                                  pasteStartTime,
-                                                              trackType:
-                                                                  targetTrack
-                                                                      .trackType,
-                                                            );
+                                    final result = await currentState
+                                        .pasteClips(
+                                          targetTrackId: targetTrackId,
+                                          pasteStartTime: pasteStartTime,
+                                          trackType: targetTrack.trackType,
+                                        );
 
-                                                    if (result.isErr() &&
-                                                        context.mounted) {
-                                                      ScaffoldMessenger.of(
-                                                        context,
-                                                      ).showSnackBar(
-                                                        SnackBar(
-                                                          content: Text(
-                                                            (result
-                                                                    as Error<
-                                                                      void
-                                                                    >)
-                                                                .toErrorMessage(),
-                                                          ),
-                                                        ),
-                                                      );
-                                                    } else if (result.isOk()) {
-                                                      KarbeatLogger.info(
-                                                        "Paste clip",
-                                                      );
-
-                                                      setState(() {
-                                                        _lastRightClickPos =
-                                                            null;
-                                                      });
-                                                    }
-                                                  },
-                                                ),
-                                              ],
-                                              child: ListView.builder(
-                                                controller:
-                                                    _timelineController, // Controller 2 (Synced Vertically)
-                                                physics: isZooming
-                                                    ? const UnclampedNeverScrollableScrollPhysics()
-                                                    : const ClampingScrollPhysics(),
-                                                padding: EdgeInsets.zero,
-                                                itemCount: itemCount,
-                                                itemBuilder: (context, index) {
-                                                  if (index ==
-                                                      widget.trackIds.length) {
-                                                    return SizedBox(height: 60);
-                                                  }
-                                                  return IgnorePointer(
-                                                    ignoring: isPlacing,
-                                                    child: KarbeatTrackSlot(
-                                                      trackId: widget
-                                                          .trackIds[index],
-                                                      height: widget.itemHeight,
-                                                      horizontalScrollController:
-                                                          _trackContentController,
-                                                      sampleRate:
-                                                          _activeSampleRate,
-                                                      clipDragController:
-                                                          _clipDragController,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
+                                    if (result.isErr() && context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            (result as Error<void>)
+                                                .toErrorMessage(),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                  ),
+                                      );
+                                    } else if (result.isOk()) {
+                                      AppLogger.info("Paste clip");
+                                      setState(() => _lastRightClickPos = null);
+                                    }
+                                  },
                                 ),
+                              ],
+                              child: ListView.builder(
+                                controller: _timelineController,
+                                physics: isZooming
+                                    ? const UnclampedNeverScrollableScrollPhysics()
+                                    : const ClampingScrollPhysics(),
+                                padding: EdgeInsets.zero,
+                                itemCount: itemCount,
+                                itemBuilder: (context, index) {
+                                  if (index == widget.trackIds.length) {
+                                    return const SizedBox(height: 60);
+                                  }
+                                  return IgnorePointer(
+                                    ignoring: isPlacing,
+                                    child: AudioTrackSlot(
+                                      trackId: widget.trackIds[index],
+                                      height: widget.itemHeight,
+                                      horizontalScrollController:
+                                          _trackContentController,
+                                      sampleRate: _activeSampleRate,
+                                      clipDragController: _clipDragController,
+                                    ),
+                                  );
+                                },
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ],
-              ),
-              if (isPlacing && _mousePos != null) _buildGhostClip(context),
-              if (_isRangeSelecting) _buildRangeSelectRect(context),
-              _buildCutHelperLine(context, state),
-
-              // Batch drag overlays for all selected clips during move
-              _GroupedBatchOverlay(
-                trackIds: widget.trackIds,
-                headerWidth: widget.headerWidth,
-                itemHeight: widget.itemHeight,
-                horizontalScrollController: _trackContentController,
-                timelineController: _timelineController,
-                clipDragController: _clipDragController,
-              ),
-              Positioned.fill(
-                child: IgnorePointer(
-                  ignoring: false,
-                  child: PlayheadOverlay(
-                    offsetAdjustment: widget.headerWidth,
-                    scrollController: _trackContentController,
-                    zoomLevel: horizontalZoom,
-                    sampleSelector: (pos) => pos.ticks,
-                    onSeek: (int newTicks) {
-                      final state = ref.read(karbeatStateProvider);
-                      final tempo = state.tempo;
-                      final safeTicks = newTicks < 0 ? 0 : newTicks;
-                      final sampleRate = state.hardwareConfig.sampleRate > 0
-                          ? state.hardwareConfig.sampleRate
-                          : 48000;
-                      final samples =
-                          (safeTicks * (60.0 / tempo) * (sampleRate / 960.0))
-                              .round();
-                      state.seekTo(samples);
-
-                      KarbeatLogger.info("Seeking to: $samples samples");
-                    },
-                  ),
                 ),
               ),
-              if (isPlacing)
-                Positioned(
-                  bottom: 30,
-                  right: 30,
-                  child: Row(
-                    children: [
-                      FloatingActionButton.extended(
-                        heroTag: 'cancel_place',
-                        label: const Text("Cancel"),
-                        icon: const Icon(Icons.close),
-                        backgroundColor: Colors.redAccent,
-                        onPressed: () {
-                          setState(() => _mousePos = null);
-                          ref
-                              .read(clipPlacementProvider.notifier)
-                              .cancelPlacement();
-                        },
-                      ),
-                      const SizedBox(width: 16),
-                      FloatingActionButton.extended(
-                        onPressed: () async {
-                          final result = await ref
-                              .read(clipPlacementProvider.notifier)
-                              .confirmPlacement();
-                          if (!context.mounted) return;
-                          switch (result) {
-                            case Ok<void>():
-                              if (!ref.read(clipPlacementProvider).isPlacing) {
-                                setState(() => _mousePos = null);
-                              }
-                            case Error<void>():
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(result.toErrorMessage()),
-                                ),
-                              );
-                          }
-                        },
-                        label: const Text('Confirm'),
-                        heroTag: 'confirm_place',
-                        icon: Icon(Icons.check),
-                        backgroundColor: Colors.greenAccent,
-                      ),
-                    ],
-                  ),
-                ),
+            ),
+          ],
+        ),
 
-              if (selectedClipIds.isNotEmpty)
-                FloatingContextPanel(
-                  actions: [
-                    KarbeatContextAction(
-                      title: "Copy",
-                      icon: Icons.copy,
-                      onTap: () async {
-                        KarbeatLogger.info("Copy clips");
-                        final trackId = state.selectedTrackId;
-                        if (trackId == null) return;
-                        final result = await state.copySelectedClips(
-                          trackId: trackId,
-                          clipIds: selectedClipIds,
-                        );
-                        if (!context.mounted) return;
-                        if (result.isErr()) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                (result as Error<void>).toErrorMessage(),
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    KarbeatContextAction(
-                      title: "Cut",
-                      icon: Icons.cut,
-                      onTap: () async {
-                        KarbeatLogger.info("Cut clips");
-                        final trackId = state.selectedTrackId;
-                        if (trackId == null) return;
-                        final result = await state.cutSelectedClips(
-                          trackId: trackId,
-                          clipIds: selectedClipIds,
-                        );
-                        state.deselectAllClips();
-                        if (!context.mounted) return;
-                        if (result.isErr()) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                (result as Error<void>).toErrorMessage(),
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                    ),
-                    KarbeatContextAction(
-                      title: "Delete",
-                      icon: Icons.delete,
-                      isDestructive: true,
-                      onTap: () async {
-                        KarbeatLogger.info("Delete clips");
-                        state.deleteSelectedClips();
-                        state.deselectAllClips();
-                      },
-                    ),
-                  ],
-                  onClose: () {
-                    state.deselectAllClips();
-                  },
-                  title:
-                      "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
-                ),
-            ],
+        // Overlays inside the Timeline Stack
+        if (isPlacing && _mousePos != null) _buildGhostClip(context),
+        if (_isRangeSelecting) _buildRangeSelectRect(context),
+        _buildCutHelperLine(context, state),
+
+        _GroupedBatchOverlay(
+          trackIds: widget.trackIds,
+          itemHeight: widget.itemHeight,
+          horizontalScrollController: _trackContentController,
+          timelineController: _timelineController,
+          clipDragController: _clipDragController,
+        ),
+
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: false,
+            child: PlayheadOverlay(
+              offsetAdjustment: 0.0,
+              scrollController: _trackContentController,
+              zoomLevel: horizontalZoom,
+              sampleSelector: (pos) => pos.ticks,
+              onSeek: (int newTicks) {
+                final state = ref.read(globalStateProvider);
+                final tempo = state.tempo;
+                final safeTicks = newTicks < 0 ? 0 : newTicks;
+                final sampleRate = state.hardwareConfig.sampleRate > 0
+                    ? state.hardwareConfig.sampleRate
+                    : 48000;
+                final samples =
+                    (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
+                state.seekTo(samples);
+              },
+            ),
           ),
         ),
+
+        if (isPlacing)
+          Positioned(
+            bottom: 30,
+            right: 30,
+            child: Row(
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'cancel_place',
+                  label: const Text("Cancel"),
+                  icon: const Icon(Icons.close),
+                  backgroundColor: Colors.redAccent,
+                  onPressed: () {
+                    setState(() => _mousePos = null);
+                    ref.read(clipPlacementProvider.notifier).cancelPlacement();
+                  },
+                ),
+                const SizedBox(width: 16),
+                FloatingActionButton.extended(
+                  onPressed: () async {
+                    final result = await ref
+                        .read(clipPlacementProvider.notifier)
+                        .confirmPlacement();
+                    if (!context.mounted) return;
+                    switch (result) {
+                      case Ok<void>():
+                        if (!ref.read(clipPlacementProvider).isPlacing) {
+                          setState(() => _mousePos = null);
+                        }
+                      case Error<void>():
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(result.toErrorMessage())),
+                        );
+                    }
+                  },
+                  label: const Text('Confirm'),
+                  heroTag: 'confirm_place',
+                  icon: const Icon(Icons.check),
+                  backgroundColor: Colors.greenAccent,
+                ),
+              ],
+            ),
+          ),
+
+        if (selectedClipIds.isNotEmpty)
+          FloatingContextPanel(
+            actions: [
+              DawContextAction(
+                title: "Copy",
+                icon: Icons.copy,
+                onTap: () async {
+                  final trackId = state.selectedTrackId;
+                  if (trackId == null) return;
+                  final result = await state.copySelectedClips(
+                    trackId: trackId,
+                    clipIds: selectedClipIds,
+                  );
+                  if (!context.mounted) return;
+                  if (result.isErr()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text((result as Error<void>).toErrorMessage()),
+                      ),
+                    );
+                  }
+                },
+              ),
+              DawContextAction(
+                title: "Cut",
+                icon: Icons.cut,
+                onTap: () async {
+                  final trackId = state.selectedTrackId;
+                  if (trackId == null) return;
+                  final result = await state.cutSelectedClips(
+                    trackId: trackId,
+                    clipIds: selectedClipIds,
+                  );
+                  state.deselectAllClips();
+                  if (!context.mounted) return;
+                  if (result.isErr()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text((result as Error<void>).toErrorMessage()),
+                      ),
+                    );
+                  }
+                },
+              ),
+              DawContextAction(
+                title: "Delete",
+                icon: Icons.delete,
+                isDestructive: true,
+                onTap: () async {
+                  state.deleteSelectedClips();
+                  state.deselectAllClips();
+                },
+              ),
+            ],
+            onClose: () => state.deselectAllClips(),
+            title:
+                "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
+          ),
       ],
     );
   }
@@ -1235,7 +1116,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     double absoluteX = (_mousePos!.dx + scrollX).clamp(0, double.infinity);
 
     // Convert X Pixels -> Ticks
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final zoomLevel = state.horizontalZoomLevel;
     double ticks = absoluteX * zoomLevel;
 
@@ -1271,7 +1152,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       scrollX = _trackContentController.offset;
     }
 
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     double absoluteX = _mousePos!.dx + scrollX;
     if (absoluteX < 0) absoluteX = 0;
 
@@ -1282,10 +1163,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     // Convert the snapped position back into a screen pixel coordinate
     double snappedAbsoluteX = ticks / state.horizontalZoomLevel;
-    double left = widget.headerWidth + (snappedAbsoluteX - scrollX);
-
-    // Safety check to keep it in timeline area
-    if (left < widget.headerWidth) left = widget.headerWidth;
+    double left = math.max(snappedAbsoluteX - scrollX, 0);
 
     return Positioned(
       left: left,
@@ -1363,7 +1241,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final maxX = startX > endX ? startX : endX;
 
     // Convert from absolute coordinates to screen coordinates
-    final screenLeft = minX - scrollX + widget.headerWidth;
+    final screenLeft = minX - scrollX;
     final screenWidth = maxX - minX;
 
     // Track row position (fixed to the starting track)
@@ -1412,7 +1290,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
-              ref.read(karbeatStateProvider).addAudioTrack();
+              ref.read(globalStateProvider).addAudioTrack();
             },
             child: const Row(
               children: [
@@ -1442,7 +1320,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   void _showGeneratorBrowser(BuildContext context) {
-    final availablePlugins = ref.read(karbeatStateProvider).availableGenerators;
+    final availablePlugins = ref.read(globalStateProvider).availableGenerators;
 
     showDialog(
       context: context,
@@ -1524,7 +1402,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     return InkWell(
       onTap: () {
         Navigator.pop(ctx);
-        ref.read(karbeatStateProvider).addMidiTrackWithGeneratorId(plugin.id);
+        ref.read(globalStateProvider).addMidiTrackWithGeneratorId(plugin.id);
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
@@ -1556,6 +1434,42 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    // Calculate total height to ensure both lists have exactly same extent
+    // +1 for the Add Button row
+    final int itemCount = widget.trackIds.length + 1;
+    return Column(
+      children: [
+        _buildToolbar(),
+        Expanded(
+          child: MultiSplitViewTheme(
+            data: MultiSplitViewThemeData(
+              dividerPainter: DividerPainters.grooved1(
+                color: Colors.grey.shade800,
+                highlightedColor: Colors.cyanAccent,
+                thickness: 1,
+              ),
+            ),
+            child: MultiSplitView(
+              controller: _trackSplitViewController,
+              builder: (context, area) {
+                switch (area.data) {
+                  case 'header':
+                    return _buildHeaderArea(itemCount);
+                  case 'timeline':
+                    return _buildTimelineArea(context, itemCount);
+                  default:
+                    return const SizedBox();
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _TrackHeader extends ConsumerWidget {
@@ -1581,11 +1495,63 @@ class _TrackHeader extends ConsumerWidget {
     }
   }
 
+  Future<Color?> _showColorPickerDialog(
+    BuildContext context,
+    Color currentColor,
+  ) {
+    return showDialog<Color>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text("Select Track Color"),
+          content: SingleChildScrollView(
+            child: Wrap(
+              spacing: 12.0,
+              runSpacing: 12.0,
+              children: dawColors.map((color) {
+                final isSelected = currentColor.toARGB32() == color.toARGB32();
+                return GestureDetector(
+                  onTap: () => Navigator.of(ctx).pop(color),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isSelected ? Colors.white : Colors.transparent,
+                        width: isSelected ? 3 : 0,
+                      ),
+                      boxShadow: [
+                        if (isSelected)
+                          BoxShadow(
+                            color: color.withAlpha(100),
+                            blurRadius: 8,
+                            spreadRadius: 2,
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text("Cancel"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Only rebuilds this specific header if the track's name/color/type changes
     final track = ref.watch(
-      karbeatStateProvider.select((s) => s.tracks[trackId]),
+      globalStateProvider.select((s) => s.tracks[trackId]),
     );
 
     if (track == null) return const SizedBox();
@@ -1631,37 +1597,94 @@ class _TrackHeader extends ConsumerWidget {
         ],
       ),
       actions: [
-        KarbeatContextAction(
+        DawContextAction(
           title: "Rename",
           icon: Icons.edit,
           onTap: () {
-            // Replace with your actual rename logic via app_state
-            KarbeatLogger.info("Rename track requested for ID: ${track.id}");
+            final textController = TextEditingController(text: track.name);
+
+            showDialog<String>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text("Rename Track"),
+                content: TextField(
+                  controller: textController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: "New track name",
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (value) {
+                    Navigator.pop(ctx, value);
+                  },
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text("Cancel"),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, textController.text),
+                    child: const Text("Rename"),
+                  ),
+                ],
+              ),
+            ).then((newName) {
+              if (newName != null &&
+                  newName.trim().isNotEmpty &&
+                  newName != track.name) {
+                AppLogger.info(
+                  "Rename track requested for ID: ${track.id} with name [${newName.trim()}]",
+                );
+                ref
+                    .read(globalStateProvider)
+                    .changeTrackName(trackId, newName.trim());
+              }
+            });
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
+          title: "Change Color",
+          icon: Icons.color_lens,
+          onTap: () {
+            final currentColor = track.color.toColor();
+
+            _showColorPickerDialog(context, currentColor).then((selectedColor) {
+              if (selectedColor != null &&
+                  selectedColor.toARGB32() != currentColor.toARGB32()) {
+                AppLogger.info(
+                  "Change color requested for track ID: ${track.id}",
+                );
+                ref
+                    .read(globalStateProvider)
+                    .changeTrackColor(trackId, selectedColor);
+              }
+            });
+          },
+        ),
+        DawContextAction(
           title: "Move Up",
           icon: Icons.arrow_upward,
           onTap: () {
             // Replace with actual move up logic
-            KarbeatLogger.info("Move Up requested for track ID: ${track.id}");
+            AppLogger.info("Move Up requested for track ID: ${track.id}");
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
           title: "Move Down",
           icon: Icons.arrow_downward,
           onTap: () {
             // Replace with actual move down logic
-            KarbeatLogger.info("Move Down requested for track ID: ${track.id}");
+            AppLogger.info("Move Down requested for track ID: ${track.id}");
           },
         ),
-        KarbeatContextAction(
+        DawContextAction(
           title: "Delete Track",
           icon: Icons.delete,
           isDestructive: true,
           onTap: () {
-            // Replace with actual delete logic via app_state
-            KarbeatLogger.info("Delete track requested for ID: ${track.id}");
+            AppLogger.info("Delete track requested for ID: ${track.id}");
+            ref.read(globalStateProvider).deleteTrack(trackId);
           },
         ),
       ],
@@ -1749,9 +1772,9 @@ class _TimelineRuler extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Read state for drawing
     final zoomLevel = ref.watch(
-      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
+      globalStateProvider.select((s) => s.horizontalZoomLevel),
     );
-    final tempo = ref.watch(karbeatStateProvider.select((s) => s.tempo));
+    final tempo = ref.watch(globalStateProvider.select((s) => s.tempo));
     final safeSampleRate = sampleRate <= 0 ? 48000 : sampleRate;
 
     return RepaintBoundary(
@@ -1884,14 +1907,14 @@ class _TimelineRulerPainter extends CustomPainter {
   }
 }
 
-class KarbeatTrackSlot extends ConsumerStatefulWidget {
+class AudioTrackSlot extends ConsumerStatefulWidget {
   final int trackId;
   final double height;
   final ScrollController horizontalScrollController;
   final int sampleRate;
   final ClipDragController clipDragController;
 
-  const KarbeatTrackSlot({
+  const AudioTrackSlot({
     super.key,
     required this.trackId,
     required this.height,
@@ -1901,16 +1924,16 @@ class KarbeatTrackSlot extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<KarbeatTrackSlot> createState() => _KarbeatTrackSlotState();
+  ConsumerState<AudioTrackSlot> createState() => _AudioTrackSlotState();
 }
 
-class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
+class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   void _handleEmptySpaceClick({
     required BuildContext context,
     required double localDx,
     required double zoomLevel,
   }) {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     int startTime = (localDx * zoomLevel).round();
 
     if (state.snapToGrid) {
@@ -1924,23 +1947,23 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
   Widget build(BuildContext context) {
     // Listen to Zoom Level (Global)
     final zoomLevel = ref.watch(
-      karbeatStateProvider.select((s) => s.horizontalZoomLevel),
+      globalStateProvider.select((s) => s.horizontalZoomLevel),
     );
 
-    final gridSize = ref.watch(karbeatStateProvider.select((s) => s.gridSize));
-    final tempo = ref.watch(karbeatStateProvider.select((s) => s.tempo));
+    final gridSize = ref.watch(globalStateProvider.select((s) => s.gridSize));
+    final tempo = ref.watch(globalStateProvider.select((s) => s.tempo));
 
     // Listen to Track Data
     final track = ref.watch(
-      karbeatStateProvider.select((s) => s.tracks[widget.trackId]),
+      globalStateProvider.select((s) => s.tracks[widget.trackId]),
     );
 
     final isSelectedTrack = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedTrackId == widget.trackId),
+      globalStateProvider.select((s) => s.selectedTrackId == widget.trackId),
     );
 
     final trackSelectedClipIdsStr = ref.watch(
-      karbeatStateProvider.select((s) {
+      globalStateProvider.select((s) {
         if (s.selectedTrackId != widget.trackId) return '';
         return s.selectedClipIds.join(',');
       }),
@@ -1948,12 +1971,12 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
 
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
-    final waveformMapAsync = ref.watch(
+    final waveformMap = ref.watch(
       trackWaveformProvider((trackId: widget.trackId)),
     );
 
     final selectedTool = ref.watch(
-      karbeatStateProvider.select((s) => s.selectedTool),
+      globalStateProvider.select((s) => s.selectedTool),
     );
 
     final selectedClipIds = trackSelectedClipIdsStr.isEmpty
@@ -1989,7 +2012,7 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
                       zoomLevel: zoomLevel,
                     );
                   } else {
-                    ref.read(karbeatStateProvider).deselectAllClips();
+                    ref.read(globalStateProvider).deselectAllClips();
                   }
                 },
                 child: RepaintBoundary(
@@ -2006,46 +2029,26 @@ class _KarbeatTrackSlotState extends ConsumerState<KarbeatTrackSlot> {
               ),
             ),
           ),
-          ...waveformMapAsync.when(
-            loading: () => [
-              const Positioned.fill(
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ],
+          ...track.clips.map((clip) {
+            final isSelected =
+                isSelectedTrack && selectedClipIds.contains(clip.id);
 
-            error: (err, _) => [
-              Positioned.fill(
-                child: Center(
-                  child: Text(
-                    "Error loading waveforms",
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ),
-            ],
-
-            data: (waveformMap) {
-              return track.clips.map((clip) {
-                final isSelected =
-                    isSelectedTrack && selectedClipIds.contains(clip.id);
-
-                return _InteractiveClip(
-                  key: ValueKey(clip.id),
-                  clip: clip,
-                  trackId: widget.trackId,
-                  trackType: track.trackType,
-                  zoomLevel: zoomLevel,
-                  height: widget.height,
-                  selectedTool: selectedTool,
-                  isSelected: isSelected,
-                  selectedClipIds: selectedClipIds,
-                  clipDragController: widget.clipDragController,
-                  horizontalScrollController: widget.horizontalScrollController,
-                  waveformMap: waveformMap,
-                );
-              }).toList();
-            },
-          ),
+            return _InteractiveClip(
+              key: ValueKey(clip.id),
+              clip: clip,
+              trackId: widget.trackId,
+              trackType: track.trackType,
+              color: track.color.toColor(),
+              zoomLevel: zoomLevel,
+              height: widget.height,
+              selectedTool: selectedTool,
+              isSelected: isSelected,
+              selectedClipIds: selectedClipIds,
+              clipDragController: widget.clipDragController,
+              horizontalScrollController: widget.horizontalScrollController,
+              waveformMap: waveformMap,
+            );
+          }),
         ],
       ),
     );
@@ -2060,6 +2063,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final UiClip clip;
   final int trackId;
   final UiTrackType trackType;
+  final Color color;
   final double zoomLevel;
   final double height;
   final ToolSelection selectedTool;
@@ -2067,7 +2071,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final List<int> selectedClipIds;
   final ClipDragController clipDragController;
   final ScrollController horizontalScrollController;
-  final Map<int, AudioWaveformUiForClip> waveformMap;
+  final Map<int, WaveformHandle> waveformMap;
 
   const _InteractiveClip({
     super.key,
@@ -2077,6 +2081,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
     required this.zoomLevel,
     required this.height,
     required this.selectedTool,
+    required this.color,
     required this.isSelected,
     required this.selectedClipIds,
     required this.clipDragController,
@@ -2136,7 +2141,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   }
 
   void _syncModel() {
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     final bpm = state.tempo;
     final sr = state.hardwareConfig.sampleRate;
     // Convert to tick-equivalent for rendering on the tick-based timeline
@@ -2224,7 +2229,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
               onTapUp: (details) async {
                 if (widget.selectedTool == ToolSelection.delete) {
-                  final state = ref.read(karbeatStateProvider);
+                  final state = ref.read(globalStateProvider);
                   // If this clip is selected and there are multiple selections, batch delete
                   if (widget.isSelected && widget.selectedClipIds.length > 1) {
                     state.deleteSelectedClips();
@@ -2232,7 +2237,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                     state.deleteClip(widget.trackId, widget.clip.id);
                   }
                 } else if (widget.selectedTool == ToolSelection.select) {
-                  final state = ref.read(karbeatStateProvider);
+                  final state = ref.read(globalStateProvider);
                   // Get tap position for panel positioning
                   final renderBox = context.findRenderObject() as RenderBox?;
                   final tapPosition =
@@ -2266,14 +2271,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                   }
                 } else if (widget.selectedTool == ToolSelection.pointer) {
                   ref
-                      .read(karbeatStateProvider)
+                      .read(globalStateProvider)
                       .selectClip(
                         trackId: widget.trackId,
                         clipId: widget.clip.id,
                       );
                 } else if (widget.selectedTool == ToolSelection.slice) {
                   // Calculate absolute position on the timeline (in native clip units)
-                  final state = ref.read(karbeatStateProvider);
+                  final state = ref.read(globalStateProvider);
                   int cutPoint;
                   if (widget.clip.isSampleBased) {
                     // For audio clips: convert pixel→tick→sample
@@ -2333,7 +2338,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 }
 
                 // If the user starts dragging an UNSELECTED clip, select it first!
-                final state = ref.read(karbeatStateProvider);
+                final state = ref.read(globalStateProvider);
                 if (!widget.isSelected) {
                   state.selectClip(
                     trackId: widget.trackId,
@@ -2384,7 +2389,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               onPanUpdate: (details) {
                 if (_currentAction == _DragAction.none) return;
 
-                final state = ref.read(karbeatStateProvider);
+                final state = ref.read(globalStateProvider);
                 final currentSelectedIds = state.selectedClipIds;
                 final track = state.tracks[widget.trackId];
                 if (track == null) return;
@@ -2456,7 +2461,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               onPanEnd: (_) {
                 if (_currentAction == _DragAction.none) return;
 
-                final state = ref.read(karbeatStateProvider);
+                final state = ref.read(globalStateProvider);
                 final currentSelectedIds = state.selectedClipIds;
 
                 int? newTrackId;
@@ -2518,10 +2523,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               child: _ClipRenderer(
                 clip: widget.clip,
                 trackType: widget.trackType,
-                color: Colors.cyanAccent.withAlpha(47),
+                color: widget.color,
                 zoomLevel: widget.zoomLevel,
                 projectSampleRate: ref
-                    .read(karbeatStateProvider)
+                    .read(globalStateProvider)
                     .hardwareConfig
                     .sampleRate,
                 overrideOffset: _visualOffset.toDouble(),
@@ -2552,7 +2557,7 @@ class _ClipRenderer extends ConsumerWidget {
   final bool isSelected;
   final ScrollController scrollController;
   final double clipLeftOffset;
-  final Map<int, AudioWaveformUiForClip> waveformMap;
+  final Map<int, WaveformHandle> waveformMap;
 
   const _ClipRenderer({
     required this.clip,
@@ -2571,11 +2576,11 @@ class _ClipRenderer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       decoration: BoxDecoration(
-        color: color,
+        color: color.withAlpha(100),
         borderRadius: BorderRadius.circular(4),
         border: isSelected
             ? Border.all(color: Colors.white, width: 2)
-            : Border.all(color: color.withAlpha(16), width: 1),
+            : Border.all(color: color.withAlpha(150), width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(3),
@@ -2611,12 +2616,12 @@ class _ClipRenderer extends ConsumerWidget {
   }
 
   Widget _buildContent(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(karbeatStateProvider);
+    final state = ref.watch(globalStateProvider);
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
-        final audioData = waveformMap[sourceId];
-        if (audioData == null) {
+        final handle = waveformMap[sourceId];
+        if (handle == null) {
           return const Center(
             child: Text("Loading...", style: TextStyle(fontSize: 8)),
           );
@@ -2626,15 +2631,21 @@ class _ClipRenderer extends ConsumerWidget {
             overrideOffset ??
             clip.offsetStartInTicks(state.tempo, projectSampleRate).toDouble();
 
+        // getSampleRate() is a sync opaque call — zero FFI overhead
         final samplesPerTick =
-            (60.0 / state.tempo) * (audioData.sampleRate / 960.0);
+            (60.0 / state.tempo) * (handle.getSampleRate() / 960.0);
+
+        final waveformColor = color.computeLuminance() > 0.5
+            ? Colors.black.withAlpha(180) // Dark waveform for light tracks
+            : Colors.white.withAlpha(200);
 
         return RepaintBoundary(
           child: CustomPaint(
-            size: Size.infinite, // Fill the clip container
+            size: Size.infinite,
             painter: StereoWaveformClipPainter(
-              samples: audioData.previewBuffer,
-              color: Colors.white.withAlpha(200),
+              // Zero-copy: Float32List view directly into Rust-owned Mmap memory
+              samples: createZeroCopyWaveformView(handle),
+              color: waveformColor,
               zoomLevel: zoomLevel,
               offsetTicks: effectiveOffsetTicks,
               strokeWidth: 1.0,
@@ -2782,19 +2793,12 @@ class _GridPainter extends CustomPainter {
 }
 
 final trackWaveformProvider =
-    FutureProvider.family<Map<int, AudioWaveformUiForClip>, ({int trackId})>((
-      ref,
-      arg, // Access fields via the record variable
-    ) async {
-      final trackId = arg.trackId;
+    Provider.family<Map<int, WaveformHandle>, ({int trackId})>((ref, arg) {
+      // Re-evaluate whenever the track changes (e.g. clips added/removed)
+      ref.watch(globalStateProvider.select((s) => s.tracks[arg.trackId]));
 
-      ref.watch(karbeatStateProvider.select((s) => s.tracks[trackId]));
-
-      final result = await getAudioWaveformForClipOnlyInSpecificTrack(
-        trackId: trackId,
-      );
-
-      return result;
+      // Sync call — no copy, no await; returns Arc handles into Rust memory
+      return getWaveformHandlesForTrack(trackId: arg.trackId);
     });
 
 int computeTargetBin(double zoomLevel) {
@@ -2810,7 +2814,7 @@ int computeTargetBin(double zoomLevel) {
 }
 
 /// Snaps a tick value to the nearest grid line based on the global state
-int _snapTick(int ticks, KarbeatState state) {
+int _snapTick(int ticks, GlobalAppState state) {
   if (!state.snapToGrid) return ticks;
 
   final gridSize = state.gridSize;
@@ -2828,7 +2832,7 @@ int _snapTick(int ticks, KarbeatState state) {
 
 /// Snaps an absolute tick value to the nearest global step boundary.
 /// Used for the cut tool, where the cut point should land on a step grid line.
-int _snapClipShiftTick(int ticks, KarbeatState state) {
+int _snapClipShiftTick(int ticks, GlobalAppState state) {
   final step = state.horizontalClipShiftSizeDenom;
   if (step == MusicalBeatSize.none) return ticks;
 
@@ -2842,7 +2846,7 @@ int _snapClipShiftTick(int ticks, KarbeatState state) {
 /// Unlike [_snapClipShiftTick], this does NOT clamp to global grid boundaries.
 /// The clip jumps in step-size increments from its initial starting position:
 ///   new_position = initial_start + round(delta / step) * step
-int _snapDeltaToStep(int deltaInTicks, KarbeatState state) {
+int _snapDeltaToStep(int deltaInTicks, GlobalAppState state) {
   final step = state.horizontalClipShiftSizeDenom;
   if (step == MusicalBeatSize.none) return deltaInTicks;
 
@@ -2854,7 +2858,6 @@ int _snapDeltaToStep(int deltaInTicks, KarbeatState state) {
 
 class _GroupedBatchOverlay extends ConsumerWidget {
   final List<int> trackIds;
-  final double headerWidth;
   final double itemHeight;
   final ScrollController horizontalScrollController;
   final ScrollController timelineController;
@@ -2862,7 +2865,6 @@ class _GroupedBatchOverlay extends ConsumerWidget {
 
   const _GroupedBatchOverlay({
     required this.trackIds,
-    required this.headerWidth,
     required this.itemHeight,
     required this.horizontalScrollController,
     required this.timelineController,
@@ -2876,7 +2878,7 @@ class _GroupedBatchOverlay extends ConsumerWidget {
       builder: (context, child) {
         if (!clipDragController.isActive) return const SizedBox();
 
-        final state = ref.read(karbeatStateProvider);
+        final state = ref.read(globalStateProvider);
         final selectedClipIds = state.selectedClipIds;
         final selectedTrackId = state.selectedTrackId;
 
@@ -2912,9 +2914,7 @@ class _GroupedBatchOverlay extends ConsumerWidget {
             final bpm = state.tempo;
             final sr = state.hardwareConfig.sampleRate;
             final screenLeft =
-                (clip.startTimeInTicks(bpm, sr) / zoomLevel) -
-                scrollX +
-                headerWidth;
+                (clip.startTimeInTicks(bpm, sr) / zoomLevel) - scrollX;
             final screenTop = (trackIndex * itemHeight) - scrollY + 30 + 2;
             final clipWidth = clip.loopLengthInTicks(bpm, sr) / zoomLevel;
 

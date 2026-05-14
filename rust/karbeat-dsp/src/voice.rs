@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::envelope::AdsrProcessor;
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SynthVoice {
     pub note: u8,
     pub velocity: u8,

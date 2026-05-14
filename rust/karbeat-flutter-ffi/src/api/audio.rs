@@ -51,10 +51,8 @@ impl From<TransportFeedback> for UiTransportFeedback {
 /// GETTER: Fetch details + Downsampled Buffer for UI
 pub fn get_audio_properties(id: u32) -> Option<AudioWaveformUiForAudioProperties> {
     audio_api::get_audio_source(AudioSourceId::from(id), |waveform| {
-        //TODO: Add dynamic downsampling to send this to the frontend side for smaller memory footprint
-        // downsample(waveform.buffer)
-        AudioWaveformUiForAudioProperties::from(waveform)
-    })
+        AudioWaveformUiForAudioProperties::try_from(waveform).ok()
+    })?
 }
 
 /// ACTION: Play the sound via the Engine
@@ -137,10 +135,6 @@ pub fn play_preview_note_generator(
 
     if !(0..=100).contains(&velocity) {
         return Err("Note velocity must be between 0 and 100".to_string());
-    }
-
-    if is_on {
-        log::info!("Playing note {}", note_key);
     }
 
     audio_api::play_preview_note_generator(

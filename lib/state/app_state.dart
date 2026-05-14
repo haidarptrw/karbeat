@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/export_audio.dart';
 import 'package:karbeat/models/grid.dart';
@@ -11,6 +12,7 @@ import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/project.dart' as project_api;
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
+import 'package:karbeat/utils/color.dart';
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
@@ -26,8 +28,8 @@ import 'package:karbeat/utils/logger.dart';
 import 'package:karbeat/services/serializer_service.dart';
 
 /// Top-level Riverpod provider for the app state
-final karbeatStateProvider = ChangeNotifierProvider<KarbeatState>((ref) {
-  return KarbeatState();
+final globalStateProvider = ChangeNotifierProvider<GlobalAppState>((ref) {
+  return GlobalAppState();
 });
 
 enum ToolSelection { pointer, slice, draw, move, delete, zoom, select, resize }
@@ -52,7 +54,7 @@ enum ProjectEvent {
   mixerChanged,
 }
 
-class KarbeatState extends ChangeNotifier {
+class GlobalAppState extends ChangeNotifier {
   // ================== BACKEND STATES =========================
   UiTransportState _transportState = transportStateNew();
 
@@ -85,10 +87,10 @@ class KarbeatState extends ChangeNotifier {
   List<UiPluginInfo> _availableEffects = [];
   List<UiPluginInfo> get availableEffects => _availableEffects;
 
-  static final List<KarbeatToolbarMenuGroup> menuGroups = [
-    KarbeatToolbarMenuGroupFactory.createProjectMenuGroup(),
-    KarbeatToolbarMenuGroupFactory.createEditMenuGroup(),
-    KarbeatToolbarMenuGroupFactory.createViewMenuGroup(),
+  static final List<DawToolbarMenuGroup> menuGroups = [
+    DawToolbarMenuGroupFactory.createProjectMenuGroup(),
+    DawToolbarMenuGroupFactory.createEditMenuGroup(),
+    DawToolbarMenuGroupFactory.createViewMenuGroup(),
   ];
 
   int maxSamplesIndex = 2000;
@@ -130,12 +132,12 @@ class KarbeatState extends ChangeNotifier {
 
   // =========== PIANO ROLL STATE ====================
   PianoRollToolSelection _pianoRollTool = PianoRollToolSelection.grab;
-  double _zoomLevelTick = 1;
+  double _zoomLevelTick = 0.67;
 
   double get zoomLevelTick => _zoomLevelTick;
 
   set zoomLevelTick(double value) {
-    _zoomLevelTick = value.clamp(0.01, 10);
+    _zoomLevelTick = value.clamp(0.01, 5);
   }
 
   Set<int> _selectedNoteIds = {};
@@ -159,7 +161,7 @@ class KarbeatState extends ChangeNotifier {
   // }
 
   // ================ CONSTRUCTOR ==================
-  KarbeatState() {
+  GlobalAppState() {
     _positionBroadcastStream = createPositionStream().asBroadcastStream();
     _initStateListener();
     _positionBroadcastStream.listen((pos) {
@@ -263,7 +265,7 @@ class KarbeatState extends ChangeNotifier {
       _availableEffects = list;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Error fetching effect plugins: $e");
+      AppLogger.error("Error fetching effect plugins: $e");
     }
   }
 
@@ -308,7 +310,7 @@ class KarbeatState extends ChangeNotifier {
       try {
         await action();
       } catch (e) {
-        KarbeatLogger.error("Error executing custom backend change: $e");
+        AppLogger.error("Error executing custom backend change: $e");
       }
     });
   }
@@ -372,8 +374,8 @@ class KarbeatState extends ChangeNotifier {
   double get horizontalZoomLevel => _horizontalZoomLevel;
 
   /// Min: 1 sample/px (each sample tick visible). Max: 1k ticks/px.
-  static const double _minZoom = 1.0;
-  static const double _maxZoom = 1000.0;
+  static const double _minZoom = 0.01;
+  static const double _maxZoom = 500.0;
 
   set horizontalZoomLevel(double val) {
     final clamped = val.clamp(_minZoom, _maxZoom);
@@ -399,7 +401,7 @@ class KarbeatState extends ChangeNotifier {
       _tracks = newState;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("error when syncing the track state: $e");
+      AppLogger.error("error when syncing the track state: $e");
     }
   }
 
@@ -417,7 +419,7 @@ class KarbeatState extends ChangeNotifier {
       _transportState = newState;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Transport sync failed: $e");
+      AppLogger.error("Transport sync failed: $e");
     }
   }
 
@@ -428,7 +430,7 @@ class KarbeatState extends ChangeNotifier {
       _metadata = newState;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("failed when syncing metadata: $e");
+      AppLogger.error("failed when syncing metadata: $e");
     }
   }
 
@@ -438,7 +440,7 @@ class KarbeatState extends ChangeNotifier {
       maxSamplesIndex = newState;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("failed when syncing max sample index: $e");
+      AppLogger.error("failed when syncing max sample index: $e");
     }
   }
 
@@ -487,7 +489,7 @@ class KarbeatState extends ChangeNotifier {
       _generators = generators;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Failed to sync generators: $e");
+      AppLogger.error("Failed to sync generators: $e");
     }
   }
 
@@ -499,7 +501,7 @@ class KarbeatState extends ChangeNotifier {
       _generators = newMap;
       notifyListeners();
     } catch (error) {
-      KarbeatLogger.error("Failed to sync generator $generatorId: $error");
+      AppLogger.error("Failed to sync generator $generatorId: $error");
     }
   }
 
@@ -509,7 +511,7 @@ class KarbeatState extends ChangeNotifier {
       _hardwareConfig = newState;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Failed to sync audio hardware state: $e");
+      AppLogger.error("Failed to sync audio hardware state: $e");
     }
   }
 
@@ -519,7 +521,7 @@ class KarbeatState extends ChangeNotifier {
       _patterns = result;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Failed to sync pattern list: $e");
+      AppLogger.error("Failed to sync pattern list: $e");
     }
   }
 
@@ -535,7 +537,7 @@ class KarbeatState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Error syncing single pattern $patternId: $e");
+      AppLogger.error("Error syncing single pattern $patternId: $e");
     }
   }
 
@@ -549,7 +551,7 @@ class KarbeatState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Error syncing single track $trackId: $e");
+      AppLogger.error("Error syncing single track $trackId: $e");
     }
   }
 
@@ -573,7 +575,7 @@ class KarbeatState extends ChangeNotifier {
       _mixerState = newState;
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Failed to sync mixer state: $e");
+      AppLogger.error("Failed to sync mixer state: $e");
     }
   }
 
@@ -583,7 +585,7 @@ class KarbeatState extends ChangeNotifier {
       _mixerState = _mixerState.copyWith(buses: newBuses);
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Failedto sync mixer bus: $e");
+      AppLogger.error("Failedto sync mixer bus: $e");
     }
   }
 
@@ -597,7 +599,7 @@ class KarbeatState extends ChangeNotifier {
       _mixerState = _mixerState.copyWith(channels: newChannels);
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Error syncing mixer channel $trackId: $e");
+      AppLogger.error("Error syncing mixer channel $trackId: $e");
     }
   }
 
@@ -607,7 +609,7 @@ class KarbeatState extends ChangeNotifier {
       _mixerState = _mixerState.copyWith(masterBus: updatedMaster);
       notifyListeners();
     } catch (e) {
-      KarbeatLogger.error("Failed to sync master bus: $e");
+      AppLogger.error("Failed to sync master bus: $e");
     }
   }
 
@@ -640,7 +642,7 @@ class KarbeatState extends ChangeNotifier {
       await service.saveProject(pathName: path);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to save project: $e");
+      AppLogger.error("Failed to save project: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -656,10 +658,10 @@ class KarbeatState extends ChangeNotifier {
 
       notifyListeners();
 
-      KarbeatLogger.info("Project loaded successfully from $path");
+      AppLogger.info("Project loaded successfully from $path");
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to load project: $e");
+      AppLogger.error("Failed to load project: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -668,7 +670,7 @@ class KarbeatState extends ChangeNotifier {
     final newApp = await serialization_api.newBlankProject();
     _populateState(newApp);
     notifyListeners();
-    KarbeatLogger.info("New blank project created");
+    AppLogger.info("New blank project created");
   }
 
   Stream<double> exportProject({
@@ -699,7 +701,7 @@ class KarbeatState extends ChangeNotifier {
       sampleRate: sampleRate.value,
       bitPerSample: bpsValue,
       tailHandling: tailHandlingDto,
-      channels: numberOfChannels
+      channels: numberOfChannels,
     );
   }
 
@@ -710,7 +712,7 @@ class KarbeatState extends ChangeNotifier {
       // notifyBackendChange(ProjectEvent.sourceListChanged);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to add audio file: $e");
+      AppLogger.error("Failed to add audio file: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -721,7 +723,7 @@ class KarbeatState extends ChangeNotifier {
       notifyBackendChange(ProjectEvent.tracksChanged);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to add track: $e");
+      AppLogger.error("Failed to add track: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -734,9 +736,86 @@ class KarbeatState extends ChangeNotifier {
       notifyBackendChange(ProjectEvent.generatorListChanged);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to add midi track: $e");
+      AppLogger.error("Failed to add midi track: $e");
       return Result.error(Exception("$e"));
     }
+  }
+
+  Future<Result<void>> deleteTrack(int trackId) async {
+    try {
+      final deletedTrackType = await track_api.deleteTrack(trackId: trackId);
+      notifyCustomBackendChange(() async {
+        await syncTracksState();
+        switch (deletedTrackType) {
+          case "audio":
+            break;
+          case "midi":
+            await syncGeneratorList();
+            break;
+          case "automation":
+            // Automation deletion is not removable from this API. it will be deleted on separate
+            // dedicated API to remove automation lane of a track, general bus, master bus, or project param automation.
+            break;
+        }
+      });
+
+      return Result.ok(null);
+    } catch (e) {
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> changeTrackName(int trackId, String newName) async {
+    final originalTrack = _tracks[trackId];
+    if (originalTrack == null) {
+      return Result.error(Exception("Track not found"));
+    }
+
+    final oldName = originalTrack.name;
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = _copyWithTrack(originalTrack, name: newName);
+    notifyListeners();
+
+    try {
+      await track_api.changeTrackName(trackId: trackId, newName: newName);
+      return Result.ok(null);
+    } catch (e) {
+      AppLogger.error("Failed to change track name: $e");
+      if (_tracks.containsKey(trackId)) {
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(originalTrack, name: oldName);
+        notifyListeners();
+      }
+
+      return Result.error(Exception("$e"));
+    }
+  }
+
+  Future<Result<void>> changeTrackColor(int trackId, Color newColor) async {
+    final originalTrack = _tracks[trackId];
+    if (originalTrack == null) {
+      return Result.error(Exception("Track not found"));
+    }
+
+    final oldColorStr = originalTrack.color;
+    // Turn the color to hex string #RRGGBBAA representation
+    final colorStr = newColor.toRGBA();
+
+    _tracks = Map.from(_tracks);
+    _tracks[trackId] = _copyWithTrack(originalTrack, color: colorStr);
+    notifyListeners();
+
+      try {
+        await track_api.changeTrackColor(trackId: trackId, newColor: colorStr);
+        return Result.ok(null);
+      } catch (e) {
+        if (_tracks.containsKey(trackId)) {
+        _tracks = Map.from(_tracks);
+        _tracks[trackId] = _copyWithTrack(originalTrack, color: oldColorStr);
+        notifyListeners();
+      }
+      return Result.error(Exception("$e"));
+      }
   }
 
   Future<Result<void>> addEffectToMixerChannel(
@@ -745,13 +824,13 @@ class KarbeatState extends ChangeNotifier {
   ) async {
     try {
       if (channelId == -1) {
-        KarbeatLogger.info("Adding effect to master channel");
+        AppLogger.info("Adding effect to master channel");
         await mixer_api.addEffectToMasterBus(registryId: registryId);
         notifyCustomBackendChange(() async {
           await syncMasterBus();
         });
       } else {
-        KarbeatLogger.info("Adding effect to track channel $channelId");
+        AppLogger.info("Adding effect to track channel $channelId");
         await mixer_api.addEffectToMixerChannelById(
           trackId: channelId,
           registryId: registryId,
@@ -762,21 +841,21 @@ class KarbeatState extends ChangeNotifier {
       }
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to add effect to channel: $e");
+      AppLogger.error("Failed to add effect to channel: $e");
       return Result.error(Exception("$e"));
     }
   }
 
   Future<Result<void>> addEffectToBusChannel(int busId, int registryId) async {
     try {
-      KarbeatLogger.info("Adding effect to bus channel $busId");
+      AppLogger.info("Adding effect to bus channel $busId");
       await mixer_api.addEffectToBus(busId: busId, registryId: registryId);
       notifyCustomBackendChange(() async {
         await syncBuses();
       });
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to add effect to bus channel: $e");
+      AppLogger.error("Failed to add effect to bus channel: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -786,11 +865,11 @@ class KarbeatState extends ChangeNotifier {
       await mixer_api.addEffectToMasterBus(registryId: registryId);
       notifyCustomBackendChange(() async {
         await syncMasterBus();
-        KarbeatLogger.info("Adding effect to master channel");
+        AppLogger.info("Adding effect to master channel");
       });
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to add effect to master bus: $e");
+      AppLogger.error("Failed to add effect to master bus: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -808,7 +887,7 @@ class KarbeatState extends ChangeNotifier {
   //   } catch (e) {
   //     log("Failed to toggle play: $e");
   //     _pendingPlayRequest = false;
-  //     return Result.error(Exception("$e"));
+  //     return Result.error(Exception("$e"));a
   //   }
   // }
 
@@ -817,7 +896,7 @@ class KarbeatState extends ChangeNotifier {
       await transport_api.stopSongPlayback();
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to stop play: $e");
+      AppLogger.error("Failed to stop play: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -828,7 +907,7 @@ class KarbeatState extends ChangeNotifier {
       await transport_api.setLooping(val: newLooping);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to toggle loop: $e");
+      AppLogger.error("Failed to toggle loop: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -851,7 +930,7 @@ class KarbeatState extends ChangeNotifier {
       await transport_api.setBpm(val: value);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Failed to set bpm: $e");
+      AppLogger.error("Failed to set bpm: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -959,7 +1038,7 @@ class KarbeatState extends ChangeNotifier {
       notifyListeners();
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error seeking: $e");
+      AppLogger.error("Error seeking: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -979,7 +1058,7 @@ class KarbeatState extends ChangeNotifier {
       // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error deleting clip: $e");
+      AppLogger.error("Error deleting clip: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -994,7 +1073,7 @@ class KarbeatState extends ChangeNotifier {
       await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error cutting clip: $e");
+      AppLogger.error("Error cutting clip: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1016,7 +1095,7 @@ class KarbeatState extends ChangeNotifier {
       // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error resizing clip: $e");
+      AppLogger.error("Error resizing clip: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1041,7 +1120,7 @@ class KarbeatState extends ChangeNotifier {
       // }
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error moving clip: $e");
+      AppLogger.error("Error moving clip: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1056,12 +1135,12 @@ class KarbeatState extends ChangeNotifier {
         trackId: trackId,
         startTime: startTime,
       );
-      KarbeatLogger.info("New empty pattern clip is successfully created");
+      AppLogger.info("New empty pattern clip is successfully created");
       // notifyBackendChange(ProjectEvent.tracksChanged);
       await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error when creating new empty pattern clip: $e");
+      AppLogger.error("Error when creating new empty pattern clip: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1089,7 +1168,7 @@ class KarbeatState extends ChangeNotifier {
       // }
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error moving clips in batch: $e");
+      AppLogger.error("Error moving clips in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1112,7 +1191,7 @@ class KarbeatState extends ChangeNotifier {
       // await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error resizing clips in batch: $e");
+      AppLogger.error("Error resizing clips in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1137,7 +1216,7 @@ class KarbeatState extends ChangeNotifier {
       await syncTrack(trackId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error deleting clips in batch: $e");
+      AppLogger.error("Error deleting clips in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1168,12 +1247,12 @@ class KarbeatState extends ChangeNotifier {
         velocity: velocity,
         isOn: isOn,
       );
-      KarbeatLogger.info(
+      AppLogger.info(
         "Play ${numToMidiKey(noteKey)} with generator from $trackId",
       );
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error previewing note: $e");
+      AppLogger.error("Error previewing note: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1195,7 +1274,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error adding note: $e");
+      AppLogger.error("Error adding note: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1209,7 +1288,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error adding notes in batch: $e");
+      AppLogger.error("Error adding notes in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1226,7 +1305,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error deleting notes in batch: $e");
+      AppLogger.error("Error deleting notes in batch: $e");
       await syncPattern(patternId);
       return Result.error(Exception("$e"));
     }
@@ -1241,7 +1320,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error moving notes in batch: $e");
+      AppLogger.error("Error moving notes in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1255,7 +1334,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error resizing notes in batch: $e");
+      AppLogger.error("Error resizing notes in batch: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1271,7 +1350,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error deleting note: $e");
+      AppLogger.error("Error deleting note: $e");
       await syncPattern(patternId);
       return Result.error(Exception("$e"));
     }
@@ -1294,7 +1373,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error moving note: $e");
+      AppLogger.error("Error moving note: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1314,7 +1393,7 @@ class KarbeatState extends ChangeNotifier {
       await syncPattern(patternId);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error("Error resizing note: $e");
+      AppLogger.error("Error resizing note: $e");
       return Result.error(Exception("$e"));
     }
   }
@@ -1536,11 +1615,16 @@ class KarbeatState extends ChangeNotifier {
   // ============= PLACEMENT MODE LOGIC =================
   // Placement logic moved to ClipPlacementNotifier
 
-  UiTrack _copyWithTrack(UiTrack original, {List<UiClip>? clips}) {
+  UiTrack _copyWithTrack(
+    UiTrack original, {
+    List<UiClip>? clips,
+    String? name,
+    String? color,
+  }) {
     return UiTrack(
       id: original.id,
-      color: original.color, // Fixed: use original color instead of #FFFFFF
-      name: original.name,
+      color: color ?? original.color, // Fixed: use original color instead of #FFFFFF
+      name: name ?? original.name,
       trackType: original.trackType,
       clips: clips ?? original.clips,
       generatorId: original.generatorId, // Forward generator ID
@@ -1645,7 +1729,7 @@ class KarbeatState extends ChangeNotifier {
         _applyMixerParamLocally(event);
       },
       onError: (e) {
-        KarbeatLogger.error('Mixer event stream error: $e');
+        AppLogger.error('Mixer event stream error: $e');
       },
     );
   }
@@ -1746,7 +1830,7 @@ class KarbeatState extends ChangeNotifier {
       // notified listeners, and the event stream will keep us in sync.
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error('Error setting mixer channel params: $e');
+      AppLogger.error('Error setting mixer channel params: $e');
       // On error, re-sync from the backend to undo the optimistic update
       syncMixerState();
       return Result.error(Exception("$e"));
@@ -1763,7 +1847,7 @@ class KarbeatState extends ChangeNotifier {
       await mixer_api.setMasterBusParams(params: params);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error('Error setting master bus params: $e');
+      AppLogger.error('Error setting master bus params: $e');
       syncMixerState();
       return Result.error(Exception("$e"));
     }
@@ -1780,7 +1864,7 @@ class KarbeatState extends ChangeNotifier {
       await mixer_api.setBusParams(busId: busId, params: params);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error('Error setting bus channel params: $e');
+      AppLogger.error('Error setting bus channel params: $e');
       syncMixerState();
       return Result.error(Exception("$e"));
     }
@@ -1794,7 +1878,7 @@ class KarbeatState extends ChangeNotifier {
       });
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error('Error when trying to add a new bus channel: $e');
+      AppLogger.error('Error when trying to add a new bus channel: $e');
       syncBuses();
       return Result.error(Exception("$e"));
     }
@@ -1937,7 +2021,7 @@ class KarbeatState extends ChangeNotifier {
     try {
       session_api.copyPatternNotes(patternId: patternId, noteIds: noteIds);
     } catch (e) {
-      KarbeatLogger.error(e.toString());
+      AppLogger.error(e.toString());
       // rethrow;
     }
   }
@@ -1959,7 +2043,7 @@ class KarbeatState extends ChangeNotifier {
         await syncPattern(patternId);
       });
     } catch (e) {
-      KarbeatLogger.error(e.toString());
+      AppLogger.error(e.toString());
       // Re-sync on failure to restore accidentally "deleted" notes
       await syncPattern(patternId);
     }
@@ -2009,7 +2093,7 @@ class KarbeatState extends ChangeNotifier {
         await syncPattern(targetPatternId);
       });
     } catch (e) {
-      KarbeatLogger.error(e.toString());
+      AppLogger.error(e.toString());
     }
   }
 
@@ -2025,7 +2109,7 @@ class KarbeatState extends ChangeNotifier {
       await session_api.copyClips(trackId: trackId, clipIds: clipIds);
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error(e.toString());
+      AppLogger.error(e.toString());
       return Result.error(Exception("$e"));
     }
   }
@@ -2063,7 +2147,7 @@ class KarbeatState extends ChangeNotifier {
 
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error(e.toString());
+      AppLogger.error(e.toString());
       return Result.error(Exception("$e"));
     }
   }
@@ -2109,7 +2193,7 @@ class KarbeatState extends ChangeNotifier {
 
       return Result.ok(null);
     } catch (e) {
-      KarbeatLogger.error(e.toString());
+      AppLogger.error(e.toString());
       return Result.error(Exception("$e"));
     }
   }

@@ -33,7 +33,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   @override
   void initState() {
     super.initState();
-    final state = ref.read(karbeatStateProvider);
+    final state = ref.read(globalStateProvider);
     _nameController = TextEditingController(text: state.metadata.name);
   }
 
@@ -67,7 +67,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       _exportProgress = 0.0;
     });
 
-    final state = ref.read(karbeatStateProvider.notifier);
+    final state = ref.read(globalStateProvider.notifier);
 
     try {
       // Consume the progress stream

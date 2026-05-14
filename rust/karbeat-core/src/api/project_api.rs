@@ -14,7 +14,7 @@ use crate::audio::exporter::{
 use crate::audio::writer::{ AudioFormat, BitPerSample, create_writer };
 use crate::commands::{ AudioCommand, AudioFeedback };
 use crate::context::utils::{ broadcast_state_change, send_audio_command };
-use crate::core::file_manager::project_loader::{ load_karbeat_project, save_karbeat_project };
+use crate::core::file_manager::project_loader::{ load_daw_project, save_daw_project };
 use crate::core::project::{
     generator::GeneratorInstance,
     transport::TransportState,
@@ -177,7 +177,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
         }
 
         // Finally write the fully synchronized AppState to disk
-        save_karbeat_project(Path::new(path_name), &app)?;
+        save_daw_project(Path::new(path_name), &app)?;
     }
 
     log::info!("Project saved successfully.");
@@ -188,7 +188,7 @@ pub fn load_project<T, F>(path_name: &str, mapper: F) -> anyhow::Result<T>
     where F: FnOnce(&ApplicationState) -> T
 {
     // 1. Load the project from disk
-    let loaded_app = load_karbeat_project(Path::new(path_name))?;
+    let loaded_app = load_daw_project(Path::new(path_name))?;
 
     // Extract the BPM before we move the loaded app into the global lock
     let bpm = loaded_app.transport.bpm;

@@ -1,9 +1,10 @@
 use indexmap::IndexMap;
+use karbeat_plugin_api::types::ZeroCopyBuffer;
 
 use crate::{
     audio::{engine::PlaybackMode, event::PluginTarget},
     core::project::{
-        mixer::RoutingConnection, plugin::KarbeatPlugin, track::audio_waveform::AudioWaveform,
+        mixer::RoutingConnection, plugin::AudioPlugin, track::audio_waveform::AudioWaveform,
         GeneratorId,
     },
     shared::{
@@ -50,7 +51,7 @@ pub enum AudioCommand {
     AddGenerator {
         generator_id: GeneratorId,
         track_id: TrackId,
-        plugin: Box<dyn KarbeatPlugin + Send>,
+        plugin: Box<dyn AudioPlugin + Send>,
     },
     /// Remove a generator plugin from the audio thread
     RemoveGenerator {
@@ -75,56 +76,42 @@ pub enum AudioCommand {
     // =========================================================================
     // Effect Plugin Commands
     // =========================================================================
-    /// Add an effect to a track's effect chain
-    AddTrackEffect {
-        track_id: TrackId,
+    /// Add an effect to the target's effect chain
+    AddEffect {
+        target: EffectTarget,
         effect_id: EffectId,
-        effect: Box<dyn KarbeatPlugin + Send + Sync>,
+        effect: Box<dyn AudioPlugin + Send + Sync>,
     },
-    /// Remove an effect from a track's effect chain
-    RemoveTrackEffect {
-        track_id: TrackId,
-        effect_id: EffectId,
-    },
-    /// Set a parameter on a track effect
-    SetTrackEffectParameter {
-        track_id: TrackId,
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
-    /// Request parameter feedback for a track effect (triggers EffectParameterSnapshot response)
-    QueryTrackEffectParameters {
-        track_id: TrackId,
+    /// Remove an effect from the target's effect chain
+    RemoveEffect {
+        target: EffectTarget,
         effect_id: EffectId,
     },
-
-    // ======================================================
-    // Master Effect Command
-    // ======================================================
-    /// Add an effect to the master bus
-    AddMasterEffect {
-        effect_id: EffectId,
-        effect: Box<dyn KarbeatPlugin + Send + Sync>,
-    },
-    /// Remove an effect from the master bus
-    RemoveMasterEffect {
-        effect_id: EffectId,
-    },
-    /// Set a parameter on a master effect
-    SetMasterEffectParameter {
+    /// Set a parameter on a target effect
+    SetEffectParameter {
+        target: EffectTarget,
         effect_id: EffectId,
         param_id: u32,
         value: f32,
     },
-    /// Request parameter feedback for a master effect (triggers EffectParameterSnapshot response)
-    QueryMasterEffectParameters {
+    /// Request parameter feedback for a target effect (triggers EffectParameterSnapshot response)
+    QueryEffectParameters {
+        target: EffectTarget,
         effect_id: EffectId,
     },
 
-    // =========================================================================
+
+
+    /// Request a ZeroCopyBuffer from a specific plugin
+    QueryZeroCopyBuffer {
+        target: PluginTarget,
+        name: String,
+        request_id: u32,
+    },
+    
+    // =====================================================
     // Bus Commands
-    // =========================================================================
+    // =====================================================
     /// Create a new mixer bus on the audio thread
     AddBus {
         bus_id: BusId,
@@ -141,39 +128,17 @@ pub enum AudioCommand {
         pan: Option<f32>,
         mute: Option<bool>,
     },
-    /// Add effect to a bus
-    AddBusEffect {
-        bus_id: BusId,
-        effect_id: EffectId,
-        effect: Box<dyn KarbeatPlugin + Send + Sync>,
-    },
-    /// Remove effect from a bus
-    RemoveBusEffect {
-        bus_id: BusId,
-        effect_id: EffectId,
-    },
-    /// Set a bus effect parameter
-    SetBusEffectParameter {
-        bus_id: BusId,
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
-    /// Request parameter feedback for a bus effect (triggers EffectParameterSnapshot response)
-    QueryBusEffectParameters {
-        bus_id: BusId,
-        effect_id: EffectId,
-    },
+
     /// Update the routing matrix (sync from main thread)
     UpdateRouting {
         routing: Vec<RoutingConnection>,
     },
     /// Prepare all of plugins from ApplicationState to AudioEngine (upon loading project)
     PreparePlugin {
-        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>,
-        master_effects: IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>,
-        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>,
-        generators: IndexMap<GeneratorId, Box<dyn KarbeatPlugin + Send + Sync>>,
+        track_effects: IndexMap<TrackId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
+        master_effects: IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>>,
+        generators: IndexMap<GeneratorId, Box<dyn AudioPlugin + Send + Sync>>,
     },
     SetMetronomeActive(bool),
 
@@ -272,5 +237,10 @@ pub enum AudioFeedback {
         target: PluginTarget,
         state: Vec<u8>,
         request_id: u32,
+    },
+
+    ZeroCopyBufferResponse {
+        request_id: u32,
+        buffer: Option<ZeroCopyBuffer>, // Wrap it in your opaque type
     },
 }

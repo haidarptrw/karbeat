@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 
 import 'package:karbeat/features/audio_plugins/effects/abstract_effect_screen.dart';
+import 'package:karbeat/features/components/plugin_parameter_widget.dart';
+import 'package:karbeat/models/payload.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
-import 'package:karbeat/src/rust/api/plugins/eq.dart' as eq_api;
 import 'package:karbeat/features/components/fine_grained_input.dart';
 
 /// Math helpers for Logarithmic Frequency Mapping
@@ -78,8 +79,8 @@ class KarbeatParametricEqState
   int? _draggingNodeIndex;
 
   // Backend-computed response curve
-  List<eq_api.UiResponseCurvePoint> _responseCurve = [];
-  List<eq_api.UiResponseCurvePoint> _spectrumCurve = [];
+  List<CurvePoint> _responseCurve = [];
+  List<CurvePoint> _spectrumCurve = [];
 
   // ======================================
   // Real-time Plugin Command Stream
@@ -109,34 +110,13 @@ class KarbeatParametricEqState
     Colors.pinkAccent,
   ];
 
-  final List<String> _filterTypes = [
-    "Peaking",
-    "Low Shelf",
-    "High Shelf",
-    "Low Pass",
-    "High Pass",
-    "Band Pass",
-    "Notch",
-  ];
-
-  final List<String> _slopeChoices = [
-    "12 dB/oct",
-    "24 dB/oct",
-    "36 dB/oct",
-    "48 dB/oct",
-    "60 dB/oct",
-    "72 dB/oct",
-    "84 dB/oct",
-    "96 dB/oct",
-  ];
-
   @override
   String get effectName => 'Parametric EQ';
 
   @override
   void initState() {
     super.initState();
-    _initDefaultBands();
+    _initBandsFromParameters();
 
     // Open the real-time plugin command stream once and subscribe.
     // All GET_MAGNITUDE_RESPONSE and GET_SPECTRUM replies arrive here.
@@ -196,7 +176,7 @@ class KarbeatParametricEqState
         .executeRealtimePluginCommand(
           target: _toPluginTarget(),
           command: 'GET_MAGNITUDE_RESPONSE',
-          payloadJson: jsonEncode({'num_points': 1000}),
+          payloadJson: jsonEncode({'num_points': 500}),
         )
         .then((id) {
           _magnitudeRequestId = id;
@@ -213,7 +193,7 @@ class KarbeatParametricEqState
         .executeRealtimePluginCommand(
           target: _toPluginTarget(),
           command: 'GET_SPECTRUM',
-          payloadJson: jsonEncode({'num_points': 1500}),
+          payloadJson: jsonEncode({'num_points': 300}),
         )
         .then((id) {
           _spectrumRequestId = id;
@@ -228,16 +208,27 @@ class KarbeatParametricEqState
   void _onPluginMessage(plugin_api.UiPluginCommandResponse msg) {
     if (!mounted) return;
 
-    if (msg.requestId == _magnitudeRequestId) {
-      final curvePoints = eq_api.parseEqCurveResponse(
-        jsonStr: msg.responseJson,
-      );
-      setState(() => _responseCurve = curvePoints);
-    } else if (msg.requestId == _spectrumRequestId) {
-      final curvePoints = eq_api.parseEqCurveResponse(
-        jsonStr: msg.responseJson,
-      );
-      setState(() => _spectrumCurve = curvePoints);
+    if (msg.requestId == _magnitudeRequestId ||
+        msg.requestId == _spectrumRequestId) {
+      // Decode the flat JSON array: [freq0, db0, freq1, db1, ...]
+      final List<dynamic> rawList = jsonDecode(msg.responseJson);
+      final List<CurvePoint> parsedPoints = [];
+
+      // Iterate by 2 to extract the pairs
+      for (int i = 0; i < rawList.length; i += 2) {
+        parsedPoints.add(
+          CurvePoint(
+            frequency: (rawList[i] as num).toDouble(),
+            magnitudeDb: (rawList[i + 1] as num).toDouble(),
+          ),
+        );
+      }
+
+      if (msg.requestId == _magnitudeRequestId) {
+        setState(() => _responseCurve = parsedPoints);
+      } else {
+        setState(() => _spectrumCurve = parsedPoints);
+      }
     }
   }
 
@@ -246,75 +237,82 @@ class KarbeatParametricEqState
     if (parameters.isEmpty) return;
 
     setState(() {
-      for (final p in parameters) {
-        // 1. Direct path check for base_gain
-        if (p.path == 'base_gain') {
-          masterGain = p.value;
-          continue;
-        }
-
-        // 2. Regex to extract the band index and parameter name from the string path!
-        // Matches e.g., "band0/freq", "band1/active", etc.
-        final match = RegExp(r'band(\d+)/(.+)').firstMatch(p.path);
-        if (match != null) {
-          final bandIndex = int.parse(match.group(1)!);
-
-          if (bandIndex >= 0 && bandIndex < bands.length) {
-            final band = bands[bandIndex];
-            final paramName = match.group(2)!;
-
-            switch (paramName) {
-              case 'active':
-                band.active = p.value > 0.5;
-                break;
-              case 'type':
-                band.filterType = p.value.toInt();
-                break;
-              case 'freq':
-                band.freq = p.value;
-                break;
-              case 'q':
-                band.q = p.value;
-                break;
-              case 'gain':
-                band.gain = p.value;
-                break;
-              case 'slope':
-                band.order = p.value.toInt();
-                break;
-            }
-          }
-        }
-      }
+      _applyParametersToState();
     });
 
     _sendMagnitudeRequest();
   }
 
-  void _initDefaultBands() {
-    final defaultFreqs = [
-      60.0,
-      125.0,
-      250.0,
-      500.0,
-      1000.0,
-      2000.0,
-      4000.0,
-      8000.0,
-    ];
-    bands = List.generate(8, (i) {
-      int type = 0; // Peaking
-      if (i == 0) type = 1; // Low Shelf
-      if (i == 7) type = 2; // High Shelf
+  void _initBandsFromParameters() {
+    // 1. Determine how many bands the API actually provided by scanning the paths
+    int maxBandIndex = -1;
+    for (final p in parameters) {
+      final match = RegExp(r'band(\d+)/').firstMatch(p.path);
+      if (match != null) {
+        final idx = int.parse(match.group(1)!);
+        if (idx > maxBandIndex) maxBandIndex = idx;
+      }
+    }
 
-      return EqBand(
+    // 2. Create the exact number of bands (fallback to 8 if none found)
+    final numBands = maxBandIndex >= 0 ? maxBandIndex + 1 : 8;
+
+    // Initialize with generic safe defaults
+    bands = List.generate(
+      numBands,
+      (i) => EqBand(
         active: true,
-        filterType: type,
-        freq: defaultFreqs[i],
+        filterType: 0,
+        freq: 1000.0,
         gain: 0.0,
         q: 0.707,
-      );
-    });
+      ),
+    );
+
+    // 3. Immediately apply the actual API values from the parameters list
+    _applyParametersToState();
+  }
+
+  void _applyParametersToState() {
+    for (final p in parameters) {
+      // 1. Direct path check for base_gain
+      if (p.path == 'base_gain') {
+        masterGain = p.value;
+        continue;
+      }
+
+      // 2. Extract the band index and parameter name from the string path
+      final match = RegExp(r'band(\d+)/(.+)').firstMatch(p.path);
+      if (match != null) {
+        final bandIndex = int.parse(match.group(1)!);
+
+        if (bandIndex >= 0 && bandIndex < bands.length) {
+          final band = bands[bandIndex];
+          final paramName = match.group(2)!;
+
+          switch (paramName) {
+            case 'active':
+              band.active = p.value > 0.5;
+              break;
+            case 'type':
+              band.filterType = p.value.toInt();
+              break;
+            case 'freq':
+              band.freq = p.value;
+              break;
+            case 'q':
+              band.q = p.value;
+              break;
+            case 'gain':
+              band.gain = p.value;
+              break;
+            case 'slope':
+              band.order = p.value.toInt();
+              break;
+          }
+        }
+      }
+    }
   }
 
   // ==== Backend Communication ====
@@ -485,6 +483,24 @@ class KarbeatParametricEqState
   }
 
   Widget _buildMasterStrip() {
+    plugin_api.UiPluginParameter? p;
+    for (final param in parameters) {
+      if (param.path == 'base_gain') {
+        p = param;
+        break;
+      }
+    }
+
+    final pMin = p?.min ?? minGain;
+    final pMax = p?.max ?? maxGain;
+    final pDef = p?.defaultValue ?? 0.0;
+    final pStep = p?.step ?? 0.1;
+    final pName = p?.name ?? 'Gain';
+    // the fallback ID is not an invalid ID because at the Rust side, the ID is represented by u32.
+    // this will probably crash app if we did not handle it gracefully
+    final pId = p?.id ?? -1;
+    final pValue = p?.value ?? 0.0;
+
     return Container(
       width: 80,
       padding: const EdgeInsets.all(8),
@@ -502,30 +518,16 @@ class KarbeatParametricEqState
           Expanded(
             child: RotatedBox(
               quarterTurns: 3,
-              child: SliderTheme(
-                data: SliderThemeData(
-                  trackHeight: 4,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 8,
-                  ),
-                ),
-                child: ParameterInteractionWrapper<double>(
-                  value: masterGain,
-                  min: minGain,
-                  max: maxGain,
-                  step: 0.1,
-                  onChanged: _updateMasterGain,
-                  parameterName: 'Gain',
-                  defaultValue: 0.0,
-                  child: Slider(
-                    value: masterGain,
-                    min: minGain,
-                    max: maxGain,
-                    activeColor: Colors.white,
-                    onChanged: _updateMasterGain,
-                    allowedInteraction: SliderInteraction.slideThumb,
-                  ),
-                ),
+              child: DawFloatParam(
+                paramId: pId,
+                name: pName,
+                value: pValue,
+                min: pMin,
+                max: pMax,
+                defaultValue: pDef,
+                step: pStep,
+                suffix: "dB",
+                onChanged: _updateMasterGain,
               ),
             ),
           ),
@@ -541,7 +543,19 @@ class KarbeatParametricEqState
 
   Widget _buildBandStrip(int i) {
     final band = bands[i];
-    final color = _bandColors[i];
+    // Guard: wrap index so extra bands cycle through colors safely
+    final color = _bandColors[i % _bandColors.length];
+
+    // Extract enum choices natively from the Rust parameters
+    plugin_api.UiPluginParameter? typeParam;
+    plugin_api.UiPluginParameter? slopeParam;
+    for (final p in parameters) {
+      if (p.path == 'band$i/type') typeParam = p;
+      if (p.path == 'band$i/slope') slopeParam = p;
+    }
+
+    final filterChoices = typeParam?.choices ?? [];
+    final slopeChoices = slopeParam?.choices ?? [];
 
     return Container(
       width: 100,
@@ -612,12 +626,12 @@ class KarbeatParametricEqState
                 color: Colors.grey.shade800,
                 onSelected: (val) => _updateBandParam(i, 4, val.toDouble()),
                 itemBuilder: (context) => List.generate(
-                  _filterTypes.length,
+                  filterChoices.length,
                   (idx) => PopupMenuItem<int>(
                     value: idx,
                     height: 32,
                     child: Text(
-                      _filterTypes[idx],
+                      filterChoices[idx],
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 9,
@@ -630,7 +644,10 @@ class KarbeatParametricEqState
                   children: [
                     Expanded(
                       child: Text(
-                        _filterTypes[band.filterType],
+                        filterChoices.isNotEmpty &&
+                                band.filterType < filterChoices.length
+                            ? filterChoices[band.filterType]
+                            : "",
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 9,
@@ -654,18 +671,15 @@ class KarbeatParametricEqState
             _buildParamControl(
               "Freq",
               band.freq,
-              minFreq,
-              maxFreq,
+              "band$i/freq", // Matches backend dynamic path
               (v) => _updateBandParam(i, 0, v),
-              isLog: true,
               suffix: "Hz",
               parameterName: "Frequency",
             ),
             _buildParamControl(
               "Gain",
               band.gain,
-              minGain,
-              maxGain,
+              "band$i/gain", // Matches backend dynamic path
               (v) => _updateBandParam(i, 1, v),
               suffix: "dB",
               parameterName: "Gain",
@@ -673,8 +687,7 @@ class KarbeatParametricEqState
             _buildParamControl(
               "Q",
               band.q,
-              0.1,
-              20.0,
+              "band$i/q", // Matches backend dynamic path
               (v) => _updateBandParam(i, 2, v),
               suffix: "",
               parameterName: "Q Bandwidth",
@@ -685,17 +698,17 @@ class KarbeatParametricEqState
             SizedBox(
               height: 28,
               child: PopupMenuButton<int>(
-                initialValue: band.order.clamp(0, _slopeChoices.length - 1),
+                initialValue: band.order,
                 padding: EdgeInsets.zero,
                 color: Colors.grey.shade800,
                 onSelected: (val) => _updateBandParam(i, 5, val.toDouble()),
                 itemBuilder: (context) => List.generate(
-                  _slopeChoices.length,
+                  slopeChoices.length,
                   (idx) => PopupMenuItem<int>(
                     value: idx,
                     height: 32,
                     child: Text(
-                      _slopeChoices[idx],
+                      slopeChoices[idx],
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 9,
@@ -708,10 +721,10 @@ class KarbeatParametricEqState
                   children: [
                     Expanded(
                       child: Text(
-                        _slopeChoices[band.order.clamp(
-                          0,
-                          _slopeChoices.length - 1,
-                        )],
+                        slopeChoices.isNotEmpty &&
+                                band.order < slopeChoices.length
+                            ? slopeChoices[band.order]
+                            : "",
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 9,
@@ -737,48 +750,38 @@ class KarbeatParametricEqState
   Widget _buildParamControl(
     String label,
     double val,
-    double min,
-    double max,
+    String paramPath,
     ValueChanged<double> onChanged, {
-    bool isLog = false,
     String suffix = "",
     String parameterName = "",
   }) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 9)),
-        SliderTheme(
-          data: SliderThemeData(
-            trackHeight: 2,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
-          ),
-          child: ParameterInteractionWrapper<double>(
-            value: val,
-            min: min,
-            max: max,
-            step: isLog ? 1.0 : 0.1,
-            onChanged: onChanged,
-            parameterName: parameterName,
-            defaultValue: 40.0,
-            child: Slider(
-              value: (isLog ? log(val) / ln10 : val).clamp(
-                isLog ? log(min) / ln10 : min,
-                isLog ? log(max) / ln10 : max,
-              ),
-              min: isLog ? log(min) / ln10 : min,
-              max: isLog ? log(max) / ln10 : max,
-              onChanged: (newVal) =>
-                  onChanged(isLog ? pow(10, newVal).toDouble() : newVal),
-              allowedInteraction: SliderInteraction.slideThumb,
-            ),
-          ),
-        ),
-        Text(
-          "${val >= 1000 ? '${(val / 1000).toStringAsFixed(1)}k' : val.toStringAsFixed(1)}$suffix",
-          style: const TextStyle(color: Colors.white, fontSize: 9),
-        ),
-      ],
+    plugin_api.UiPluginParameter? p;
+    for (final param in parameters) {
+      if (param.path == paramPath) {
+        p = param;
+        break;
+      }
+    }
+
+    final pMin = p?.min ?? 0.0;
+    final pMax = p?.max ?? 1.0;
+    final pDef = p?.defaultValue ?? 0.0;
+    final pStep = p?.step ?? 0.1;
+    final pId = p?.id ?? -1;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: DawFloatParam(
+        paramId: pId,
+        name: label,
+        value: val,
+        min: pMin,
+        max: pMax,
+        defaultValue: pDef,
+        step: pStep,
+        suffix: suffix,
+        onChanged: onChanged,
+      ),
     );
   }
 }
@@ -788,8 +791,8 @@ class _EqResponsePainter extends CustomPainter {
   final List<EqBand> bands;
   final List<Color> bandColors;
   final int? activeNodeIndex;
-  final List<eq_api.UiResponseCurvePoint> responseCurve;
-  final List<eq_api.UiResponseCurvePoint> spectrumCurve;
+  final List<CurvePoint> responseCurve;
+  final List<CurvePoint> spectrumCurve;
 
   _EqResponsePainter({
     required this.bands,
@@ -998,4 +1001,3 @@ Path _buildSmoothPath(List<Offset> pts) {
 
   return path;
 }
-

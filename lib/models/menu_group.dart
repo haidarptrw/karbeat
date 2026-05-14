@@ -6,15 +6,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Toolbar Menu Group
-class KarbeatToolbarMenuGroup {
+class DawToolbarMenuGroup {
   final ToolbarMenuContextGroup id;
   final String title;
   final IconData icon;
 
-  /// Define list of actions with type [KarbeatToolbarMenuAction]
-  final List<KarbeatToolbarMenuAction> actions;
+  /// Define list of actions with type [DawToolbarMenuAction]
+  final List<DawToolbarMenuAction> actions;
 
-  KarbeatToolbarMenuGroup({
+  DawToolbarMenuGroup({
     required this.id,
     required this.title,
     required this.icon,
@@ -23,7 +23,7 @@ class KarbeatToolbarMenuGroup {
 }
 
 /// Model for toolbar menu action
-class KarbeatToolbarMenuAction {
+class DawToolbarMenuAction {
   final String title;
 
   /// Shortcut for this action to give a context to the user. **Note that this shortcut only works on desktop app**
@@ -33,9 +33,9 @@ class KarbeatToolbarMenuAction {
   final bool isDestructive;
 
   /// Define the callback when this action is executed
-  final KarbeatToolbarMenuActionCallback? callback;
+  final DawToolbarMenuActionCallback? callback;
 
-  KarbeatToolbarMenuAction(
+  DawToolbarMenuAction(
     this.title, {
     this.shortcut,
     this.isDestructive = false,
@@ -43,22 +43,21 @@ class KarbeatToolbarMenuAction {
   });
 }
 
-typedef KarbeatToolbarMenuActionCallback =
-    void Function(BuildContext, KarbeatState);
+typedef DawToolbarMenuActionCallback =
+    void Function(BuildContext, GlobalAppState);
 
 /// Factory for toolbar menu group
 ///
 /// **DEVELOPER NOTE**: *Create a new initialization here for a new group menu type*
-class KarbeatToolbarMenuGroupFactory {
+class DawToolbarMenuGroupFactory {
   /// Helper to safely update the window title on Desktop platforms
   static Future<void> _updateWindowTitle(String filePath) async {
     // Only attempt to change the window title on desktop OS
     if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-      // Extract just the file name from the full path (e.g., "MySong.karbeat")
       final fileName = filePath.split(RegExp(r'[/\\]')).last;
 
       try {
-        await windowManager.setTitle('Karbeat — $fileName');
+        await windowManager.setTitle('DigiDAW — $fileName');
       } catch (e) {
         debugPrint("Failed to set window title: $e");
       }
@@ -68,13 +67,13 @@ class KarbeatToolbarMenuGroupFactory {
   /// Helper to handle "Save As" logic used by both Save and Save As buttons
   static Future<void> _performSaveAs(
     BuildContext context,
-    KarbeatState state,
+    GlobalAppState state,
   ) async {
     final path = await FilePicker.platform.saveFile(
       dialogTitle: 'Save Project As...',
-      fileName: 'untitled.karbeat',
+      fileName: 'untitled.dgdaw',
       type: FileType.custom,
-      allowedExtensions: ['karbeat'],
+      allowedExtensions: ['karbeat', 'dgdaw'],
     );
 
     if (path != null) {
@@ -97,35 +96,37 @@ class KarbeatToolbarMenuGroupFactory {
     }
   }
 
-  static KarbeatToolbarMenuGroup
-  createProjectMenuGroup() => KarbeatToolbarMenuGroup(
+  static DawToolbarMenuGroup createProjectMenuGroup() => DawToolbarMenuGroup(
     id: ToolbarMenuContextGroup.project,
     icon: Icons.work,
     title: "Project",
     actions: [
-      KarbeatToolbarMenuAction('New project', shortcut: 'Ctrl + N', callback: (context, state) async {
-        final _ = await state.newBlankProject();
-        // newBlankProject never throws error, it just load the new project
-        // Reset file path in state
-              state.currentFilePath = null;
-              
-              // Safely update window title back to default
-              if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
-                try {
-                  await windowManager.setTitle('Karbeat — Untitled');
-                } catch (e) {
-                  debugPrint("Failed to set window title: $e");
-                }
-              }
+      DawToolbarMenuAction(
+        'New project',
+        shortcut: 'Ctrl + N',
+        callback: (context, state) async {
+          final _ = await state.newBlankProject();
+          // newBlankProject never throws error, it just load the new project
+          // Reset file path in state
+          state.currentFilePath = null;
 
-      }),
-      KarbeatToolbarMenuAction(
+          // Safely update window title back to default
+          if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+            try {
+              await windowManager.setTitle('DigiDAW — Untitled');
+            } catch (e) {
+              debugPrint("Failed to set window title: $e");
+            }
+          }
+        },
+      ),
+      DawToolbarMenuAction(
         'Open project',
         shortcut: 'Ctrl+O',
         callback: (context, state) async {
           final result = await FilePicker.platform.pickFiles(
             type: FileType.custom,
-            allowedExtensions: ['karbeat'],
+            allowedExtensions: ['karbeat', 'dgdaw'],
           );
           if (result != null && result.files.single.path != null) {
             final path = result.files.single.path!;
@@ -177,7 +178,7 @@ class KarbeatToolbarMenuGroupFactory {
           }
         },
       ),
-      KarbeatToolbarMenuAction(
+      DawToolbarMenuAction(
         'Save Project',
         shortcut: 'Ctrl+S',
         callback: (context, state) async {
@@ -199,43 +200,41 @@ class KarbeatToolbarMenuGroupFactory {
           }
         },
       ),
-      KarbeatToolbarMenuAction(
+      DawToolbarMenuAction(
         'Save As...',
         shortcut: 'Ctrl+Shift+S',
         callback: (context, state) async {
           await _performSaveAs(context, state);
         },
       ),
-      KarbeatToolbarMenuAction('Import Audio'),
-      KarbeatToolbarMenuAction(
+      DawToolbarMenuAction('Import Audio'),
+      DawToolbarMenuAction(
         'Export Project',
         callback: (context, state) async {
           state.openExportPanel();
         },
       ),
-      KarbeatToolbarMenuAction('Settings'),
+      DawToolbarMenuAction('Settings'),
     ],
   );
 
-  static KarbeatToolbarMenuGroup createEditMenuGroup() =>
-      KarbeatToolbarMenuGroup(
-        id: ToolbarMenuContextGroup.edit,
-        icon: Icons.edit,
-        title: 'Edit',
-        actions: [
-          KarbeatToolbarMenuAction('Undo', shortcut: 'Ctrl+Z'),
-          KarbeatToolbarMenuAction('Redo', shortcut: 'CTRL+Y'),
-        ],
-      );
+  static DawToolbarMenuGroup createEditMenuGroup() => DawToolbarMenuGroup(
+    id: ToolbarMenuContextGroup.edit,
+    icon: Icons.edit,
+    title: 'Edit',
+    actions: [
+      DawToolbarMenuAction('Undo', shortcut: 'Ctrl+Z'),
+      DawToolbarMenuAction('Redo', shortcut: 'CTRL+Y'),
+    ],
+  );
 
-  static KarbeatToolbarMenuGroup createViewMenuGroup() =>
-      KarbeatToolbarMenuGroup(
-        id: ToolbarMenuContextGroup.view,
-        title: 'View',
-        icon: Icons.visibility,
-        actions: [
-          KarbeatToolbarMenuAction('Zoom in', shortcut: 'Ctrl+Plus'),
-          KarbeatToolbarMenuAction('Zoom out', shortcut: 'CTRL+Minus'),
-        ],
-      );
+  static DawToolbarMenuGroup createViewMenuGroup() => DawToolbarMenuGroup(
+    id: ToolbarMenuContextGroup.view,
+    title: 'View',
+    icon: Icons.visibility,
+    actions: [
+      DawToolbarMenuAction('Zoom in', shortcut: 'Ctrl+Plus'),
+      DawToolbarMenuAction('Zoom out', shortcut: 'CTRL+Minus'),
+    ],
+  );
 }

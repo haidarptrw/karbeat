@@ -10,15 +10,14 @@ use karbeat_core::{
     core::project::{
         clip::Clip,
         generator::{GeneratorInstance, GeneratorInstanceType},
-        track::{audio_waveform::AudioWaveform, KarbeatTrack, TrackType},
+        track::{audio_waveform::AudioWaveform, AudioTrack, TrackType},
         transport::TransportState,
-        AudioHardwareConfig, KarbeatSource, ProjectMetadata,
+        AudioHardwareConfig, DawSource, ProjectMetadata,
     },
-    utils::get_waveform_buffer,
 };
-use karbeat_utils::audio_utils::quantize_to_i8;
 use serde::Serialize;
 
+use crate::api::waveform::{WaveformHandle, get_waveform_handle};
 use crate::frb_generated::StreamSink;
 
 pub enum UiTrackType {
@@ -205,8 +204,8 @@ impl From<UiTransportState> for TransportState {
     }
 }
 
-impl From<&KarbeatTrack> for UiTrack {
-    fn from(value: &KarbeatTrack) -> Self {
+impl From<&AudioTrack> for UiTrack {
+    fn from(value: &AudioTrack) -> Self {
         let generator_id = value
             .generator
             .as_ref()
@@ -292,10 +291,10 @@ impl From<&Clip> for UiClip {
     fn from(value: &Clip) -> Self {
         // Map source to either AudioWaveform, midi
         let source = match &value.source {
-            KarbeatSource::Audio(source_id) => UiClipSource::Audio {
+            DawSource::Audio(source_id) => UiClipSource::Audio {
                 source_id: source_id.to_u32(),
             },
-            KarbeatSource::Midi(pattern_id) => UiClipSource::Midi {
+            DawSource::Midi(pattern_id) => UiClipSource::Midi {
                 pattern_id: pattern_id.to_u32(),
             },
             _ => UiClipSource::None,
@@ -324,7 +323,8 @@ pub struct AudioWaveformUiForSourceList {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct AudioWaveformUiForAudioProperties {
-    pub preview_buffer: Vec<i8>, // Quantized i8 samples (-127..127) for waveform display
+    pub id: Option<u32>,
+    pub buffer_handle: WaveformHandle, // Quantized i8 samples (-127..127) for waveform display
     pub file_path: String,
     pub name: String,
     pub sample_rate: u32,
@@ -339,14 +339,6 @@ pub struct AudioWaveformUiForAudioProperties {
     pub muted: bool, // this only affects when play stream, not when doing preview sound
 }
 
-pub struct AudioWaveformUiForClip {
-    pub name: String,
-    pub preview_buffer: Vec<i8>,
-    pub sample_rate: u32,
-    pub channels: u16,
-    pub duration: f64,
-}
-
 impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
     fn from(value: &AudioWaveform) -> Self {
         Self {
@@ -357,18 +349,46 @@ impl From<&AudioWaveform> for AudioWaveformUiForSourceList {
     }
 }
 
-impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
-    fn from(value: &AudioWaveform) -> Self {
-        let preview_buffer: Vec<i8> = get_waveform_buffer(&value.buffer)
-            .map(|slice| {
-                slice
-                    .iter()
-                    .map(|&s| (s.clamp(-1.0, 1.0) * 127.0) as i8)
-                    .collect()
-            })
-            .unwrap_or_default();
-        Self {
-            preview_buffer,
+// impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
+//     fn from(value: &AudioWaveform) -> Self {
+//         let preview_buffer: Vec<i8> = get_waveform_buffer(&value.buffer)
+//             .map(|slice| {
+//                 slice
+//                     .iter()
+//                     .map(|&s| (s.clamp(-1.0, 1.0) * 127.0) as i8)
+//                     .collect()
+//             })
+//             .unwrap_or_default();
+//         Self {
+//             file_path: value.file_path.display().to_string(),
+//             name: value.name.clone(),
+//             sample_rate: value.sample_rate,
+//             channels: value.channels,
+//             duration: value.duration,
+//             root_note: value.root_note,
+//             fine_tune: value.fine_tune,
+//             trim_start: value.trim_start,
+//             trim_end: value.trim_end,
+//             is_looping: value.is_looping,
+//             normalized: value.normalized,
+//             muted: value.muted,
+//         }
+//     }
+// }
+
+impl TryFrom<&AudioWaveform> for AudioWaveformUiForAudioProperties {
+    type Error = String;
+
+    fn try_from(value: &AudioWaveform) -> Result<Self, Self::Error> {
+        let Some(id) = value.id else {
+            return Err(String::from("This audio waveform does not have an ID"));
+        };
+        log::debug!("Can get source id");
+        let waveform_handle = get_waveform_handle(id.to_u32()).ok_or("Cannot get this waveform handle")?;
+        log::debug!("Can get waveform handle");
+        Ok(Self {
+            id: Some(id.to_u32()),
+            buffer_handle: waveform_handle,
             file_path: value.file_path.display().to_string(),
             name: value.name.clone(),
             sample_rate: value.sample_rate,
@@ -381,47 +401,8 @@ impl From<&AudioWaveform> for AudioWaveformUiForAudioProperties {
             is_looping: value.is_looping,
             normalized: value.normalized,
             muted: value.muted,
-        }
-    }
-}
-
-impl From<&AudioWaveform> for AudioWaveformUiForClip {
-    fn from(value: &AudioWaveform) -> Self {
-        let preview_buffer: Vec<i8> = get_waveform_buffer(&value.buffer)
-            .map(|slice| {
-                slice
-                    .iter()
-                    .map(|&s| (s.clamp(-1.0, 1.0) * 127.0) as i8)
-                    .collect()
-            })
-            .unwrap_or_default();
-        Self {
-            preview_buffer,
-            name: value.name.clone(),
-            sample_rate: value.sample_rate,
-            channels: value.channels,
-            duration: value.duration,
-        }
-    }
-}
-
-#[frb(ignore)]
-impl AudioWaveformUiForClip {
-    pub fn try_from_audio_waveform_with_target_sample_bin(source_id: u32) -> Result<Self, String> {
-        audio_waveform_api::get_audio_waveform(source_id, |waveform| {
-            let preview_buffer = get_waveform_buffer(&waveform.buffer)
-                .map(|slice| quantize_to_i8(slice))
-                .unwrap_or_default();
-
-            Self {
-                preview_buffer,
-                name: waveform.name.clone(),
-                sample_rate: waveform.sample_rate,
-                channels: waveform.channels,
-                duration: waveform.duration,
-            }
         })
-        .map_err(|e| e.to_string())
+
     }
 }
 // ============================================================

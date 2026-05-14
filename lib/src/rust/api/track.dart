@@ -9,27 +9,6 @@ import 'project.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
-Future<Map<int, AudioWaveformUiForClip>> getAudioWaveformClipsData() =>
-    RustLib.instance.api.crateApiTrackGetAudioWaveformClipsData();
-
-Future<AudioWaveformUiForClip> getAudioWaveformForClip({
-  required int audioSourceId,
-}) => RustLib.instance.api.crateApiTrackGetAudioWaveformForClip(
-  audioSourceId: audioSourceId,
-);
-
-/// Getter for all audio waveform data for audio only for this specific track
-Future<Map<int, AudioWaveformUiForClip>>
-getAudioWaveformForClipOnlyInSpecificTrack({required int trackId}) => RustLib
-    .instance
-    .api
-    .crateApiTrackGetAudioWaveformForClipOnlyInSpecificTrack(trackId: trackId);
-
-/// Getter for all audio waveform data for audio in all audio tracks
-Future<Map<int, AudioWaveformUiForClip>>
-getAudioWaveformForClipAllAvailableInTracks() => RustLib.instance.api
-    .crateApiTrackGetAudioWaveformForClipAllAvailableInTracks();
-
 Future<UiClip> createClip({
   int? sourceId,
   required UiSourceType sourceType,
@@ -152,6 +131,11 @@ Future<void> changeTrackColor({
   trackId: trackId,
   newColor: newColor,
 );
+
+/// Delete a track from the timeline. This function returns a string which will be
+/// "audio", "midi", or "automation"
+Future<String> deleteTrack({required int trackId}) =>
+    RustLib.instance.api.crateApiTrackDeleteTrack(trackId: trackId);
 
 enum UiResizeEdge { left, right }
 

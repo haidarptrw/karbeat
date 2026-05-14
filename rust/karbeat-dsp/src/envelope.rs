@@ -3,7 +3,7 @@
 // ============================================================================
 
 use karbeat_macros::karbeat_plugin;
-use karbeat_plugin_types::parameter::Param;
+use serde::{Deserialize, Serialize};
 
 /// A common trait for any envelope settings struct.
 /// Allows the AdsrProcessor to process both standard and advanced envelopes.
@@ -243,7 +243,7 @@ impl Envelope for AdvancedEnvelopeSettings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub enum EnvelopeState {
     Idle,
     Attack,
@@ -252,7 +252,7 @@ pub enum EnvelopeState {
     Release,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AdsrProcessor {
     pub state: EnvelopeState,
     pub current_level: f32,

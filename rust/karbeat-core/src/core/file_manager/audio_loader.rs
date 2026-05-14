@@ -144,7 +144,7 @@ impl AudioLoader for ApplicationState {
     fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<AudioSourceId> {
         // Load the actual audio data (Heavy I/O operation)
         // This parses the file into f32 samples
-        let waveform = match load_audio_file(path, name) {
+        let mut waveform = match load_audio_file(path, name) {
             Ok(waveform) => waveform,
             Err(e) => {
                 let error_msg = format!("Cannot decode audio file: {}", e);
@@ -152,19 +152,20 @@ impl AudioLoader for ApplicationState {
                 return Err(anyhow!("{}", error_msg));
             }
         };
-        let raw_id = self.asset_library.next_id;
-        let source_id = AudioSourceId::from(raw_id);
+        let mut raw_id = self.asset_library.next_id;
+        let source_id = AudioSourceId::next(&mut raw_id);
 
         let asset_library = Arc::make_mut(&mut self.asset_library);
-        asset_library.next_id += 1;
+        // asset_library.next_id += 1;
 
-        // set mipmap
+        // Assign this audio waveform with an Id
+        waveform.id = Some(source_id);
 
         asset_library
             .source_map
             .insert(source_id, Arc::new(waveform));
 
-        log::info!("Successfully loaded audio: {} (ID: {})", path, raw_id);
+        log::info!("Successfully loaded audio: {} (ID: {})", path, source_id);
 
         Ok(source_id)
     }
