@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/models/export_audio.dart';
+import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/state/app_state.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -21,11 +22,23 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   late TextEditingController _nameController;
   String _exportDirectory = "Select Directory...";
   SupportedAudioFormat _selectedFormat = SupportedAudioFormat.wav;
-  BitPerSample _selectedBitDepth = BitPerSample.b16;
+  BitDepthDTO _selectedBitDepth = const BitDepthDTO.bitPerSample(16);
   SampleRate _selectedSampleRate = SampleRate.hz44100;
   TailHandling _tailHandling = TailHandling.leaveRemainder;
-  int _selectedBitrate = 192;
   bool _openFolderAfterExport = true;
+
+  static const _bitPerSampleOptions = [
+    BitDepthDTO.bitPerSample(8),
+    BitDepthDTO.bitPerSample(16),
+    BitDepthDTO.bitPerSample(24),
+    BitDepthDTO.bitPerSample(32),
+  ];
+  static const _bitPerSecondOptions = [
+    BitDepthDTO.bitPerSecond(128),
+    BitDepthDTO.bitPerSecond(192),
+    BitDepthDTO.bitPerSecond(256),
+    BitDepthDTO.bitPerSecond(320),
+  ];
 
   bool _isExporting = false;
   double _exportProgress = 0.0;
@@ -75,16 +88,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         path: _exportDirectory,
         soundfileName: _nameController.text,
         format: _selectedFormat,
-        bitPerSample:
-            _selectedFormat == SupportedAudioFormat.wav ||
-                _selectedFormat == SupportedAudioFormat.flac
-            ? _selectedBitDepth
-            : null,
-        bitrate:
-            _selectedFormat == SupportedAudioFormat.mp3 ||
-                _selectedFormat == SupportedAudioFormat.ogg
-            ? _selectedBitrate
-            : null,
+        bitDepth: _selectedBitDepth,
         sampleRate: _selectedSampleRate,
         tailHandling: _tailHandling,
       );
@@ -254,10 +258,22 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 _buildDropdown<SupportedAudioFormat>(
                                   value: _selectedFormat,
                                   // items: SupportedAudioFormat.values,
-                                  items: const [SupportedAudioFormat.wav],
+                                  items: const [
+                                    SupportedAudioFormat.wav,
+                                    SupportedAudioFormat.mp3,
+                                  ],
                                   itemLabel: (f) => f.name.toUpperCase(),
-                                  onChanged: (val) =>
-                                      setState(() => _selectedFormat = val!),
+                                  onChanged: (val) => setState(() {
+                                    _selectedFormat = val!;
+                                    _selectedBitDepth = switch (val) {
+                                      SupportedAudioFormat.wav ||
+                                      SupportedAudioFormat.flac =>
+                                        const BitDepthDTO.bitPerSample(16),
+                                      SupportedAudioFormat.mp3 ||
+                                      SupportedAudioFormat.ogg =>
+                                        const BitDepthDTO.bitPerSecond(192),
+                                    };
+                                  }),
                                 ),
                               ],
                             ),
@@ -292,28 +308,31 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _buildSectionTitle("Bit Depth / Bitrate"),
-                                if (_selectedFormat ==
-                                        SupportedAudioFormat.wav ||
-                                    _selectedFormat ==
-                                        SupportedAudioFormat.flac)
-                                  _buildDropdown<BitPerSample>(
-                                    value: _selectedBitDepth,
-                                    items: BitPerSample.values,
-                                    itemLabel: (b) => b.name.substring(1),
-                                    suffix: "-bit",
-                                    onChanged: (val) => setState(
-                                      () => _selectedBitDepth = val!,
-                                    ),
-                                  )
-                                else
-                                  _buildDropdown<int>(
-                                    value: _selectedBitrate,
-                                    items: const [128, 192, 256, 320],
-                                    itemLabel: (b) => b.toString(),
-                                    suffix: " kbps",
-                                    onChanged: (val) =>
-                                        setState(() => _selectedBitrate = val!),
-                                  ),
+                                _buildDropdown<BitDepthDTO>(
+                                  value: _selectedBitDepth,
+                                  items:
+                                      _selectedFormat ==
+                                              SupportedAudioFormat.wav ||
+                                          _selectedFormat ==
+                                              SupportedAudioFormat.flac
+                                      ? _bitPerSampleOptions
+                                      : _bitPerSecondOptions,
+                                  itemLabel: (b) => switch (b) {
+                                    BitDepthDTO_BitPerSample(:final field0) =>
+                                      field0.toString(),
+                                    BitDepthDTO_BitPerSecond(:final field0) =>
+                                      field0.toString(),
+                                  },
+                                  suffix:
+                                      _selectedFormat ==
+                                              SupportedAudioFormat.wav ||
+                                          _selectedFormat ==
+                                              SupportedAudioFormat.flac
+                                      ? "-bit"
+                                      : " kbps",
+                                  onChanged: (val) =>
+                                      setState(() => _selectedBitDepth = val!),
+                                ),
                               ],
                             ),
                           ),

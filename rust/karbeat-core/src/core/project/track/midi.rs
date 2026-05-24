@@ -9,6 +9,7 @@ use crate::core::project::NoteId;
 use crate::shared::id::PatternId;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct Pattern {
     pub id: PatternId,
     pub name: String,
@@ -17,6 +18,18 @@ pub struct Pattern {
     pub notes: Vec<Note>,
 
     pub next_note_id: u32,
+}
+
+impl Default for Pattern {
+    fn default() -> Self {
+        Self {
+            id: PatternId::default(),
+            name: "Pattern".to_string(),
+            length_ticks: 0,
+            notes: Vec::new(),
+            next_note_id: 0,
+        }
+    }
 }
 
 impl Pattern {

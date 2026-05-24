@@ -240,7 +240,13 @@ impl ApplicationState {
         default_value: f32,
     ) -> anyhow::Result<AutomationId> {
         // Prevent duplicate lanes for the same target
-        if self.automation_pool.values().any(|l| l.target == target) {
+        if self.automation_pool.values().any(|l| {
+            if let Some(l_target) = &l.target {
+                l_target == &target
+            } else {
+                false
+            }
+        }) {
             return Err(anyhow!("Automation lane for this target already exists"));
         }
 
@@ -288,7 +294,13 @@ impl ApplicationState {
         default_value: f32,
     ) -> anyhow::Result<Arc<AutomationLane>> {
         // Prevent duplicate lanes for the same target
-        if self.automation_pool.values().any(|l| l.target == target) {
+        if self.automation_pool.values().any(|l| {
+            if let Some(l_target) = &l.target {
+                l_target == &target
+            } else {
+                false
+            }
+        }) {
             return Err(anyhow!("Automation lane for this target already exists"));
         }
 
@@ -377,14 +389,25 @@ impl ApplicationState {
     pub fn get_automation_lanes_for_track(&self, track_id: TrackId) -> Vec<Arc<AutomationLane>> {
         self.automation_pool
             .values()
-            .filter(|l| l.target.references_track(track_id))
+            .filter(|l| {
+                if let Some(l_target) = &l.target {
+                    l_target.references_track(track_id)
+                } else {
+                    false
+                }
+            })
             .cloned()
             .collect()
     }
 
     /// Remove all automation lanes that reference a track (used when deleting tracks).
     pub fn remove_automation_lanes_for_track(&mut self, track_id: TrackId) {
-        self.automation_pool
-            .retain(|_, lane| !lane.target.references_track(track_id));
+        self.automation_pool.retain(|_, lane| {
+            if let Some(l_target) = &lane.target {
+                !l_target.references_track(track_id)
+            } else {
+                false
+            }
+        });
     }
 }

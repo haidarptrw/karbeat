@@ -24,6 +24,7 @@ pub enum AudioSampleMode {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct AudioWaveform {
     pub id: Option<AudioSourceId>,
     /// Audio buffer of samples

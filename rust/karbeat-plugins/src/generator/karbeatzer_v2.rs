@@ -1,8 +1,7 @@
 //! src/plugin/generator/karbeatzer_v2.rs
 
-use std::{any::Any, f32::consts::PI};
+use std::f32::consts::PI;
 
-use hashbrown::HashMap;
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
@@ -64,20 +63,14 @@ impl Default for KarbeatzerV2 {
         ];
 
         // Setup some nice default starting values
-        engine.oscillators[0]
-            .waveform
-            .set_base(Waveform::Saw as usize as f32);
+        engine.oscillators[0].waveform.set_base(Waveform::Saw);
         engine.oscillators[0].mix.set_base(1.0);
 
-        engine.oscillators[1]
-            .waveform
-            .set_base(Waveform::Square as usize as f32);
+        engine.oscillators[1].waveform.set_base(Waveform::Square);
         engine.oscillators[1].detune.set_base(0.1);
         engine.oscillators[1].mix.set_base(0.5);
 
-        engine.oscillators[2]
-            .waveform
-            .set_base(Waveform::Sine as usize as f32);
+        engine.oscillators[2].waveform.set_base(Waveform::Sine);
         engine.oscillators[2].detune.set_base(-12.0);
         engine.oscillators[2].mix.set_base(0.3);
 
@@ -177,6 +170,7 @@ impl KarbeatzerV2 {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
+#[karbeat_macros::auto_param(on_change = "self.handle_side_effects()")]
 impl AudioPlugin for KarbeatzerV2 {
     fn name(&self) -> &str {
         "Karbeatzer V2"
@@ -309,53 +303,6 @@ impl AudioPlugin for KarbeatzerV2 {
 
         // Cleanup dead voices
         self.active_voices.retain(|v| v.is_active);
-    }
-
-    // --- Dynamic Hashed Routing! ---
-
-    fn set_parameter(&mut self, id: u32, value: f32) {
-        if self.auto_set_parameter(karbeat_utils::hash::FNV_OFFSET, id, value) {
-            self.handle_side_effects();
-        }
-    }
-
-    fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
-            .unwrap_or(0.0)
-    }
-
-    fn apply_automation(&mut self, id: u32, value: f32) {
-        if self.auto_apply_automation(karbeat_utils::hash::FNV_OFFSET, id, value) {
-            self.handle_side_effects();
-        }
-    }
-
-    fn clear_automation(&mut self, id: u32) {
-        if self.auto_clear_automation(karbeat_utils::hash::FNV_OFFSET, id) {
-            self.handle_side_effects();
-        }
-    }
-
-    fn default_parameters(&self) -> HashMap<u32, f32> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-            .into_iter()
-            .map(|spec| (spec.id, spec.default_value))
-            .collect()
-    }
-
-    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn static_parameter_specs() -> Vec<ParameterSpec>
-    where
-        Self: Sized,
-    {
-        Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
     }
 
     fn category(&self) -> PluginCategory {

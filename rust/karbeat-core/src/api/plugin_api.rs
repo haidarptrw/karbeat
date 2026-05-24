@@ -1,3 +1,4 @@
+use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 use parking_lot::Mutex;
@@ -10,14 +11,11 @@ use crate::{
         generator::GeneratorInstanceType, mixer::EffectInstance, GeneratorId, GeneratorInstance,
         TrackId,
     },
-    lock::{get_app_read, get_app_write, get_plugin_registry_read},
+    lock::{get_app_read, get_plugin_registry_read},
     shared::id::*,
 };
 
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 // ============================================================================
 // PARAMETER ID RESOLVER
@@ -89,7 +87,11 @@ pub fn get_effect<M, U>(track_id: &TrackId, effect_id: &EffectId, mapper: M) -> 
 where
     M: FnOnce(&EffectInstance) -> U,
 {
-    let app = get_app_read();
+    let app: parking_lot::lock_api::RwLockReadGuard<
+        '_,
+        parking_lot::RawRwLock,
+        crate::core::project::ApplicationState,
+    > = get_app_read();
 
     let channel = app.mixer.channels.get(track_id)?;
 
@@ -165,11 +167,7 @@ where
             let result: Vec<T> = specs
                 .into_iter()
                 .map(|p| {
-                    let value = plugin_instance
-                        .parameters
-                        .get(&p.id)
-                        .copied()
-                        .unwrap_or(p.default_value);
+                    let value = p.default_value as f32;
                     mapper(p, value)
                 })
                 .collect();
@@ -195,7 +193,7 @@ where
 {
     let app = get_app_read();
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match target {
+    let (plugin_name, plugin_registry_id) = match target {
         EffectTarget::Track(track_id) => {
             let channel = app
                 .mixer
@@ -207,11 +205,7 @@ where
                 .iter()
                 .find(|e| e.id == *effect_id)
                 .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
         EffectTarget::Bus(bus_id) => {
             let bus = app
@@ -225,11 +219,7 @@ where
                 .iter()
                 .find(|e| e.id == *effect_id)
                 .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
         EffectTarget::Master => {
             let effect = app
@@ -239,11 +229,7 @@ where
                 .iter()
                 .find(|e| e.id == *effect_id)
                 .ok_or_else(|| format!("Effect {} not found", effect_id.0))?;
-            (
-                effect.instance.name.clone(),
-                effect.instance.registry_id,
-                effect.instance.parameters.clone(),
-            )
+            (effect.instance.name.clone(), effect.instance.registry_id)
         }
     };
 
@@ -261,10 +247,7 @@ where
         let result: Vec<T> = specs
             .into_iter()
             .map(|p| {
-                let value = plugin_parameters
-                    .get(&p.id)
-                    .copied()
-                    .unwrap_or(p.default_value);
+                let value = p.default_value as f32;
                 mapper(p, value)
             })
             .collect();
@@ -291,43 +274,22 @@ pub fn set_generator_parameter(
         });
     }
 
-    {
-        let mut app = get_app_write();
-        if let Some(generator_arc) = app.generator_pool.get_mut(generator_id) {
-            let generator = Arc::make_mut(generator_arc);
-            if let GeneratorInstanceType::Plugin(plugin_instance) = &mut generator.instance_type {
-                plugin_instance.parameters.insert(param_id, value);
-            }
-        }
-    }
-
-    crate::context::utils::broadcast_state_change();
     Ok(())
 }
 
+pub fn set_generator_parameter_to_default(
+    _generator_id: &GeneratorId,
+    _param_id: impl IntoParamId,
+) {
+}
+
 pub fn get_generator_parameter(
-    generator_id: &GeneratorId,
-    param_id: impl IntoParamId,
+    _generator_id: &GeneratorId,
+    _param_id: impl IntoParamId,
 ) -> Result<f32, String> {
-    let param_id = param_id.into_id();
-    let app = get_app_read();
-
-    let generator_arc = app
-        .generator_pool
-        .get(generator_id)
-        .ok_or_else(|| format!("Generator {} not found", generator_id.0))?;
-
-    let generator = generator_arc.as_ref();
-
-    if let GeneratorInstanceType::Plugin(ref plugin_instance) = generator.instance_type {
-        plugin_instance
-            .parameters
-            .get(&param_id)
-            .copied()
-            .ok_or_else(|| format!("Parameter {} not found", param_id))
-    } else {
-        Err("Generator is not a plugin type".to_string())
-    }
+    // Parameter tracking has been moved entirely to the audio thread.
+    // If Dart needs the value, it should fetch it from the audio thread parameter snapshot.
+    Err("ApplicationState no longer tracks parameters in real-time".to_string())
 }
 
 pub fn set_effect_parameter(
@@ -346,44 +308,6 @@ pub fn set_effect_parameter(
         });
     }
 
-    {
-        let mut app = get_app_write();
-
-        match target {
-            EffectTarget::Track(track_id) => {
-                if let Some(channel_arc) = app.mixer.channels.get_mut(track_id) {
-                    let channel = Arc::make_mut(channel_arc);
-                    if let Some(effect) = channel.effects.iter_mut().find(|e| e.id == *effect_id) {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            EffectTarget::Bus(bus_id) => {
-                if let Some(bus_arc) = app.mixer.buses.get_mut(bus_id) {
-                    let bus_mut = Arc::make_mut(bus_arc);
-                    if let Some(effect) = bus_mut
-                        .channel
-                        .effects
-                        .iter_mut()
-                        .find(|e| e.id == *effect_id)
-                    {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            EffectTarget::Master => {
-                let master = Arc::make_mut(&mut app.mixer.master_bus);
-                if let Some(effect) = master.effects.iter_mut().find(|e| e.id == *effect_id) {
-                    let plugin = Arc::make_mut(&mut effect.instance);
-                    plugin.parameters.insert(param_id, value);
-                }
-            }
-        }
-    }
-
-    crate::context::utils::broadcast_state_change();
     Ok(())
 }
 
@@ -412,75 +336,7 @@ pub fn query_effect_parameters(target: &EffectTarget, effect_id: &EffectId) -> R
     }
 }
 
-pub fn sync_generator_parameters_from_audio<I, P>(items: I)
-where
-    I: IntoIterator<Item = (GeneratorId, P)>,
-    P: IntoIterator<Item = (u32, f32)>,
-{
-    let mut app = get_app_write();
-
-    for (gen_id, params) in items {
-        if let Some(generator_arc) = app.generator_pool.get_mut(&gen_id) {
-            let generator = Arc::make_mut(generator_arc);
-            if let GeneratorInstanceType::Plugin(ref mut plugin_instance) = generator.instance_type
-            {
-                for (param_id, value) in params {
-                    plugin_instance.parameters.insert(param_id, value);
-                }
-            }
-        }
-    }
-}
-
-pub fn sync_effect_parameters_from_audio<I, P>(items: I)
-where
-    I: IntoIterator<Item = (EffectTarget, EffectId, P)>,
-    P: IntoIterator<Item = (u32, f32)>,
-{
-    let mut app = get_app_write();
-
-    for (target, effect_id, params) in items {
-        match target {
-            EffectTarget::Master => {
-                let master = Arc::make_mut(&mut app.mixer.master_bus);
-                if let Some(effect) = master.effects.iter_mut().find(|e| e.id == effect_id) {
-                    let plugin = Arc::make_mut(&mut effect.instance);
-                    for (param_id, value) in params {
-                        plugin.parameters.insert(param_id, value);
-                    }
-                }
-            }
-            EffectTarget::Track(track_id) => {
-                if let Some(channel_arc) = app.mixer.channels.get_mut(&track_id) {
-                    let channel = Arc::make_mut(channel_arc);
-                    if let Some(effect) = channel.effects.iter_mut().find(|e| e.id == effect_id) {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        for (param_id, value) in params {
-                            plugin.parameters.insert(param_id, value);
-                        }
-                    }
-                }
-            }
-            EffectTarget::Bus(bus_id) => {
-                if let Some(bus) = app.mixer.buses.get_mut(&bus_id) {
-                    let bus_mut = Arc::make_mut(bus);
-                    if let Some(effect) = bus_mut
-                        .channel
-                        .effects
-                        .iter_mut()
-                        .find(|e| e.id == effect_id)
-                    {
-                        let plugin = Arc::make_mut(&mut effect.instance);
-                        for (param_id, value) in params {
-                            plugin.parameters.insert(param_id, value);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
+// Syncing parameters to state is no longer done in real-time.
 pub fn execute_plugin_command_generator(
     gen_registry_id: u32,
     command: &str,
@@ -509,7 +365,7 @@ pub fn execute_effect_instance_command(
 ) -> Result<serde_json::Value, String> {
     let app = get_app_read();
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match target {
+    let (plugin_name, plugin_registry_id, plugin_state) = match target {
         EffectTarget::Track(track_id) => {
             let channel = app
                 .mixer
@@ -524,7 +380,7 @@ pub fn execute_effect_instance_command(
             (
                 effect.instance.name.clone(),
                 effect.instance.registry_id,
-                effect.instance.parameters.clone(),
+                effect.instance.plugin_state.clone(),
             )
         }
         EffectTarget::Bus(bus_id) => {
@@ -542,7 +398,7 @@ pub fn execute_effect_instance_command(
             (
                 effect.instance.name.clone(),
                 effect.instance.registry_id,
-                effect.instance.parameters.clone(),
+                effect.instance.plugin_state.clone(),
             )
         }
         EffectTarget::Master => {
@@ -556,23 +412,23 @@ pub fn execute_effect_instance_command(
             (
                 effect.instance.name.clone(),
                 effect.instance.registry_id,
-                effect.instance.parameters.clone(),
+                effect.instance.plugin_state.clone(),
             )
         }
     };
 
     let registry = get_plugin_registry_read();
-    let mut temp_plugin = if plugin_registry_id > 0 {
+    let mut temp_plugin = (if plugin_registry_id > 0 {
         registry
             .create_effect_by_id(plugin_registry_id)
             .map(|(p, _)| p)
     } else {
         registry.create_effect(&plugin_name)
-    }
+    })
     .ok_or_else(|| format!("Effect '{}' not found in registry", plugin_name))?;
 
-    for (&param_id, &value) in &plugin_parameters {
-        temp_plugin.set_parameter(param_id, value);
+    if !plugin_state.is_empty() {
+        temp_plugin.set_state(&plugin_state);
     }
 
     temp_plugin
@@ -592,23 +448,25 @@ pub fn execute_generator_instance_command(
         .get(generator_id)
         .ok_or_else(|| format!("Generator {} not found", generator_id.0))?;
 
-    let (plugin_name, plugin_registry_id, plugin_parameters) = match &gen_arc.instance_type {
-        GeneratorInstanceType::Plugin(p) => (p.name.clone(), p.registry_id, p.parameters.clone()),
-        _ => return Err("Generator is not a plugin".into()),
+    let (plugin_name, plugin_registry_id, plugin_state) = match &gen_arc.instance_type {
+        GeneratorInstanceType::Plugin(p) => (p.name.clone(), p.registry_id, p.plugin_state.clone()),
+        _ => {
+            return Err("Generator is not a plugin".into());
+        }
     };
 
     let registry = get_plugin_registry_read();
-    let mut temp_plugin = if plugin_registry_id > 0 {
+    let mut temp_plugin = (if plugin_registry_id > 0 {
         registry
             .create_generator_by_id(plugin_registry_id)
             .map(|(p, _)| p)
     } else {
         registry.create_generator(&plugin_name)
-    }
+    })
     .ok_or_else(|| format!("Generator '{}' not found in registry", plugin_name))?;
 
-    for (&param_id, &value) in &plugin_parameters {
-        temp_plugin.set_parameter(param_id, value);
+    if !plugin_state.is_empty() {
+        temp_plugin.set_state(&plugin_state);
     }
 
     temp_plugin
@@ -688,15 +546,17 @@ where
     }
 
     // Extract only PluginCommandResponse messages; leave the rest intact
-    pending.retain(|feedback| match feedback {
-        AudioFeedback::PluginCommandResponse {
-            request_id,
-            response,
-        } => {
-            results.push(mapper(*request_id, response.clone()));
-            false // consumed — remove from pending
+    pending.retain(|feedback| {
+        match feedback {
+            AudioFeedback::PluginCommandResponse {
+                request_id,
+                response,
+            } => {
+                results.push(mapper(*request_id, response.clone()));
+                false // consumed — remove from pending
+            }
+            _ => true, // keep all other feedback for other pollers
         }
-        _ => true, // keep all other feedback for other pollers
     });
 
     results
@@ -769,4 +629,71 @@ where
     });
 
     snapshots
+}
+
+static ZERO_COPY_REQUEST_ID: AtomicU32 = AtomicU32::new(1);
+
+/// Dispatches a command to the audio thread to fetch a ZeroCopyBuffer from a specific plugin.
+///
+/// # Parameters
+/// - `target`: Which plugin instance to target (Generator, TrackEffect, etc.).
+/// - `name`: The specific buffer name to request from the plugin (e.g., "spectrum").
+///
+/// # Returns
+/// `Ok(request_id)` on success. Use this ID to correlate the response that
+/// arrives via `poll_zero_copy_buffer_from_live_plugin`. Returns `Err` if the audio stream
+/// is not initialised or the command queue is full.
+pub fn query_zero_copy_buffer_from_live_plugin(
+    target: PluginTarget,
+    name: String,
+) -> Result<u32, String> {
+    let request_id = ZERO_COPY_REQUEST_ID.fetch_add(1, Ordering::Relaxed);
+
+    if let Some(sender) = ctx().command_sender.lock().as_mut() {
+        sender
+            .push(AudioCommand::QueryZeroCopyBuffer {
+                target,
+                name,
+                request_id,
+            })
+            .map_err(|_| "Command queue full".to_string())?;
+        Ok(request_id)
+    } else {
+        Err("Audio stream not initialised".to_string())
+    }
+}
+
+/// Drains all pending `ZeroCopyBufferResponse` messages from the feedback
+/// channel and maps each one through the provided `mapper` closure.
+///
+/// Unrelated feedback messages are kept in the pending buffer for other pollers.
+///
+/// # Parameters
+/// - `mapper`: Called once per response with `(request_id, Option<ZeroCopyBuffer>)`.
+///   Returns `T`, which is collected into the output `Vec`.
+pub fn poll_zero_copy_buffer_from_live_plugin<T, F>(mut mapper: F) -> Vec<T>
+where
+    // Note: Assuming you wrapped ZeroCopyBuffer in an opaque `ZeroCopyHandle` as discussed previously.
+    F: FnMut(u32, Option<ZeroCopyBuffer>) -> T,
+{
+    let mut results = Vec::new();
+    let mut pending = PENDING_FEEDBACK.lock();
+
+    // Drain the live feedback consumer into the shared pending buffer first
+    if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
+        while let Ok(feedback) = consumer.pop() {
+            pending.push(feedback);
+        }
+    }
+
+    // Extract only ZeroCopyBufferResponse messages; leave the rest intact
+    pending.retain(|feedback| match feedback {
+        AudioFeedback::ZeroCopyBufferResponse { request_id, buffer } => {
+            results.push(mapper(*request_id, buffer.clone()));
+            false
+        }
+        _ => true,
+    });
+
+    results
 }

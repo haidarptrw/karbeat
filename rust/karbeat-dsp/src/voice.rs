@@ -9,6 +9,7 @@ pub struct SynthVoice {
     pub is_active: bool,
     pub phase: Vec<f64>,
     pub adsr: AdsrProcessor, // Every voice tracks its own ADSR state
+    pub filter_state: Vec<f64>,
 }
 
 impl SynthVoice {
@@ -22,6 +23,7 @@ impl SynthVoice {
             is_active: true,
             phase: vec![0.0; num_voices],
             adsr,
+            filter_state: vec![0.0; num_voices],
         }
     }
 

@@ -77,8 +77,6 @@ abstract class AbstractGeneratorScreenState<T extends AbstractGeneratorScreen>
       final snapshots = await plugin_api.pollGeneratorParameterFeedback();
       if (snapshots.isEmpty) return;
 
-      await plugin_api.syncGeneratorParametersFromAudio(snapshots: snapshots);
-
       bool updated = false;
 
       setState(() {

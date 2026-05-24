@@ -1,6 +1,6 @@
 use crate::context::utils::broadcast_state_change;
-use crate::core::project::AudioTrack;
 use crate::core::project::track::RemovedTrackType;
+use crate::core::project::AudioTrack;
 use crate::lock::{get_app_read, get_app_write};
 use crate::shared::id::*;
 use karbeat_utils::color::Color;
@@ -86,9 +86,7 @@ pub fn delete_track(track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
     let deleted_track_type = {
         let mut app = get_app_write();
         app.remove_track(track_id)?
-
     };
     broadcast_state_change();
     Ok(deleted_track_type)
-
 }

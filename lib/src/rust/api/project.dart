@@ -11,7 +11,7 @@ import 'pattern.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`
 
 UiProjectMetadata projectMetadataNew() =>
     RustLib.instance.api.crateApiProjectProjectMetadataNew();
@@ -84,15 +84,11 @@ Future<int> getMaxSampleIndex() =>
 /// Export project to flutter. also report progress via StreamSink
 Stream<double> exportProjectFlutter({
   required String outputPath,
-  required int sampleRate,
-  required int bitPerSample,
-  required int channels,
+  required AudioExportConfigDTO config,
   required TailHandlingDTO tailHandling,
 }) => RustLib.instance.api.crateApiProjectExportProjectFlutter(
   outputPath: outputPath,
-  sampleRate: sampleRate,
-  bitPerSample: bitPerSample,
-  channels: channels,
+  config: config,
   tailHandling: tailHandling,
 );
 
@@ -156,6 +152,16 @@ abstract class AudioWaveformUiForAudioProperties
   set trimStart(int trimStart);
 }
 
+@freezed
+sealed class AudioExportConfigDTO with _$AudioExportConfigDTO {
+  const AudioExportConfigDTO._();
+
+  const factory AudioExportConfigDTO.wav(WavExportConfigDTO field0) =
+      AudioExportConfigDTO_Wav;
+  const factory AudioExportConfigDTO.mp3(Mp3ExportConfigDTO field0) =
+      AudioExportConfigDTO_Mp3;
+}
+
 class AudioWaveformUiForSourceList {
   final String name;
   final bool muted;
@@ -178,6 +184,39 @@ class AudioWaveformUiForSourceList {
           name == other.name &&
           muted == other.muted &&
           sampleRate == other.sampleRate;
+}
+
+@freezed
+sealed class BitDepthDTO with _$BitDepthDTO {
+  const BitDepthDTO._();
+
+  const factory BitDepthDTO.bitPerSample(int field0) = BitDepthDTO_BitPerSample;
+  const factory BitDepthDTO.bitPerSecond(int field0) = BitDepthDTO_BitPerSecond;
+}
+
+class Mp3ExportConfigDTO {
+  final int sampleRate;
+  final int channels;
+  final BitDepthDTO bitRate;
+
+  const Mp3ExportConfigDTO({
+    required this.sampleRate,
+    required this.channels,
+    required this.bitRate,
+  });
+
+  @override
+  int get hashCode =>
+      sampleRate.hashCode ^ channels.hashCode ^ bitRate.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Mp3ExportConfigDTO &&
+          runtimeType == other.runtimeType &&
+          sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          bitRate == other.bitRate;
 }
 
 enum TailHandlingDTO { cutRemaining, leaveRemaining, wrapRemaining }
@@ -369,22 +408,14 @@ class UiPluginInstance {
   /// Whether this plugin is bypassed
   final bool bypass;
 
-  /// Plugin parameters for persistence (Param ID -> Value)
-  final Map<int, double> parameters;
-
   const UiPluginInstance({
     required this.registryId,
     required this.name,
     required this.bypass,
-    required this.parameters,
   });
 
   @override
-  int get hashCode =>
-      registryId.hashCode ^
-      name.hashCode ^
-      bypass.hashCode ^
-      parameters.hashCode;
+  int get hashCode => registryId.hashCode ^ name.hashCode ^ bypass.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -393,8 +424,7 @@ class UiPluginInstance {
           runtimeType == other.runtimeType &&
           registryId == other.registryId &&
           name == other.name &&
-          bypass == other.bypass &&
-          parameters == other.parameters;
+          bypass == other.bypass;
 }
 
 class UiProjectMetadata {
@@ -488,4 +518,29 @@ class UiTransportState {
           runtimeType == other.runtimeType &&
           bpm == other.bpm &&
           timeSignature == other.timeSignature;
+}
+
+class WavExportConfigDTO {
+  final int sampleRate;
+  final int channels;
+  final BitDepthDTO bitDepth;
+
+  const WavExportConfigDTO({
+    required this.sampleRate,
+    required this.channels,
+    required this.bitDepth,
+  });
+
+  @override
+  int get hashCode =>
+      sampleRate.hashCode ^ channels.hashCode ^ bitDepth.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WavExportConfigDTO &&
+          runtimeType == other.runtimeType &&
+          sampleRate == other.sampleRate &&
+          channels == other.channels &&
+          bitDepth == other.bitDepth;
 }

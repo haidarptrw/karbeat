@@ -16,6 +16,7 @@ class DawFloatParam extends StatelessWidget {
   final String suffix;
   final ValueChanged<double> onChanged;
   final SliderInteraction sliderInteraction;
+  final double? sliderWidth;
 
   const DawFloatParam({
     super.key,
@@ -29,6 +30,7 @@ class DawFloatParam extends StatelessWidget {
     this.suffix = '',
     required this.onChanged,
     this.sliderInteraction = SliderInteraction.slideThumb,
+    this.sliderWidth,
   });
 
   @override
@@ -58,37 +60,43 @@ class DawFloatParam extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: Colors.cyanAccent,
-            inactiveTrackColor: Colors.grey.shade700,
-            thumbColor: Colors.cyanAccent,
-            overlayColor: Colors.cyanAccent.withAlpha(51),
-            trackHeight: 4,
-            tickMarkShape: SliderTickMarkShape.noTickMark,
-          ),
-          child: ParameterInteractionWrapper<double>(
-            parameterName: name,
-            value: value,
-            defaultValue: defaultValue,
-            min: min,
-            max: max,
-            step: step,
-            onChanged: onChanged,
-            onAddAutomation: () {
-              // TODO: Wire up automation lane creation using paramId
-              debugPrint("Create automation for $name ($paramId)");
-            },
-            child: Slider(
-              value: value.clamp(min, max),
+        () {
+          final sliderWithTheme = SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: Colors.cyanAccent,
+              inactiveTrackColor: Colors.grey.shade700,
+              thumbColor: Colors.cyanAccent,
+              overlayColor: Colors.cyanAccent.withAlpha(51),
+              trackHeight: 4,
+              tickMarkShape: SliderTickMarkShape.noTickMark,
+            ),
+            child: ParameterInteractionWrapper<double>(
+              parameterName: name,
+              value: value,
+              defaultValue: defaultValue,
               min: min,
               max: max,
-              divisions: divisions,
+              step: step,
               onChanged: onChanged,
-              allowedInteraction: sliderInteraction,
+              onAddAutomation: () {
+                // TODO: Wire up automation lane creation using paramId
+                debugPrint("Create automation for $name ($paramId)");
+              },
+              child: Slider(
+                value: value.clamp(min, max),
+                min: min,
+                max: max,
+                divisions: divisions,
+                onChanged: onChanged,
+                allowedInteraction: sliderInteraction,
+              ),
             ),
-          ),
-        ),
+          );
+          if (sliderWidth != null) {
+            return SizedBox(width: sliderWidth!, child: sliderWithTheme);
+          }
+          return sliderWithTheme;
+        }(),
       ],
     );
   }

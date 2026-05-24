@@ -1,63 +1,53 @@
+use karbeat_dsp::compressor::SidechainCompressor;
 use karbeat_macros::karbeat_plugin;
+use karbeat_plugin_api::prelude::*;
 
 /// An audio FX to do sidechain compressing,
 /// Meaning that the compression is influenced
 /// by another input signal
+#[derive(Clone)]
 #[karbeat_plugin]
-pub struct SidechainCompressor {
-    #[param(
-        id = "gate_threshold",
-        name = "Gate Threshold",
-        group = "Gate",
-        min = -60.0,
-        max = 12.0,
-        step = 0.1,
-        default = 0.0
-    )]
-    pub gate_threshold: f32,
+pub struct DigidawSidechainCompressor {
+    #[nested(prefix = "compressor/")]
+    pub compressor: SidechainCompressor,
+}
 
-    // Expander parameters
-    #[param(
-        id = "expander_threshold",
-        name = "Expander Threshold",
-        group = "Expander",
-        min = -60.0,
-        max = 12.0,
-        step = 0.1,
-        default = 0.0
-    )]
-    pub expander_threshold: f32,
-    #[param(
-        id = "expander_ratio",
-        name = "Expander Ratio",
-        group = "Expander",
-        min = 0.0,
-        max = 16.0,
-        step = 0.1,
-        default = 1.0
-    )]
-    pub expander_ratio: f32,
+impl Default for DigidawSidechainCompressor {
+    fn default() -> Self {
+        Self {
+            compressor: SidechainCompressor::default(),
+        }
+    }
+}
 
-    // Compressor parameters
-    #[param(
-        id = "compressor_threshold",
-        name = "Compressor Threshold",
-        group = "Compressor",
-        min = -60.0,
-        max = 12.0,
-        step = 0.1,
-        default = 0.0
-    )]
-    pub compressor_threshold: f32,
+#[karbeat_macros::auto_param]
+impl AudioPlugin for DigidawSidechainCompressor {
+    fn name(&self) -> &str {
+        "DigiDAW Sidechain Compressor"
+    }
 
-    #[param(
-        id = "compressor_ratio",
-        name = "Compressor Ratio",
-        group = "Compressor",
-        min = 0.0,
-        max = 16.0,
-        step = 0.1,
-        default = 1.0
-    )]
-    pub compressor_ratio: f32,
+    fn category(&self) -> PluginCategory {
+        PluginCategory::Effect
+    }
+
+    fn prepare(&mut self, sample_rate: f32, _channels: usize, _max_buffer_size: usize) {
+        self.compressor.prepare(sample_rate as f64);
+    }
+
+    fn reset(&mut self) {
+        self.compressor.prepare(48000.0);
+    }
+
+    fn process(&mut self, buffer: &mut [f32], context: &ProcessContext) {
+        let aux = context.aux_buffer.get();
+
+        for i in 0..buffer.len() {
+            let main_sample = buffer[i];
+
+            // Extract the sidechain signal, defaulting to 0.0 if not routed
+            let sc_sample = aux.map_or(0.0, |a| a.get(i).copied().unwrap_or(0.0));
+
+            buffer[i] = self.compressor.process_sample(main_sample, sc_sample);
+        }
+    }
 }

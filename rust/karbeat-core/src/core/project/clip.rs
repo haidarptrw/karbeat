@@ -42,6 +42,16 @@ pub enum ClipTimeUnit {
     },
 }
 
+impl Default for ClipTimeUnit {
+    fn default() -> Self {
+        Self::Samples {
+            start_time: 0,
+            loop_length: 0,
+            offset_start: 0,
+        }
+    }
+}
+
 impl ClipTimeUnit {
     /// Get the start time in samples, converting ticks if necessary
     pub fn start_time_samples(&self, bpm: f32, sample_rate: u32) -> u64 {
@@ -121,14 +131,15 @@ impl ClipTimeUnit {
 /// Clip struct that holds data for clip in the timeline.
 /// Positioning uses ClipTimeUnit to distinguish between sample-based (audio)
 /// and tick-based (MIDI/automation) clips.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(default)]
 pub struct Clip {
     /// Clip name
     pub name: String,
     /// Clip ID
     pub id: ClipId,
     /// Source of the clip
-    pub source: DawSource,
+    pub source: Option<DawSource>,
     /// Timeline position and length — explicit units via enum
     pub time: ClipTimeUnit,
 }
@@ -479,7 +490,7 @@ impl ApplicationState {
                 let clip = Clip {
                     name: audio_source.name.clone(),
                     id: new_clip_id,
-                    source: DawSource::Audio(source_id),
+                    source: Some(DawSource::Audio(source_id)),
                     time: ClipTimeUnit::Samples {
                         start_time: start_time_samples,
                         loop_length: timeline_length_samples,
@@ -529,7 +540,7 @@ impl ApplicationState {
                 let clip = Clip {
                     name: pattern_name,
                     id: new_clip_id,
-                    source: DawSource::Midi(pattern_id),
+                    source: Some(DawSource::Midi(pattern_id)),
                     time: ClipTimeUnit::Ticks {
                         start_time,
                         loop_length: timeline_length,
@@ -608,8 +619,8 @@ impl ApplicationState {
                     {
                         // Check compatibility
                         let is_compatible = match (&target_type, &clip.source) {
-                            (TrackType::Audio, DawSource::Audio(_)) => true,
-                            (TrackType::Midi, DawSource::Midi(_)) => true,
+                            (TrackType::Audio, Some(DawSource::Audio(_))) => true,
+                            (TrackType::Midi, Some(DawSource::Midi(_))) => true,
                             _ => false,
                         };
                         if !is_compatible {

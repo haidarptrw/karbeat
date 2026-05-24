@@ -563,13 +563,14 @@ extension UiRoutingNodePatterns on UiRoutingNode {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiRoutingNode_Track value)?  track,TResult Function( UiRoutingNode_Bus value)?  bus,TResult Function( UiRoutingNode_Master value)?  master,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiRoutingNode_Track value)?  track,TResult Function( UiRoutingNode_Bus value)?  bus,TResult Function( UiRoutingNode_Master value)?  master,TResult Function( UiRoutingNode_PluginSidechain value)?  pluginSidechain,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case UiRoutingNode_Track() when track != null:
 return track(_that);case UiRoutingNode_Bus() when bus != null:
 return bus(_that);case UiRoutingNode_Master() when master != null:
-return master(_that);case _:
+return master(_that);case UiRoutingNode_PluginSidechain() when pluginSidechain != null:
+return pluginSidechain(_that);case _:
   return orElse();
 
 }
@@ -587,13 +588,14 @@ return master(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiRoutingNode_Track value)  track,required TResult Function( UiRoutingNode_Bus value)  bus,required TResult Function( UiRoutingNode_Master value)  master,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiRoutingNode_Track value)  track,required TResult Function( UiRoutingNode_Bus value)  bus,required TResult Function( UiRoutingNode_Master value)  master,required TResult Function( UiRoutingNode_PluginSidechain value)  pluginSidechain,}){
 final _that = this;
 switch (_that) {
 case UiRoutingNode_Track():
 return track(_that);case UiRoutingNode_Bus():
 return bus(_that);case UiRoutingNode_Master():
-return master(_that);}
+return master(_that);case UiRoutingNode_PluginSidechain():
+return pluginSidechain(_that);}
 }
 /// A variant of `map` that fallback to returning `null`.
 ///
@@ -607,13 +609,14 @@ return master(_that);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiRoutingNode_Track value)?  track,TResult? Function( UiRoutingNode_Bus value)?  bus,TResult? Function( UiRoutingNode_Master value)?  master,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiRoutingNode_Track value)?  track,TResult? Function( UiRoutingNode_Bus value)?  bus,TResult? Function( UiRoutingNode_Master value)?  master,TResult? Function( UiRoutingNode_PluginSidechain value)?  pluginSidechain,}){
 final _that = this;
 switch (_that) {
 case UiRoutingNode_Track() when track != null:
 return track(_that);case UiRoutingNode_Bus() when bus != null:
 return bus(_that);case UiRoutingNode_Master() when master != null:
-return master(_that);case _:
+return master(_that);case UiRoutingNode_PluginSidechain() when pluginSidechain != null:
+return pluginSidechain(_that);case _:
   return null;
 
 }
@@ -630,12 +633,13 @@ return master(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int field0)?  track,TResult Function( int field0)?  bus,TResult Function()?  master,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int field0)?  track,TResult Function( int field0)?  bus,TResult Function()?  master,TResult Function()?  pluginSidechain,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case UiRoutingNode_Track() when track != null:
 return track(_that.field0);case UiRoutingNode_Bus() when bus != null:
 return bus(_that.field0);case UiRoutingNode_Master() when master != null:
-return master();case _:
+return master();case UiRoutingNode_PluginSidechain() when pluginSidechain != null:
+return pluginSidechain();case _:
   return orElse();
 
 }
@@ -653,12 +657,13 @@ return master();case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int field0)  track,required TResult Function( int field0)  bus,required TResult Function()  master,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int field0)  track,required TResult Function( int field0)  bus,required TResult Function()  master,required TResult Function()  pluginSidechain,}) {final _that = this;
 switch (_that) {
 case UiRoutingNode_Track():
 return track(_that.field0);case UiRoutingNode_Bus():
 return bus(_that.field0);case UiRoutingNode_Master():
-return master();}
+return master();case UiRoutingNode_PluginSidechain():
+return pluginSidechain();}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -672,12 +677,13 @@ return master();}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int field0)?  track,TResult? Function( int field0)?  bus,TResult? Function()?  master,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int field0)?  track,TResult? Function( int field0)?  bus,TResult? Function()?  master,TResult? Function()?  pluginSidechain,}) {final _that = this;
 switch (_that) {
 case UiRoutingNode_Track() when track != null:
 return track(_that.field0);case UiRoutingNode_Bus() when bus != null:
 return bus(_that.field0);case UiRoutingNode_Master() when master != null:
-return master();case _:
+return master();case UiRoutingNode_PluginSidechain() when pluginSidechain != null:
+return pluginSidechain();case _:
   return null;
 
 }
@@ -841,6 +847,38 @@ int get hashCode => runtimeType.hashCode;
 @override
 String toString() {
   return 'UiRoutingNode.master()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class UiRoutingNode_PluginSidechain extends UiRoutingNode {
+  const UiRoutingNode_PluginSidechain(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiRoutingNode_PluginSidechain);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'UiRoutingNode.pluginSidechain()';
 }
 
 

@@ -2,6 +2,7 @@
 name = "karbeat-macros"
 version = "0.3.0"
 edition = "2024"
+license = "LGPL-3.0-only"
 
 [lib]
 proc-macro = true

@@ -4,7 +4,7 @@ use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
 
 // use crate::effect::compressor::create_compressor;
-use karbeat_plugin_api::traits::{AudioPluginBuilder, AudioPlugin};
+use karbeat_plugin_api::traits::{AudioPlugin, AudioPluginBuilder};
 
 use crate::{
     effect::parametric_eq::DigiParametricEQ,

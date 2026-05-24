@@ -7,6 +7,7 @@ import '../frb_generated.dart';
 import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'plugins/opaque.dart';
 import 'project.dart';
 part 'plugin.freezed.dart';
 
@@ -79,21 +80,8 @@ Future<void> queryGeneratorParameters({required int generatorId}) => RustLib
 Future<List<UiGeneratorParameterSnapshot>> pollGeneratorParameterFeedback() =>
     RustLib.instance.api.crateApiPluginPollGeneratorParameterFeedback();
 
-/// Sync parameter values from audio thread to stored parameters.
-Future<void> syncGeneratorParametersFromAudio({
-  required List<UiGeneratorParameterSnapshot> snapshots,
-}) => RustLib.instance.api.crateApiPluginSyncGeneratorParametersFromAudio(
-  snapshots: snapshots,
-);
-
 Future<List<UiEffectParameterSnapshot>> pollEffectParameterFeedback() =>
     RustLib.instance.api.crateApiPluginPollEffectParameterFeedback();
-
-Future<void> syncEffectParametersFromAudio({
-  required List<UiEffectParameterSnapshot> snapshots,
-}) => RustLib.instance.api.crateApiPluginSyncEffectParametersFromAudio(
-  snapshots: snapshots,
-);
 
 Future<List<UiPluginParameter>> getEffectParameterSpecs({
   required UiEffectTarget target,
@@ -201,6 +189,30 @@ Future<int> executeRealtimePluginCommand({
 /// automatically when Flutter closes the stream (sink returns an error).
 Stream<UiPluginCommandResponse> createPluginMessageStream() =>
     RustLib.instance.api.crateApiPluginCreatePluginMessageStream();
+
+/// Dispatches a request to the audio thread to fetch a zero-copy buffer from a live plugin.
+///
+/// # Parameters
+/// - `target`: Which plugin instance to target.
+/// - `name`: The requested buffer name (e.g., `"magnitude"` or `"spectrum"`).
+///
+/// # Returns
+/// `Ok(request_id)` — correlate this with `UiZeroCopyBufferResponse.request_id` in the stream.
+Future<int> queryLivePluginZeroCopyBuf({
+  required UiPluginTarget target,
+  required String name,
+}) => RustLib.instance.api.crateApiPluginQueryLivePluginZeroCopyBuf(
+  target: target,
+  name: name,
+);
+
+/// Opens a stream that continuously polls the audio→UI feedback channel and
+/// forwards any requested `ZeroCopyBuffer` handles to Flutter.
+///
+/// The polling thread runs at ~16ms intervals (≈60fps). It terminates
+/// automatically when Flutter closes the stream.
+Stream<UiZeroCopyBufferResponse> createZeroCopyBufferStream() =>
+    RustLib.instance.api.crateApiPluginCreateZeroCopyBufferStream();
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PluginBufferHandle>>
 abstract class PluginBufferHandle implements RustOpaqueInterface {
@@ -433,4 +445,27 @@ sealed class UiPluginTarget with _$UiPluginTarget {
   /// An effect on the master bus
   const factory UiPluginTarget.masterEffect(int field0) =
       UiPluginTarget_MasterEffect;
+}
+
+/// A response message arriving from the audio thread containing the zero-copy buffer.
+/// Dart uses the `request_id` to correlate with the original command sent via `query_zero_copy_buffer`.
+class UiZeroCopyBufferResponse {
+  final int requestId;
+
+  /// The opaque handle that Dart can use to read raw memory.
+  /// It is `None` if the plugin did not recognize the buffer name.
+  final ZeroCopyHandle? handle;
+
+  const UiZeroCopyBufferResponse({required this.requestId, this.handle});
+
+  @override
+  int get hashCode => requestId.hashCode ^ handle.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiZeroCopyBufferResponse &&
+          runtimeType == other.runtimeType &&
+          requestId == other.requestId &&
+          handle == other.handle;
 }

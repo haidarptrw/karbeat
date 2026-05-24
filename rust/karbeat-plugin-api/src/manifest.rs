@@ -26,7 +26,7 @@ pub trait Manifestable {
         // SANITIZATION PASS
         for param in &mut manifest.parameters {
             // Helper closure to round to 4 decimal places to kill IEEE 754 garbage
-            let clean_float = |val: f32| -> f32 { (val * 10000.0).round() / 10000.0 };
+            let clean_float = |val: f64| -> f64 { (val * 10000.0).round() / 10000.0 };
 
             param.min = clean_float(param.min);
             param.max = clean_float(param.max);

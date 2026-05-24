@@ -120,6 +120,7 @@ impl Oscillator {
         channels: u8,
         base_freq: f64,
         current_phase: &mut f64,
+        filter_state: &mut f64,
     ) {
         let current_mix = self.mix.get();
         if current_mix <= 0.0 || out_block.is_empty() {
@@ -130,15 +131,24 @@ impl Oscillator {
         let current_waveform = self.waveform.get();
         let current_pw = self.pulse_width.get() as f64;
 
-        let actual_freq = base_freq * (2.0_f64).powf((current_detune as f64) / 12.0);
+        let nyquist = (sample_rate as f64) * 0.49;
+        let actual_freq = (base_freq * (2.0_f64).powf((current_detune as f64) / 12.0)).min(nyquist);
         let phase_inc = actual_freq / (sample_rate as f64);
+
+        // Pre-calculate 1-Pole Lowpass Coefficients
+        let cutoff_hz = (sample_rate as f64) * 0.45;
+        let b1 = (-TAU * cutoff_hz / (sample_rate as f64)).exp();
+        let a0 = 1.0 - b1;
 
         // Process frame by frame, dynamically adapting to channel count
         for frame in out_block.chunks_exact_mut(channels as usize) {
-            let sample =
+            let raw_sample =
                 Self::generate_aa_sample(current_waveform, current_pw, *current_phase, phase_inc);
 
-            let final_sample = (sample * (current_mix as f64)) as f32;
+            // Apply the anti-aliasing safety net filter
+            *filter_state = a0 * raw_sample + b1 * (*filter_state);
+
+            let final_sample = (*filter_state * (current_mix as f64)) as f32;
 
             // Apply the sample to every channel in the frame (Mono = 1 loop, Stereo = 2 loops)
             for ch in frame.iter_mut() {
@@ -160,6 +170,7 @@ impl Oscillator {
         channels: u8,
         base_freq: f64,
         current_phase: &mut f64,
+        filter_state: &mut f64,
     ) {
         let current_mix = self.mix.get();
         if current_mix <= 0.0 || out_block.is_empty() {
@@ -170,8 +181,15 @@ impl Oscillator {
         let current_waveform = self.waveform.get();
         let current_pw = self.pulse_width.get() as f64;
 
-        let actual_freq = base_freq * (2.0_f64).powf((current_detune as f64) / 12.0);
+        // Clamp the fundamental frequency just below Nyquist to prevent phase increment explosion
+        let nyquist = (sample_rate as f64) * 0.49;
+        let actual_freq = (base_freq * (2.0_f64).powf((current_detune as f64) / 12.0)).min(nyquist);
         let phase_inc = actual_freq / (sample_rate as f64);
+
+        // Pre-calculate 1-Pole Lowpass Coefficients
+        let cutoff_hz = (sample_rate as f64) * 0.45;
+        let b1 = (-TAU * cutoff_hz / (sample_rate as f64)).exp();
+        let a0 = 1.0 - b1;
 
         let channels_usize = channels as usize;
 
@@ -184,10 +202,13 @@ impl Oscillator {
             let modulation = (mod_frame[0] as f64) * fm_depth;
             let modulated_phase = (*current_phase + modulation).rem_euclid(1.0);
 
-            let sample =
+            let raw_sample =
                 Self::generate_aa_sample(current_waveform, current_pw, modulated_phase, phase_inc);
 
-            let final_sample = (sample * (current_mix as f64)) as f32;
+            // Apply the anti-aliasing safety net filter
+            *filter_state = a0 * raw_sample + b1 * (*filter_state);
+
+            let final_sample = (*filter_state * (current_mix as f64)) as f32;
 
             // Apply to all channels in the frame
             for ch in out_frame.iter_mut() {

@@ -659,8 +659,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     MouseCursor handleCursor() {
       if (isPlacing) return SystemMouseCursors.move;
-      if (selectedTool == ToolSelection.select)
+      if (selectedTool == ToolSelection.select) {
         return SystemMouseCursors.precise;
+      }
       if (selectedTool == ToolSelection.slice) return SystemMouseCursors.text;
       return SystemMouseCursors.basic;
     }
@@ -792,8 +793,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                             details.localPosition,
                           ),
                     onPanStart: (details) {
-                      if (selectedTool == ToolSelection.select)
+                      if (selectedTool == ToolSelection.select) {
                         _startRangeSelect(details.localPosition);
+                      }
                     },
                     onPanEnd: (details) {
                       if (selectedTool == ToolSelection.select &&

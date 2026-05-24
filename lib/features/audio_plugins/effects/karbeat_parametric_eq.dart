@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
+import 'dart:ffi' as ffi;
 
 import 'package:flutter/material.dart';
 import 'dart:math';
@@ -8,7 +8,6 @@ import 'package:karbeat/features/audio_plugins/effects/abstract_effect_screen.da
 import 'package:karbeat/features/components/plugin_parameter_widget.dart';
 import 'package:karbeat/models/payload.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
-import 'package:karbeat/features/components/fine_grained_input.dart';
 
 /// Math helpers for Logarithmic Frequency Mapping
 const double minFreq = 20.0;
@@ -87,7 +86,7 @@ class KarbeatParametricEqState
   // ======================================
 
   /// Subscription to the plugin command response stream.
-  StreamSubscription<plugin_api.UiPluginCommandResponse>? _pluginStreamSub;
+  StreamSubscription<plugin_api.UiZeroCopyBufferResponse>? _zeroCopyStreamSub;
 
   /// request_id of the most recently dispatched GET_MAGNITUDE_RESPONSE command.
   /// Responses are matched by ID so stale replies are ignored.
@@ -96,7 +95,7 @@ class KarbeatParametricEqState
   /// request_id of the most recently dispatched GET_SPECTRUM command.
   int? _spectrumRequestId;
 
-  /// Timer that re-fires GET_SPECTRUM at ~30 FPS to drive the analyzer.
+  /// Timer that re-fires GET_SPECTRUM at a FPS to drive the analyzer.
   Timer? _spectrumPollTimer;
 
   final List<Color> _bandColors = [
@@ -117,11 +116,8 @@ class KarbeatParametricEqState
   void initState() {
     super.initState();
     _initBandsFromParameters();
-
-    // Open the real-time plugin command stream once and subscribe.
-    // All GET_MAGNITUDE_RESPONSE and GET_SPECTRUM replies arrive here.
-    _pluginStreamSub = plugin_api.createPluginMessageStream().listen(
-      _onPluginMessage,
+    _zeroCopyStreamSub = plugin_api.createZeroCopyBufferStream().listen(
+      _onZeroCopyMessage,
     );
 
     // Request the initial magnitude response after the first frame so that
@@ -139,7 +135,7 @@ class KarbeatParametricEqState
 
   @override
   void dispose() {
-    _pluginStreamSub?.cancel();
+    _zeroCopyStreamSub?.cancel();
     _spectrumPollTimer?.cancel();
     super.dispose();
   }
@@ -164,7 +160,6 @@ class KarbeatParametricEqState
         effectId: eid,
       );
     } else {
-      // UiEffectTarget_Master
       return plugin_api.UiPluginTarget.masterEffect(eid);
     }
   }
@@ -173,10 +168,9 @@ class KarbeatParametricEqState
   /// The response arrives via [_onPluginMessage].
   void _sendMagnitudeRequest() {
     plugin_api
-        .executeRealtimePluginCommand(
+        .queryLivePluginZeroCopyBuf(
           target: _toPluginTarget(),
-          command: 'GET_MAGNITUDE_RESPONSE',
-          payloadJson: jsonEncode({'num_points': 500}),
+          name: 'magnitude',
         )
         .then((id) {
           _magnitudeRequestId = id;
@@ -190,11 +184,7 @@ class KarbeatParametricEqState
   /// Fired at ~30 FPS by [_spectrumPollTimer].
   void _sendSpectrumRequest() {
     plugin_api
-        .executeRealtimePluginCommand(
-          target: _toPluginTarget(),
-          command: 'GET_SPECTRUM',
-          payloadJson: jsonEncode({'num_points': 300}),
-        )
+        .queryLivePluginZeroCopyBuf(target: _toPluginTarget(), name: 'spectrum')
         .then((id) {
           _spectrumRequestId = id;
         })
@@ -203,25 +193,35 @@ class KarbeatParametricEqState
         });
   }
 
-  /// Routes incoming plugin command responses to the correct state field.
-  /// Only the most-recently-issued request ID is accepted to discard stale data.
-  void _onPluginMessage(plugin_api.UiPluginCommandResponse msg) {
+  /// Routes incoming zero-copy buffer responses to the correct state field.
+  /// Converts the raw memory pointer instantly to a Float32List.
+  void _onZeroCopyMessage(plugin_api.UiZeroCopyBufferResponse msg) {
     if (!mounted) return;
 
     if (msg.requestId == _magnitudeRequestId ||
         msg.requestId == _spectrumRequestId) {
-      // Decode the flat JSON array: [freq0, db0, freq1, db1, ...]
-      final List<dynamic> rawList = jsonDecode(msg.responseJson);
+      final handle = msg.handle;
+      if (handle == null) return;
+
+      // Bridge the raw memory pointer directly to a Dart TypedData list
+      final address = handle.memoryAddress();
+      final length = handle.lengthElements();
+
+      final ptr = ffi.Pointer<ffi.Float>.fromAddress(address);
+      final rawList = ptr.asTypedList(length);
+
       final List<CurvePoint> parsedPoints = [];
 
-      // Iterate by 2 to extract the pairs
+      // Iterate by 2 to extract the pairs [freq, db]
       for (int i = 0; i < rawList.length; i += 2) {
-        parsedPoints.add(
-          CurvePoint(
-            frequency: (rawList[i] as num).toDouble(),
-            magnitudeDb: (rawList[i + 1] as num).toDouble(),
-          ),
-        );
+        if (i + 1 < rawList.length) {
+          parsedPoints.add(
+            CurvePoint(
+              frequency: rawList[i].toDouble(),
+              magnitudeDb: rawList[i + 1].toDouble(),
+            ),
+          );
+        }
       }
 
       if (msg.requestId == _magnitudeRequestId) {
@@ -244,7 +244,7 @@ class KarbeatParametricEqState
   }
 
   void _initBandsFromParameters() {
-    // 1. Determine how many bands the API actually provided by scanning the paths
+    // Determine how many bands the API actually provided by scanning the paths
     int maxBandIndex = -1;
     for (final p in parameters) {
       final match = RegExp(r'band(\d+)/').firstMatch(p.path);
@@ -254,7 +254,7 @@ class KarbeatParametricEqState
       }
     }
 
-    // 2. Create the exact number of bands (fallback to 8 if none found)
+    // Create the exact number of bands (fallback to 8 if none found)
     final numBands = maxBandIndex >= 0 ? maxBandIndex + 1 : 8;
 
     // Initialize with generic safe defaults
@@ -269,7 +269,7 @@ class KarbeatParametricEqState
       ),
     );
 
-    // 3. Immediately apply the actual API values from the parameters list
+    // Immediately apply the actual API values from the parameters list
     _applyParametersToState();
   }
 
@@ -558,7 +558,6 @@ class KarbeatParametricEqState
     final slopeChoices = slopeParam?.choices ?? [];
 
     return Container(
-      width: 100,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(
@@ -569,179 +568,181 @@ class KarbeatParametricEqState
         ),
       ),
       child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Band Header + Active Toggle
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: color,
+        child: IntrinsicWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Band Header + Active Toggle
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      "B${i + 1}",
-                      style: TextStyle(
-                        color: band.active ? Colors.white70 : Colors.white30,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                      const SizedBox(width: 3),
+                      Text(
+                        "B${i + 1}",
+                        style: TextStyle(
+                          color: band.active ? Colors.white70 : Colors.white30,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                // Compact toggle
-                SizedBox(
-                  width: 32,
-                  height: 20,
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: Switch(
-                      value: band.active,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      activeThumbColor: color,
-                      onChanged: (val) =>
-                          _updateBandParam(i, 3, val ? 1.0 : 0.0),
-                    ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-
-            // Type Dropdown (compact)
-            SizedBox(
-              height: 28,
-              child: PopupMenuButton<int>(
-                initialValue: band.filterType,
-                padding: EdgeInsets.zero,
-                color: Colors.grey.shade800,
-                onSelected: (val) => _updateBandParam(i, 4, val.toDouble()),
-                itemBuilder: (context) => List.generate(
-                  filterChoices.length,
-                  (idx) => PopupMenuItem<int>(
-                    value: idx,
-                    height: 32,
-                    child: Text(
-                      filterChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
+                  // Compact toggle
+                  SizedBox(
+                    width: 32,
+                    height: 20,
+                    child: FittedBox(
+                      fit: BoxFit.contain,
+                      child: Switch(
+                        value: band.active,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        activeThumbColor: color,
+                        onChanged: (val) =>
+                            _updateBandParam(i, 3, val ? 1.0 : 0.0),
                       ),
                     ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
+                ],
+              ),
+          
+              // Type Dropdown (compact)
+              SizedBox(
+                height: 28,
+                child: PopupMenuButton<int>(
+                  initialValue: band.filterType,
+                  padding: EdgeInsets.zero,
+                  color: Colors.grey.shade800,
+                  onSelected: (val) => _updateBandParam(i, 4, val.toDouble()),
+                  itemBuilder: (context) => List.generate(
+                    filterChoices.length,
+                    (idx) => PopupMenuItem<int>(
+                      value: idx,
+                      height: 32,
                       child: Text(
-                        filterChoices.isNotEmpty &&
-                                band.filterType < filterChoices.length
-                            ? filterChoices[band.filterType]
-                            : "",
+                        filterChoices[idx],
                         style: const TextStyle(
-                          color: Colors.white54,
+                          color: Colors.white70,
                           fontSize: 9,
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 2),
-
-            // Parameter controls
-            _buildParamControl(
-              "Freq",
-              band.freq,
-              "band$i/freq", // Matches backend dynamic path
-              (v) => _updateBandParam(i, 0, v),
-              suffix: "Hz",
-              parameterName: "Frequency",
-            ),
-            _buildParamControl(
-              "Gain",
-              band.gain,
-              "band$i/gain", // Matches backend dynamic path
-              (v) => _updateBandParam(i, 1, v),
-              suffix: "dB",
-              parameterName: "Gain",
-            ),
-            _buildParamControl(
-              "Q",
-              band.q,
-              "band$i/q", // Matches backend dynamic path
-              (v) => _updateBandParam(i, 2, v),
-              suffix: "",
-              parameterName: "Q Bandwidth",
-            ),
-
-            // Slope dropdown
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 28,
-              child: PopupMenuButton<int>(
-                initialValue: band.order,
-                padding: EdgeInsets.zero,
-                color: Colors.grey.shade800,
-                onSelected: (val) => _updateBandParam(i, 5, val.toDouble()),
-                itemBuilder: (context) => List.generate(
-                  slopeChoices.length,
-                  (idx) => PopupMenuItem<int>(
-                    value: idx,
-                    height: 32,
-                    child: Text(
-                      slopeChoices[idx],
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 9,
                       ),
                     ),
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        slopeChoices.isNotEmpty &&
-                                band.order < slopeChoices.length
-                            ? slopeChoices[band.order]
-                            : "",
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 9,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          filterChoices.isNotEmpty &&
+                                  band.filterType < filterChoices.length
+                              ? filterChoices[band.filterType]
+                              : "",
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 9,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const Icon(
-                      Icons.arrow_drop_down,
-                      size: 12,
-                      color: Colors.white54,
-                    ),
-                  ],
+                      const Icon(
+                        Icons.arrow_drop_down,
+                        size: 12,
+                        color: Colors.white54,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+          
+              const SizedBox(height: 2),
+          
+              // Parameter controls
+              _buildParamControl(
+                "Freq",
+                band.freq,
+                "band$i/freq", // Matches backend dynamic path
+                (v) => _updateBandParam(i, 0, v),
+                suffix: "Hz",
+                parameterName: "Frequency",
+              ),
+              _buildParamControl(
+                "Gain",
+                band.gain,
+                "band$i/gain", // Matches backend dynamic path
+                (v) => _updateBandParam(i, 1, v),
+                suffix: "dB",
+                parameterName: "Gain",
+              ),
+              _buildParamControl(
+                "Q",
+                band.q,
+                "band$i/q", // Matches backend dynamic path
+                (v) => _updateBandParam(i, 2, v),
+                suffix: "",
+                parameterName: "Q Bandwidth",
+              ),
+          
+              // Slope dropdown
+              const SizedBox(height: 4),
+              SizedBox(
+                height: 28,
+                child: PopupMenuButton<int>(
+                  initialValue: band.order,
+                  padding: EdgeInsets.zero,
+                  color: Colors.grey.shade800,
+                  onSelected: (val) => _updateBandParam(i, 5, val.toDouble()),
+                  itemBuilder: (context) => List.generate(
+                    slopeChoices.length,
+                    (idx) => PopupMenuItem<int>(
+                      value: idx,
+                      height: 32,
+                      child: Text(
+                        slopeChoices[idx],
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          slopeChoices.isNotEmpty &&
+                                  band.order < slopeChoices.length
+                              ? slopeChoices[band.order]
+                              : "",
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 9,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Icon(
+                        Icons.arrow_drop_down,
+                        size: 12,
+                        color: Colors.white54,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

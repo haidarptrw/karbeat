@@ -100,15 +100,13 @@ pub enum AudioCommand {
         effect_id: EffectId,
     },
 
-
-
     /// Request a ZeroCopyBuffer from a specific plugin
     QueryZeroCopyBuffer {
         target: PluginTarget,
         name: String,
         request_id: u32,
     },
-    
+
     // =====================================================
     // Bus Commands
     // =====================================================
@@ -164,6 +162,16 @@ pub enum AudioCommand {
     QueryPluginState {
         target: PluginTarget,
         request_id: u32, // To track the response in the UI
+    },
+
+    /// Ask the engine to get the copied version of the latest engine snapshot
+    /// This is only used when exporting project into a soundfile
+    QueryAudioEngine {
+        state_consumer: triple_buffer::Output<crate::audio::render_state::AudioRenderState>,
+        command_consumer: rtrb::Consumer<AudioCommand>,
+        position_producer: rtrb::Producer<crate::audio::event::TransportFeedback>,
+        feedback_producer: rtrb::Producer<crate::commands::AudioFeedback>,
+        response_tx: std::sync::mpsc::Sender<Box<crate::audio::engine::AudioEngine>>,
     },
 }
 

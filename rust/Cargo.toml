@@ -8,19 +8,20 @@ members = [
     "karbeat-plugins",
     "karbeat-plugin-api",
     "karbeat-utils",
-    "karbeat-macros", "karbeat-plugin-types",
+    "karbeat-macros",
+    "karbeat-plugin-types",
 ]
 
 [workspace.dependencies]
-karbeat-core = { path = "karbeat-core"}
+karbeat-core = { path = "karbeat-core" }
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat_flutter_ffi = { path = "karbeat-flutter-ffi" }
 karbeat-host = { path = "karbeat-host" }
 karbeat-plugin-api = { path = "karbeat-plugin-api" }
 karbeat-plugins = { path = "karbeat-plugins" }
 karbeat-utils = { path = "karbeat-utils" }
-karbeat-macros = { path = "karbeat-macros"}
-karbeat-plugin-types = {path = "karbeat-plugin-types"}
+karbeat-macros = { path = "karbeat-macros" }
+karbeat-plugin-types = { path = "karbeat-plugin-types" }
 anyhow = "1.0.100"
 cpal = { version = "0.17.3", features = ["jack", "asio"] }
 env_logger = "0.11"
@@ -44,7 +45,7 @@ triple_buffer = "9.0.0"
 rustfft = "6.4.1"
 thiserror = "2.0"
 dasp = { version = "0.11.0", features = ["all"] }
-smallvec = {version = "1.15.1", features = ["serde"]}
+smallvec = { version = "1.15.1", features = ["serde"] }
 hashbrown = { version = "0.17.0", features = ["serde"] }
 indexmap = { version = "2.14.0", features = ["serde"] }
 num-complex = "0.4.6"
@@ -63,6 +64,7 @@ strum = { version = "0.28.0", features = ["derive"] }
 num-traits = "0.2"
 wide = "1.3.0"
 heck = "0.5.0"
+fundsp = "0.23.0"
 
 [profile.dev]
 opt-level = 3

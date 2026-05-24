@@ -124,6 +124,14 @@ Future<void> addEffectToBus({required int busId, required int registryId}) =>
 Future<void> renameBus({required int busId, required String newName}) =>
     RustLib.instance.api.crateApiMixerRenameBus(busId: busId, newName: newName);
 
+Future<List<UiRoutingConnection>> getChannelDestinations({
+  required bool isBus,
+  required int channelId,
+}) => RustLib.instance.api.crateApiMixerGetChannelDestinations(
+  isBus: isBus,
+  channelId: channelId,
+);
+
 /// Set routing: source → destination with send level.
 Future<void> setRouting({
   required UiRoutingNode source,
@@ -229,16 +237,11 @@ class UiBus {
 class UiEffectInstance {
   final int id;
   final String name;
-  final Map<int, double> parameters;
 
-  const UiEffectInstance({
-    required this.id,
-    required this.name,
-    required this.parameters,
-  });
+  const UiEffectInstance({required this.id, required this.name});
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ parameters.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -246,8 +249,7 @@ class UiEffectInstance {
       other is UiEffectInstance &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          name == other.name &&
-          parameters == other.parameters;
+          name == other.name;
 }
 
 class UiEffectSummary {
@@ -452,4 +454,5 @@ sealed class UiRoutingNode with _$UiRoutingNode {
   const factory UiRoutingNode.track(int field0) = UiRoutingNode_Track;
   const factory UiRoutingNode.bus(int field0) = UiRoutingNode_Bus;
   const factory UiRoutingNode.master() = UiRoutingNode_Master;
+  const factory UiRoutingNode.pluginSidechain() = UiRoutingNode_PluginSidechain;
 }

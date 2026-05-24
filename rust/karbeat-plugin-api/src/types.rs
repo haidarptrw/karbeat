@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 
 pub struct MidiEvent {
     pub sample_offset: usize,
@@ -23,6 +23,7 @@ pub enum PluginCategory {
     MidiEffect,
 }
 
+#[derive(Clone)]
 pub struct ProcessContext<'a> {
     pub bpm: f32,
     pub time_sig_numerator: u8,
@@ -30,9 +31,8 @@ pub struct ProcessContext<'a> {
     pub is_playing: bool,
     pub sample_position: u64,
     pub midi_events: &'a [MidiEvent],
-    pub aux_buffer: Option<&'a [f32]>,
+    pub aux_buffer: Cell<Option<&'a [f32]>>,
 }
-
 
 /// Zero copy buffer used for FFI interoperability
 #[derive(Clone, Debug)]
@@ -40,6 +40,7 @@ pub enum ZeroCopyBuffer {
     Float32(Arc<Box<[f32]>>),
     Uint8(Arc<Box<[u8]>>),
     Int32(Arc<Box<[i32]>>),
+    Int8(Arc<Box<[i8]>>),
 }
 
 /// Avalable Shared Buffer Data Type
@@ -47,4 +48,5 @@ pub enum BufferDataType {
     Float32,
     Uint8,
     Int32,
+    Int8,
 }

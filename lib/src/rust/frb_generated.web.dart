@@ -10,7 +10,6 @@ import 'api/audio.dart';
 import 'api/mixer.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
-import 'api/plugins/eq.dart';
 import 'api/plugins/opaque.dart';
 import 'api/project.dart';
 import 'api/serialization.dart';
@@ -134,9 +133,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
 
   @protected
-  Map<int, double> dco_decode_Map_u_32_f_32_None(dynamic raw);
-
-  @protected
   Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw);
 
   @protected
@@ -201,12 +197,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<UiZeroCopyBufferResponse>
+  dco_decode_StreamSink_ui_zero_copy_buffer_response_Sse(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
+
+  @protected
+  AudioExportConfigDTO dco_decode_audio_export_config_dto(dynamic raw);
 
   @protected
   AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
     dynamic raw,
   );
+
+  @protected
+  BitDepthDTO dco_decode_bit_depth_dto(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
@@ -224,10 +230,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ZeroCopyHandle
+  dco_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    dynamic raw,
+  );
+
+  @protected
+  AudioExportConfigDTO dco_decode_box_autoadd_audio_export_config_dto(
+    dynamic raw,
+  );
+
+  @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
+
+  @protected
+  Mp3ExportConfigDTO dco_decode_box_autoadd_mp_3_export_config_dto(dynamic raw);
 
   @protected
   PlaybackModeDto dco_decode_box_autoadd_playback_mode_dto(dynamic raw);
@@ -258,6 +278,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
+
+  @protected
+  WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -319,9 +342,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<(int, double)> dco_decode_list_record_u_32_f_32(dynamic raw);
-
-  @protected
   List<(int, UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw);
 
   @protected
@@ -381,12 +401,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiPluginParameter> dco_decode_list_ui_plugin_parameter(dynamic raw);
 
   @protected
-  List<UiResponseCurvePoint> dco_decode_list_ui_response_curve_point(
-    dynamic raw,
-  );
+  List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
 
   @protected
-  List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
+  Mp3ExportConfigDTO dco_decode_mp_3_export_config_dto(dynamic raw);
 
   @protected
   int? dco_decode_opt_CastedPrimitive_i_64(dynamic raw);
@@ -410,6 +428,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   WaveformHandle?
   dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    dynamic raw,
+  );
+
+  @protected
+  ZeroCopyHandle?
+  dco_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     dynamic raw,
   );
 
@@ -452,9 +476,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, int, int) dco_decode_record_u_32_casted_primitive_u_64_u_8(dynamic raw);
-
-  @protected
-  (int, double) dco_decode_record_u_32_f_32(dynamic raw);
 
   @protected
   (int, UiBus) dco_decode_record_u_32_ui_bus(dynamic raw);
@@ -593,9 +614,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiResizeEdge dco_decode_ui_resize_edge(dynamic raw);
 
   @protected
-  UiResponseCurvePoint dco_decode_ui_response_curve_point(dynamic raw);
-
-  @protected
   UiRoutingConnection dco_decode_ui_routing_connection(dynamic raw);
 
   @protected
@@ -617,10 +635,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiTransportState dco_decode_ui_transport_state(dynamic raw);
 
   @protected
+  UiZeroCopyBufferResponse dco_decode_ui_zero_copy_buffer_response(dynamic raw);
+
+  @protected
   void dco_decode_unit(dynamic raw);
 
   @protected
   BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  WavExportConfigDTO dco_decode_wav_export_config_dto(dynamic raw);
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
@@ -707,9 +731,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  Map<int, double> sse_decode_Map_u_32_f_32_None(SseDeserializer deserializer);
-
-  @protected
   Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(SseDeserializer deserializer);
 
   @protected
@@ -782,12 +803,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<UiZeroCopyBufferResponse>
+  sse_decode_StreamSink_ui_zero_copy_buffer_response_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  AudioExportConfigDTO sse_decode_audio_export_config_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
     SseDeserializer deserializer,
   );
+
+  @protected
+  BitDepthDTO sse_decode_bit_depth_dto(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -805,10 +840,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ZeroCopyHandle
+  sse_decode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AudioExportConfigDTO sse_decode_box_autoadd_audio_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  Mp3ExportConfigDTO sse_decode_box_autoadd_mp_3_export_config_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlaybackModeDto sse_decode_box_autoadd_playback_mode_dto(
@@ -851,6 +902,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiRoutingNode sse_decode_box_autoadd_ui_routing_node(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -916,11 +972,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(int, int, int)> sse_decode_list_record_u_32_casted_primitive_u_64_u_8(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<(int, double)> sse_decode_list_record_u_32_f_32(
     SseDeserializer deserializer,
   );
 
@@ -1002,12 +1053,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<UiResponseCurvePoint> sse_decode_list_ui_response_curve_point(
+  List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
     SseDeserializer deserializer,
   );
 
   @protected
-  List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
+  Mp3ExportConfigDTO sse_decode_mp_3_export_config_dto(
     SseDeserializer deserializer,
   );
 
@@ -1035,6 +1086,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   WaveformHandle?
   sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ZeroCopyHandle?
+  sse_decode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
     SseDeserializer deserializer,
   );
 
@@ -1087,9 +1144,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (int, int, int) sse_decode_record_u_32_casted_primitive_u_64_u_8(
     SseDeserializer deserializer,
   );
-
-  @protected
-  (int, double) sse_decode_record_u_32_f_32(SseDeserializer deserializer);
 
   @protected
   (int, UiBus) sse_decode_record_u_32_ui_bus(SseDeserializer deserializer);
@@ -1254,11 +1308,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiResizeEdge sse_decode_ui_resize_edge(SseDeserializer deserializer);
 
   @protected
-  UiResponseCurvePoint sse_decode_ui_response_curve_point(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   UiRoutingConnection sse_decode_ui_routing_connection(
     SseDeserializer deserializer,
   );
@@ -1284,10 +1333,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiTransportState sse_decode_ui_transport_state(SseDeserializer deserializer);
 
   @protected
+  UiZeroCopyBufferResponse sse_decode_ui_zero_copy_buffer_response(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  WavExportConfigDTO sse_decode_wav_export_config_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   void sse_encode_AnyhowException(
@@ -1388,12 +1447,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_Map_u_32_f_32_None(
-    Map<int, double> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_Map_u_32_ui_bus_None(
     Map<int, UiBus> self,
     SseSerializer serializer,
@@ -1483,13 +1536,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_zero_copy_buffer_response_Sse(
+    RustStreamSink<UiZeroCopyBufferResponse> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_audio_export_config_dto(
+    AudioExportConfigDTO self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_audio_waveform_ui_for_source_list(
     AudioWaveformUiForSourceList self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_bit_depth_dto(BitDepthDTO self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -1509,10 +1577,29 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void
+  sse_encode_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    ZeroCopyHandle self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_audio_export_config_dto(
+    AudioExportConfigDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_mp_3_export_config_dto(
+    Mp3ExportConfigDTO self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_playback_mode_dto(
@@ -1565,6 +1652,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_routing_node(
     UiRoutingNode self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_wav_export_config_dto(
+    WavExportConfigDTO self,
     SseSerializer serializer,
   );
 
@@ -1647,12 +1740,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_u_32_casted_primitive_u_64_u_8(
     List<(int, int, int)> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_record_u_32_f_32(
-    List<(int, double)> self,
     SseSerializer serializer,
   );
 
@@ -1748,14 +1835,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_ui_response_curve_point(
-    List<UiResponseCurvePoint> self,
+  void sse_encode_list_ui_routing_connection(
+    List<UiRoutingConnection> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_ui_routing_connection(
-    List<UiRoutingConnection> self,
+  void sse_encode_mp_3_export_config_dto(
+    Mp3ExportConfigDTO self,
     SseSerializer serializer,
   );
 
@@ -1785,6 +1872,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerWaveformHandle(
     WaveformHandle? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void
+  sse_encode_opt_box_autoadd_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle(
+    ZeroCopyHandle? self,
     SseSerializer serializer,
   );
 
@@ -1846,12 +1940,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_casted_primitive_u_64_u_8(
     (int, int, int) self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_record_u_32_f_32(
-    (int, double) self,
     SseSerializer serializer,
   );
 
@@ -2066,12 +2154,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_resize_edge(UiResizeEdge self, SseSerializer serializer);
 
   @protected
-  void sse_encode_ui_response_curve_point(
-    UiResponseCurvePoint self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_ui_routing_connection(
     UiRoutingConnection self,
     SseSerializer serializer,
@@ -2102,10 +2184,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_zero_copy_buffer_response(
+    UiZeroCopyBufferResponse self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
   void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_wav_export_config_dto(
+    WavExportConfigDTO self,
+    SseSerializer serializer,
+  );
 }
 
 // Section: wire_class

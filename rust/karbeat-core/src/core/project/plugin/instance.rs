@@ -1,4 +1,3 @@
-use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// Define a plugin instance descriptor.
@@ -15,7 +14,7 @@ use serde::{Deserialize, Serialize};
 ///     parameters: indexmap::IndexMap::new(),
 /// };
 /// ```
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct PluginInstance {
     /// Registry ID for plugin lookup (stable identifier)
     pub registry_id: u32,
@@ -23,11 +22,22 @@ pub struct PluginInstance {
     pub name: String,
     /// Whether this plugin is bypassed
     pub bypass: bool,
-    /// Plugin parameters for persistence (Param ID -> Value)
-    pub parameters: HashMap<u32, f32>,
+    /// Plugin parameter specifications for persistence
+    #[serde(default)]
+    pub parameter_specs: Vec<karbeat_plugin_types::ParameterSpec>,
 
     #[serde(default)]
     pub plugin_state: Vec<u8>,
+}
+
+impl PartialEq for PluginInstance {
+    fn eq(&self, other: &Self) -> bool {
+        self.registry_id == other.registry_id
+            && self.name == other.name
+            && self.bypass == other.bypass
+            && self.plugin_state == other.plugin_state
+        // Note: We ignore parameter_specs for equality checks because they are just metadata
+    }
 }
 
 impl PluginInstance {
@@ -37,7 +47,7 @@ impl PluginInstance {
             registry_id: 0,
             name: name.to_string(),
             bypass: false,
-            parameters: HashMap::new(),
+            parameter_specs: Vec::new(),
             plugin_state: Vec::new(),
         }
     }
@@ -48,18 +58,7 @@ impl PluginInstance {
             registry_id,
             name: name.to_string(),
             bypass: false,
-            parameters: HashMap::new(),
-            plugin_state: Vec::new(),
-        }
-    }
-
-    /// Create a new plugin instance with registry ID, name, and default parameters
-    pub fn new_with_params(registry_id: u32, name: &str, parameters: HashMap<u32, f32>) -> Self {
-        Self {
-            registry_id,
-            name: name.to_string(),
-            bypass: false,
-            parameters,
+            parameter_specs: Vec::new(),
             plugin_state: Vec::new(),
         }
     }

@@ -1,4 +1,5 @@
 use karbeat_utils::define_id;
+use serde::{Deserialize, Serialize};
 
 define_id!(TrackId);
 define_id!(ClipId);
@@ -10,3 +11,11 @@ define_id!(AudioSourceId);
 define_id!(GeneratorId);
 define_id!(SourceId);
 define_id!(NoteId);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SidechainRouteId {
+    Generator(GeneratorId),
+    TrackEffect(TrackId, EffectId),
+    BusEffect(BusId, EffectId),
+    MasterEffect(EffectId),
+}

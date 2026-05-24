@@ -3,13 +3,9 @@
 // Author: Haidar Wibowo
 // ====================================================
 
-use std::any::Any;
-
-use hashbrown::HashMap;
 use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
-use karbeat_plugin_types::*;
 
 /// A generator/synthesizer that produces a retro-sounding synth sound.
 /// It has strictly two oscillators, making it a simple 8-bit retro sound.
@@ -53,7 +49,7 @@ pub struct MyRetro {
         min = 432.0,
         max = 448.0,
         default = 440.0,
-        step = 1.0,
+        step = 1.0
     )]
     pub base_freq: f32,
 
@@ -69,11 +65,11 @@ impl Default for MyRetro {
 
         // Override specific nested logic for the two oscillators safely
         let mut osc1 = Oscillator::new("Oscillator 1");
-        osc1.waveform.set_base(Waveform::Square as usize as f32);
+        osc1.waveform.set_base(Waveform::Square);
         osc1.mix.set_base(1.0);
 
         let mut osc2 = Oscillator::new("Oscillator 2");
-        osc2.waveform.set_base(Waveform::Square as usize as f32);
+        osc2.waveform.set_base(Waveform::Square);
         osc2.detune.set_base(-12.0);
         osc2.mix.set_base(0.8);
 
@@ -129,6 +125,7 @@ impl MyRetro {
 
             for (i, osc) in oscillators.iter().enumerate() {
                 let mut phase = voice.phase[i];
+                let mut filter_state = voice.filter_state[i];
 
                 // Extract 1 sample frame
                 let mut osc_output = [0.0; 2];
@@ -138,6 +135,7 @@ impl MyRetro {
                     2,
                     base_freq,
                     &mut phase,
+                    &mut filter_state,
                 );
 
                 voice.phase[i] = phase;
@@ -162,6 +160,7 @@ impl MyRetro {
 // DIRECT GENERATOR IMPLEMENTATION
 // ============================================================================
 
+#[karbeat_macros::auto_param]
 impl AudioPlugin for MyRetro {
     fn name(&self) -> &str {
         "My Retro"
@@ -230,7 +229,7 @@ impl AudioPlugin for MyRetro {
                         *channels,
                         voice,
                         scratch_slice,
-                        self.base_freq.get()
+                        self.base_freq.get(),
                     );
 
                     // Mix the voice scratch buffer into the main output
@@ -259,6 +258,7 @@ impl AudioPlugin for MyRetro {
                             );
                             for (i, osc) in self.oscillators.iter().enumerate() {
                                 voice.phase[i] = osc.phase_offset.get() as f64;
+                                voice.filter_state[i] = 0.0;
                             }
                             self.active_voices.push(voice);
                         } else {
@@ -285,45 +285,6 @@ impl AudioPlugin for MyRetro {
         }
 
         self.active_voices.retain(|v| v.is_active);
-    }
-
-    fn set_parameter(&mut self, id: u32, value: f32) {
-        self.auto_set_parameter(karbeat_utils::hash::FNV_OFFSET, id, value);
-    }
-
-    fn get_parameter(&self, id: u32) -> f32 {
-        self.auto_get_parameter(karbeat_utils::hash::FNV_OFFSET, id)
-            .unwrap_or(0.0)
-    }
-
-    fn apply_automation(&mut self, id: u32, value: f32) {
-        self.auto_apply_automation(karbeat_utils::hash::FNV_OFFSET, id, value);
-    }
-
-    fn clear_automation(&mut self, id: u32) {
-        self.auto_clear_automation(karbeat_utils::hash::FNV_OFFSET, id);
-    }
-
-    fn default_parameters(&self) -> HashMap<u32, f32> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-            .into_iter()
-            .map(|spec| (spec.id, spec.default_value))
-            .collect()
-    }
-
-    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
-        self.auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-    }
-
-    fn static_parameter_specs() -> Vec<ParameterSpec>
-    where
-        Self: Sized,
-    {
-        Self::default().auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn category(&self) -> PluginCategory {

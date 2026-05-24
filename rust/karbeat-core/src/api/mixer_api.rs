@@ -149,6 +149,21 @@ where
     app.mixer.routing.iter().map(|conn| mapper(conn)).collect()
 }
 
+/// **GETTER: Fetch the routing destinations for a specific source channel**
+pub fn get_destinations_of_mixer_channel<C, T, F>(source: &RoutingNode, mut mapper: F) -> C
+where
+    F: FnMut(&RoutingConnection) -> T,
+    C: FromIterator<T>,
+{
+    let app = get_app_read();
+    app.mixer
+        .routing
+        .iter()
+        .filter(|conn| conn.source == *source)
+        .map(|conn| mapper(conn))
+        .collect()
+}
+
 pub fn set_master_bus_params(params: &[MixerChannelParams]) -> anyhow::Result<()> {
     {
         let mut app = get_app_write();

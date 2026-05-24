@@ -114,9 +114,9 @@ pub mod utils {
 
     pub fn try_send_audio_command_chain(commands: Vec<AudioCommand>) -> anyhow::Result<()> {
         if let Some(sender) = ctx().command_sender.lock().as_mut() {
-            commands
-                .into_iter()
-                .try_for_each(|command| sender.push(command))?;
+            commands.into_iter().for_each(|command| {
+                let _ = sender.push(command);
+            });
         }
 
         Ok(())

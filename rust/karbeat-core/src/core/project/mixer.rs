@@ -13,7 +13,7 @@ use crate::{
     commands::AudioCommand,
     context::{ctx, utils::send_audio_command},
     core::project::{plugin::AudioPlugin, ApplicationState, PluginInstance, TrackId},
-    shared::{BusId, EffectId},
+    shared::{BusId, EffectId, SidechainRouteId},
 };
 
 // =============================================================================
@@ -26,6 +26,7 @@ pub enum RoutingNode {
     Track(TrackId),
     Bus(BusId),
     Master,
+    PluginSidechain(SidechainRouteId),
 }
 
 /// A routing connection in the matrix
@@ -61,6 +62,7 @@ impl RoutingConnection {
 
 /// A mixer bus with its own channel strip
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct MixerBus {
     pub id: BusId,
     pub name: String,
@@ -138,11 +140,10 @@ pub enum MixerChannelParams {
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(default)]
 pub struct EffectInstance {
     pub id: EffectId,
     pub instance: Arc<PluginInstance>,
-    #[serde(default)]
-    pub plugin_state: Vec<u8>,
 }
 
 impl EffectInstance {
@@ -150,12 +151,12 @@ impl EffectInstance {
         Self {
             id,
             instance: Arc::new(instance),
-            plugin_state: Vec::new(),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+#[serde(default)]
 pub struct MixerState {
     /// Per-track mixer channels (volume, pan, effects)
     pub channels: IndexMap<TrackId, Arc<MixerChannel>>,
@@ -170,6 +171,7 @@ pub struct MixerState {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct MixerChannel {
     pub volume: Param<f32>, //dB
     pub pan: Param<f32>,    // -1.0 to 1.0
@@ -204,7 +206,7 @@ impl MixerChannel {
     ) -> anyhow::Result<(Box<dyn AudioPlugin + Send + Sync>, String, EffectId)> {
         let effect_id = EffectId::next(&mut self.effect_counter);
 
-        let (effect_plugin, effect_name, default_params) = {
+        let (effect_plugin, effect_name, _default_params) = {
             let registry = ctx().plugin_registry.read();
             if let Some((effect_box, name)) = registry.create_effect_by_id(effect_registry_id) {
                 let default_params = effect_box.default_parameters();
@@ -222,8 +224,7 @@ impl MixerChannel {
             }
         };
 
-        let plugin_instance =
-            PluginInstance::new_with_params(effect_registry_id, &effect_name, default_params);
+        let plugin_instance = PluginInstance::new_with_id(effect_registry_id, &effect_name);
 
         let effect_instance = EffectInstance::new(effect_id, plugin_instance);
         self.effects.push(effect_instance);

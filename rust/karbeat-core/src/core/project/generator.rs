@@ -7,7 +7,8 @@ use crate::{
     shared::id::GeneratorId,
 };
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default)]
 pub struct GeneratorInstance {
     pub id: GeneratorId,
     pub instance_type: GeneratorInstanceType,
@@ -20,6 +21,13 @@ pub enum GeneratorInstanceType {
 
     // A Sampler (Plays a file from AssetLibrary)
     Sampler { asset_id: u32, root_note: u8 },
+}
+
+// Default implementation for GeneratorInstanceType
+impl Default for GeneratorInstanceType {
+    fn default() -> Self {
+        Self::Plugin(PluginInstance::default())
+    }
 }
 
 impl ApplicationState {

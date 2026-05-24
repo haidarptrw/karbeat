@@ -2,6 +2,7 @@
 name = "karbeat-utils"
 version = "0.3.0"
 edition = "2021"
+license = "LGPL-3.0-only"
 description = "Auxiliary utilities for Karbeat"
 
 [dependencies]

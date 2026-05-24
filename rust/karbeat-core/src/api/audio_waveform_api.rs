@@ -55,7 +55,7 @@ where
         .iter()
         .filter_map(|c| {
             // Get source Id from clip
-            let DawSource::Audio(id) = c.source else {
+            let Some(DawSource::Audio(id)) = c.source else {
                 return None;
             };
 
@@ -81,7 +81,7 @@ where
         .filter(|t| matches!(t.track_type, TrackType::Audio))
         .flat_map(|t| t.clips().iter())
         .filter_map(|clip| {
-            if let DawSource::Audio(id) = clip.source {
+            if let Some(DawSource::Audio(id)) = clip.source {
                 let id_u32 = id.to_u32();
                 if processed.insert(id_u32) {
                     // Prevents duplicate IDs natively

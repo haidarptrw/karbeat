@@ -9,7 +9,7 @@ use dasp::slice;
 use hashbrown::HashMap;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
-use std::sync::Arc;
+use std::{cell::Cell, sync::Arc};
 use triple_buffer::Output;
 use wide::f32x4;
 
@@ -21,7 +21,6 @@ use crate::{
         },
         render_state::{
             AudioEffectInstance, AudioGeneratorInstance, AudioPluginState, AudioRenderState,
-            SidechainRouteId,
         },
     },
     commands::{
@@ -31,7 +30,7 @@ use crate::{
     core::project::{
         automation::AutomationTarget,
         mixer::{MixerChannel, RoutingNode},
-        plugin::{MidiEvent, MidiMessage, ProcessContext},
+        plugin::{modulation::ModulationEvent, MidiEvent, MidiMessage, ProcessContext},
         AudioTrack, AudioWaveform, Clip, DawSource, GeneratorId, GeneratorInstance, Pattern,
         PatternId, TrackId,
     },
@@ -146,6 +145,8 @@ pub struct AudioEngine {
     bpm: f32,
     sample_rate: u32,
     num_channels: u16,
+    time_sig_numerator: u8,
+    time_sig_denominator: u8,
 
     song_state: SongPlaybackState,
     pattern_state: PatternPlaybackState,
@@ -177,11 +178,14 @@ pub struct AudioEngine {
     playback_mode: PlaybackMode,
 
     // =========================
-    // Automation Event Queue
+    // Automation and Modulations
     // =========================
     track_automation_events: SmallVec<[(TrackId, Vec<TrackAutomationEvent>); 4]>,
     bus_automation_events: SmallVec<[(BusId, Vec<BusAutomationEvent>); 4]>,
     master_automation_events: SmallVec<[MasterAutomationEvent; 4]>,
+
+    /// Tracks the continuous phase of active LFOs
+    lfo_phases: HashMap<AutomationTarget, f32>,
 
     //////////////////////////////////////////////////
     /// Metronome state
@@ -203,8 +207,9 @@ pub struct AudioEngine {
     compensation_delays: HashMap<RoutingNode, u32>,
     track_delay_lines: HashMap<TrackId, DelayLine>,
     bus_delay_lines: HashMap<BusId, DelayLine>,
+    sidechain_delay_lines: HashMap<SidechainRouteId, DelayLine>,
 
-    // =============== Auxiliary/Sidechain buffer
+    // =============== Auxiliary/Sidechain buffer =================
     aux_buffers: HashMap<SidechainRouteId, Vec<f32>>,
 }
 
@@ -340,6 +345,71 @@ impl AudioEngine {
             track_delay_lines: HashMap::new(),
             bus_delay_lines: HashMap::new(),
             aux_buffers: HashMap::new(),
+            sidechain_delay_lines: HashMap::new(),
+            time_sig_numerator: 4,
+            time_sig_denominator: 4,
+            lfo_phases: HashMap::new(),
+        }
+    }
+
+    /// Creates a perfect replica of the current engine state for offline rendering.
+    /// Replaces the communication channels with the provided ones for the new thread.
+    pub fn clone_for_export(
+        &self,
+        state_consumer: Output<AudioRenderState>,
+        command_consumer: Consumer<AudioCommand>,
+        position_producer: Producer<TransportFeedback>,
+        feedback_producer: Producer<AudioFeedback>,
+    ) -> Self {
+        Self {
+            state_consumer,
+            command_consumer,
+            position_producer,
+            feedback_producer,
+            current_state: self.current_state.clone(),
+
+            bpm: self.bpm,
+            sample_rate: self.sample_rate,
+            num_channels: self.num_channels,
+            time_sig_numerator: self.time_sig_numerator,
+            time_sig_denominator: self.time_sig_denominator,
+
+            song_state: self.song_state.clone(),
+            pattern_state: self.pattern_state.clone(),
+
+            // Clear active voices so the export starts fresh without hanging MIDI notes
+            active_generators: Vec::with_capacity(32),
+            active_oneshots: Vec::with_capacity(16),
+            preview_voices: Vec::with_capacity(4),
+
+            // Deep clone the plugins to preserve their internal states!
+            plugin_state: self.plugin_state.clone(),
+
+            mix_buffer: self.mix_buffer.clone(),
+            bus_buffers: self.bus_buffers.clone(),
+            bus_temp_buffer: self.bus_temp_buffer.clone(),
+            cached_routing_order: self.cached_routing_order.clone(),
+            playback_mode: self.playback_mode,
+
+            // Clear active automation for a clean render
+            track_automation_events: SmallVec::new(),
+            bus_automation_events: SmallVec::new(),
+            master_automation_events: SmallVec::new(),
+
+            metronome_state: MetronomeState::default(),
+
+            // Keep delay states intact! This guarantees exact tail behavior.
+            track_tails: self.track_tails.clone(),
+            bus_tails: self.bus_tails.clone(),
+            master_tail: self.master_tail,
+            node_has_signal: HashMap::new(),
+
+            compensation_delays: self.compensation_delays.clone(),
+            track_delay_lines: self.track_delay_lines.clone(),
+            bus_delay_lines: self.bus_delay_lines.clone(),
+            aux_buffers: self.aux_buffers.clone(),
+            sidechain_delay_lines: self.sidechain_delay_lines.clone(),
+            lfo_phases: self.lfo_phases.clone(),
         }
     }
 
@@ -349,7 +419,6 @@ impl AudioEngine {
 
     pub fn process(&mut self, output_buffer: &mut [f32]) {
         let mut pdc_dirty = false;
-        // Sync graph state (transport no longer comes via triple buffer)
         if self.state_consumer.update() {
             let new_state = self.state_consumer.read().clone();
 
@@ -363,7 +432,6 @@ impl AudioEngine {
         // Process Commands (Play, Stop, Seek)
         while let Ok(cmd) = self.command_consumer.pop() {
             if self.process_command(cmd) {
-                // Make process_command return bool
                 pdc_dirty = true;
             }
         }
@@ -485,18 +553,10 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
-        // Schedule Events (MIDI / Audio Clips)
         self.resolve_sequencer_events(buffer_size);
-
-        // Apply Automation (parameter modulation)
-        self.evaluate_automation_lanes();
-
-        // Render Active Voices
+        self.evaluate_pre_block_modulations(buffer_size);
         self.render_voices_to_buffer(output_buffer, channels, true);
-
         self.render_metronome(output_buffer, channels, self.song_state.playhead_samples);
-
-        // Advance Playhead
         self.advance_song_playhead(buffer_size);
     }
 
@@ -642,6 +702,93 @@ impl AudioEngine {
         }
     }
 
+    fn get_effect_list_mut(
+        &mut self,
+        target: &EffectTarget,
+    ) -> Option<&mut Vec<AudioEffectInstance>> {
+        match target {
+            EffectTarget::Track(track_id) => self
+                .plugin_state
+                .get_track_effects_mut(track_id.to_u32() as usize),
+            EffectTarget::Bus(bus_id) => self
+                .plugin_state
+                .get_bus_effects_mut(bus_id.to_u32() as usize),
+            EffectTarget::Master => Some(&mut self.plugin_state.master_effects),
+        }
+    }
+
+    fn get_effect_list(&self, target: &EffectTarget) -> Option<&Vec<AudioEffectInstance>> {
+        match target {
+            EffectTarget::Track(track_id) => self
+                .plugin_state
+                .get_track_effects(track_id.to_u32() as usize),
+            EffectTarget::Bus(bus_id) => {
+                self.plugin_state.get_bus_effects(bus_id.to_u32() as usize)
+            }
+            EffectTarget::Master => Some(&self.plugin_state.master_effects),
+        }
+    }
+
+    fn get_plugin_mut<'a>(
+        &'a mut self,
+        target: &PluginTarget,
+    ) -> Option<&'a mut Box<dyn crate::core::project::plugin::AudioPlugin + Send + Sync>> {
+        match target {
+            PluginTarget::Generator(id) => self
+                .plugin_state
+                .get_generator_mut(id.to_u32() as usize)
+                .map(|i| &mut i.plugin),
+            PluginTarget::TrackEffect(track_id, effect_id) => self
+                .get_effect_list_mut(&EffectTarget::Track(*track_id))?
+                .iter_mut()
+                .find(|e| e.id == *effect_id)
+                .map(|e| &mut e.plugin),
+            PluginTarget::BusEffect(bus_id, effect_id) => self
+                .get_effect_list_mut(&EffectTarget::Bus(*bus_id))?
+                .iter_mut()
+                .find(|e| e.id == *effect_id)
+                .map(|e| &mut e.plugin),
+            PluginTarget::MasterEffect(effect_id) => self
+                .get_effect_list_mut(&EffectTarget::Master)?
+                .iter_mut()
+                .find(|e| e.id == *effect_id)
+                .map(|e| &mut e.plugin),
+        }
+    }
+
+    fn get_plugin<'a>(
+        &'a self,
+        target: &PluginTarget,
+    ) -> Option<&'a Box<dyn crate::core::project::plugin::AudioPlugin + Send + Sync>> {
+        match target {
+            PluginTarget::Generator(id) => self
+                .plugin_state
+                .get_generator(id.to_u32() as usize)
+                .map(|i| &i.plugin),
+            PluginTarget::TrackEffect(track_id, effect_id) => self
+                .get_effect_list(&EffectTarget::Track(*track_id))?
+                .iter()
+                .find(|e| e.id == *effect_id)
+                .map(|e| &e.plugin),
+            PluginTarget::BusEffect(bus_id, effect_id) => self
+                .get_effect_list(&EffectTarget::Bus(*bus_id))?
+                .iter()
+                .find(|e| e.id == *effect_id)
+                .map(|e| &e.plugin),
+            PluginTarget::MasterEffect(effect_id) => self
+                .get_effect_list(&EffectTarget::Master)?
+                .iter()
+                .find(|e| e.id == *effect_id)
+                .map(|e| &e.plugin),
+        }
+    }
+
+    fn reset_pattern_state(&mut self) {
+        self.pattern_state.playhead_samples = 0;
+        self.pattern_state.last_emitted_samples = 0;
+        self.recalculate_pattern_beat_bar();
+    }
+
     /// Process incoming commands from command queue buffer
     fn process_command(&mut self, cmd: AudioCommand) -> bool {
         let mut pdc_dirty = false;
@@ -663,8 +810,12 @@ impl AudioEngine {
                 }
 
                 match self.playback_mode {
-                    PlaybackMode::Song => self.song_state.is_playing = val,
-                    PlaybackMode::Pattern { .. } => self.pattern_state.is_playing = val,
+                    PlaybackMode::Song => {
+                        self.song_state.is_playing = val;
+                    }
+                    PlaybackMode::Pattern { .. } => {
+                        self.pattern_state.is_playing = val;
+                    }
                 }
 
                 self.emit_current_playback_position();
@@ -840,75 +991,25 @@ impl AudioEngine {
                     }
                 }
             }
-            AudioCommand::RemoveEffect { target, effect_id } => match target {
-                EffectTarget::Track(track_id) => {
-                    if let Some(effects) = self
-                        .plugin_state
-                        .get_track_effects_mut(track_id.to_u32() as usize)
-                    {
-                        if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
-                            effects.remove(pos);
-                        }
+            AudioCommand::RemoveEffect { target, effect_id } => {
+                if let Some(effects) = self.get_effect_list_mut(&target) {
+                    if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
+                        effects.remove(pos);
                     }
                 }
-                EffectTarget::Bus(bus_id) => {
-                    if let Some(effects) = self
-                        .plugin_state
-                        .get_bus_effects_mut(bus_id.to_u32() as usize)
-                    {
-                        if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
-                            effects.remove(pos);
-                        }
-                    }
-                }
-                EffectTarget::Master => {
-                    if let Some(pos) = self
-                        .plugin_state
-                        .master_effects
-                        .iter()
-                        .position(|e| e.id == effect_id)
-                    {
-                        self.plugin_state.master_effects.remove(pos);
-                    }
-                }
-            },
+            }
             AudioCommand::SetEffectParameter {
                 target,
                 effect_id,
                 param_id,
                 value,
-            } => match target {
-                EffectTarget::Track(track_id) => {
-                    if let Some(effects) = self
-                        .plugin_state
-                        .get_track_effects_mut(track_id.to_u32() as usize)
-                    {
-                        if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
-                            effect.plugin.set_parameter(param_id, value);
-                        }
-                    }
-                }
-                EffectTarget::Bus(bus_id) => {
-                    if let Some(effects) = self
-                        .plugin_state
-                        .get_bus_effects_mut(bus_id.to_u32() as usize)
-                    {
-                        if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
-                            effect.plugin.set_parameter(param_id, value);
-                        }
-                    }
-                }
-                EffectTarget::Master => {
-                    if let Some(effect) = self
-                        .plugin_state
-                        .master_effects
-                        .iter_mut()
-                        .find(|e| e.id == effect_id)
-                    {
+            } => {
+                if let Some(effects) = self.get_effect_list_mut(&target) {
+                    if let Some(effect) = effects.iter_mut().find(|e| e.id == effect_id) {
                         effect.plugin.set_parameter(param_id, value);
                     }
                 }
-            },
+            }
             AudioCommand::QueryGeneratorParameters { generator_id } => {
                 // Get all parameter values from the generator and send back
                 if let Some(gen_instance) = self
@@ -975,21 +1076,9 @@ impl AudioEngine {
                 pdc_dirty = true;
             }
             AudioCommand::QueryEffectParameters { target, effect_id } => {
-                let effect_instance_opt = match &target {
-                    EffectTarget::Track(track_id) => self
-                        .plugin_state
-                        .get_track_effects(track_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id)),
-                    EffectTarget::Bus(bus_id) => self
-                        .plugin_state
-                        .get_bus_effects(bus_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id)),
-                    EffectTarget::Master => self
-                        .plugin_state
-                        .master_effects
-                        .iter()
-                        .find(|e| e.id == effect_id),
-                };
+                let effect_instance_opt = self
+                    .get_effect_list(&target)
+                    .and_then(|effects| effects.iter().find(|e| e.id == effect_id));
 
                 if let Some(effect_instance) = effect_instance_opt {
                     let specs = effect_instance.plugin.get_parameter_specs();
@@ -1112,34 +1201,26 @@ impl AudioEngine {
                 log::info!("[AudioEngine] Metronome Active: {}", active);
             }
             AudioCommand::TogglePlayingWithPlaybackMode(playback_mode) => {
-                // check if the mode is same as before. if it is, then check the is playing
                 if self.playback_mode == playback_mode {
-                    let is_currently_playing = match self.playback_mode {
-                        PlaybackMode::Song => self.song_state.is_playing,
-                        PlaybackMode::Pattern { .. } => self.pattern_state.is_playing,
+                    let is_playing = match self.playback_mode {
+                        PlaybackMode::Song => &mut self.song_state.is_playing,
+                        PlaybackMode::Pattern { .. } => &mut self.pattern_state.is_playing,
                     };
-                    if is_currently_playing {
-                        match self.playback_mode {
-                            PlaybackMode::Song => self.song_state.is_playing = false,
-                            PlaybackMode::Pattern { .. } => self.pattern_state.is_playing = false,
-                        }
+                    if *is_playing {
+                        *is_playing = false;
                         self.stop_all_active_generators();
                     } else {
-                        match self.playback_mode {
-                            PlaybackMode::Song => self.song_state.is_playing = true,
-                            PlaybackMode::Pattern { .. } => self.pattern_state.is_playing = true,
-                        }
+                        *is_playing = true;
                     }
                 } else {
-                    // stop and reset first when the playback mode changes
                     self.stop_playback();
                     self.playback_mode = playback_mode;
                     match self.playback_mode {
-                        PlaybackMode::Song => self.song_state.is_playing = true,
+                        PlaybackMode::Song => {
+                            self.song_state.is_playing = true;
+                        }
                         PlaybackMode::Pattern { .. } => {
-                            self.pattern_state.playhead_samples = 0;
-                            self.pattern_state.last_emitted_samples = 0;
-                            self.recalculate_pattern_beat_bar();
+                            self.reset_pattern_state();
                             self.pattern_state.is_playing = true;
                         }
                     }
@@ -1150,33 +1231,20 @@ impl AudioEngine {
                 pattern_id,
                 generator_id,
             } => {
-                let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
-
-                if !is_pattern_mode {
-                    // If not in pattern mode: Stop song, change mode, and immediately play from start
+                if !matches!(self.playback_mode, PlaybackMode::Pattern { .. }) {
                     self.stop_playback();
                     self.playback_mode = PlaybackMode::Pattern {
                         pattern_id,
                         generator_id,
                     };
-                    self.pattern_state.playhead_samples = 0;
-                    self.pattern_state.last_emitted_samples = 0;
-                    self.recalculate_pattern_beat_bar();
+                    self.reset_pattern_state();
                     self.pattern_state.is_playing = true;
+                } else if self.pattern_state.is_playing {
+                    self.pattern_state.is_playing = false;
+                    self.stop_all_active_generators();
+                    self.reset_pattern_state();
                 } else {
-                    // Else we check current state
-                    if self.pattern_state.is_playing {
-                        // If it is playing: stop, silence voices, and go to first tick
-                        self.pattern_state.is_playing = false;
-                        self.stop_all_active_generators();
-
-                        self.pattern_state.playhead_samples = 0;
-                        self.pattern_state.last_emitted_samples = 0;
-                        self.recalculate_pattern_beat_bar();
-                    } else {
-                        // If it is stopped: just play
-                        self.pattern_state.is_playing = true;
-                    }
+                    self.pattern_state.is_playing = true;
                 }
 
                 self.emit_current_playback_position();
@@ -1212,111 +1280,25 @@ impl AudioEngine {
                 payload,
                 request_id,
             } => {
-                let response = match target {
-                    PluginTarget::Generator(generator_id) => self
-                        .plugin_state
-                        .get_generator_mut(generator_id.to_u32() as usize)
-                        .and_then(|instance| {
-                            instance.plugin.execute_custom_command(&command, &payload)
-                        }),
-                    PluginTarget::TrackEffect(track_id, effect_id) => self
-                        .plugin_state
-                        .get_track_effects_mut(track_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
-                        .and_then(|instance| {
-                            instance.plugin.execute_custom_command(&command, &payload)
-                        }),
-                    PluginTarget::BusEffect(bus_id, effect_id) => self
-                        .plugin_state
-                        .get_bus_effects_mut(bus_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter_mut().find(|e| e.id == effect_id))
-                        .and_then(|instance| {
-                            instance.plugin.execute_custom_command(&command, &payload)
-                        }),
-                    PluginTarget::MasterEffect(effect_id) => self
-                        .plugin_state
-                        .master_effects
-                        .iter_mut()
-                        .find(|e| e.id == effect_id)
-                        .and_then(|instance| {
-                            instance.plugin.execute_custom_command(&command, &payload)
-                        }),
-                };
-                // If the plugin returned a response, send it back to the UI
-                if let Some(res) = response {
-                    let _ = self
-                        .feedback_producer
-                        .push(AudioFeedback::PluginCommandResponse {
-                            request_id,
-                            response: res,
-                        });
+                if let Some(plugin) = self.get_plugin_mut(&target) {
+                    if let Some(res) = plugin.execute_custom_command(&command, &payload) {
+                        let _ = self
+                            .feedback_producer
+                            .push(AudioFeedback::PluginCommandResponse {
+                                request_id,
+                                response: res,
+                            });
+                    }
                 }
             }
-            AudioCommand::SetPluginState { target, state } => match target {
-                PluginTarget::Generator(id) => {
-                    if let Some(instance) =
-                        self.plugin_state.get_generator_mut(id.to_u32() as usize)
-                    {
-                        instance.plugin.set_state(&state);
-                    }
+            AudioCommand::SetPluginState { target, state } => {
+                if let Some(plugin) = self.get_plugin_mut(&target) {
+                    plugin.set_state(&state);
                 }
-                PluginTarget::TrackEffect(track_id, effect_id) => {
-                    if let Some(effects) = self
-                        .plugin_state
-                        .get_track_effects_mut(track_id.to_u32() as usize)
-                    {
-                        if let Some(instance) = effects.iter_mut().find(|e| e.id == effect_id) {
-                            instance.plugin.set_state(&state);
-                        }
-                    }
-                }
-                PluginTarget::BusEffect(bus_id, effect_id) => {
-                    if let Some(effects) = self
-                        .plugin_state
-                        .get_bus_effects_mut(bus_id.to_u32() as usize)
-                    {
-                        if let Some(instance) = effects.iter_mut().find(|e| e.id == effect_id) {
-                            instance.plugin.set_state(&state);
-                        }
-                    }
-                }
-                PluginTarget::MasterEffect(effect_id) => {
-                    if let Some(instance) = self
-                        .plugin_state
-                        .master_effects
-                        .iter_mut()
-                        .find(|e| e.id == effect_id)
-                    {
-                        instance.plugin.set_state(&state);
-                    }
-                }
-            },
+            }
             AudioCommand::QueryPluginState { target, request_id } => {
-                let state_blob = match target {
-                    PluginTarget::Generator(id) => self
-                        .plugin_state
-                        .get_generator(id.to_u32() as usize)
-                        .map(|i| i.plugin.get_state()),
-                    PluginTarget::TrackEffect(track_id, effect_id) => self
-                        .plugin_state
-                        .get_track_effects(track_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id))
-                        .map(|i| i.plugin.get_state()),
-                    PluginTarget::BusEffect(bus_id, effect_id) => self
-                        .plugin_state
-                        .get_bus_effects(bus_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id))
-                        .map(|i| i.plugin.get_state()),
-                    PluginTarget::MasterEffect(effect_id) => self
-                        .plugin_state
-                        .master_effects
-                        .iter()
-                        .find(|e| e.id == effect_id)
-                        .map(|i| i.plugin.get_state()),
-                };
-
-                // If we successfully got the state, send it back to the UI
-                if let Some(state) = state_blob {
+                if let Some(plugin) = self.get_plugin(&target) {
+                    let state = plugin.get_state();
                     let _ = self
                         .feedback_producer
                         .push(AudioFeedback::PluginStateSnapshot {
@@ -1327,30 +1309,14 @@ impl AudioEngine {
                 }
             }
 
-            AudioCommand::QueryZeroCopyBuffer {target, name, request_id}  => {
-                let buffer_opt = match target {
-                    PluginTarget::Generator(id) => self
-                        .plugin_state
-                        .get_generator(id.to_u32() as usize)
-                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
-                    PluginTarget::TrackEffect(track_id, effect_id) => self
-                        .plugin_state
-                        .get_track_effects(track_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id))
-                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
-                    PluginTarget::BusEffect(bus_id, effect_id) => self
-                        .plugin_state
-                        .get_bus_effects(bus_id.to_u32() as usize)
-                        .and_then(|effects| effects.iter().find(|e| e.id == effect_id))
-                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
-                    PluginTarget::MasterEffect(effect_id) => self
-                        .plugin_state
-                        .master_effects
-                        .iter()
-                        .find(|e| e.id == effect_id)
-                        .and_then(|i| i.plugin.get_zero_copy_buffer(&name)),
-                };
-
+            AudioCommand::QueryZeroCopyBuffer {
+                target,
+                name,
+                request_id,
+            } => {
+                let buffer_opt = self
+                    .get_plugin(&target)
+                    .and_then(|p| p.get_zero_copy_buffer(&name));
                 let _ = self
                     .feedback_producer
                     .push(AudioFeedback::ZeroCopyBufferResponse {
@@ -1358,7 +1324,23 @@ impl AudioEngine {
                         buffer: buffer_opt,
                     });
             }
-            
+            AudioCommand::QueryAudioEngine {
+                state_consumer,
+                command_consumer,
+                position_producer,
+                feedback_producer,
+                response_tx,
+            } => {
+                let cloned_engine = self.clone_for_export(
+                    state_consumer,
+                    command_consumer,
+                    position_producer,
+                    feedback_producer,
+                );
+
+                // Fire the fully hydrated engine back to the export thread
+                let _ = response_tx.send(Box::new(cloned_engine));
+            }
         }
 
         pdc_dirty
@@ -1436,17 +1418,17 @@ impl AudioEngine {
         let is_pattern_mode = matches!(self.playback_mode, PlaybackMode::Pattern { .. });
 
         let ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
-            (self.song_state.playhead_samples as f64
-                * (self.bpm as f64 / 60.0)
-                * (960.0 / self.sample_rate as f64)) as u32
+            ((self.song_state.playhead_samples as f64)
+                * ((self.bpm as f64) / 60.0)
+                * (960.0 / (self.sample_rate as f64))) as u32
         } else {
             0
         };
 
         let pattern_ticks = if self.bpm > 0.0 && self.sample_rate > 0 {
-            (self.pattern_state.playhead_samples as f64
-                * (self.bpm as f64 / 60.0)
-                * (960.0 / self.sample_rate as f64)) as u32
+            ((self.pattern_state.playhead_samples as f64)
+                * ((self.bpm as f64) / 60.0)
+                * (960.0 / (self.sample_rate as f64))) as u32
         } else {
             0
         };
@@ -1459,11 +1441,13 @@ impl AudioEngine {
             bar: self.song_state.current_bar,
             tempo: self.bpm,
             sample_rate: self.current_state.graph.sample_rate,
+
             // Transport state
             is_playing,
             is_looping: self.song_state.is_looping,
             is_recording: self.song_state.is_recording,
             is_pattern_playing: self.pattern_state.is_playing,
+
             // Pattern position (independent)
             is_pattern_mode,
             pattern_samples: self.pattern_state.playhead_samples,
@@ -1713,7 +1697,7 @@ impl AudioEngine {
 
                     let mut has_signal = false;
 
-                    // Generator Voice - use plugin_state directly (no lock!)
+                    // Generator Voice
                     if let Some(gen_voice) = self
                         .active_generators
                         .iter()
@@ -1736,16 +1720,19 @@ impl AudioEngine {
                                     gen_instance.plugin.apply_automation(*param_id, *value);
                                 }
                             }
+
+                            let sidechain_id = SidechainRouteId::Generator(gen_id);
+                            let aux = self.aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
                             // PROCESS AUDIO
                             // Build context for the generator — MIDI events are passed via ProcessContext
                             let gen_ctx = ProcessContext {
                                 bpm,
-                                time_sig_numerator: 4,
-                                time_sig_denominator: 4,
+                                time_sig_numerator: self.time_sig_numerator,
+                                time_sig_denominator: self.time_sig_denominator,
                                 is_playing,
                                 sample_position,
                                 midi_events: events,
-                                aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
+                                aux_buffer: Cell::new(aux),
                             };
                             gen_instance.plugin.process(&mut self.mix_buffer, &gen_ctx);
                             has_signal = true;
@@ -1807,7 +1794,8 @@ impl AudioEngine {
                         is_playing,
                         sample_position,
                         midi_events: &[],
-                        aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
+                        // `aux_buffer` is None because we handle this in apply_mixer_channel_with_effects
+                        aux_buffer: Cell::new(None),
                     };
                     Self::apply_mixer_channel_with_effects(
                         channel_mut,
@@ -1817,6 +1805,7 @@ impl AudioEngine {
                         &mut self.mix_buffer,
                         channels,
                         &track_effect_ctx,
+                        &self.aux_buffers,
                     );
 
                     if let Some(delay_line) = self.track_delay_lines.get_mut(track_id) {
@@ -1851,6 +1840,15 @@ impl AudioEngine {
                                 }
                                 RoutingNode::Track(_) => {
                                     // Invalid: can't route to a track
+                                }
+                                RoutingNode::PluginSidechain(sidechain_route_id) => {
+                                    let aux_buf = self
+                                        .aux_buffers
+                                        .entry(sidechain_route_id)
+                                        .or_insert_with(|| vec![0.0; buf_len]);
+
+                                    // Mix the current track's signal into the aux buffer
+                                    apply_simd_mix_gain(aux_buf, &self.mix_buffer, conn.send_level);
                                 }
                             }
                         }
@@ -1964,7 +1962,7 @@ impl AudioEngine {
                                         if let Some(effect) =
                                             effects.iter_mut().find(|e| e.id == *effect_id)
                                         {
-                                            effect.plugin.set_parameter(*param_id, *value);
+                                            effect.plugin.apply_automation(*param_id, *value);
                                         }
                                     }
                                 }
@@ -1985,9 +1983,13 @@ impl AudioEngine {
                             is_playing,
                             sample_position,
                             midi_events: &[],
-                            aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
+                            aux_buffer: Cell::new(None),
                         };
+
                         for effect in effects.iter_mut() {
+                            let sidechain_id = SidechainRouteId::BusEffect(*bus_id, effect.id);
+                            let aux = self.aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
+                            bus_effect_ctx.aux_buffer.set(aux);
                             effect.plugin.process(&mut self.mix_buffer, &bus_effect_ctx);
                         }
                     }
@@ -1998,44 +2000,9 @@ impl AudioEngine {
                     }
 
                     // Apply volume and pan (volume is stored in dB)
-                    let volume = db_to_linear(bus_volume.get());
                     let pan = bus_pan.get();
-                    let (left_gain, right_gain) = if channels == 2 {
-                        let p = (pan + 1.0) * 0.5;
-                        ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
-                    } else {
-                        (volume, volume)
-                    };
-
-                    if channels == 2 {
-                        let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
-                        let mut iter = self.mix_buffer.chunks_exact_mut(4);
-
-                        for chunk in iter.by_ref() {
-                            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                            v *= gain_v;
-                            chunk.copy_from_slice(&v.to_array());
-                        }
-
-                        // Remainder will be 0 or 2 floats (1 stereo frame)
-                        for chunk in iter.into_remainder().chunks_exact_mut(2) {
-                            chunk[0] *= left_gain;
-                            chunk[1] *= right_gain;
-                        }
-                    } else {
-                        let gain_v = f32x4::splat(left_gain);
-                        let mut iter = self.mix_buffer.chunks_exact_mut(4);
-
-                        for chunk in iter.by_ref() {
-                            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                            v *= gain_v;
-                            chunk.copy_from_slice(&v.to_array());
-                        }
-
-                        for s in iter.into_remainder() {
-                            *s *= left_gain;
-                        }
-                    }
+                    let volume_db = bus_volume.get();
+                    apply_volume_and_pan_simd(&mut self.mix_buffer, channels, volume_db, pan);
 
                     // Route bus output to destinations
                     let bus_routes: Vec<_> = routing
@@ -2059,6 +2026,15 @@ impl AudioEngine {
                                 }
                             }
                             RoutingNode::Track(_) => {}
+                            RoutingNode::PluginSidechain(sidechain_route_id) => {
+                                let aux_buf = self
+                                    .aux_buffers
+                                    .entry(sidechain_route_id)
+                                    .or_insert_with(|| vec![0.0; buf_len]);
+
+                                // Mix the current track's signal into the aux buffer
+                                apply_simd_mix_gain(aux_buf, &self.mix_buffer, conn.send_level);
+                            }
                         }
                     }
                 }
@@ -2100,7 +2076,7 @@ impl AudioEngine {
                             is_playing,
                             sample_position,
                             midi_events: &[],
-                            aux_buffer: None, // TODO: handle this aux buffer with actual aux buffer
+                            aux_buffer: Cell::new(None),
                         };
                         let mut master_bus =
                             self.current_state.graph.mixer_state.master_bus.clone();
@@ -2112,10 +2088,78 @@ impl AudioEngine {
                             output,
                             channels,
                             &master_effect_ctx,
+                            &self.aux_buffers,
                         );
                     } else {
                         // output silent buffer
                         output.fill(0.0);
+                    }
+                }
+                RoutingNode::PluginSidechain(sidechain_route_id) => {
+                    // the send level evaluation has been done, we only handles the PDC
+
+                    if let Some(aux_buf) = self.aux_buffers.get_mut(sidechain_route_id) {
+                        if let Some(delay_line) =
+                            self.sidechain_delay_lines.get_mut(sidechain_route_id)
+                        {
+                            delay_line.process_block(aux_buf, channels);
+                        }
+                    }
+                }
+            }
+
+            // ==================================================
+            // Process Modulation Events (Peak controller modulation)
+            // ==================================================
+
+            let active_modulations = self.current_state.graph.modulation_events.clone();
+
+            for modulation in active_modulations {
+                if let ModulationEvent::PeakController {
+                    source,
+                    target,
+                    depth,
+                    base_value,
+                } = modulation
+                {
+                    // Check if the current RoutingNode owns the source plugin
+                    let owns_source = match (&node, &source) {
+                        (RoutingNode::Track(t_id), PluginTarget::TrackEffect(p_t_id, _)) => {
+                            t_id == p_t_id
+                        }
+                        (RoutingNode::Bus(b_id), PluginTarget::BusEffect(p_b_id, _)) => {
+                            b_id == p_b_id
+                        }
+                        (RoutingNode::Master, PluginTarget::MasterEffect(_)) => true,
+                        _ => false,
+                    };
+
+                    if owns_source {
+                        // The source plugin just finished processing!
+                        // We can now safely grab its control buffer.
+                        if let Some(karbeat_plugin_api::prelude::ZeroCopyBuffer::Float32(
+                            control_buf,
+                        )) = self
+                            .get_plugin(&source)
+                            .and_then(|p| p.get_zero_copy_buffer("control"))
+                        {
+                            let peak = control_buf.first().copied().unwrap_or(0.0);
+
+                            // Map the output
+                            let modulated_value = (base_value + peak * depth).clamp(0.0, 1.0);
+
+                            // Queue it up! The target plugin will automatically consume this
+                            // value when its turn comes up later in the topological loop.
+                            Self::queue_parameter_change_no_self_ref(
+                                &target,
+                                modulated_value,
+                                &mut self.track_automation_events,
+                                &mut self.active_generators,
+                                &mut self.bus_automation_events,
+                                &mut self.master_automation_events,
+                                &mut self.bpm,
+                            );
+                        }
                     }
                 }
             }
@@ -2294,14 +2338,15 @@ impl AudioEngine {
     }
 
     /// Apply mixer channel settings (volume, pan, phase) and effects from plugin_state
-    fn apply_mixer_channel_with_effects(
+    fn apply_mixer_channel_with_effects<'a>(
         mixer_channel: &mut MixerChannel,
         track_effects: &mut Vec<Vec<AudioEffectInstance>>,
         track_automation_events: &[(TrackId, Vec<TrackAutomationEvent>)],
         track_id: TrackId,
         buffer: &mut [f32],
         channels: usize,
-        process_ctx: &ProcessContext,
+        process_ctx: &ProcessContext<'a>,
+        aux_buffers: &'a HashMap<SidechainRouteId, Vec<f32>>,
     ) {
         // Extract base values from the current UI state
         let track_volume = &mut mixer_channel.volume;
@@ -2337,68 +2382,25 @@ impl AudioEngine {
 
         // ==== SIMD Phase Inversion ====
         if mixer_channel.inverted_phase {
-            let neg_one = f32x4::splat(-1.0);
-            let mut iter = buffer.chunks_exact_mut(4);
-
-            for chunk in iter.by_ref() {
-                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                v *= neg_one;
-                chunk.copy_from_slice(&v.to_array());
-            }
-
-            for sample in iter.into_remainder() {
-                *sample = -*sample;
-            }
+            apply_phase_inversion_simd(buffer);
         }
 
         // Effects chain from plugin_state
         if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
             for effect in effects.iter_mut() {
+                let sidechain_id = SidechainRouteId::TrackEffect(track_id, effect.id);
+                let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
+
+                process_ctx.aux_buffer.set(aux);
                 effect.plugin.process(buffer, process_ctx);
             }
         }
 
         // Apply calculated Volume and Pan
         let pan = track_pan.get();
-        let volume = db_to_linear(track_volume.get());
+        let volume_db = track_volume.get();
 
-        let (left_gain, right_gain) = if channels == 2 {
-            let p = (pan + 1.0) * 0.5;
-            ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
-        } else {
-            (volume, volume)
-        };
-
-        // Apply gain
-        if channels == 2 {
-            let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
-            let mut iter = buffer.chunks_exact_mut(4);
-
-            for chunk in iter.by_ref() {
-                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                v *= gain_v;
-                chunk.copy_from_slice(&v.to_array());
-            }
-
-            // Handle remainder (0 or 2 floats for stereo)
-            for chunk in iter.into_remainder().chunks_exact_mut(2) {
-                chunk[0] *= left_gain;
-                chunk[1] *= right_gain;
-            }
-        } else {
-            let gain_v = f32x4::splat(left_gain);
-            let mut iter = buffer.chunks_exact_mut(4);
-
-            for chunk in iter.by_ref() {
-                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                v *= gain_v;
-                chunk.copy_from_slice(&v.to_array());
-            }
-
-            for sample in iter.into_remainder() {
-                *sample *= left_gain;
-            }
-        }
+        apply_volume_and_pan_simd(buffer, channels, volume_db, pan);
     }
 
     /// Apply master bus settings (volume, pan, phase) and effects from plugin_state
@@ -2409,13 +2411,14 @@ impl AudioEngine {
     /// * `master_effects` - The master bus effects chain
     /// * `buffer` - The buffer to apply the master bus settings to
     /// * `channels` - The number of channels in the buffer
-    fn apply_master_bus_with_effects(
+    fn apply_master_bus_with_effects<'a>(
         master_bus: &mut MixerChannel,
         master_effects: &mut [AudioEffectInstance],
         master_automation_events: &[MasterAutomationEvent],
         buffer: &mut [f32],
         channels: usize,
-        process_ctx: &ProcessContext,
+        process_ctx: &ProcessContext<'a>,
+        aux_buffers: &'a HashMap<SidechainRouteId, Vec<f32>>,
     ) {
         let master_volume = &mut master_bus.volume;
         let master_pan = &mut master_bus.pan;
@@ -2443,65 +2446,24 @@ impl AudioEngine {
 
         // ==== SIMD Phase Inversion ====
         if master_bus.inverted_phase {
-            let neg_one = f32x4::splat(-1.0);
-            let mut iter = buffer.chunks_exact_mut(4);
-
-            for chunk in iter.by_ref() {
-                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                v *= neg_one;
-                chunk.copy_from_slice(&v.to_array());
-            }
-
-            for sample in iter.into_remainder() {
-                *sample = -*sample;
-            }
+            apply_phase_inversion_simd(buffer);
         }
 
         // Master effects chain
         for effect in master_effects.iter_mut() {
+            let sidechain_id = SidechainRouteId::MasterEffect(effect.id);
+            let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
+
+            process_ctx.aux_buffer.set(aux);
             effect.plugin.process(buffer, process_ctx);
         }
 
         // Volume and Pan (volume is stored in dB)
         let pan = master_pan.get();
-        let volume = db_to_linear(master_volume.get());
-        let (left_gain, right_gain) = if channels == 2 {
-            let p = (pan + 1.0) * 0.5;
-            ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
-        } else {
-            (volume, volume)
-        };
+        let volume_db = master_volume.get();
 
         // ==== SIMD Apply Gain and Pan ====
-        if channels == 2 {
-            let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
-            let mut iter = buffer.chunks_exact_mut(4);
-
-            for chunk in iter.by_ref() {
-                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                v *= gain_v;
-                chunk.copy_from_slice(&v.to_array());
-            }
-
-            // Handle remainder (0 or 2 floats for stereo)
-            for chunk in iter.into_remainder().chunks_exact_mut(2) {
-                chunk[0] *= left_gain;
-                chunk[1] *= right_gain;
-            }
-        } else {
-            let gain_v = f32x4::splat(left_gain);
-            let mut iter = buffer.chunks_exact_mut(4);
-
-            for chunk in iter.by_ref() {
-                let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                v *= gain_v;
-                chunk.copy_from_slice(&v.to_array());
-            }
-
-            for sample in iter.into_remainder() {
-                *sample *= left_gain;
-            }
-        }
+        apply_volume_and_pan_simd(buffer, channels, volume_db, pan);
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
@@ -2548,9 +2510,9 @@ impl AudioEngine {
                     loop_length,
                     offset_start,
                 } => {
-                    let st = (*start_time as f64 * samples_per_tick) as u32;
-                    let ll = (*loop_length as f64 * samples_per_tick) as u32;
-                    let os = (*offset_start as f64 * samples_per_tick) as u32;
+                    let st = ((*start_time as f64) * samples_per_tick) as u32;
+                    let ll = ((*loop_length as f64) * samples_per_tick) as u32;
+                    let os = ((*offset_start as f64) * samples_per_tick) as u32;
                     (st, ll, os)
                 }
             };
@@ -2575,7 +2537,7 @@ impl AudioEngine {
             };
 
             match &clip.source {
-                DawSource::Audio(source_id) => {
+                Some(DawSource::Audio(source_id)) => {
                     let waveform_opt = self
                         .current_state
                         .graph
@@ -2587,7 +2549,7 @@ impl AudioEngine {
                         self.prepare_audio_voice(track.id, &clip, &waveform, start_time, end_time);
                     }
                 }
-                DawSource::Midi(id) => {
+                Some(DawSource::Midi(id)) => {
                     let fresh_pattern = self.current_state.graph.patterns.get(id);
 
                     if let Some(pattern) = fresh_pattern {
@@ -2730,7 +2692,7 @@ impl AudioEngine {
         let render_start = std::cmp::max(buffer_start, clip_timeline_start);
         let render_end = std::cmp::min(
             buffer_end,
-            clip_timeline_start + clip.time.loop_length_raw() as u32,
+            clip_timeline_start + (clip.time.loop_length_raw() as u32),
         );
 
         if render_end <= render_start {
@@ -2739,7 +2701,7 @@ impl AudioEngine {
 
         let output_offset = (render_start - buffer_start) as usize;
         let samples_elapsed = render_start - clip_timeline_start;
-        let effective_pos = samples_elapsed + clip.time.offset_start_raw() as u32;
+        let effective_pos = samples_elapsed + (clip.time.offset_start_raw() as u32);
 
         let ratio = (waveform.sample_rate as f64) / (self.sample_rate as f64);
         let source_elapsed_frames = (effective_pos as f64) * ratio;
@@ -2888,135 +2850,6 @@ impl AudioEngine {
         }
     }
 
-    fn evaluate_automation_lanes(&mut self) {
-        let tempo = self.bpm;
-        if tempo <= 0.0 {
-            return;
-        }
-
-        // Convert playhead from samples to ticks (960 ticks per beat)
-        let samples_per_beat = (60.0 / tempo) * (self.sample_rate as f32);
-        let samples_per_tick = samples_per_beat / 960.0;
-        let current_tick =
-            ((self.song_state.playhead_samples as f64) / (samples_per_tick as f64)) as u32;
-
-        for lane in self.current_state.graph.automation_lanes.values() {
-            let value = lane.value_at_ticks(current_tick);
-
-            match &lane.target {
-                AutomationTarget::TrackGeneratorPluginParam { track_id, param_id } => {
-                    if let Some(voice) = self
-                        .active_generators
-                        .iter_mut()
-                        .find(|v| v.track_id == *track_id)
-                    {
-                        voice
-                            .automation_events
-                            .push(GeneratorAutomationEvent::PluginParam {
-                                param_id: *param_id,
-                                value,
-                            });
-                    }
-                }
-                AutomationTarget::TrackVolume(track_id) => {
-                    let pos = self
-                        .track_automation_events
-                        .iter()
-                        .position(|(id, _)| id == track_id)
-                        .unwrap_or_else(|| {
-                            let idx = self.track_automation_events.len();
-                            self.track_automation_events.push((*track_id, Vec::new()));
-                            idx
-                        });
-                    self.track_automation_events[pos]
-                        .1
-                        .push(TrackAutomationEvent::Volume(value));
-                }
-                AutomationTarget::TrackPan(track_id) => {
-                    let pos = self
-                        .track_automation_events
-                        .iter()
-                        .position(|(id, _)| id == track_id)
-                        .unwrap_or_else(|| {
-                            let idx = self.track_automation_events.len();
-                            self.track_automation_events.push((*track_id, Vec::new()));
-                            idx
-                        });
-                    self.track_automation_events[pos]
-                        .1
-                        .push(TrackAutomationEvent::Pan(value));
-                }
-                AutomationTarget::TrackPluginParam {
-                    track_id,
-                    effect_id,
-                    param_id,
-                } => {
-                    let pos = self
-                        .track_automation_events
-                        .iter()
-                        .position(|(id, _)| id == track_id)
-                        .unwrap_or_else(|| {
-                            let idx = self.track_automation_events.len();
-                            self.track_automation_events.push((*track_id, Vec::new()));
-                            idx
-                        });
-                    self.track_automation_events[pos]
-                        .1
-                        .push(TrackAutomationEvent::PluginParam {
-                            effect_id: *effect_id,
-                            param_id: *param_id,
-                            value,
-                        });
-                }
-                AutomationTarget::BusVolume(bus_id) => {
-                    let pos = self
-                        .bus_automation_events
-                        .iter()
-                        .position(|(id, _)| id == bus_id)
-                        .unwrap_or_else(|| {
-                            let idx = self.bus_automation_events.len();
-                            self.bus_automation_events.push((*bus_id, Vec::new()));
-                            idx
-                        });
-                    self.bus_automation_events[pos]
-                        .1
-                        .push(BusAutomationEvent::Volume(value));
-                }
-                AutomationTarget::BusPluginParam {
-                    bus_id,
-                    effect_id,
-                    param_id,
-                } => {
-                    let pos = self
-                        .bus_automation_events
-                        .iter()
-                        .position(|(id, _)| id == bus_id)
-                        .unwrap_or_else(|| {
-                            let idx = self.bus_automation_events.len();
-                            self.bus_automation_events.push((*bus_id, Vec::new()));
-                            idx
-                        });
-                    self.bus_automation_events[pos]
-                        .1
-                        .push(BusAutomationEvent::PluginParam {
-                            effect_id: *effect_id,
-                            param_id: *param_id,
-                            value,
-                        });
-                }
-                AutomationTarget::MasterVolume => {
-                    self.master_automation_events
-                        .push(MasterAutomationEvent::Volume(value));
-                }
-                AutomationTarget::TempoBpm => {
-                    // Global target handled immediately since transport is owned by AudioEngine
-                    self.bpm = value;
-                }
-                _ => {}
-            }
-        }
-    }
-
     fn render_metronome(&mut self, output: &mut [f32], channels: usize, start_playhead: u32) {
         if !self.metronome_state.is_active {
             return;
@@ -3031,14 +2864,14 @@ impl AudioEngine {
         let mut out_iter = output.chunks_exact_mut(channels);
 
         for i in 0..frames {
-            let current_sample = start_playhead + i as u32;
+            let current_sample = start_playhead + (i as u32);
 
             // Detect exact beat boundaries perfectly
             let is_trigger = if current_sample == 0 {
                 true
             } else {
-                let prev_beat_idx = ((current_sample - 1) as f32 / samples_per_beat) as u32;
-                let curr_beat_idx = (current_sample as f32 / samples_per_beat) as u32;
+                let prev_beat_idx = (((current_sample - 1) as f32) / samples_per_beat) as u32;
+                let curr_beat_idx = ((current_sample as f32) / samples_per_beat) as u32;
                 curr_beat_idx > prev_beat_idx
             };
 
@@ -3046,7 +2879,7 @@ impl AudioEngine {
                 self.metronome_state.is_playing = true;
                 self.metronome_state.play_index = 0; // Reset playhead to start of WAV
 
-                let curr_beat_idx = (current_sample as f32 / samples_per_beat) as u32;
+                let curr_beat_idx = ((current_sample as f32) / samples_per_beat) as u32;
                 self.metronome_state.is_downbeat = curr_beat_idx.is_multiple_of(4);
             }
 
@@ -3176,6 +3009,14 @@ impl AudioEngine {
                     dl.set_delay(comp as usize, channels);
                 }
                 RoutingNode::Master => {} // Master has no compensation delay
+                RoutingNode::PluginSidechain(sidechain_route_id) => {
+                    let dl = self
+                        .sidechain_delay_lines
+                        .entry(*sidechain_route_id)
+                        .or_insert_with(DelayLine::default);
+
+                    dl.set_delay(comp as usize, channels);
+                }
             }
         }
 
@@ -3185,12 +3026,188 @@ impl AudioEngine {
         );
     }
 
-    fn get_plugin_box_gen(gen_id: GeneratorId) {
-
+    /// This is just underlying logic behind [`queue_parameter_change`] but
+    /// without directly bringing the entire mutable reference of self.
+    /// 
+    /// Call this if you don't want to fight the borrow checker
+    fn queue_parameter_change_no_self_ref(
+        target: &AutomationTarget,
+        value: f32,
+        track_automation_events: &mut SmallVec<[(TrackId, Vec<TrackAutomationEvent>); 4]>,
+        active_generators: &mut Vec<GeneratorVoice>,
+        bus_automation_events: &mut SmallVec<[(BusId, Vec<BusAutomationEvent>); 4]>,
+        master_automation_events: &mut SmallVec<[MasterAutomationEvent; 4]>,
+        bpm: &mut f32,
+    ) {
+        match target {
+            AutomationTarget::TrackVolume(track_id) => {
+                let pos = track_automation_events
+                    .iter()
+                    .position(|(id, _)| id == track_id)
+                    .unwrap_or_else(|| {
+                        let idx = track_automation_events.len();
+                        track_automation_events.push((*track_id, Vec::new()));
+                        idx
+                    });
+                track_automation_events[pos]
+                    .1
+                    .push(TrackAutomationEvent::Volume(value));
+            }
+            AutomationTarget::TrackPan(track_id) => {
+                let pos = track_automation_events
+                    .iter()
+                    .position(|(id, _)| id == track_id)
+                    .unwrap_or_else(|| {
+                        let idx = track_automation_events.len();
+                        track_automation_events.push((*track_id, Vec::new()));
+                        idx
+                    });
+                track_automation_events[pos]
+                    .1
+                    .push(TrackAutomationEvent::Pan(value));
+            }
+            AutomationTarget::TrackPluginParam {
+                track_id,
+                effect_id,
+                param_id,
+            } => {
+                let pos = track_automation_events
+                    .iter()
+                    .position(|(id, _)| id == track_id)
+                    .unwrap_or_else(|| {
+                        let idx = track_automation_events.len();
+                        track_automation_events.push((*track_id, Vec::new()));
+                        idx
+                    });
+                track_automation_events[pos]
+                    .1
+                    .push(TrackAutomationEvent::PluginParam {
+                        effect_id: *effect_id,
+                        param_id: *param_id,
+                        value,
+                    });
+            }
+            AutomationTarget::TrackGeneratorPluginParam { track_id, param_id } => {
+                if let Some(voice) = active_generators
+                    .iter_mut()
+                    .find(|v| v.track_id == *track_id)
+                {
+                    voice
+                        .automation_events
+                        .push(GeneratorAutomationEvent::PluginParam {
+                            param_id: *param_id,
+                            value,
+                        });
+                }
+            }
+            AutomationTarget::BusVolume(bus_id) => {
+                let pos = bus_automation_events
+                    .iter()
+                    .position(|(id, _)| id == bus_id)
+                    .unwrap_or_else(|| {
+                        let idx = bus_automation_events.len();
+                        bus_automation_events.push((*bus_id, Vec::new()));
+                        idx
+                    });
+                bus_automation_events[pos]
+                    .1
+                    .push(BusAutomationEvent::Volume(value));
+            }
+            AutomationTarget::BusPluginParam {
+                bus_id,
+                effect_id,
+                param_id,
+            } => {
+                let pos = bus_automation_events
+                    .iter()
+                    .position(|(id, _)| id == bus_id)
+                    .unwrap_or_else(|| {
+                        let idx = bus_automation_events.len();
+                        bus_automation_events.push((*bus_id, Vec::new()));
+                        idx
+                    });
+                bus_automation_events[pos]
+                    .1
+                    .push(BusAutomationEvent::PluginParam {
+                        effect_id: *effect_id,
+                        param_id: *param_id,
+                        value,
+                    });
+            }
+            AutomationTarget::MasterVolume => {
+                master_automation_events.push(MasterAutomationEvent::Volume(value));
+            }
+            AutomationTarget::TempoBpm => {
+                *bpm = value;
+            }
+            _ => {}
+        }
     }
 
-    fn get_plugin_box_effect(target: EffectTarget, effect_id: EffectId) {
+    /// Centralized routing to push a parameter change into the correct queue
+    fn queue_parameter_change(&mut self, target: &AutomationTarget, value: f32) {
+        Self::queue_parameter_change_no_self_ref(
+            target,
+            value,
+            &mut self.track_automation_events,
+            &mut self.active_generators,
+            &mut self.bus_automation_events,
+            &mut self.master_automation_events,
+            &mut self.bpm,
+        );
+    }
 
+    fn evaluate_pre_block_modulations(&mut self, buffer_size: usize) {
+        let tempo = self.bpm;
+        if tempo <= 0.0 {
+            return;
+        }
+
+        let samples_per_beat = (60.0 / tempo) * (self.sample_rate as f32);
+        let samples_per_tick = samples_per_beat / 960.0;
+        let current_tick =
+            ((self.song_state.playhead_samples as f64) / (samples_per_tick as f64)) as u32;
+
+        // Assume your AudioGraphState now holds a `modulations: Vec<ModulationEvent>`
+        let active_modulations = self.current_state.graph.modulation_events.clone();
+
+        for modulation in active_modulations {
+            match modulation {
+                ModulationEvent::Automation { lane_id, target } => {
+                    // Extract the value from the automation lane at the current tick
+                    if let Some(lane) = self
+                        .current_state
+                        .graph
+                        .automation_lanes
+                        .get(&AutomationId::from(lane_id))
+                    {
+                        let value = lane.value_at_ticks(current_tick);
+                        self.queue_parameter_change(&target, value);
+                    }
+                }
+                ModulationEvent::LFO {
+                    rate_hz,
+                    depth,
+                    base_value,
+                    target,
+                } => {
+                    // Calculate LFO advancement based on buffer time
+                    let phase_inc = (rate_hz * (buffer_size as f32)) / (self.sample_rate as f32);
+
+                    let phase = self.lfo_phases.entry(target.clone()).or_insert(0.0);
+                    let lfo_val = (*phase * std::f32::consts::TAU).sin(); // Standard Sine LFO
+
+                    *phase = (*phase + phase_inc).fract();
+
+                    // Apply Depth and Base
+                    let final_val = base_value + lfo_val * depth;
+                    self.queue_parameter_change(&target, final_val);
+                }
+                ModulationEvent::PeakController { .. } => {
+                    // Ignored here! Peak Controllers are audio-driven and must be evaluated topologically
+                }
+            }
+        }
     }
 }
 
@@ -3290,6 +3307,56 @@ fn load_internal_wav(bytes: &[u8]) -> Vec<f32> {
     // Convert 16-bit integer (-32768 to 32767) to f32 (-1.0 to 1.0)
     reader
         .into_samples::<i16>()
-        .map(|s| s.unwrap_or(0) as f32 / 32768.0)
+        .map(|s| (s.unwrap_or(0) as f32) / 32768.0)
         .collect()
+}
+
+#[inline(always)]
+fn apply_phase_inversion_simd(buffer: &mut [f32]) {
+    let neg_one = f32x4::splat(-1.0);
+    let mut iter = buffer.chunks_exact_mut(4);
+    for chunk in iter.by_ref() {
+        let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        v *= neg_one;
+        chunk.copy_from_slice(&v.to_array());
+    }
+    for sample in iter.into_remainder() {
+        *sample = -*sample;
+    }
+}
+
+#[inline(always)]
+fn apply_volume_and_pan_simd(buffer: &mut [f32], channels: usize, volume_db: f32, pan: f32) {
+    let volume = db_to_linear(volume_db);
+    let (left_gain, right_gain) = if channels == 2 {
+        let p = (pan + 1.0) * 0.5;
+        ((1.0 - p).sqrt() * volume, p.sqrt() * volume)
+    } else {
+        (volume, volume)
+    };
+
+    if channels == 2 {
+        let gain_v = f32x4::new([left_gain, right_gain, left_gain, right_gain]);
+        let mut iter = buffer.chunks_exact_mut(4);
+        for chunk in iter.by_ref() {
+            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            v *= gain_v;
+            chunk.copy_from_slice(&v.to_array());
+        }
+        for chunk in iter.into_remainder().chunks_exact_mut(2) {
+            chunk[0] *= left_gain;
+            chunk[1] *= right_gain;
+        }
+    } else {
+        let gain_v = f32x4::splat(left_gain);
+        let mut iter = buffer.chunks_exact_mut(4);
+        for chunk in iter.by_ref() {
+            let mut v = f32x4::new([chunk[0], chunk[1], chunk[2], chunk[3]]);
+            v *= gain_v;
+            chunk.copy_from_slice(&v.to_array());
+        }
+        for sample in iter.into_remainder() {
+            *sample *= left_gain;
+        }
+    }
 }

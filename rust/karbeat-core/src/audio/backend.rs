@@ -100,12 +100,14 @@ fn set_host() -> cpal::Host {
 
     #[cfg(target_os = "windows")]
     {
-          if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
+        if let Ok(asio_host) = cpal::host_from_id(cpal::HostId::Asio) {
             if host_has_output_device(&asio_host) {
                 log::info!("Connected to ASIO Host");
                 return asio_host;
             } else {
-                log::warn!("ASIO host found but no output devices were available; falling back to WASAPI");
+                log::warn!(
+                    "ASIO host found but no output devices were available; falling back to WASAPI"
+                );
             }
         } else {
             log::warn!("ASIO host not available; falling back to WASAPI");
@@ -186,7 +188,8 @@ pub fn start_audio_stream(
     log::info!("Output device: {}", device_name);
 
     // Ask the OS for its preferred/native audio configuration
-    let default_config = device.default_output_config()
+    let default_config = device
+        .default_output_config()
         .context("no default output config available")?;
     let native_sample_rate = default_config.sample_rate();
 
@@ -197,16 +200,20 @@ pub fn start_audio_stream(
     // Find a config that supports F32, 2 Channels, AND the OS's native sample rate
     let supported_config = supported_configs_range
         .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
-        .find(|c| c.min_sample_rate() <= native_sample_rate && c.max_sample_rate() >= native_sample_rate)
+        .find(|c| {
+            c.min_sample_rate() <= native_sample_rate && c.max_sample_rate() >= native_sample_rate
+        })
         .map(|c| c.with_sample_rate(native_sample_rate))
         // Fallback: If native rate isn't found in F32, try forcing a standard 48000 Hz
         .or_else(|| {
-            device.supported_output_configs().ok()?.find(|c| {
-                c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2
-            }).map(|c| {
-                let clamped_rate = 48000.clamp(c.min_sample_rate(), c.max_sample_rate());
-                c.with_sample_rate(clamped_rate)
-            })
+            device
+                .supported_output_configs()
+                .ok()?
+                .find(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
+                .map(|c| {
+                    let clamped_rate = 48000.clamp(c.min_sample_rate(), c.max_sample_rate());
+                    c.with_sample_rate(clamped_rate)
+                })
         })
         .context("device does not support f32 samples with 2 channels")?;
 

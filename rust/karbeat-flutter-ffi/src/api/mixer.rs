@@ -122,6 +122,7 @@ pub enum UiRoutingNode {
     Track(u32),
     Bus(u32),
     Master,
+    PluginSidechain, // this actually useless because the UI does not need this
 }
 
 impl From<&RoutingNode> for UiRoutingNode {
@@ -130,6 +131,7 @@ impl From<&RoutingNode> for UiRoutingNode {
             RoutingNode::Track(id) => UiRoutingNode::Track(id.to_u32()),
             RoutingNode::Bus(id) => UiRoutingNode::Bus(id.to_u32()),
             RoutingNode::Master => UiRoutingNode::Master,
+            _ => Self::PluginSidechain,
         }
     }
 }
@@ -140,6 +142,7 @@ impl From<&UiRoutingNode> for RoutingNode {
             UiRoutingNode::Track(id) => RoutingNode::Track((*id).into()),
             UiRoutingNode::Bus(id) => RoutingNode::Bus(BusId::from(*id)),
             UiRoutingNode::Master => RoutingNode::Master,
+            _ => RoutingNode::Master,
         }
     }
 }
@@ -174,7 +177,6 @@ impl From<&MixerState> for UiMixerState {
 pub struct UiEffectInstance {
     pub id: u32,
     pub name: String,
-    pub parameters: HashMap<u32, f32>,
 }
 
 impl From<&EffectInstance> for UiEffectInstance {
@@ -182,7 +184,6 @@ impl From<&EffectInstance> for UiEffectInstance {
         Self {
             id: value.id.to_u32(),
             name: value.instance.name.clone(),
-            parameters: value.instance.parameters.clone().into_iter().collect(),
         }
     }
 }
@@ -282,11 +283,11 @@ impl From<&ParameterSpec> for ParameterSpecDTO {
             id: spec.id,
             name: spec.name.clone(),
             group: spec.group.clone(),
-            value: spec.value,
-            min: spec.min,
-            max: spec.max,
-            default_value: spec.default_value,
-            step: spec.step,
+            value: spec.value as f32,
+            min: spec.min as f32,
+            max: spec.max as f32,
+            default_value: spec.default_value as f32,
+            step: spec.step as f32,
             value_type: spec.value_type.into(), // Automatically uses the enum mapping above
             choices: spec.choices.clone(),
         }
@@ -545,12 +546,24 @@ pub fn rename_bus(bus_id: u32, new_name: String) -> Result<(), String> {
     mixer_api::rename_bus(BusId::from(bus_id), &new_name).map_err(|e| e.to_string())
 }
 
-// TODO: Implement remove_effect_from_bus when the Audio Engine already
-// handled the RemoveEffectFromBus command
-
 // ======================================
 // ROUTING APIs
 // ======================================
+
+pub fn get_channel_destinations(is_bus: bool, channel_id: u32) -> Vec<UiRoutingConnection> {
+    let source_node = if is_bus {
+        RoutingNode::Bus(BusId::from(channel_id))
+    } else {
+        RoutingNode::Track(TrackId::from(channel_id))
+    };
+
+    mixer_api::get_destinations_of_mixer_channel(&source_node, |conn| UiRoutingConnection {
+        destination: UiRoutingNode::from(&conn.destination),
+        send_level: conn.send_level,
+        source: UiRoutingNode::from(&source_node),
+        is_send: conn.is_send,
+    })
+}
 
 /// Set routing: source → destination with send level.
 pub fn set_routing(

@@ -1,3 +1,4 @@
+use crate::api::plugins::opaque::ZeroCopyHandle;
 use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
@@ -115,6 +116,15 @@ impl UiPluginInfo {
     }
 }
 
+/// A response message arriving from the audio thread containing the zero-copy buffer.
+/// Dart uses the `request_id` to correlate with the original command sent via `query_zero_copy_buffer`.
+pub struct UiZeroCopyBufferResponse {
+    pub request_id: u32,
+    /// The opaque handle that Dart can use to read raw memory.
+    /// It is `None` if the plugin did not recognize the buffer name.
+    pub handle: Option<ZeroCopyHandle>,
+}
+
 /// Get all available generators with their registry IDs (preferred for UI)
 pub fn get_available_generators_with_ids() -> Result<Vec<UiPluginInfo>, String> {
     Ok(plugin_api::get_available_generators(|plugin_info| {
@@ -169,10 +179,10 @@ pub fn get_generator_parameter_specs(generator_id: u32) -> Result<Vec<UiPluginPa
         name: p.name,
         group: p.group,
         value,
-        min: p.min,
-        max: p.max,
-        default_value: p.default_value,
-        step: p.step,
+        min: p.min as f32,
+        max: p.max as f32,
+        default_value: p.default_value as f32,
+        step: p.step as f32,
         param_type: UiParameterType::from(p.value_type),
         choices: p.choices,
     })
@@ -269,19 +279,6 @@ pub fn poll_generator_parameter_feedback() -> Vec<UiGeneratorParameterSnapshot> 
     })
 }
 
-/// Sync parameter values from audio thread to stored parameters.
-pub fn sync_generator_parameters_from_audio(snapshots: &[UiGeneratorParameterSnapshot]) {
-    let items = snapshots.iter().map(|snapshot| {
-        let params = snapshot
-            .parameters
-            .iter()
-            .map(|p| (p.param_id, p.value))
-            .collect::<Vec<_>>();
-        (GeneratorId::from(snapshot.generator_id), params)
-    });
-    plugin_api::sync_generator_parameters_from_audio(items);
-}
-
 // Do the same for effect plugin
 pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
     plugin_api::poll_effect_parameter_feedback(|target, effect_id, parameters| {
@@ -294,22 +291,6 @@ pub fn poll_effect_parameter_feedback() -> Vec<UiEffectParameterSnapshot> {
                 .collect(),
         }
     })
-}
-
-pub fn sync_effect_parameters_from_audio(snapshots: &[UiEffectParameterSnapshot]) {
-    let items = snapshots.iter().map(|snapshot| {
-        let params = snapshot
-            .parameters
-            .iter()
-            .map(|p| (p.param_id, p.value))
-            .collect::<Vec<_>>();
-        (
-            snapshot.target.clone().into(),
-            EffectId::from(snapshot.effect_id),
-            params,
-        )
-    });
-    plugin_api::sync_effect_parameters_from_audio(items);
 }
 
 // ============================================================================
@@ -330,10 +311,10 @@ pub fn get_effect_parameter_specs(
             name: p.name,
             group: p.group,
             value,
-            min: p.min,
-            max: p.max,
-            default_value: p.default_value,
-            step: p.step,
+            min: p.min as f32,
+            max: p.max as f32,
+            default_value: p.default_value as f32,
+            step: p.step as f32,
             param_type: UiParameterType::from(p.value_type),
             choices: p.choices,
         }
@@ -530,6 +511,57 @@ pub fn create_plugin_message_stream(
             }
 
             // ~60fps poll rate, same as the transport position stream
+            std::thread::sleep(Duration::from_millis(16));
+        }
+    });
+
+    Ok(())
+}
+
+/// Dispatches a request to the audio thread to fetch a zero-copy buffer from a live plugin.
+///
+/// # Parameters
+/// - `target`: Which plugin instance to target.
+/// - `name`: The requested buffer name (e.g., `"magnitude"` or `"spectrum"`).
+///
+/// # Returns
+/// `Ok(request_id)` — correlate this with `UiZeroCopyBufferResponse.request_id` in the stream.
+#[frb]
+pub fn query_live_plugin_zero_copy_buf(
+    target: UiPluginTarget,
+    name: String,
+) -> Result<u32, String> {
+    plugin_api::query_zero_copy_buffer_from_live_plugin(target.into(), name)
+}
+
+/// Opens a stream that continuously polls the audio→UI feedback channel and
+/// forwards any requested `ZeroCopyBuffer` handles to Flutter.
+///
+/// The polling thread runs at ~16ms intervals (≈60fps). It terminates
+/// automatically when Flutter closes the stream.
+pub fn create_zero_copy_buffer_stream(
+    sink: StreamSink<UiZeroCopyBufferResponse>,
+) -> Result<(), String> {
+    std::thread::spawn(move || {
+        loop {
+            // Poll the core API. The mapper closure converts the FFI-agnostic
+            // ZeroCopyBuffer into the FFI-specific ZeroCopyHandle.
+            let responses =
+                plugin_api::poll_zero_copy_buffer_from_live_plugin(|request_id, buffer_opt| {
+                    UiZeroCopyBufferResponse {
+                        request_id,
+                        handle: buffer_opt.map(|buffer| ZeroCopyHandle::new(buffer)),
+                    }
+                });
+
+            for msg in responses {
+                if sink.add(msg).is_err() {
+                    // Flutter closed the stream - exit gracefully
+                    return;
+                }
+            }
+
+            // ~60fps poll rate
             std::thread::sleep(Duration::from_millis(16));
         }
     });

@@ -429,7 +429,7 @@ pub struct BiquadFilter<T: FilterMode + 'static> {
     )]
     pub q: f32,
 
-    #[param(id = "active", name = "Active", group = "Filter", default = 1.0)]
+    #[param(id = "active", name = "Active", group = "Filter", default = true)]
     pub active: bool,
 
     #[param(id = "type", name = "Type", group = "Filter", default = 0.0)]
@@ -659,10 +659,8 @@ mod tests {
         let mut filter = BiquadFilter::<BiquadFilterType>::default();
         // Set to 6 channels to test SIMD (4 channels) + Scalar (2 channels)
         filter.prepare(6, 44100);
-        filter.active.set_base(1.0);
-        filter
-            .filter_type
-            .set_base(BiquadFilterType::LowPass as usize as f32);
+        filter.active.set_base(true);
+        filter.filter_type.set_base(BiquadFilterType::LowPass);
         filter.freq.set_base(1000.0);
         filter.q.set_base(0.707);
         filter.cascades.set_base(1.0);
@@ -690,10 +688,8 @@ mod tests {
     fn test_biquad_state_reset() {
         let mut filter = BiquadFilter::<BiquadFilterType>::default();
         filter.prepare(2, 44100);
-        filter.active.set_base(1.0);
-        filter
-            .filter_type
-            .set_base(BiquadFilterType::LowPass as usize as f32);
+        filter.active.set_base(true);
+        filter.filter_type.set_base(BiquadFilterType::LowPass);
         filter.freq.set_base(1000.0);
         filter.cascades.set_base(1.0);
 

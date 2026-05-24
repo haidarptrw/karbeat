@@ -2,6 +2,7 @@
 name = "karbeat-host"
 version = "0.3.0"
 edition = "2021"
+license = "LGPL-3.0-only"
 description = "3rd-party plugin hosting implementation for Karbeat, including VST3, LV2, and CLAP support"
 
 [dependencies]

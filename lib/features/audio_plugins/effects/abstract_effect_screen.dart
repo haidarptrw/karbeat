@@ -89,9 +89,6 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
       final snapshots = await plugin_api.pollEffectParameterFeedback();
       if (snapshots.isEmpty) return;
 
-      // Sync to stored parameters (for persistence)
-      await plugin_api.syncEffectParametersFromAudio(snapshots: snapshots);
-
       bool updated = false;
 
       // Update local UI state
@@ -157,6 +154,17 @@ abstract class AbstractEffectScreenState<T extends AbstractEffectScreen>
         isLoading = false;
       });
     }
+  }
+
+  /// Reset a parameter to its default value.
+  @protected
+  Future<void> resetToDefault({required int paramId, }) async {
+    await plugin_api.setEffectParameter(
+      target: widget.target,
+      effectId: widget.effectId,
+      paramId: plugin_api.UiParamId.id(paramId),
+      value: parameters[paramId].defaultValue,
+    );
   }
 
   /// Set a parameter value with optimistic local update + backend sync.

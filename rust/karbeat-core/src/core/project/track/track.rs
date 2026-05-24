@@ -10,7 +10,7 @@ use crate::{
         automation::{AutomationLane, AutomationTarget},
         clip::ClipTimeUnit,
         mixer::MixerChannel,
-        ApplicationState, Clip, GeneratorInstance, GeneratorInstanceType, DawSource,
+        ApplicationState, Clip, DawSource, GeneratorInstance, GeneratorInstanceType,
         PluginInstance,
     },
     shared::{
@@ -21,6 +21,7 @@ use crate::{
 use karbeat_utils::color::Color;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct AudioTrack {
     pub id: TrackId,
     pub name: String,
@@ -29,6 +30,12 @@ pub struct AudioTrack {
     pub clips: BTreeSet<Arc<Clip>>,
     pub max_sample_index: u32,
     pub generator: Option<GeneratorInstance>,
+    /// ======================================
+    /// Track Sorting Order
+    /// Represents the track index position to be displayed in the UI.
+    /// Used for preserving layout on load/save and custom reordering.
+    /// ======================================
+    pub order_idx: usize,
 }
 
 impl Default for AudioTrack {
@@ -41,6 +48,7 @@ impl Default for AudioTrack {
             clips: BTreeSet::new(),
             max_sample_index: 0,
             generator: None,
+            order_idx: 0,
         }
     }
 }
@@ -77,7 +85,16 @@ impl AudioTrack {
             clips: BTreeSet::new(),
             max_sample_index: 0,
             generator: None,
+            order_idx: 0,
         }
+    }
+
+    /// ======================================
+    /// Set Track Order
+    /// Updates the order index, which dictates UI track positioning.
+    /// ======================================
+    pub fn set_order_idx(&mut self, new_idx: usize) {
+        self.order_idx = new_idx;
     }
 
     pub fn clips(&self) -> &BTreeSet<Arc<Clip>> {
@@ -100,9 +117,9 @@ impl AudioTrack {
     /// the clip type is incompatible with the track type
     pub fn add_clip(&mut self, clip: Clip) -> anyhow::Result<u32> {
         let is_valid = match (&self.track_type, &clip.source) {
-            (TrackType::Audio, DawSource::Audio(_)) => true,
-            (TrackType::Midi, DawSource::Midi { .. }) => true,
-            (TrackType::Automation, DawSource::Automation(_)) => true,
+            (TrackType::Audio, Some(DawSource::Audio(_))) => true,
+            (TrackType::Midi, Some(DawSource::Midi { .. })) => true,
+            (TrackType::Automation, Some(DawSource::Automation(_))) => true,
             // Allow Automation on Audio/Midi tracks? usually yes, but strictly speaking:
             _ => false,
         };
@@ -166,15 +183,16 @@ impl AudioTrack {
         let clips_set = &mut self.clips;
 
         clips_set.retain(|clip_arc| match &clip_arc.source {
-            DawSource::Audio(source_id) => {
+            Some(DawSource::Audio(source_id)) => {
                 if !is_generator {
                     source_id != &source_id_u32
                 } else {
                     true
                 }
             }
-            DawSource::Midi { .. } => true,
-            DawSource::Automation(_) => true,
+            Some(DawSource::Midi { .. }) => true,
+            Some(DawSource::Automation(_)) => true,
+            None => true,
         });
     }
 
@@ -265,12 +283,27 @@ impl AudioTrack {
 }
 
 impl ApplicationState {
+    /// ======================================
+    /// Update Track Order
+    /// Updates the order_idx of a specific track by ID
+    /// ======================================
+    pub fn update_track_order(&mut self, track_id: TrackId, new_idx: usize) -> anyhow::Result<()> {
+        if let Some(track_arc) = self.tracks.get_mut(&track_id) {
+            Arc::make_mut(track_arc).set_order_idx(new_idx);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Track {:?} not found", track_id))
+        }
+    }
+
     pub fn add_new_audio_track(&mut self) -> Arc<AudioTrack> {
         let new_track_id = TrackId::next(&mut self.track_counter);
+        let track_order = self.tracks.len();
         let new_track = AudioTrack {
             track_type: TrackType::Audio,
             id: new_track_id,
             name: format!("Track {}", new_track_id),
+            order_idx: track_order,
             ..Default::default()
         };
         let track_arc = Arc::new(new_track);
@@ -293,13 +326,11 @@ impl ApplicationState {
         let track_id = TrackId::next(&mut self.track_counter);
 
         // Create the plugin via registry using ID
-        let (generator_plugin, generator_name, default_params) = {
+        let (generator_plugin, generator_name) = {
             let registry = ctx().plugin_registry.read();
 
             if let Some((generator_box, name)) = registry.create_generator_by_id(registry_id) {
-                // Get default parameters BEFORE sending to audio thread
-                let params = generator_box.default_parameters();
-                (generator_box, name, params)
+                (generator_box, name)
             } else {
                 let message = format!("Generator with ID {} not found in registry", registry_id);
                 log::error!("{}", message);
@@ -319,9 +350,8 @@ impl ApplicationState {
             });
         }
 
-        // Create plugin instance descriptor with registry ID and default parameters
-        let plugin_instance =
-            PluginInstance::new_with_params(registry_id, &generator_name, default_params);
+        // Create plugin instance descriptor with registry ID
+        let plugin_instance = PluginInstance::new_with_id(registry_id, &generator_name);
 
         let generator = GeneratorInstance {
             id: gen_id,
@@ -330,12 +360,14 @@ impl ApplicationState {
         self.generator_pool
             .insert(gen_id, Arc::new(generator.clone()));
 
+        let track_order = self.tracks.len();
         let new_track = AudioTrack {
             track_type: TrackType::Midi,
             id: track_id,
             name: generator_name.clone(),
             color: Color::new_from_string("#FF8A65").unwrap_or(Color::default()),
             generator: Some(generator),
+            order_idx: track_order,
             ..Default::default()
         };
 
@@ -421,12 +453,14 @@ impl ApplicationState {
             current_value,
         )?;
 
+        let track_order = self.tracks.len();
         // Create an automation track explicitly for the timeline (because it is a Bus target)
         let mut new_track = AudioTrack {
             track_type: TrackType::Automation,
             id: track_id,
             name: label.clone(),
             color: Color::new_from_rgb(150, 150, 150),
+            order_idx: track_order,
             ..Default::default()
         };
 
@@ -434,7 +468,7 @@ impl ApplicationState {
         let automation_clip = Clip {
             id: ClipId::next(&mut self.clip_counter),
             name: label,
-            source: DawSource::Automation(new_automation_lane.id),
+            source: Some(DawSource::Automation(new_automation_lane.id)),
             time: ClipTimeUnit::Ticks {
                 start_time: 0,
                 loop_length: end_sample,
