@@ -43,7 +43,7 @@ impl ApplicationState {
 
     /// Deletes a generator source and removes all clips referencing it.
     pub fn remove_generator(&mut self, generator_id: GeneratorId) -> Option<GeneratorId> {
-        if self.generator_pool.shift_remove(&generator_id).is_none() {
+        if self.generator_pool.remove(&generator_id).is_none() {
             return None;
         }
 

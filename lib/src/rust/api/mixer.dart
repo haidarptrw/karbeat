@@ -8,12 +8,37 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'mixer.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `push_mixer_event`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
-/// Create the Rust → Flutter event stream for mixer param changes.
-Stream<UiMixerParamEvent> createMixerEventStream() =>
-    RustLib.instance.api.crateApiMixerCreateMixerEventStream();
+/// Opens a stream that continuously polls the audio-thread feedback ring buffer
+/// for `MixerChannelSnapshot` events and forwards them to Flutter.
+///
+/// Call `query_mixer_channel(target)` to request a snapshot; the audio thread
+/// will push the response into the feedback ring buffer, and it will arrive
+/// here within one polling interval (~16 ms).
+///
+/// This mirrors the pattern used by `create_plugin_message_stream` for plugin
+/// parameters — there is no special direct-callback path; everything goes
+/// through the shared `PENDING_FEEDBACK` buffer.
+///
+/// The polling thread terminates automatically when Flutter closes the stream.
+Stream<UiMixerChannelSnapshot> createMixerSnapshotStream() =>
+    RustLib.instance.api.crateApiMixerCreateMixerSnapshotStream();
+
+/// Set a single DSP parameter on a mixer channel.
+/// Routes through the audio thread ring buffer; AppState is only updated on save.
+Future<void> setMixerChannelParam({
+  required UiMixerChannelTarget target,
+  required UiMixerChannelParams param,
+}) => RustLib.instance.api.crateApiMixerSetMixerChannelParam(
+  target: target,
+  param: param,
+);
+
+/// Request a full snapshot of a mixer channel's current DSP state.
+/// Results arrive asynchronously via the `create_mixer_snapshot_stream` polling stream.
+Future<void> queryMixerChannel({required UiMixerChannelTarget target}) =>
+    RustLib.instance.api.crateApiMixerQueryMixerChannel(target: target);
 
 /// **GETTER: Fetch the mixer state**
 Future<UiMixerState> getMixerState() =>
@@ -59,17 +84,6 @@ Future<List<ParameterSpecDTO>?> getBusMixerChannelSpecs({required int busId}) =>
 Future<List<ParameterSpecDTO>> getMasterChannelSpecs() =>
     RustLib.instance.api.crateApiMixerGetMasterChannelSpecs();
 
-Future<void> setMasterBusParams({required List<UiMixerChannelParams> params}) =>
-    RustLib.instance.api.crateApiMixerSetMasterBusParams(params: params);
-
-Future<void> setMixerChannelParams({
-  required int trackId,
-  required List<UiMixerChannelParams> params,
-}) => RustLib.instance.api.crateApiMixerSetMixerChannelParams(
-  trackId: trackId,
-  params: params,
-);
-
 /// Add an effect to a mixer channel by its registry ID (preferred method).
 Future<void> addEffectToMixerChannelById({
   required int trackId,
@@ -104,15 +118,6 @@ Future<int> createBus({required String name}) =>
 /// Delete a mixer bus.
 Future<void> deleteBus({required int busId}) =>
     RustLib.instance.api.crateApiMixerDeleteBus(busId: busId);
-
-/// Set bus channel parameters (volume, pan, mute).
-Future<void> setBusParams({
-  required int busId,
-  required List<UiMixerChannelParams> params,
-}) => RustLib.instance.api.crateApiMixerSetBusParams(
-  busId: busId,
-  params: params,
-);
 
 /// Add an effect to a bus by its registry ID.
 Future<void> addEffectToBus({required int busId, required int registryId}) =>
@@ -334,39 +339,63 @@ sealed class UiMixerChannelParams with _$UiMixerChannelParams {
       UiMixerChannelParams_Solo;
 }
 
-class UiMixerParamEvent {
+/// Full DSP state snapshot of a mixer channel, polled via
+/// poll_mixer_channel_feedback() after calling query_mixer_channel().
+class UiMixerChannelSnapshot {
   final int trackId;
-  final double? volume;
-  final double? pan;
-  final bool? mute;
-  final bool? solo;
+  final int? busId;
+  final bool isMaster;
+  final double volume;
+  final double pan;
+  final bool mute;
+  final bool solo;
+  final bool invertedPhase;
 
-  const UiMixerParamEvent({
+  const UiMixerChannelSnapshot({
     required this.trackId,
-    this.volume,
-    this.pan,
-    this.mute,
-    this.solo,
+    this.busId,
+    required this.isMaster,
+    required this.volume,
+    required this.pan,
+    required this.mute,
+    required this.solo,
+    required this.invertedPhase,
   });
 
   @override
   int get hashCode =>
       trackId.hashCode ^
+      busId.hashCode ^
+      isMaster.hashCode ^
       volume.hashCode ^
       pan.hashCode ^
       mute.hashCode ^
-      solo.hashCode;
+      solo.hashCode ^
+      invertedPhase.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is UiMixerParamEvent &&
+      other is UiMixerChannelSnapshot &&
           runtimeType == other.runtimeType &&
           trackId == other.trackId &&
+          busId == other.busId &&
+          isMaster == other.isMaster &&
           volume == other.volume &&
           pan == other.pan &&
           mute == other.mute &&
-          solo == other.solo;
+          solo == other.solo &&
+          invertedPhase == other.invertedPhase;
+}
+
+@freezed
+sealed class UiMixerChannelTarget with _$UiMixerChannelTarget {
+  const UiMixerChannelTarget._();
+
+  const factory UiMixerChannelTarget.track(int field0) =
+      UiMixerChannelTarget_Track;
+  const factory UiMixerChannelTarget.bus(int field0) = UiMixerChannelTarget_Bus;
+  const factory UiMixerChannelTarget.master() = UiMixerChannelTarget_Master;
 }
 
 /// UI representation of the mixer state.

@@ -4,6 +4,7 @@ import 'package:karbeat/features/components/context_menu.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
 import 'package:karbeat/features/audio_plugins/effects/effect_registry.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/state/app_state.dart';
@@ -28,27 +29,32 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   void initState() {
     super.initState();
 
-    _splitController = MultiSplitViewController(areas: [
-      Area(
-        size: 400,
-        min: 150,
-        builder: (context, area) => _buildTracksArea(context, area),
-      ),
-      Area(
-        min: 0.1,
-        builder: (context, area) => _buildBusesArea(context, area),
-      ),
-    ]);
+    _splitController = MultiSplitViewController(
+      areas: [
+        Area(
+          size: 400,
+          min: 150,
+          builder: (context, area) => _buildTracksArea(context, area),
+        ),
+        Area(
+          min: 0.1,
+          builder: (context, area) => _buildBusesArea(context, area),
+        ),
+      ],
+    );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(globalStateProvider).syncMixerState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final state = ref.read(globalStateProvider);
+      await state.syncMixerState();
     });
   }
 
   Widget _buildTracksArea(BuildContext context, Area area) {
     return Consumer(
       builder: (context, ref, _) {
-        final mixerState = ref.watch(globalStateProvider.select((s) => s.mixerState));
+        final mixerState = ref.watch(
+          globalStateProvider.select((s) => s.mixerState),
+        );
         final tracks = ref.watch(globalStateProvider.select((s) => s.tracks));
         final state = ref.read(globalStateProvider);
 
@@ -81,10 +87,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
         return ListView.builder(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 12,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           itemCount: channelEntries.length,
           itemBuilder: (context, index) {
             final entry = channelEntries[index];
@@ -92,22 +95,21 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               key: ValueKey('mixer_track_${entry.id}'),
               child: ContextMenuWrapper(
                 title: 'Track ${entry.id}',
-                header: Column(
-                  children: [
-                    Text(entry.name),
-                  ],
-                ),
+                header: Column(children: [Text(entry.name)]),
                 actions: [
-                  DawContextAction(title: 'Route to node...', onTap: () {
-                    AppLogger.info("Route to node...");
-                  }),
+                  DawContextAction(
+                    title: 'Route to node...',
+                    onTap: () {
+                      _showRoutingDialog(context, entry.id, mixerState, state);
+                    },
+                  ),
                 ],
                 child: _ChannelStrip(
                   entry: entry,
                   onVolumeChanged: (value) {
-                    state.setMixerChannelParams(
+                    state.setMixerChannelParam(
                       trackId: entry.id,
-                      params: [UiMixerChannelParams.volume(value)],
+                      param: UiMixerChannelParams.volume(value),
                     );
                   },
                   onVolumeChangeStart: () {
@@ -117,9 +119,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     state.markParamReleased(entry.id, 'volume');
                   },
                   onPanChanged: (value) {
-                    state.setMixerChannelParams(
+                    state.setMixerChannelParam(
                       trackId: entry.id,
-                      params: [UiMixerChannelParams.pan(value)],
+                      param: UiMixerChannelParams.pan(value),
                     );
                   },
                   onPanChangeStart: () {
@@ -129,19 +131,15 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                     state.markParamReleased(entry.id, 'pan');
                   },
                   onMuteToggled: () {
-                    state.setMixerChannelParams(
+                    state.setMixerChannelParam(
                       trackId: entry.id,
-                      params: [
-                        UiMixerChannelParams.mute(!entry.channel.mute),
-                      ],
+                      param: UiMixerChannelParams.mute(!entry.channel.mute),
                     );
                   },
                   onSoloToggled: () {
-                    state.setMixerChannelParams(
+                    state.setMixerChannelParam(
                       trackId: entry.id,
-                      params: [
-                        UiMixerChannelParams.solo(!entry.channel.solo),
-                      ],
+                      param: UiMixerChannelParams.solo(!entry.channel.solo),
                     );
                   },
                   isSelected:
@@ -166,7 +164,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
   Widget _buildBusesArea(BuildContext context, Area area) {
     return Consumer(
       builder: (context, ref, _) {
-        final mixerState = ref.watch(globalStateProvider.select((s) => s.mixerState));
+        final mixerState = ref.watch(
+          globalStateProvider.select((s) => s.mixerState),
+        );
         final state = ref.read(globalStateProvider);
 
         final busEntries = <_ChannelEntry>[];
@@ -184,10 +184,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
         return ListView.builder(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 12,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           itemCount: busEntries.length + 1,
           itemBuilder: (context, index) {
             // Last item: "Add Bus" ghost strip
@@ -195,9 +192,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               return GestureDetector(
                 onTap: () async {
                   final busCount = busEntries.length + 1;
-                  await state.createNewBusChannel(
-                    name: "Bus $busCount",
-                  );
+                  await state.createNewBusChannel(name: "Bus $busCount");
                 },
                 child: Container(
                   width: 72,
@@ -239,9 +234,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               child: _ChannelStrip(
                 entry: entry,
                 onVolumeChanged: (value) {
-                  state.setBusChannelParams(
+                  state.setBusChannelParam(
                     busId: entry.id,
-                    params: [UiMixerChannelParams.volume(value)],
+                    param: UiMixerChannelParams.volume(value),
                   );
                 },
                 onVolumeChangeStart: () {
@@ -251,9 +246,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   state.markParamReleased(entry.id, 'volume');
                 },
                 onPanChanged: (value) {
-                  state.setBusChannelParams(
+                  state.setBusChannelParam(
                     busId: entry.id,
-                    params: [UiMixerChannelParams.pan(value)],
+                    param: UiMixerChannelParams.pan(value),
                   );
                 },
                 onPanChangeStart: () {
@@ -263,23 +258,18 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   state.markParamReleased(entry.id, 'pan');
                 },
                 onMuteToggled: () {
-                  state.setBusChannelParams(
+                  state.setBusChannelParam(
                     busId: entry.id,
-                    params: [
-                      UiMixerChannelParams.mute(!entry.channel.mute),
-                    ],
+                    param: UiMixerChannelParams.mute(!entry.channel.mute),
                   );
                 },
                 onSoloToggled: () {
-                  state.setBusChannelParams(
+                  state.setBusChannelParam(
                     busId: entry.id,
-                    params: [
-                      UiMixerChannelParams.solo(!entry.channel.solo),
-                    ],
+                    param: UiMixerChannelParams.solo(!entry.channel.solo),
                   );
                 },
-                isSelected:
-                    _selectedChannelId == entry.id && _isSelectedBus,
+                isSelected: _selectedChannelId == entry.id && _isSelectedBus,
                 onTap: () {
                   setState(() {
                     _selectedChannelId = entry.id;
@@ -289,6 +279,87 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  void _showRoutingDialog(
+    BuildContext context,
+    int trackId,
+    UiMixerState mixerState,
+    dynamic state, // Using dynamic or your GlobalAppState type
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return SimpleDialog(
+          title: Text("Route Track $trackId To..."),
+          backgroundColor: Colors.grey.shade900,
+          titleTextStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          children: [
+            // Option to route to Master
+            SimpleDialogOption(
+              onPressed: () {
+                AppLogger.info("Routing track $trackId to Master");
+                // TODO: Call your state backend to update the routing graph
+                // e.g., state.routeTrackToMaster(trackId);
+                Navigator.pop(ctx);
+              },
+              child: const Row(
+                children: [
+                  Icon(Icons.hub, color: Colors.amber, size: 20),
+                  SizedBox(width: 12),
+                  Text("Master", style: TextStyle(color: Colors.white)),
+                ],
+              ),
+            ),
+
+            if (mixerState.buses.isNotEmpty) ...[
+              const Divider(color: Colors.white24),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Text(
+                  "BUSES",
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
+              // Dynamically list all available buses
+              ...mixerState.buses.values.map((bus) {
+                return SimpleDialogOption(
+                  onPressed: () {
+                    AppLogger.info("Routing track $trackId to Bus ${bus.id}");
+                    // TODO: Call your state backend to update the routing graph
+                    // e.g., state.routeTrackToBus(trackId, bus.id);
+                    Navigator.pop(ctx);
+                  },
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.settings_input_component,
+                        color: Colors.cyanAccent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        bus.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
         );
       },
     );
@@ -315,9 +386,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   highlightedColor: Colors.white70,
                 ),
               ),
-              child: MultiSplitView(
-                controller: _splitController,
-              ),
+              child: MultiSplitView(controller: _splitController),
             ),
           ),
 
@@ -326,10 +395,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
 
           // === Master Channel (fixed) ===
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
             child: _ChannelStrip(
               entry: _ChannelEntry(
                 id: -1,
@@ -338,8 +404,8 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 isMaster: true,
               ),
               onVolumeChanged: (value) {
-                state.setMasterBusParams(
-                  params: [UiMixerChannelParams.volume(value)],
+                state.setMasterBusParam(
+                  param: UiMixerChannelParams.volume(value),
                 );
               },
               onVolumeChangeStart: () {
@@ -349,9 +415,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 state.markParamReleased(4294967295, 'volume');
               },
               onPanChanged: (value) {
-                state.setMasterBusParams(
-                  params: [UiMixerChannelParams.pan(value)],
-                );
+                state.setMasterBusParam(param: UiMixerChannelParams.pan(value));
               },
               onPanChangeStart: () {
                 state.markParamTouched(4294967295, 'pan');
@@ -360,17 +424,13 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                 state.markParamReleased(4294967295, 'pan');
               },
               onMuteToggled: () {
-                state.setMasterBusParams(
-                  params: [
-                    UiMixerChannelParams.mute(!mixerState.masterBus.mute),
-                  ],
+                state.setMasterBusParam(
+                  param: UiMixerChannelParams.mute(!mixerState.masterBus.mute),
                 );
               },
               onSoloToggled: () {
-                state.setMasterBusParams(
-                  params: [
-                    UiMixerChannelParams.solo(!mixerState.masterBus.solo),
-                  ],
+                state.setMasterBusParam(
+                  param: UiMixerChannelParams.solo(!mixerState.masterBus.solo),
                 );
               },
               isSelected: _selectedChannelId == -1 && !_isSelectedBus,
@@ -508,10 +568,12 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                               final registryId = availableEffects
                                   .firstWhere((p) => p.id == effect.registryId)
                                   .id;
-                              final builder = EffectRegistry.getEffectBuilder(
-                                registryId,
+
+                              final screen = EffectRegistry.getScreen(
+                                registryId: registryId,
+                                instanceId: effect.id,
+                                target: target,
                               );
-                              final screen = builder(effect.id, target);
 
                               Navigator.push(
                                 context,
@@ -1189,4 +1251,98 @@ class _ToggleButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// Place this anywhere at the bottom of the file
+class _RoutingPainter extends CustomPainter {
+  final List<plugin_api.UiRoutingConnection> routing;
+  final Map<String, GlobalKey> stripKeys;
+  final int? selectedChannelId;
+  final bool isSelectedBus;
+
+  _RoutingPainter({
+    required this.routing,
+    required this.stripKeys,
+    required this.selectedChannelId,
+    required this.isSelectedBus,
+  });
+
+  String? _getNodeKeyString(plugin_api.UiRoutingNode node) {
+    if (node is plugin_api.UiRoutingNode_Track) return 'track_${node.field0}';
+    if (node is plugin_api.UiRoutingNode_Bus) return 'bus_${node.field0}';
+    if (node is plugin_api.UiRoutingNode_Master) return 'master';
+    return null;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final activePaint = Paint()
+      ..color = Colors.cyanAccent.withAlpha(200)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+
+    final inactivePaint = Paint()
+      ..color = Colors.white.withAlpha(20)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    for (final conn in routing) {
+      final srcStr = _getNodeKeyString(conn.source);
+      final dstStr = _getNodeKeyString(conn.destination);
+
+      if (srcStr == null || dstStr == null) continue;
+
+      final srcKey = stripKeys[srcStr];
+      final dstKey = stripKeys[dstStr];
+
+      if (srcKey == null || dstKey == null) continue;
+
+      final srcBox = srcKey.currentContext?.findRenderObject() as RenderBox?;
+      final dstBox = dstKey.currentContext?.findRenderObject() as RenderBox?;
+
+      if (srcBox == null || dstBox == null) continue;
+
+      // Ensure boxes are actually attached to the screen coordinates
+      final srcPos = srcBox.localToGlobal(Offset.zero);
+      final dstPos = dstBox.localToGlobal(Offset.zero);
+
+      // Start from bottom-center of source, go to bottom-center of destination
+      final start = Offset(srcPos.dx + srcBox.size.width / 2, srcPos.dy + srcBox.size.height - 10);
+      final end = Offset(dstPos.dx + dstBox.size.width / 2, dstPos.dy + dstBox.size.height - 10);
+
+      bool isActive = false;
+      if (selectedChannelId != null) {
+        final selectedStr = selectedChannelId == -1
+            ? 'master'
+            : (isSelectedBus ? 'bus_$selectedChannelId' : 'track_$selectedChannelId');
+        if (srcStr == selectedStr || dstStr == selectedStr) {
+          isActive = true;
+        }
+      }
+
+      final path = Path();
+      path.moveTo(start.dx, start.dy);
+      
+      // Draw a hanging curve under the tracks to visualize the cable
+      final distance = (end.dx - start.dx).abs();
+      final drop = 40.0 + (distance * 0.1).clamp(0.0, 80.0); 
+
+      final controlPoint1 = Offset(start.dx, start.dy + drop);
+      final controlPoint2 = Offset(end.dx, end.dy + drop);
+      path.cubicTo(controlPoint1.dx, controlPoint1.dy, controlPoint2.dx, controlPoint2.dy, end.dx, end.dy);
+
+      canvas.drawPath(path, isActive ? activePaint : inactivePaint);
+
+      // Draw a glowing node point at the destination to indicate flow direction
+      if (isActive) {
+        final arrowPaint = Paint()
+          ..color = Colors.cyanAccent.withAlpha(200)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(end, 4, arrowPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RoutingPainter oldDelegate) => true; 
 }

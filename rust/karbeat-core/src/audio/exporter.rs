@@ -1,11 +1,10 @@
 use rtrb::RingBuffer;
 use thiserror::Error;
-use triple_buffer::TripleBuffer;
 
 use crate::{
     audio::{
         render_state::AudioRenderState,
-        writer::{AudioExportConfig, AudioWriter, create_writer},
+        writer::{create_writer, AudioExportConfig, AudioWriter},
     },
     commands::AudioCommand,
     context::utils::send_audio_command,
@@ -64,7 +63,6 @@ where
     let render_state = AudioRenderState::from(app_state);
 
     // Set up Dummy Communication Channels
-    let (mut _state_in, state_out) = TripleBuffer::new(&render_state).split();
     let (mut cmd_producer, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
     let (pos_producer, mut _pos_consumer) = RingBuffer::new(1024);
     let (feedback_producer, mut _feedback_consumer) = RingBuffer::new(1024);
@@ -72,9 +70,9 @@ where
     // Create a oneshot channel to receive the cloned engine
     let (engine_tx, engine_rx) = std::sync::mpsc::channel();
 
-    // Send audio command to get a copy of Audio Engine from live engine
+    // Send audio command to get a copy of Audio Engine from live engine.
+    // The engine is cloned from its own internal graph state — no triple-buffer involved.
     send_audio_command(AudioCommand::QueryAudioEngine {
-        state_consumer: state_out,
         command_consumer: cmd_consumer,
         position_producer: pos_producer,
         feedback_producer: feedback_producer,
@@ -237,7 +235,7 @@ where
         let mut max_tail_samples: u32 = 0;
 
         let plugin_state = offline_engine.plugin_state();
-        
+
         for effect in &plugin_state.master_effects {
             max_tail_samples = max_tail_samples.max(effect.plugin.tail_samples());
         }

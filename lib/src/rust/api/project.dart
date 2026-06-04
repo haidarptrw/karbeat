@@ -465,6 +465,7 @@ class UiTrack {
   final UiTrackType trackType;
   final List<UiClip> clips;
   final int? generatorId;
+  final int orderIdx;
 
   const UiTrack({
     required this.id,
@@ -473,6 +474,7 @@ class UiTrack {
     required this.trackType,
     required this.clips,
     this.generatorId,
+    required this.orderIdx,
   });
 
   @override
@@ -482,7 +484,8 @@ class UiTrack {
       color.hashCode ^
       trackType.hashCode ^
       clips.hashCode ^
-      generatorId.hashCode;
+      generatorId.hashCode ^
+      orderIdx.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -494,7 +497,8 @@ class UiTrack {
           color == other.color &&
           trackType == other.trackType &&
           clips == other.clips &&
-          generatorId == other.generatorId;
+          generatorId == other.generatorId &&
+          orderIdx == other.orderIdx;
 }
 
 enum UiTrackType { audio, midi, automation }

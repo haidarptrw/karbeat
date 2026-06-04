@@ -48,6 +48,7 @@ dasp = { version = "0.11.0", features = ["all"] }
 smallvec = { version = "1.15.1", features = ["serde"] }
 hashbrown = { version = "0.17.0", features = ["serde"] }
 indexmap = { version = "2.14.0", features = ["serde"] }
+itertools = { version = "^0.14" }
 num-complex = "0.4.6"
 parking_lot = "0.12.5"
 uuid = { version = "1.22.0", features = ["v4", "serde"] }

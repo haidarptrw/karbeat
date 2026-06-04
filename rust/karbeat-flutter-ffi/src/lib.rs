@@ -2,11 +2,12 @@
 
 use std::{path::PathBuf, sync::Arc};
 
+use karbeat_core::audio::backend::AudioDeviceConfig;
 use memmap2::MmapOptions;
 use rtrb::RingBuffer;
 
 pub(crate) use karbeat_core::{
-    audio::{backend::start_audio_stream, render_state::AudioRenderState},
+    audio::backend::start_audio_stream,
     commands::AudioCommand,
     context::{ctx, INIT_LOGGER},
     core::project::track::audio_waveform::AudioWaveform,
@@ -62,29 +63,16 @@ fn generate_startup_beep() -> AudioWaveform {
 }
 
 pub fn init_engine() {
-    let initial_state = {
-        let app = ctx().app_state.read();
-        AudioRenderState::from(&*app)
-    };
+    let device_conf = AudioDeviceConfig::default();
 
-    log::info!(
-        "Init Engine with Buffer Size: {}",
-        initial_state.graph.buffer_size
-    );
-    let (state_in, state_out) = triple_buffer::TripleBuffer::new(&initial_state).split();
-
-    {
-        let mut render_state_guard = ctx().render_state_producer.lock();
-        *render_state_guard = Some(state_in);
-    }
-    // Capacity 128 is plenty for manual clicks
-    let (cmd_prod, cmd_cons) = RingBuffer::new(128);
+    // Capacity 1024 is plenty for manual clicks
+    let (cmd_prod, cmd_cons) = RingBuffer::new(1024);
 
     // Store Producer in context
     let mut guard = ctx().command_sender.lock();
     *guard = Some(cmd_prod);
 
-    match start_audio_stream(state_out, cmd_cons, initial_state) {
+    match start_audio_stream(cmd_cons, device_conf) {
         Ok(_) => {
             log::info!("Audio Engine Successfully initialized");
 

@@ -1,3 +1,6 @@
+/// Generate newtype ID for explicit ID tag.
+/// With newtype ID, we give clarity to developers
+/// what ID is used by the variable
 #[macro_export]
 macro_rules! define_id {
     ($name:ident) => {

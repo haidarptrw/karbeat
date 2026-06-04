@@ -1,7 +1,7 @@
 use crate::audio::engine::PlaybackMode;
 use crate::commands::AudioCommand;
 use crate::context::utils::{
-    broadcast_state_change, send_audio_command, try_send_audio_command_chain,
+    broadcast_track_graph, send_audio_command, try_send_audio_command_chain,
 };
 use crate::lock::get_app_write;
 use crate::shared::{GeneratorId, PatternId};
@@ -34,7 +34,8 @@ pub fn set_bpm(val: f32) {
         app.update_max_sample_index();
     }
     send_audio_command(AudioCommand::SetBPM(val));
-    broadcast_state_change();
+    // max_sample_index changes with BPM — push the updated track graph snapshot
+    broadcast_track_graph();
 }
 
 pub fn stop_song_playback() {

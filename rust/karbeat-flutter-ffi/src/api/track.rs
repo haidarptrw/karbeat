@@ -216,3 +216,8 @@ pub fn delete_track(track_id: u32) -> Result<String, String> {
 
     Ok(type_string.into())
 }
+
+/// Update track order in the timeline
+pub fn update_track_order(track_id: u32, new_idx: usize) -> Result<(), String> {
+    track_api::update_track_order(track_id.into(), new_idx).map_err(|e| e.to_string())
+}

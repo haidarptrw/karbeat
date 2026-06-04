@@ -56,11 +56,25 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     super.dispose();
   }
 
-  Future<void> _pickDirectory() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-    if (selectedDirectory != null) {
+  // Replace _pickDirectory with this new native save dialog handler
+  Future<void> _pickSavePath() async {
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: 'Select export location and name',
+      fileName: '${_nameController.text}.${_selectedFormat.name.toLowerCase()}',
+      type: FileType.custom,
+      allowedExtensions: [_selectedFormat.name.toLowerCase()],
+    );
+
+    if (outputFile != null) {
+      final file = File(outputFile);
       setState(() {
-        _exportDirectory = selectedDirectory;
+        _exportDirectory = file.parent.path;
+        // Extract filename without extension to cleanly update the name controller
+        final nameWithExt = file.uri.pathSegments.last;
+        final nameWithoutExt = nameWithExt.contains('.')
+            ? nameWithExt.substring(0, nameWithExt.lastIndexOf('.'))
+            : nameWithExt;
+        _nameController.text = nameWithoutExt;
       });
     }
   }
@@ -205,42 +219,42 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                       const SizedBox(height: 16),
 
                       // Directory
-                      _buildSectionTitle("Export Directory"),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade800,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _exportDirectory,
-                                style: TextStyle(
-                                  color:
-                                      _exportDirectory == "Select Directory..."
-                                      ? Colors.white54
-                                      : Colors.white,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
+                      _buildSectionTitle("Export Location"),
+                      TextField(
+                        readOnly: true,
+                        style: TextStyle(
+                          color: _exportDirectory == "Select Directory..."
+                              ? Colors.white54
+                              : Colors.white,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: "Select Directory...",
+                          hintStyle: const TextStyle(color: Colors.white54),
+                          filled: true,
+                          fillColor: Colors.grey.shade800,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(4),
+                            borderSide: BorderSide.none,
                           ),
-                          const SizedBox(width: 8),
-                          ElevatedButton.icon(
-                            onPressed: _isExporting ? null : _pickDirectory,
-                            icon: const Icon(Icons.folder_open),
-                            label: const Text("Browse"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blueAccent,
-                              foregroundColor: Colors.white,
-                            ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
-                        ],
+                          // The three dots button
+                          suffixIcon: IconButton(
+                            icon: const Icon(
+                              Icons.more_horiz,
+                              color: Colors.white70,
+                            ),
+                            onPressed: _isExporting ? null : _pickSavePath,
+                          ),
+                        ),
+                        controller: TextEditingController(
+                          text: _exportDirectory == "Select Directory..."
+                              ? ""
+                              : "$_exportDirectory${Platform.pathSeparator}${_nameController.text}.${_selectedFormat.name.toLowerCase()}",
+                        ),
                       ),
                       const SizedBox(height: 24),
                       const Divider(color: Colors.white24),

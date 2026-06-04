@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use flutter_rust_bridge::frb;
 use karbeat_core::shared::id::*;
@@ -9,17 +10,51 @@ pub use karbeat_core::{
 
 use crate::frb_generated::StreamSink;
 use karbeat_core::api::mixer_api;
-use karbeat_core::{
-    context::{ctx, MixerParamEvent},
-    core::project::mixer::{
-        EffectInstance, MixerBus, MixerChannel, MixerChannelParams, MixerState, RoutingConnection,
-        RoutingNode,
-    },
+use karbeat_core::commands::MixerChannelTarget;
+use karbeat_core::core::project::mixer::{
+    BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
+    RoutingConnection, RoutingNode,
 };
 
 // ======================================
 // Type Definitions
 // ======================================
+
+// ======================================
+// MixerChannelTarget DTO
+// ======================================
+
+/// UI-facing mixer channel target — identifies which channel to address.
+#[frb]
+pub enum UiMixerChannelTarget {
+    Track(u32),
+    Bus(u32),
+    Master,
+}
+
+impl From<&UiMixerChannelTarget> for MixerChannelTarget {
+    fn from(val: &UiMixerChannelTarget) -> Self {
+        match val {
+            UiMixerChannelTarget::Track(id) => MixerChannelTarget::Track(TrackId::from(*id)),
+            UiMixerChannelTarget::Bus(id) => MixerChannelTarget::Bus(BusId::from(*id)),
+            UiMixerChannelTarget::Master => MixerChannelTarget::Master,
+        }
+    }
+}
+
+/// Full DSP state snapshot of a mixer channel, polled via
+/// poll_mixer_channel_feedback() after calling query_mixer_channel().
+#[derive(Clone)]
+pub struct UiMixerChannelSnapshot {
+    pub track_id: u32, // u32::MAX for buses, u32::MAX - 1 for master
+    pub bus_id: Option<u32>,
+    pub is_master: bool,
+    pub volume: f32,
+    pub pan: f32,
+    pub mute: bool,
+    pub solo: bool,
+    pub inverted_phase: bool,
+}
 
 /// UI representation of a mixer channel.
 pub struct UiMixerChannel {
@@ -36,26 +71,6 @@ pub struct UiEffectSummary {
     pub id: u32,
     pub registry_id: u32,
     pub name: String,
-}
-
-pub struct UiMixerParamEvent {
-    pub track_id: u32,
-    pub volume: Option<f32>,
-    pub pan: Option<f32>,
-    pub mute: Option<bool>,
-    pub solo: Option<bool>,
-}
-
-impl From<MixerParamEvent> for UiMixerParamEvent {
-    fn from(value: MixerParamEvent) -> Self {
-        Self {
-            track_id: value.track_id,
-            volume: value.volume,
-            pan: value.pan,
-            mute: value.mute,
-            solo: value.solo,
-        }
-    }
 }
 
 impl From<&MixerChannel> for UiMixerChannel {
@@ -87,8 +102,8 @@ pub struct UiBus {
     pub channel: UiMixerChannel,
 }
 
-impl From<&MixerBus> for UiBus {
-    fn from(value: &MixerBus) -> Self {
+impl From<&BusMixerChannel> for UiBus {
+    fn from(value: &BusMixerChannel) -> Self {
         Self {
             id: value.id.to_u32(),
             name: value.name.clone(),
@@ -161,7 +176,7 @@ impl From<&MixerState> for UiMixerState {
             channels: value
                 .channels
                 .iter()
-                .map(|(id, channel)| (id.to_u32(), channel.as_ref().into()))
+                .map(|(id, channel)| (id.to_u32(), UiMixerChannel::from(&channel.channel)))
                 .collect(),
             master_bus: value.master_bus.as_ref().into(),
             buses: value
@@ -295,24 +310,75 @@ impl From<&ParameterSpec> for ParameterSpecDTO {
 }
 
 // ======================================
-// STREAM
+// STREAMS
 // ======================================
 
-/// Create the Rust → Flutter event stream for mixer param changes.
-pub fn create_mixer_event_stream(sink: StreamSink<UiMixerParamEvent>) -> Result<(), String> {
-    let mut guard = ctx().mixer_event_sink.lock();
-    *guard = Some(Box::new(move |event| {
-        let _ = sink.add(event.into());
-    }));
-    log::info!("Mixer event stream connected");
+/// Opens a stream that continuously polls the audio-thread feedback ring buffer
+/// for `MixerChannelSnapshot` events and forwards them to Flutter.
+///
+/// Call `query_mixer_channel(target)` to request a snapshot; the audio thread
+/// will push the response into the feedback ring buffer, and it will arrive
+/// here within one polling interval (~16 ms).
+///
+/// This mirrors the pattern used by `create_plugin_message_stream` for plugin
+/// parameters — there is no special direct-callback path; everything goes
+/// through the shared `PENDING_FEEDBACK` buffer.
+///
+/// The polling thread terminates automatically when Flutter closes the stream.
+pub fn create_mixer_snapshot_stream(
+    sink: StreamSink<UiMixerChannelSnapshot>,
+) -> Result<(), String> {
+    std::thread::spawn(move || {
+        loop {
+            let snapshots = mixer_api::poll_mixer_channel_feedback(|snap| {
+                let (track_id, bus_id, is_master) = match &snap.target {
+                    MixerChannelTarget::Track(id) => (id.to_u32(), None, false),
+                    MixerChannelTarget::Bus(id) => (u32::MAX, Some(id.to_u32()), false),
+                    MixerChannelTarget::Master => (u32::MAX - 1, None, true),
+                };
+                UiMixerChannelSnapshot {
+                    track_id,
+                    bus_id,
+                    is_master,
+                    volume: snap.volume,
+                    pan: snap.pan,
+                    mute: snap.mute,
+                    solo: snap.solo,
+                    inverted_phase: snap.inverted_phase,
+                }
+            });
+
+            for snapshot in snapshots {
+                if sink.add(snapshot).is_err() {
+                    // Flutter closed the stream — exit cleanly
+                    return;
+                }
+            }
+
+            // ~60 fps poll rate, same as plugin parameter streams
+            std::thread::sleep(Duration::from_millis(16));
+        }
+    });
+
     Ok(())
 }
 
-/// Helper: push an event to the mixer sink (if connected).
-fn push_mixer_event(event: MixerParamEvent) {
-    if let Some(sink) = ctx().mixer_event_sink.lock().as_ref() {
-        sink(event);
-    }
+// ======================================
+// SETTERS — Command-Based (no AppState write)
+// ======================================
+
+/// Set a single DSP parameter on a mixer channel.
+/// Routes through the audio thread ring buffer; AppState is only updated on save.
+pub fn set_mixer_channel_param(target: UiMixerChannelTarget, param: UiMixerChannelParams) {
+    let core_target = MixerChannelTarget::from(&target);
+    let core_param = MixerChannelParams::from(&param);
+    mixer_api::set_mixer_channel_param(core_target, core_param);
+}
+
+/// Request a full snapshot of a mixer channel's current DSP state.
+/// Results arrive asynchronously via the `create_mixer_snapshot_stream` polling stream.
+pub fn query_mixer_channel(target: UiMixerChannelTarget) {
+    mixer_api::query_mixer_channel(MixerChannelTarget::from(&target));
 }
 
 // ======================================
@@ -382,80 +448,8 @@ pub fn get_master_channel_specs() -> Vec<ParameterSpecDTO> {
 }
 
 // ======================================
-// MIXER ACTIONS AND APIs
+// Effect Chain (structural — AppState backed)
 // ======================================
-
-pub fn set_master_bus_params(params: Vec<UiMixerChannelParams>) -> Result<(), String> {
-    let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
-    mixer_api::set_master_bus_params(&params_legit).map_err(|e| e.to_string())?;
-
-    // Push event to Flutter stream
-    let mut event = MixerParamEvent {
-        track_id: u32::MAX,
-        volume: None,
-        pan: None,
-        mute: None,
-        solo: None,
-    };
-    for p in &params {
-        match p {
-            UiMixerChannelParams::Volume(v) => {
-                event.volume = Some(*v);
-            }
-            UiMixerChannelParams::Pan(v) => {
-                event.pan = Some(*v);
-            }
-            UiMixerChannelParams::Mute(v) => {
-                event.mute = Some(*v);
-            }
-            UiMixerChannelParams::Solo(v) => {
-                event.solo = Some(*v);
-            }
-            _ => {}
-        }
-    }
-    push_mixer_event(event);
-
-    Ok(())
-}
-
-pub fn set_mixer_channel_params(
-    track_id: u32,
-    params: Vec<UiMixerChannelParams>,
-) -> Result<(), String> {
-    let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
-    mixer_api::set_mixer_channel_params(TrackId::from(track_id), &params_legit)
-        .map_err(|e| e.to_string())?;
-
-    // Push event to Flutter stream
-    let mut event = MixerParamEvent {
-        track_id,
-        volume: None,
-        pan: None,
-        mute: None,
-        solo: None,
-    };
-    for p in &params {
-        match p {
-            UiMixerChannelParams::Volume(v) => {
-                event.volume = Some(*v);
-            }
-            UiMixerChannelParams::Pan(v) => {
-                event.pan = Some(*v);
-            }
-            UiMixerChannelParams::Mute(v) => {
-                event.mute = Some(*v);
-            }
-            UiMixerChannelParams::Solo(v) => {
-                event.solo = Some(*v);
-            }
-            _ => {}
-        }
-    }
-    push_mixer_event(event);
-
-    Ok(())
-}
 
 /// Add an effect to a mixer channel by its registry ID (preferred method).
 pub fn add_effect_to_mixer_channel_by_id(track_id: u32, registry_id: u32) -> Result<(), String> {
@@ -519,12 +513,6 @@ pub fn create_bus(name: String) -> Result<u32, String> {
 /// Delete a mixer bus.
 pub fn delete_bus(bus_id: u32) -> Result<(), String> {
     mixer_api::delete_bus(BusId::from(bus_id)).map_err(|e| e.to_string())
-}
-
-/// Set bus channel parameters (volume, pan, mute).
-pub fn set_bus_params(bus_id: u32, params: Vec<UiMixerChannelParams>) -> Result<(), String> {
-    let params_legit: Vec<MixerChannelParams> = params.iter().map(|p| p.into()).collect();
-    mixer_api::set_bus_params(BusId::from(bus_id), &params_legit).map_err(|e| e.to_string())
 }
 
 // ======================================

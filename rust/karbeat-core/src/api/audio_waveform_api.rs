@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use crate::{
-    context::utils::broadcast_state_change,
+    context::utils::broadcast_full_graph,
     core::{
         file_manager::audio_loader::AudioLoader,
         project::{AudioSourceId, AudioWaveform, DawSource, TrackId, TrackType},
@@ -126,7 +126,7 @@ pub fn add_audio_source(file_path: &str) -> anyhow::Result<AudioSourceId> {
             }
         }
     };
-    broadcast_state_change();
+    broadcast_full_graph();
     Ok(id)
 }
 

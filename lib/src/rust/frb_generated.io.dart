@@ -4,7 +4,9 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api/audio.dart';
+import 'api/automation.dart';
 import 'api/mixer.dart';
+import 'api/monitor.dart';
 import 'api/pattern.dart';
 import 'api/plugin.dart';
 import 'api/plugins/opaque.dart';
@@ -13,6 +15,7 @@ import 'api/serialization.dart';
 import 'api/session.dart';
 import 'api/track.dart';
 import 'api/transport.dart';
+import 'api/utils.dart';
 import 'api/waveform.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -131,6 +134,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_Map_u_32_audio_waveform_ui_for_source_list_None(dynamic raw);
 
   @protected
+  Map<int, AutomationLaneDto> dco_decode_Map_u_32_automation_lane_dto_None(
+    dynamic raw,
+  );
+
+  @protected
+  Map<int, ModulationLinkDto> dco_decode_Map_u_32_modulation_link_dto_None(
+    dynamic raw,
+  );
+
+  @protected
   Map<int, UiBus> dco_decode_Map_u_32_ui_bus_None(dynamic raw);
 
   @protected
@@ -183,8 +196,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustStreamSink<double> dco_decode_StreamSink_f_32_Sse(dynamic raw);
 
   @protected
-  RustStreamSink<UiMixerParamEvent>
-  dco_decode_StreamSink_ui_mixer_param_event_Sse(dynamic raw);
+  RustStreamSink<PerformanceMetricsDTO>
+  dco_decode_StreamSink_performance_metrics_dto_Sse(dynamic raw);
+
+  @protected
+  RustStreamSink<UiMixerChannelSnapshot>
+  dco_decode_StreamSink_ui_mixer_channel_snapshot_Sse(dynamic raw);
 
   @protected
   RustStreamSink<UiPluginCommandResponse>
@@ -208,6 +225,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AudioWaveformUiForSourceList dco_decode_audio_waveform_ui_for_source_list(
     dynamic raw,
   );
+
+  @protected
+  AutomationCurveTypeDto dco_decode_automation_curve_type_dto(dynamic raw);
+
+  @protected
+  AutomationLaneDto dco_decode_automation_lane_dto(dynamic raw);
+
+  @protected
+  AutomationPointDto dco_decode_automation_point_dto(dynamic raw);
+
+  @protected
+  AutomationTargetDto dco_decode_automation_target_dto(dynamic raw);
 
   @protected
   BitDepthDTO dco_decode_bit_depth_dto(dynamic raw);
@@ -239,10 +268,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AutomationTargetDto dco_decode_box_autoadd_automation_target_dto(dynamic raw);
+
+  @protected
   bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
+  EffectAutomationTargetDto dco_decode_box_autoadd_effect_automation_target_dto(
+    dynamic raw,
+  );
+
+  @protected
   double dco_decode_box_autoadd_f_32(dynamic raw);
+
+  @protected
+  MixerChannelParamTargetDto
+  dco_decode_box_autoadd_mixer_channel_param_target_dto(dynamic raw);
+
+  @protected
+  ModulationSourceDto dco_decode_box_autoadd_modulation_source_dto(dynamic raw);
 
   @protected
   Mp3ExportConfigDTO dco_decode_box_autoadd_mp_3_export_config_dto(dynamic raw);
@@ -252,6 +296,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   (int, int) dco_decode_box_autoadd_record_u_8_u_8(dynamic raw);
+
+  @protected
+  TrackAutomationTargetDto dco_decode_box_autoadd_track_automation_target_dto(
+    dynamic raw,
+  );
 
   @protected
   int dco_decode_box_autoadd_u_32(dynamic raw);
@@ -264,6 +313,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannel dco_decode_box_autoadd_ui_mixer_channel(dynamic raw);
+
+  @protected
+  UiMixerChannelParams dco_decode_box_autoadd_ui_mixer_channel_params(
+    dynamic raw,
+  );
+
+  @protected
+  UiMixerChannelTarget dco_decode_box_autoadd_ui_mixer_channel_target(
+    dynamic raw,
+  );
 
   @protected
   UiParamId dco_decode_box_autoadd_ui_param_id(dynamic raw);
@@ -279,6 +338,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw);
+
+  @protected
+  EffectAutomationTargetDto dco_decode_effect_automation_target_dto(
+    dynamic raw,
+  );
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -303,6 +367,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<AutomationPointDto> dco_decode_list_automation_point_dto(dynamic raw);
 
   @protected
   List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
@@ -330,6 +397,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, AutomationLaneDto)>
+  dco_decode_list_record_u_32_automation_lane_dto(dynamic raw);
+
+  @protected
   List<(int, int)> dco_decode_list_record_u_32_casted_primitive_u_64(
     dynamic raw,
   );
@@ -338,6 +409,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(int, int, int)> dco_decode_list_record_u_32_casted_primitive_u_64_u_8(
     dynamic raw,
   );
+
+  @protected
+  List<(int, ModulationLinkDto)>
+  dco_decode_list_record_u_32_modulation_link_dto(dynamic raw);
+
+  @protected
+  List<(int, int, AutomationLaneDto)>
+  dco_decode_list_record_u_32_u_32_automation_lane_dto(dynamic raw);
 
   @protected
   List<(int, UiBus)> dco_decode_list_record_u_32_ui_bus(dynamic raw);
@@ -382,11 +461,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_ui_generator_parameter_snapshot(dynamic raw);
 
   @protected
-  List<UiMixerChannelParams> dco_decode_list_ui_mixer_channel_params(
-    dynamic raw,
-  );
-
-  @protected
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
@@ -400,6 +474,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
+
+  @protected
+  MixerChannelParamTargetDto dco_decode_mixer_channel_param_target_dto(
+    dynamic raw,
+  );
+
+  @protected
+  ModulationLinkDto dco_decode_modulation_link_dto(dynamic raw);
+
+  @protected
+  ModulationSourceDto dco_decode_modulation_source_dto(dynamic raw);
 
   @protected
   Mp3ExportConfigDTO dco_decode_mp_3_export_config_dto(dynamic raw);
@@ -457,6 +542,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ParameterValueTypeDTO dco_decode_parameter_value_type_dto(dynamic raw);
 
   @protected
+  PerformanceMetricsDTO dco_decode_performance_metrics_dto(dynamic raw);
+
+  @protected
   PlaybackModeDto dco_decode_playback_mode_dto(dynamic raw);
 
   @protected
@@ -470,10 +558,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  (int, AutomationLaneDto) dco_decode_record_u_32_automation_lane_dto(
+    dynamic raw,
+  );
+
+  @protected
   (int, int) dco_decode_record_u_32_casted_primitive_u_64(dynamic raw);
 
   @protected
   (int, int, int) dco_decode_record_u_32_casted_primitive_u_64_u_8(dynamic raw);
+
+  @protected
+  (int, ModulationLinkDto) dco_decode_record_u_32_modulation_link_dto(
+    dynamic raw,
+  );
+
+  @protected
+  (int, int, AutomationLaneDto) dco_decode_record_u_32_u_32_automation_lane_dto(
+    dynamic raw,
+  );
 
   @protected
   (int, UiBus) dco_decode_record_u_32_ui_bus(dynamic raw);
@@ -507,6 +610,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TailHandlingDTO dco_decode_tail_handling_dto(dynamic raw);
+
+  @protected
+  TrackAutomationTargetDto dco_decode_track_automation_target_dto(dynamic raw);
 
   @protected
   int dco_decode_u_16(dynamic raw);
@@ -570,7 +676,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiMixerChannelParams dco_decode_ui_mixer_channel_params(dynamic raw);
 
   @protected
-  UiMixerParamEvent dco_decode_ui_mixer_param_event(dynamic raw);
+  UiMixerChannelSnapshot dco_decode_ui_mixer_channel_snapshot(dynamic raw);
+
+  @protected
+  UiMixerChannelTarget dco_decode_ui_mixer_channel_target(dynamic raw);
 
   @protected
   UiMixerState dco_decode_ui_mixer_state(dynamic raw);
@@ -729,6 +838,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Map<int, AutomationLaneDto> sse_decode_Map_u_32_automation_lane_dto_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Map<int, ModulationLinkDto> sse_decode_Map_u_32_modulation_link_dto_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Map<int, UiBus> sse_decode_Map_u_32_ui_bus_None(SseDeserializer deserializer);
 
   @protected
@@ -787,8 +906,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  RustStreamSink<UiMixerParamEvent>
-  sse_decode_StreamSink_ui_mixer_param_event_Sse(SseDeserializer deserializer);
+  RustStreamSink<PerformanceMetricsDTO>
+  sse_decode_StreamSink_performance_metrics_dto_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RustStreamSink<UiMixerChannelSnapshot>
+  sse_decode_StreamSink_ui_mixer_channel_snapshot_Sse(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RustStreamSink<UiPluginCommandResponse>
@@ -816,6 +943,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AudioWaveformUiForSourceList sse_decode_audio_waveform_ui_for_source_list(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AutomationCurveTypeDto sse_decode_automation_curve_type_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AutomationLaneDto sse_decode_automation_lane_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AutomationPointDto sse_decode_automation_point_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AutomationTargetDto sse_decode_automation_target_dto(
     SseDeserializer deserializer,
   );
 
@@ -849,10 +996,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  AutomationTargetDto sse_decode_box_autoadd_automation_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
+  EffectAutomationTargetDto sse_decode_box_autoadd_effect_automation_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  MixerChannelParamTargetDto
+  sse_decode_box_autoadd_mixer_channel_param_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ModulationSourceDto sse_decode_box_autoadd_modulation_source_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Mp3ExportConfigDTO sse_decode_box_autoadd_mp_3_export_config_dto(
@@ -870,6 +1038,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TrackAutomationTargetDto sse_decode_box_autoadd_track_automation_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
@@ -882,6 +1055,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiMixerChannel sse_decode_box_autoadd_ui_mixer_channel(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelParams sse_decode_box_autoadd_ui_mixer_channel_params(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelTarget sse_decode_box_autoadd_ui_mixer_channel_target(
     SseDeserializer deserializer,
   );
 
@@ -905,6 +1088,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  EffectAutomationTargetDto sse_decode_effect_automation_target_dto(
     SseDeserializer deserializer,
   );
 
@@ -933,6 +1121,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<AutomationPointDto> sse_decode_list_automation_point_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ParameterSpecDTO> sse_decode_list_parameter_spec_dto(
@@ -964,12 +1157,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(int, AutomationLaneDto)>
+  sse_decode_list_record_u_32_automation_lane_dto(SseDeserializer deserializer);
+
+  @protected
   List<(int, int)> sse_decode_list_record_u_32_casted_primitive_u_64(
     SseDeserializer deserializer,
   );
 
   @protected
   List<(int, int, int)> sse_decode_list_record_u_32_casted_primitive_u_64_u_8(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<(int, ModulationLinkDto)>
+  sse_decode_list_record_u_32_modulation_link_dto(SseDeserializer deserializer);
+
+  @protected
+  List<(int, int, AutomationLaneDto)>
+  sse_decode_list_record_u_32_u_32_automation_lane_dto(
     SseDeserializer deserializer,
   );
 
@@ -1028,11 +1235,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_list_ui_generator_parameter_snapshot(SseDeserializer deserializer);
 
   @protected
-  List<UiMixerChannelParams> sse_decode_list_ui_mixer_channel_params(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
@@ -1052,6 +1254,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiRoutingConnection> sse_decode_list_ui_routing_connection(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MixerChannelParamTargetDto sse_decode_mixer_channel_param_target_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ModulationLinkDto sse_decode_modulation_link_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ModulationSourceDto sse_decode_modulation_source_dto(
     SseDeserializer deserializer,
   );
 
@@ -1119,6 +1336,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PerformanceMetricsDTO sse_decode_performance_metrics_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlaybackModeDto sse_decode_playback_mode_dto(SseDeserializer deserializer);
 
   @protected
@@ -1134,12 +1356,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  (int, AutomationLaneDto) sse_decode_record_u_32_automation_lane_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, int) sse_decode_record_u_32_casted_primitive_u_64(
     SseDeserializer deserializer,
   );
 
   @protected
   (int, int, int) sse_decode_record_u_32_casted_primitive_u_64_u_8(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, ModulationLinkDto) sse_decode_record_u_32_modulation_link_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (int, int, AutomationLaneDto) sse_decode_record_u_32_u_32_automation_lane_dto(
     SseDeserializer deserializer,
   );
 
@@ -1181,6 +1418,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TailHandlingDTO sse_decode_tail_handling_dto(SseDeserializer deserializer);
+
+  @protected
+  TrackAutomationTargetDto sse_decode_track_automation_target_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_16(SseDeserializer deserializer);
@@ -1256,7 +1498,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  UiMixerParamEvent sse_decode_ui_mixer_param_event(
+  UiMixerChannelSnapshot sse_decode_ui_mixer_channel_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiMixerChannelTarget sse_decode_ui_mixer_channel_target(
     SseDeserializer deserializer,
   );
 
@@ -1445,6 +1692,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_Map_u_32_automation_lane_dto_None(
+    Map<int, AutomationLaneDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_u_32_modulation_link_dto_None(
+    Map<int, ModulationLinkDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_Map_u_32_ui_bus_None(
     Map<int, UiBus> self,
     SseSerializer serializer,
@@ -1516,8 +1775,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_StreamSink_ui_mixer_param_event_Sse(
-    RustStreamSink<UiMixerParamEvent> self,
+  void sse_encode_StreamSink_performance_metrics_dto_Sse(
+    RustStreamSink<PerformanceMetricsDTO> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_ui_mixer_channel_snapshot_Sse(
+    RustStreamSink<UiMixerChannelSnapshot> self,
     SseSerializer serializer,
   );
 
@@ -1555,6 +1820,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_automation_curve_type_dto(
+    AutomationCurveTypeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_automation_lane_dto(
+    AutomationLaneDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_automation_point_dto(
+    AutomationPointDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_automation_target_dto(
+    AutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bit_depth_dto(BitDepthDTO self, SseSerializer serializer);
 
   @protected
@@ -1588,10 +1877,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_automation_target_dto(
+    AutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_effect_automation_target_dto(
+    EffectAutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_mixer_channel_param_target_dto(
+    MixerChannelParamTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_modulation_source_dto(
+    ModulationSourceDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_mp_3_export_config_dto(
@@ -1612,6 +1925,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_track_automation_target_dto(
+    TrackAutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
@@ -1626,6 +1945,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_mixer_channel(
     UiMixerChannel self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_mixer_channel_params(
+    UiMixerChannelParams self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_mixer_channel_target(
+    UiMixerChannelTarget self,
     SseSerializer serializer,
   );
 
@@ -1660,6 +1991,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_effect_automation_target_dto(
+    EffectAutomationTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -1685,6 +2022,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_automation_point_dto(
+    List<AutomationPointDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_parameter_spec_dto(
@@ -1730,6 +2073,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_u_32_automation_lane_dto(
+    List<(int, AutomationLaneDto)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_casted_primitive_u_64(
     List<(int, int)> self,
     SseSerializer serializer,
@@ -1738,6 +2087,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_u_32_casted_primitive_u_64_u_8(
     List<(int, int, int)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_u_32_modulation_link_dto(
+    List<(int, ModulationLinkDto)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_record_u_32_u_32_automation_lane_dto(
+    List<(int, int, AutomationLaneDto)> self,
     SseSerializer serializer,
   );
 
@@ -1806,12 +2167,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_ui_mixer_channel_params(
-    List<UiMixerChannelParams> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
@@ -1835,6 +2190,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_routing_connection(
     List<UiRoutingConnection> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_mixer_channel_param_target_dto(
+    MixerChannelParamTargetDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_modulation_link_dto(
+    ModulationLinkDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_modulation_source_dto(
+    ModulationSourceDto self,
     SseSerializer serializer,
   );
 
@@ -1911,6 +2284,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_performance_metrics_dto(
+    PerformanceMetricsDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_playback_mode_dto(
     PlaybackModeDto self,
     SseSerializer serializer,
@@ -1930,6 +2309,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_u_32_automation_lane_dto(
+    (int, AutomationLaneDto) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_u_32_casted_primitive_u_64(
     (int, int) self,
     SseSerializer serializer,
@@ -1938,6 +2323,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_u_32_casted_primitive_u_64_u_8(
     (int, int, int) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_modulation_link_dto(
+    (int, ModulationLinkDto) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_u_32_u_32_automation_lane_dto(
+    (int, int, AutomationLaneDto) self,
     SseSerializer serializer,
   );
 
@@ -1989,6 +2386,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_tail_handling_dto(
     TailHandlingDTO self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_track_automation_target_dto(
+    TrackAutomationTargetDto self,
     SseSerializer serializer,
   );
 
@@ -2086,8 +2489,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_ui_mixer_param_event(
-    UiMixerParamEvent self,
+  void sse_encode_ui_mixer_channel_snapshot(
+    UiMixerChannelSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_mixer_channel_target(
+    UiMixerChannelTarget self,
     SseSerializer serializer,
   );
 

@@ -78,7 +78,7 @@ class DawFloatParam extends StatelessWidget {
               max: max,
               step: step,
               onChanged: onChanged,
-              onAddAutomation: () {
+              onAddAutomation: () async {
                 // TODO: Wire up automation lane creation using paramId
                 debugPrint("Create automation for $name ($paramId)");
               },

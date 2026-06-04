@@ -445,6 +445,23 @@ impl From<UiPluginTarget> for PluginTarget {
     }
 }
 
+impl From<&PluginTarget> for UiPluginTarget {
+    fn from(value: &PluginTarget) -> Self {
+        match value {
+            PluginTarget::Generator(generator_id) => Self::Generator(generator_id.to_u32()),
+            PluginTarget::TrackEffect(track_id, effect_id) => Self::TrackEffect {
+                track_id: track_id.to_u32(),
+                effect_id: effect_id.to_u32(),
+            },
+            PluginTarget::BusEffect(bus_id, effect_id) => Self::BusEffect {
+                bus_id: bus_id.to_u32(),
+                effect_id: effect_id.to_u32(),
+            },
+            PluginTarget::MasterEffect(effect_id) => Self::MasterEffect(effect_id.to_u32()),
+        }
+    }
+}
+
 /// A response message arriving from the audio thread to Flutter.
 /// Flutter uses the `request_id` to correlate with the original command sent
 /// via `execute_realtime_plugin_command`.

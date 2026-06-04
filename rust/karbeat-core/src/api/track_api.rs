@@ -1,4 +1,4 @@
-use crate::context::utils::broadcast_state_change;
+use crate::context::utils::broadcast_track_graph;
 use crate::core::project::track::RemovedTrackType;
 use crate::core::project::AudioTrack;
 use crate::lock::{get_app_read, get_app_write};
@@ -23,7 +23,7 @@ pub fn add_midi_track_with_generator_id(registry_id: u32) -> anyhow::Result<Arc<
         let mut app = get_app_write();
         app.add_new_midi_track_with_generator_id(registry_id)
     };
-    broadcast_state_change();
+    broadcast_track_graph();
     res
 }
 
@@ -40,7 +40,7 @@ pub fn change_track_name(track_id: TrackId, new_name: &str) -> anyhow::Result<()
         let track = Arc::make_mut(track_arc);
         track.name = new_name.to_string();
     }
-    broadcast_state_change();
+    // Track name does not affect audio DSP — no engine notification needed.
     Ok(())
 }
 
@@ -56,7 +56,7 @@ pub fn change_track_color(track_id: TrackId, new_color: &str) -> anyhow::Result<
             anyhow::anyhow!("Invalid color format. Use hex string like #RRGGBB or #RRGGBBAA")
         })?;
     }
-    broadcast_state_change();
+    // Track color does not affect audio DSP — no engine notification needed.
     Ok(())
 }
 
@@ -65,7 +65,7 @@ pub fn add_new_audio_track() -> Arc<AudioTrack> {
         let mut app = get_app_write();
         app.add_new_audio_track()
     };
-    broadcast_state_change();
+    broadcast_track_graph();
     arc_track
 }
 
@@ -82,11 +82,36 @@ where
         .collect())
 }
 
+/// Get tracks ordered by index (For UI)
+pub fn get_tracks_ordered<C, U, M>(mapper: M) -> anyhow::Result<C>
+where
+    M: Fn(u32, &AudioTrack) -> U,
+    C: FromIterator<U>,
+{
+    let app = get_app_read();
+    Ok(app
+        .get_track_ordered_by_index()
+        .iter()
+        .map(|t| mapper(t.id.into(), t.as_ref()))
+        .collect())
+}
+
 pub fn delete_track(track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
     let deleted_track_type = {
         let mut app = get_app_write();
         app.remove_track(track_id)?
     };
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(deleted_track_type)
+}
+
+/// Update track order
+pub fn update_track_order(track_id: TrackId, new_idx: usize) -> anyhow::Result<()> {
+    {
+        let mut app = get_app_write();
+        app.update_track_order(track_id, new_idx)?;
+    }
+
+    // broadcast_state_change();
+    Ok(())
 }

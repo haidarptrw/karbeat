@@ -137,6 +137,13 @@ Future<void> changeTrackColor({
 Future<String> deleteTrack({required int trackId}) =>
     RustLib.instance.api.crateApiTrackDeleteTrack(trackId: trackId);
 
+/// Update track order in the timeline
+Future<void> updateTrackOrder({required int trackId, required int newIdx}) =>
+    RustLib.instance.api.crateApiTrackUpdateTrackOrder(
+      trackId: trackId,
+      newIdx: newIdx,
+    );
+
 enum UiResizeEdge { left, right }
 
 enum UiSourceType { audio, midi }

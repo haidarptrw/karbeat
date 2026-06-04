@@ -7,11 +7,10 @@
 use karbeat_dsp::interpolation::lerp;
 use serde::{Deserialize, Serialize};
 
-use crate::shared::id::{AutomationId, BusId, EffectId, TrackId};
-
-// ============================================================================
-// IDs
-// ============================================================================
+use crate::shared::{
+    id::{AutomationId, BusId, EffectId, TrackId},
+    types::FractionF32,
+};
 
 // ============================================================================
 // AUTOMATION TARGET
@@ -23,50 +22,67 @@ use crate::shared::id::{AutomationId, BusId, EffectId, TrackId};
 /// generator, or effect slot).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum AutomationTarget {
-    /// A parameter on the track's generator plugin
-    TrackGeneratorPluginParam {
+    Track {
         track_id: TrackId,
-        param_id: u32,
+        track_target: TrackAutomationTarget,
     },
 
-    // Track Targets
-    TrackVolume(TrackId),
-    TrackPan(TrackId),
-    TrackPluginParam {
-        track_id: TrackId,
-        effect_id: EffectId,
-        param_id: u32,
-    },
-
-    // Bus Targets
-    BusVolume(BusId),
-    BusPan(BusId),
-    BusPluginParam {
+    Bus {
         bus_id: BusId,
-        effect_id: EffectId,
-        param_id: u32,
+        mix_target: MixerChannelParamTarget,
     },
 
-    // Master Targets
-    MasterVolume,
-    MasterPan,
-    MasterPluginParam {
-        effect_id: EffectId,
-        param_id: u32,
-    },
+    Master(MixerChannelParamTarget),
 
     // Global Targets
     TempoBpm,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum TrackAutomationTarget {
+    Generator { param_id: u32 },
+    MixerChannel(MixerChannelParamTarget),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum MixerChannelParamTarget {
+    Volume,
+    Pan,
+    Plugin {
+        effect_id: EffectId,
+        target: EffectAutomationTarget,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum EffectAutomationTarget {
+    Mix, // NOTE: This is unused for a moment. might use it later
+    PluginParam { param_id: u32 },
 }
 
 impl AutomationTarget {
     /// Returns true if this target references the given track ID.
     pub fn references_track(&self, id: TrackId) -> bool {
         match self {
-            AutomationTarget::TrackGeneratorPluginParam { track_id, .. }
-            | AutomationTarget::TrackVolume(track_id)
-            | AutomationTarget::TrackPan(track_id)
-            | AutomationTarget::TrackPluginParam { track_id, .. } => *track_id == id,
+            AutomationTarget::Track { track_id, .. } => *track_id == id,
+            _ => false,
+        }
+    }
+
+    /// Checks if this automation target references a specific Bus.
+    pub fn references_bus(&self, target_bus_id: BusId) -> bool {
+        match self {
+            AutomationTarget::Bus { bus_id, .. } => *bus_id == target_bus_id,
+            _ => false,
+        }
+    }
+    /// Checks if two targets belong in the same UI accordion/drawer
+    pub fn belongs_to_same_drawer_as(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Track { track_id: id1, .. }, Self::Track { track_id: id2, .. }) => id1 == id2,
+            (Self::Bus { bus_id: id1, .. }, Self::Bus { bus_id: id2, .. }) => id1 == id2,
+            (Self::Master(_), Self::Master(_)) => true,
+            (Self::TempoBpm, Self::TempoBpm) => true,
             _ => false,
         }
     }
@@ -77,7 +93,7 @@ impl AutomationTarget {
 
 /// Interpolation curve type between automation points
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub enum CurveType {
+pub enum AutomationCurveType {
     /// Linear interpolation between points
     #[default]
     Linear,
@@ -95,14 +111,17 @@ pub enum CurveType {
 ///
 /// Values are stored in normalized form (0.0–1.0). The lane's `min`/`max`
 /// fields define the mapping to the actual parameter range.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default)]
 pub struct AutomationPoint {
     /// Position in ticks (relative to project start)
     pub time_ticks: u32,
     /// Normalized parameter value (0.0–1.0)
     pub value: f32,
     /// Interpolation curve to the NEXT point
-    pub curve_type: CurveType,
+    pub curve_type: AutomationCurveType,
+
+    pub tension: FractionF32,
 }
 
 impl AutomationPoint {
@@ -110,15 +129,23 @@ impl AutomationPoint {
         Self {
             time_ticks,
             value: value.clamp(0.0, 1.0),
-            curve_type: CurveType::Linear,
+            curve_type: AutomationCurveType::Linear,
+            tension: 0.0.into(),
         }
     }
 
-    pub fn with_curve(time_ticks: u32, value: f32, curve_type: CurveType) -> Self {
+    pub fn with_curve(
+        time_ticks: u32,
+        value: f32,
+        curve_type: AutomationCurveType,
+        min: f32,
+        max: f32,
+    ) -> Self {
         Self {
             time_ticks,
-            value: value.clamp(0.0, 1.0),
+            value: value.clamp(min, max),
             curve_type,
+            tension: 0.0.into(),
         }
     }
 }
@@ -130,12 +157,10 @@ impl AutomationPoint {
 /// An automation lane that controls a single parameter.
 ///
 /// Lives in `ApplicationState::automation_pool` and is serialized with the project.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default,)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
 #[serde(default)]
 pub struct AutomationLane {
     pub id: AutomationId,
-    /// What this lane controls
-    pub target: Option<AutomationTarget>,
     /// Human-readable label (e.g. "Volume", "Filter Cutoff")w
     pub label: String,
     /// Automation points sorted by time
@@ -154,7 +179,6 @@ impl AutomationLane {
     /// Create a new empty automation lane for the given target on the given track.
     pub fn new(
         id: AutomationId,
-        target: AutomationTarget,
         label: impl Into<String>,
         min: f32,
         max: f32,
@@ -162,7 +186,6 @@ impl AutomationLane {
     ) -> Self {
         Self {
             id,
-            target: Some(target),
             label: label.into(),
             points: Vec::new(),
             enabled: true,
@@ -191,7 +214,13 @@ impl AutomationLane {
     }
 
     /// Update a point at the given index.
-    pub fn update_point(&mut self, index: usize, time_ticks: u32, value: f32) -> Option<usize> {
+    pub fn update_point(
+        &mut self,
+        index: usize,
+        time_ticks: u32,
+        value: f32,
+        tension: f32,
+    ) -> Option<usize> {
         if index >= self.points.len() {
             return None;
         }
@@ -200,6 +229,7 @@ impl AutomationLane {
 
         point.time_ticks = time_ticks;
         point.value = value;
+        point.tension = tension.into();
 
         let new_index = match self
             .points
@@ -252,20 +282,35 @@ impl AutomationLane {
         }
 
         let t = ((time_ticks - p1.time_ticks) as f32) / (duration as f32);
+        let tension = p1.tension.get();
 
         // Interpolate based on curve type of the FIRST point
         let value = match p1.curve_type {
-            CurveType::Linear => lerp(t, p1.value, p2.value),
-            CurveType::Exponential => {
-                // Exponential interpolation (good for frequency/volume)
-                // Avoid log(0) by clamping
-                let v1 = p1.value.max(0.0001);
-                let v2 = p2.value.max(0.0001);
-                v1 * (v2 / v1).powf(t)
+            AutomationCurveType::Linear => {
+                // Apply a cubic ease via tension-weighted Hermite tangents.
+                // tension = 0  → linear (t)
+                // tension < 0  → ease-in  (slow start, fast end)
+                // tension > 0  → ease-out (fast start, slow end)
+                let t_shaped = apply_tension_to_t(t, tension);
+                lerp(t_shaped, p1.value, p2.value)
             }
-            CurveType::Step => {
-                // Step: use p1's value until we reach p2
-                p1.value
+            AutomationCurveType::Exponential => {
+                // Bias the exponent so tension shifts the curve's inflection.
+                // tension = 0  → standard (v1 * (v2/v1)^t)
+                // tension < 0  → exponent biased toward a steeper early rise
+                // tension > 0  → exponent biased toward a steeper late rise
+                let v1 = p1.value.max(1e-4);
+                let v2 = p2.value.max(1e-4);
+                let t_biased = apply_tension_to_t(t, -tension); // inverted: feels natural
+                v1 * (v2 / v1).powf(t_biased)
+            }
+            AutomationCurveType::Step => {
+                let jump_at = 0.5 + tension * 0.5; // maps [-1,1] → [0,1]
+                if t < jump_at {
+                    p1.value
+                } else {
+                    p2.value
+                }
             }
         };
 
@@ -296,11 +341,27 @@ impl AutomationLane {
     }
 }
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-// #[inline]
-// fn lerp(a: f32, b: f32, t: f32) -> f32 {
-//     a + (b - a) * t
-// }
+// Maps a linear t ∈ [0,1] through a tension-controlled cubic ease.
+///
+/// Uses a smoothstep-family blend:
+///   tension = 0  → identity (t)
+///   tension < 0  → ease-in  (t² weighted)
+///   tension > 0  → ease-out (√t weighted)
+///
+/// The blend is continuous and always passes through (0,0) and (1,1).
+fn apply_tension_to_t(t: f32, tension: f32) -> f32 {
+    if tension == 0.0 {
+        return t;
+    }
+    // smoothstep gives ease-in-out; t^2 gives ease-in; sqrt(t) gives ease-out.
+    // Blend from identity toward the appropriate end based on sign.
+    if tension < 0.0 {
+        // ease-in: blend toward t²
+        let alpha = -tension; // 0..1
+        lerp(alpha, t, t * t)
+    } else {
+        // ease-out: blend toward √t
+        let alpha = tension; // 0..1
+        lerp(alpha, t, t.sqrt())
+    }
+}

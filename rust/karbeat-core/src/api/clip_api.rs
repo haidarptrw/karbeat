@@ -1,4 +1,4 @@
-use crate::context::utils::broadcast_state_change;
+use crate::context::utils::broadcast_track_graph;
 use crate::core::history::ProjectAction;
 use crate::core::project::clip::{Clip, ClipSourceType, ResizeEdge};
 use crate::lock::{get_app_read, get_app_write, get_history_lock};
@@ -44,7 +44,7 @@ pub fn add_clip(
         });
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
 
     Ok(clip)
 }
@@ -65,7 +65,7 @@ pub fn delete_clip(track_id: TrackId, clip_id: ClipId) -> anyhow::Result<Arc<Cli
         });
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
 
     Ok(deleted_clip)
 }
@@ -102,7 +102,7 @@ pub fn move_clip(
         });
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
 
     Ok(modified_clip)
 }
@@ -136,7 +136,7 @@ pub fn resize_clip(
             new_clip: modified_clip.clone(),
         });
     }
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(modified_clip)
 }
 
@@ -177,7 +177,7 @@ pub fn slice_clip(
             },
         ]));
     }
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok((c1, c2))
 }
 
@@ -206,7 +206,7 @@ pub fn batch_delete_clips(track_id: TrackId, clip_ids: Vec<ClipId>) -> anyhow::R
             history.push(ProjectAction::Batch(deleted_actions));
         }
     }
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(())
 }
 
@@ -254,7 +254,7 @@ pub fn batch_move_clips(
             }
         }
     }
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(modified_clips)
 }
 
@@ -300,6 +300,6 @@ pub fn batch_resize_clips(
             }
         }
     }
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(modified_clips)
 }

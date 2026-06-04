@@ -1,7 +1,6 @@
 use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
-use parking_lot::Mutex;
 
 use crate::{
     audio::event::PluginTarget,
@@ -95,7 +94,11 @@ where
 
     let channel = app.mixer.channels.get(track_id)?;
 
-    let effect = channel.effects.iter().find(|e| e.id == *effect_id)?;
+    let effect = channel
+        .channel
+        .effects
+        .iter()
+        .find(|e| e.id == *effect_id)?;
 
     Some(mapper(effect))
 }
@@ -122,7 +125,7 @@ where
 
     let channel = app.mixer.channels.get(track_id)?;
 
-    Some(channel.effects.iter().map(mapper).collect())
+    Some(channel.channel.effects.iter().map(mapper).collect())
 }
 
 pub fn get_master_effects<C, U, M>(mapper: M) -> C
@@ -201,6 +204,7 @@ where
                 .get(track_id)
                 .ok_or_else(|| format!("Track channel {} not found", track_id.0))?;
             let effect = channel
+                .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
@@ -373,6 +377,7 @@ pub fn execute_effect_instance_command(
                 .get(track_id)
                 .ok_or_else(|| format!("Track channel {} not found", track_id.0))?;
             let effect = channel
+                .channel
                 .effects
                 .iter()
                 .find(|e| e.id == *effect_id)
@@ -474,8 +479,6 @@ pub fn execute_generator_instance_command(
         .ok_or_else(|| format!("Command '{}' not supported by '{}'", command, plugin_name))
 }
 
-static PENDING_FEEDBACK: Mutex<Vec<AudioFeedback>> = Mutex::new(Vec::new());
-
 // ============================================================================
 // Real-time Plugin Command Channel
 // ============================================================================
@@ -536,7 +539,7 @@ where
     F: FnMut(u32, serde_json::Value) -> T,
 {
     let mut results = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain the live feedback consumer into the shared pending buffer first
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
@@ -567,7 +570,7 @@ where
     F: FnMut(GeneratorId, Vec<(u32, f32)>) -> T,
 {
     let mut snapshots = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain context queues
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
@@ -599,7 +602,7 @@ where
     F: FnMut(EffectTarget, EffectId, Vec<(u32, f32)>) -> T,
 {
     let mut snapshots = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain context queues
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {
@@ -677,7 +680,7 @@ where
     F: FnMut(u32, Option<ZeroCopyBuffer>) -> T,
 {
     let mut results = Vec::new();
-    let mut pending = PENDING_FEEDBACK.lock();
+    let mut pending = ctx().pending_feedback.lock();
 
     // Drain the live feedback consumer into the shared pending buffer first
     if let Some(consumer) = ctx().feedback_consumer.lock().as_mut() {

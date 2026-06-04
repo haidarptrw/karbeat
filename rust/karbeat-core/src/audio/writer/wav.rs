@@ -1,5 +1,4 @@
-
-use super::{WavAudioWriterConfig, AudioWriter, BitDepth};
+use super::{AudioWriter, BitDepth, WavAudioWriterConfig};
 use anyhow::{Context, Result};
 use hound::{SampleFormat, WavSpec, WavWriter};
 use std::{fs::File, io::BufWriter, path::Path};

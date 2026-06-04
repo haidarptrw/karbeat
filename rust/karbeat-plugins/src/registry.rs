@@ -5,6 +5,7 @@ use karbeat_plugin_types::ParameterSpec;
 
 // use crate::effect::compressor::create_compressor;
 use karbeat_plugin_api::traits::{AudioPlugin, AudioPluginBuilder};
+use karbeat_utils::hash::hash_str;
 
 use crate::{
     effect::parametric_eq::DigiParametricEQ,
@@ -43,10 +44,10 @@ pub struct PluginRegistry {
     generators: HashMap<u32, RegisteredGenerator>,
     /// Effects stored by ID
     effects: HashMap<u32, RegisteredEffect>,
-    /// Counter for assigning generator IDs
-    generator_id_counter: u32,
-    /// Counter for assigning effect IDs
-    effect_id_counter: u32,
+    // /// Counter for assigning generator IDs
+    // generator_id_counter: u32,
+    // /// Counter for assigning effect IDs
+    // effect_id_counter: u32,
 }
 
 impl PluginRegistry {
@@ -54,8 +55,8 @@ impl PluginRegistry {
         Self {
             generators: HashMap::new(),
             effects: HashMap::new(),
-            generator_id_counter: 0,
-            effect_id_counter: 0,
+            // generator_id_counter: 0,
+            // effect_id_counter: 0,
         }
     }
 
@@ -64,23 +65,26 @@ impl PluginRegistry {
         let mut registry = Self::new();
 
         // Karbeatzer V2 - our main synth
-        registry.register_generator("Karbeatzer V2", || Box::new(KarbeatzerV2::build()));
-        registry.register_generator("My Retro", || Box::new(MyRetro::build()));
+        registry.register_generator("synth_karbeatzer_v2", "Karbeatzer V2", || {
+            Box::new(KarbeatzerV2::build())
+        });
+        registry.register_generator("synth_my_retro", "My Retro", || Box::new(MyRetro::build()));
 
         // Parametric EQ
-        registry.register_effect("Parametric EQ", || Box::new(DigiParametricEQ::build()));
+        registry.register_effect("effect_param_eq", "Parametric EQ", || {
+            Box::new(DigiParametricEQ::build())
+        });
 
         registry
     }
 
     /// Register a new generator/synth plugin factory.
     /// Returns the assigned registry ID.
-    pub fn register_generator<F>(&mut self, name: &str, factory: F) -> u32
+    pub fn register_generator<F>(&mut self, id_str: &str, name: &str, factory: F) -> u32
     where
         F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
     {
-        let id = self.generator_id_counter;
-        self.generator_id_counter += 1;
+        let id = hash_str(id_str);
 
         let temp_plugin = factory();
         let parameter_specs = temp_plugin.get_parameter_specs();
@@ -98,12 +102,11 @@ impl PluginRegistry {
 
     /// Register a new effect plugin factory.
     /// Returns the assigned registry ID.
-    pub fn register_effect<F>(&mut self, name: &str, factory: F) -> u32
+    pub fn register_effect<F>(&mut self, id_str: &str, name: &str, factory: F) -> u32
     where
         F: Fn() -> Box<dyn AudioPlugin + Send + Sync> + Send + Sync + 'static,
     {
-        let id = self.effect_id_counter;
-        self.effect_id_counter += 1;
+        let id = hash_str(id_str);
 
         let temp_plugin = factory();
         let parameter_specs = temp_plugin.get_parameter_specs();
@@ -158,6 +161,23 @@ impl PluginRegistry {
 
     /// Get cached parameter specs for an effect by registry ID
     pub fn get_effect_parameter_specs_by_id(&self, id: u32) -> Option<Vec<ParameterSpec>> {
+        self.effects.get(&id).map(|reg| reg.parameter_specs.clone())
+    }
+
+    /// Get cached parameter specs for a generator by registry ID from string
+    pub fn get_generator_parameter_specs_by_id_str(
+        &self,
+        id_str: &str,
+    ) -> Option<Vec<ParameterSpec>> {
+        let id = hash_str(id_str);
+        self.generators
+            .get(&id)
+            .map(|reg| reg.parameter_specs.clone())
+    }
+
+    /// Get cached parameter specs for an effect by registry ID from string
+    pub fn get_effect_parameter_specs_by_id_str(&self, id_str: &str) -> Option<Vec<ParameterSpec>> {
+        let id = hash_str(id_str);
         self.effects.get(&id).map(|reg| reg.parameter_specs.clone())
     }
 
@@ -242,6 +262,18 @@ impl PluginRegistry {
 
     /// Get an effect's name by its ID
     pub fn get_effect_name(&self, id: u32) -> Option<String> {
+        self.effects.get(&id).map(|reg| reg.name.clone())
+    }
+
+    /// Get a generator's name by its ID
+    pub fn get_generator_name_from_id_str(&self, id_str: &str) -> Option<String> {
+        let id = hash_str(id_str);
+        self.generators.get(&id).map(|reg| reg.name.clone())
+    }
+
+    /// Get an effect's name by its ID
+    pub fn get_effect_name_from_id_str(&self, id_str: &str) -> Option<String> {
+        let id = hash_str(id_str);
         self.effects.get(&id).map(|reg| reg.name.clone())
     }
 }

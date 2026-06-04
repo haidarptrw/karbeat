@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_material_design_icons/flutter_material_design_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/features/components/fine_grained_input.dart';
+import 'package:karbeat/features/components/performance_monitor.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/state/app_state.dart';
@@ -13,10 +14,12 @@ import 'package:karbeat/utils/scroll_behavior.dart';
 class ControlPanel extends StatelessWidget {
   final List<Widget> items;
   final Color backgroundColor;
+  final double height; // <--- ADDED: Explicit height boundary
 
   const ControlPanel({
     super.key,
     required this.items,
+    required this.height,
     this.backgroundColor = const Color(0xFF1E1E1E),
   });
 
@@ -24,6 +27,7 @@ class ControlPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
+      height: height, // <--- ADDED: Enforces height for the ScrollView
       decoration: BoxDecoration(
         color: backgroundColor,
         border: Border(bottom: BorderSide(color: Colors.grey.shade800)),
@@ -41,7 +45,7 @@ class ControlPanel extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min, // Takes minimum space needed
+              mainAxisSize: MainAxisSize.min,
               children: items,
             ),
           ),
@@ -59,7 +63,7 @@ class ControlPanelBuilder {
   }
 
   void addSpacer() {
-    _items.add(const SizedBox(width: 16)); // Visual gap
+    _items.add(const SizedBox(width: 16));
   }
 
   void addDivider() {
@@ -77,8 +81,9 @@ class ControlPanelBuilder {
     _items.add(widget);
   }
 
-  ControlPanel build() {
-    return ControlPanel(items: _items);
+  // <--- ADDED: Require height when building
+  ControlPanel build({required double height}) {
+    return ControlPanel(items: _items, height: height);
   }
 }
 
@@ -148,7 +153,6 @@ class ControlPanelToolbarItem extends StatelessWidget {
   }
 }
 
-/// A space-saving dropdown version of the ControlPanelToolbarItem
 class ControlPanelDropdown<T> extends StatelessWidget {
   final String name;
   final IconData icon;
@@ -175,7 +179,7 @@ class ControlPanelDropdown<T> extends StatelessWidget {
 
     return PopupMenuButton<T>(
       tooltip: name,
-      color: const Color(0xFF2A2A2A), // Dark popup background to match theme
+      color: const Color(0xFF2A2A2A),
       elevation: 8,
       position: PopupMenuPosition.under,
       onSelected: onSelected,
@@ -217,6 +221,12 @@ class DefaultControlPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(globalStateProvider);
     final builder = ControlPanelBuilder();
+
+    // 0. Pre-calculate layout constraints for the entire panel
+    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
+    final double itemHeight = isSmallScreen ? 40.0 : 50.0;
+    final double panelHeight =
+        itemHeight + 12.0; // Panel height with 6px padding top/bottom
 
     // 1. Screen Navigation Dropdown
     builder.addItem(
@@ -273,7 +283,6 @@ class DefaultControlPanel extends ConsumerWidget {
             stream: ref.read(globalStateProvider).positionStream,
             builder: (context, asyncSnapshot) {
               final pos = asyncSnapshot.data;
-
               final isSongPlaying =
                   pos != null && pos.isPlaying && !pos.isPatternMode;
 
@@ -345,6 +354,13 @@ class DefaultControlPanel extends ConsumerWidget {
 
     // 3. Info Display
     builder.addWidget(_buildInfoDisplay(context, ref));
+
+    builder.addDivider();
+
+    // AspectRatio bounds constraint injection!
+    builder.addWidget(
+      SizedBox(height: itemHeight, child: const DawPerformanceMonitor()),
+    );
 
     builder.addDivider();
 
@@ -421,7 +437,8 @@ class DefaultControlPanel extends ConsumerWidget {
       ),
     );
 
-    return builder.build();
+    // Build the panel utilizing the explicit height constraint
+    return builder.build(height: panelHeight);
   }
 
   // Helpers to dynamically display the currently selected View

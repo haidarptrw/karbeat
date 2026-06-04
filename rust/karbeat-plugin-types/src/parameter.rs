@@ -354,7 +354,10 @@ impl<T: ParamType> Param<T> {
                 ParamBounds::Toggle => 1.0,
                 ParamBounds::Choice { count, .. } => count.saturating_sub(1) as f64,
             },
-            default_value: self.base_value.to_f64(),
+            // Use the immutable factory default, not the current base_value.
+            // This ensures the UI "reset to default" always resets to the
+            // originally defined parameter default (e.g. 0 dB for volume).
+            default_value: self.default_value.to_f64(),
             step: match &self.bounds {
                 ParamBounds::Continuous { step, .. } => step.to_f64(),
                 ParamBounds::Discrete { step, .. } => step.to_f64(),

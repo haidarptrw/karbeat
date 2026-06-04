@@ -114,6 +114,7 @@ pub struct UiTrack {
     pub track_type: UiTrackType,
     pub clips: Vec<UiClip>,
     pub generator_id: Option<u32>,
+    pub order_idx: usize,
 }
 
 #[derive(Clone, Default)]
@@ -219,6 +220,7 @@ impl From<&AudioTrack> for UiTrack {
                 .map(|c| UiClip::from(c.deref()))
                 .collect(),
             generator_id,
+            order_idx: value.order_idx,
         }
     }
 }
@@ -496,7 +498,7 @@ pub struct WavExportConfigDTO {
 pub struct Mp3ExportConfigDTO {
     pub sample_rate: u32,
     pub channels: u8,
-    pub bit_rate: BitDepthDTO, 
+    pub bit_rate: BitDepthDTO,
 }
 
 #[derive(Clone)]
@@ -551,7 +553,7 @@ pub fn add_new_audio_track() -> UiTrack {
 ///
 /// Returns Map<u32, UiTrack> upon success, and Error when it fails
 pub fn get_tracks() -> Result<HashMap<u32, UiTrack>, String> {
-    track_api::get_tracks(|id, track| (id, UiTrack::from(track))).map_err(|e| e.to_string())
+    track_api::get_tracks_ordered(|id, track| (id, UiTrack::from(track))).map_err(|e| e.to_string())
 }
 
 /// Get the newest max sample index of the project
@@ -582,7 +584,6 @@ pub fn export_project_flutter(
             let bit_depth: BitDepth = mp3_dto.bit_rate.try_into()?;
             let sample_rate = mp3_dto.sample_rate;
             let channels = mp3_dto.channels;
-            
 
             AudioExportConfig::Mp3 {
                 sample_rate,

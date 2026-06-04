@@ -119,8 +119,8 @@ class SourceListScreen extends ConsumerWidget {
                     final registryId = availableGenerators
                         .firstWhere((p) => p.id == genInstance?.registryId)
                         .id;
-                    final builder = SynthRegistry.getSynthBuilder(registryId);
-                    screen = builder(id);
+                    // final builder = SynthRegistry.getSynthBuilder(registryId);
+                    screen = SynthRegistry.getScreen(registryId: registryId, instanceId: id);
                   } catch (_) {
                     screen = DynamicPluginScreen(
                       generatorId: id,

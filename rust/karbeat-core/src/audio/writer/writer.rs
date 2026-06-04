@@ -2,7 +2,10 @@ use anyhow::{anyhow, Result};
 use derive_builder::Builder;
 use std::{error::Error, path::Path};
 
-use crate::audio::writer::{mp3::{Mp3AudioWriter, Mp3AudioWriterConfig}, wav};
+use crate::audio::writer::{
+    mp3::{Mp3AudioWriter, Mp3AudioWriterConfig},
+    wav,
+};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u16)]
@@ -63,7 +66,11 @@ impl BitPerSecond {
 /// Unified configuration payload for any supported audio exporter
 pub enum AudioExportConfig {
     Wav(WavAudioWriterConfig),
-    Mp3 {sample_rate: u32, channels: u8, bit_depth: BitDepth},
+    Mp3 {
+        sample_rate: u32,
+        channels: u8,
+        bit_depth: BitDepth,
+    },
     // Flac(FlacAudioWriterConfig),
     // Ogg(OggAudioWriterConfig),
 }
@@ -81,7 +88,7 @@ impl AudioExportConfig {
     pub fn channels(&self) -> u16 {
         match self {
             Self::Wav(config) => config.channels,
-            Self::Mp3{ channels, .. }=> *channels as u16,
+            Self::Mp3 { channels, .. } => *channels as u16,
         }
     }
 }
@@ -159,12 +166,16 @@ impl AudioWriter for Box<dyn AudioWriter> {
 
 /// Factory function to create the appropriate writer based on file extension
 pub fn create_writer(path: &Path, config: AudioExportConfig) -> Result<Box<dyn AudioWriter>> {
-   match config {
-        AudioExportConfig::Wav(format) => {
-            Ok(Box::new(wav::WavAudioWriter::new(path, format)?))
-        }
-        AudioExportConfig::Mp3 { sample_rate, channels, bit_depth } => {
-            let path_str = path.to_str().ok_or_else(|| anyhow!("Invalid path for MP3 export"))?;
+    match config {
+        AudioExportConfig::Wav(format) => Ok(Box::new(wav::WavAudioWriter::new(path, format)?)),
+        AudioExportConfig::Mp3 {
+            sample_rate,
+            channels,
+            bit_depth,
+        } => {
+            let path_str = path
+                .to_str()
+                .ok_or_else(|| anyhow!("Invalid path for MP3 export"))?;
             let config = Mp3AudioWriterConfig::try_new(sample_rate, channels, bit_depth)?;
             Ok(Box::new(Mp3AudioWriter::try_new(path_str, config)?))
         }

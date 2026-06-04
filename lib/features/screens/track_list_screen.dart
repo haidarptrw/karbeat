@@ -11,7 +11,9 @@ import 'package:karbeat/features/components/midi_drawer.dart';
 import 'package:karbeat/features/components/waveform_painter.dart';
 import 'package:karbeat/features/playlist/clip_drag_controller.dart';
 import 'package:karbeat/features/playlist/playhead.dart';
+import 'package:karbeat/models/id.dart';
 import 'package:karbeat/models/interaction_target.dart';
+import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' show UiPluginInfo;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
@@ -21,6 +23,7 @@ import 'package:karbeat/state/clip_placement_state.dart';
 import 'package:karbeat/utils/clip_time_utils.dart';
 import 'package:karbeat/utils/color.dart';
 import 'package:karbeat/utils/logger.dart';
+import 'package:karbeat/utils/math.dart';
 import 'package:karbeat/utils/result_type.dart';
 import 'package:karbeat/utils/scroll_behavior.dart';
 import 'package:linked_scroll_controller/linked_scroll_controller.dart';
@@ -48,8 +51,12 @@ class TrackListScreen extends ConsumerWidget {
           builder: (context) {
             final trackIdsStr = ref.watch(
               globalStateProvider.select((s) {
-                final keys = s.tracks.keys.toList()..sort();
-                return keys.join(',');
+                // Sort the actual track objects by their orderIdx
+                final sortedTracks = s.tracks.values.toList()
+                  ..sort((a, b) => a.orderIdx.compareTo(b.orderIdx));
+
+                // Map them back to just their IDs
+                return sortedTracks.map((t) => t.id).join(',');
               }),
             );
 
@@ -66,6 +73,21 @@ class TrackListScreen extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+class _TrackContainer extends ConsumerStatefulWidget {
+  @override
+  _TrackContainerState createState() {
+    return _TrackContainerState();
+  }
+}
+
+class _TrackContainerState extends ConsumerState<_TrackContainer> {
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    throw UnimplementedError();
   }
 }
 
@@ -126,7 +148,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     super.initState();
     _trackSplitViewController = MultiSplitViewController(
       areas: [
-        Area(size: widget.headerWidth, min: 80, data: 'header'),
+        Area(size: widget.headerWidth, min: 80, max: 240, data: 'header'),
         Area(min: 200, data: 'timeline'),
       ],
     );
@@ -1437,6 +1459,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  Widget _buildBusAutomationLaneSection(BuildContext context, WidgetRef ref) {
+    return Expanded(child: Container());
+  }
+
   @override
   Widget build(BuildContext context) {
     // Calculate total height to ensure both lists have exactly same extent
@@ -1588,9 +1614,7 @@ class _TrackHeader extends ConsumerWidget {
                 width: 14,
                 height: 14,
                 decoration: BoxDecoration(
-                  color: Color(
-                    int.parse(track.color.substring(1), radix: 16),
-                  ), // Replace with track.color if available
+                  color: track.color.toColor(),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1667,17 +1691,25 @@ class _TrackHeader extends ConsumerWidget {
         DawContextAction(
           title: "Move Up",
           icon: Icons.arrow_upward,
-          onTap: () {
-            // Replace with actual move up logic
+          onTap: () async {
             AppLogger.info("Move Up requested for track ID: ${track.id}");
+            await handleUpdateTrackOrder(
+              ref: ref,
+              trackId: trackId,
+              newIdx: (track.orderIdx - 1).complyU32(),
+            );
           },
         ),
         DawContextAction(
           title: "Move Down",
           icon: Icons.arrow_downward,
-          onTap: () {
-            // Replace with actual move down logic
+          onTap: () async {
             AppLogger.info("Move Down requested for track ID: ${track.id}");
+            await handleUpdateTrackOrder(
+              ref: ref,
+              trackId: trackId,
+              newIdx: (track.orderIdx + 1).complyU32(),
+            );
           },
         ),
         DawContextAction(
@@ -2469,7 +2501,13 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 int? newTrackId;
                 final rowOffset = (_verticalDragDy / widget.height).round();
                 if (rowOffset != 0) {
-                  final sortedTracks = state.tracks.keys.toList()..sort();
+                  // Sort by visual orderIdx so vertical drag perfectly matches the UI layout
+                  final sortedTracksList = state.tracks.values.toList()
+                    ..sort((a, b) => a.orderIdx.compareTo(b.orderIdx));
+                  final sortedTracks = sortedTracksList
+                      .map((t) => t.id)
+                      .toList();
+
                   final currentIndex = sortedTracks.indexWhere(
                     (id) => id == widget.trackId,
                   );
@@ -2899,8 +2937,7 @@ class _GroupedBatchOverlay extends ConsumerWidget {
             ? timelineController.offset
             : 0;
 
-        final sortedTracks = trackIds..sort((a, b) => a.compareTo(b));
-        final trackIndex = sortedTracks.indexWhere((t) => t == selectedTrackId);
+        final trackIndex = trackIds.indexWhere((t) => t == selectedTrackId);
         if (trackIndex < 0) return const SizedBox();
 
         // Pull the live math directly from the controller
@@ -2969,4 +3006,21 @@ class _GroupedBatchOverlay extends ConsumerWidget {
       },
     );
   }
+}
+
+// ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+// Function to call API from provider
+// ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+
+Future<Result<void>> handleUpdateTrackOrder({
+  required WidgetRef ref,
+  required int trackId,
+  required int newIdx,
+}) async {
+  return await attemptAsync(() async {
+    return await updateTrackOrder(trackId: trackId, newIdx: newIdx);
+  }).andThenAsync((_) async {
+    await ref.read(globalStateProvider).syncTracksState();
+    return Result.ok(null);
+  });
 }

@@ -12,6 +12,10 @@ define_id!(GeneratorId);
 define_id!(SourceId);
 define_id!(NoteId);
 
+define_id!(ModulationId);
+
+define_id!(ModulationLinkId);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SidechainRouteId {
     Generator(GeneratorId),

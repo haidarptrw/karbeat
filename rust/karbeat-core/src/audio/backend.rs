@@ -4,10 +4,10 @@ use cpal::{
     OutputCallbackInfo,
 };
 use rtrb::{Consumer, RingBuffer};
-use triple_buffer::Output;
+use serde::{Deserialize, Serialize};
 
 use crate::{
-    audio::{engine::AudioEngine, event::TransportFeedback, render_state::AudioRenderState},
+    audio::{engine::AudioEngine, event::TransportFeedback},
     commands::AudioCommand,
     context::ctx,
 };
@@ -160,12 +160,126 @@ fn set_host() -> cpal::Host {
     host
 }
 
-/// Start the audio strem by initializing the Command Queue and Audio Engine
-/// and then building the audio stream
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioDeviceConfig {
+    /// The string name of the CPAL host (e.g., "ASIO", "WASAPI", "CoreAudio")
+    pub host_name: Option<String>,
+    /// The specific device name chosen by the user
+    pub device_name: Option<String>,
+    pub device_id: Option<String>,
+    /// The user's desired sample rate (e.g., 44100, 48000, 96000)
+    pub sample_rate: Option<u32>,
+    /// The desired block/buffer size (e.g., 256, 512, 1024)
+    pub buffer_size: Option<u32>,
+}
+
+/// A clean struct to pass back to Flutter for the UI dropdown
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioDeviceInfo {
+    pub id: String,
+    pub name: String,
+}
+
+impl Default for AudioDeviceConfig {
+    fn default() -> Self {
+        Self {
+            host_name: None,
+            device_name: None,
+            device_id: None,
+            sample_rate: None,
+            buffer_size: None, // Falls back to 1024
+        }
+    }
+}
+
+/// Resolve the host based on user preference or OS defaults
+fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
+    if let Some(host_name) = preferred_host {
+        if let Some(host_id) = cpal::available_hosts()
+            .into_iter()
+            .find(|h| h.name() == host_name)
+        {
+            if let Ok(host) = cpal::host_from_id(host_id) {
+                log::info!("Connected to user-selected Host: {}", host_name);
+                return host;
+            }
+        }
+        log::warn!(
+            "Requested host '{}' not found or failed to load. Falling back...",
+            host_name
+        );
+    }
+
+    set_host()
+}
+
+/// Returns a list of available host names on the current OS
+pub fn get_available_hosts() -> Vec<String> {
+    cpal::available_hosts()
+        .into_iter()
+        .map(|h| h.name().to_string())
+        .collect()
+}
+
+/// Returns the available output devices for a specific host
+pub fn get_output_devices(host_name: String) -> Result<Vec<AudioDeviceInfo>, anyhow::Error> {
+    let host_id = cpal::available_hosts()
+        .into_iter()
+        .find(|h| h.name() == host_name)
+        .unwrap_or_else(|| cpal::default_host().id());
+
+    let host = cpal::host_from_id(host_id)?;
+    let mut devices = vec![];
+
+    for dev in host.output_devices()? {
+        if let (Ok(id), Ok(desc)) = (dev.id(), dev.description()) {
+            devices.push(AudioDeviceInfo {
+                id: id.to_string(),
+                name: desc.to_string(),
+            });
+        }
+    }
+    Ok(devices)
+}
+
+/// Returns the supported sample rates for a specific device on a specific host
+pub fn get_device_sample_rates(
+    host_name: String,
+    device_id: String,
+) -> Result<Vec<u32>, anyhow::Error> {
+    let host_id = cpal::available_hosts()
+        .into_iter()
+        .find(|h| h.name() == host_name)
+        .unwrap_or_else(|| cpal::default_host().id());
+
+    let host = cpal::host_from_id(host_id)?;
+    let device = host
+        .output_devices()?
+        .find(|d| {
+            let Ok(id) = d.id() else {
+                return false;
+            };
+
+            id.to_string() == device_id
+        })
+        .ok_or_else(|| anyhow::anyhow!("Device not found"))?;
+
+    let mut rates = vec![];
+    for config in device.supported_output_configs()? {
+        rates.push(config.min_sample_rate());
+        rates.push(config.max_sample_rate());
+    }
+
+    rates.sort();
+    rates.dedup();
+    Ok(rates)
+}
+
+/// Start the audio stream by initializing the Command Queue and Audio Engine
+/// and then building the audio stream.
 pub fn start_audio_stream(
-    mut state_consumer: Output<AudioRenderState>,
     command_consumer: Consumer<AudioCommand>,
-    initial_state: AudioRenderState,
+    config_pref: AudioDeviceConfig,
 ) -> Result<()> {
     {
         let mut guard = ctx().stream_guard.lock();
@@ -174,15 +288,22 @@ pub fn start_audio_stream(
             *guard = None; // This drops the stream, stopping the audio thread
         }
     }
-    let host = set_host();
+    let host = resolve_host(config_pref.host_name.as_deref());
 
-    let device = host
-        .default_output_device()
-        .context("no audio output device available")?;
-
+    let device = if let Some(dev_id) = &config_pref.device_id {
+        host.output_devices()?
+            .find(|d| match d.id() {
+                Ok(id) => id.to_string() == *dev_id,
+                Err(_) => false,
+            })
+            .ok_or_else(|| anyhow!("Requested device ID '{}' not found", dev_id))?
+    } else {
+        host.default_output_device()
+            .context("no audio output device available")?
+    };
     // debug!("Output dev");
     let device_name = match device.description() {
-        Ok(desc) => desc.to_string(),
+        Ok(desc) => desc.name().to_owned(),
         Err(_) => "Unknown".into(),
     };
     log::info!("Output device: {}", device_name);
@@ -193,6 +314,8 @@ pub fn start_audio_stream(
         .context("no default output config available")?;
     let native_sample_rate = default_config.sample_rate();
 
+    let target_sample_rate = config_pref.sample_rate.unwrap_or(native_sample_rate);
+
     let supported_configs_range = device
         .supported_output_configs()
         .map_err(|e| anyhow!("error querying configs: {e}"))?;
@@ -201,28 +324,27 @@ pub fn start_audio_stream(
     let supported_config = supported_configs_range
         .filter(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
         .find(|c| {
-            c.min_sample_rate() <= native_sample_rate && c.max_sample_rate() >= native_sample_rate
+            c.min_sample_rate() <= target_sample_rate && c.max_sample_rate() >= target_sample_rate
         })
-        .map(|c| c.with_sample_rate(native_sample_rate))
-        // Fallback: If native rate isn't found in F32, try forcing a standard 48000 Hz
+        .map(|c| c.with_sample_rate(target_sample_rate))
         .or_else(|| {
+            // Fallback: If requested rate fails, force fallback to default native
+            log::warn!("Requested sample rate unsupported by device, falling back");
             device
                 .supported_output_configs()
                 .ok()?
                 .find(|c| c.sample_format() == cpal::SampleFormat::F32 && c.channels() == 2)
                 .map(|c| {
-                    let clamped_rate = 48000.clamp(c.min_sample_rate(), c.max_sample_rate());
-                    c.with_sample_rate(clamped_rate)
+                    let clamped =
+                        native_sample_rate.clamp(c.min_sample_rate(), c.max_sample_rate());
+                    c.with_sample_rate(clamped)
                 })
         })
         .context("device does not support f32 samples with 2 channels")?;
 
-    // This prevents PipeWire/JACK from resizing the buffer dynamically.
     let buffer_size = match supported_config.buffer_size() {
         cpal::SupportedBufferSize::Range { min, max } => {
-            // Request 512 frames (good balance of latency vs stability)
-            // Clamp it to ensure we don't request something invalid
-            let desired = 512;
+            let desired = config_pref.buffer_size.unwrap_or(1024);
             cpal::BufferSize::Fixed(desired.clamp(*min, *max))
         }
         cpal::SupportedBufferSize::Unknown => cpal::BufferSize::Default,
@@ -251,8 +373,6 @@ pub fn start_audio_stream(
         };
     }
 
-    state_consumer.update();
-
     let (pos_producer, pos_consumer) = RingBuffer::<TransportFeedback>::new(100);
 
     // Store Consumer in context
@@ -260,7 +380,7 @@ pub fn start_audio_stream(
 
     // Create feedback ring buffer (Audio → UI for parameter updates)
     let (feedback_producer, feedback_consumer) =
-        RingBuffer::<crate::commands::AudioFeedback>::new(256);
+        RingBuffer::<crate::commands::AudioFeedback>::new(512);
     *ctx().feedback_consumer.lock() = Some(feedback_consumer);
 
     // Read initial BPM from app state for the audio engine
@@ -269,21 +389,23 @@ pub fn start_audio_stream(
         app.transport.bpm
     };
 
+    // Resolved before engine creation so the engine can seed its internal
+    // graph snapshot with the real buffer_size (avoids graph.buffer_size = 0).
+    let engine_block_size = config_pref.buffer_size.unwrap_or(1024) as usize;
+
     let engine = AudioEngine::new(
-        state_consumer,
         command_consumer,
         pos_producer,
         feedback_producer,
         sample_rate,
         channels as u16,
         initial_bpm,
-        initial_state,
+        engine_block_size,
     );
 
     let ring_buffer_capacity = 8192;
     let (producer, consumer) = RingBuffer::<f32>::new(ring_buffer_capacity);
 
-    let engine_block_size = 512;
     let staging_buffer = vec![0.0; engine_block_size * channels];
 
     let audio_ctx = AudioContext {

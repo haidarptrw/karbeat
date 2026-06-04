@@ -2,7 +2,7 @@
 name = "karbeat-dsp"
 version = "0.3.0"
 edition = "2021"
-license = "LGPL-3.0-only"
+license = "GPL-3.0-only"
 description = "DSP algorithms and utilities for Karbeat"
 
 [dependencies]

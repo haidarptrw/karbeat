@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::shared::id::*;
 
 /// Transport feedback struct sent from the audio thread to Flutter.
@@ -26,53 +28,7 @@ pub struct TransportFeedback {
     pub pattern_bar: usize,
 }
 
-// Automation event for event-driven automation system
-
-pub enum GeneratorAutomationEvent {
-    PluginParam { param_id: u32, value: f32 },
-}
-
-pub enum TrackAutomationEvent {
-    Volume(f32),
-    Pan(f32),
-    PluginParam {
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
-}
-
-pub enum BusAutomationEvent {
-    Volume(f32),
-    Pan(f32),
-    PluginParam {
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
-}
-
-pub enum MasterAutomationEvent {
-    Volume(f32),
-    Pan(f32),
-    PluginParam {
-        effect_id: EffectId,
-        param_id: u32,
-        value: f32,
-    },
-}
-
-pub enum GlobalAutomationEvent {
-    TempoBpm(f32),
-}
-
-pub enum AudioSourceAutomationEvent {
-    Pitch(f32),
-    Pan(f32),
-    Volume(f32),
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PluginTarget {
     Generator(GeneratorId),
     TrackEffect(TrackId, EffectId),

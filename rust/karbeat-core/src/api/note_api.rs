@@ -1,4 +1,4 @@
-use crate::context::utils::broadcast_state_change;
+use crate::context::utils::broadcast_track_graph;
 use crate::core::history::ProjectAction;
 use crate::core::project::{Note, NoteId};
 use crate::lock::{get_app_write, get_history_lock};
@@ -24,7 +24,7 @@ pub fn add_note(
             note: note.clone(),
         });
     }
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(note)
 }
 
@@ -44,7 +44,7 @@ pub fn delete_note(pattern_id: PatternId, note_id: NoteId) -> anyhow::Result<Not
         });
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
 
     Ok(note)
 }
@@ -74,7 +74,7 @@ pub fn move_note(
         });
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(note)
 }
 
@@ -100,7 +100,7 @@ pub fn resize_note(
         });
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
 
     Ok(note)
 }
@@ -125,7 +125,7 @@ pub fn change_note_params(
         )?
     };
 
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(note)
 }
 
@@ -159,7 +159,7 @@ pub fn add_notes_batch(
         } else {
             history.push(ProjectAction::Batch(actions));
         }
-        broadcast_state_change();
+        broadcast_track_graph();
     }
 
     Ok(added_notes)
@@ -184,7 +184,7 @@ pub fn delete_notes_batch(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyho
         } else {
             history.push(ProjectAction::Batch(actions));
         }
-        broadcast_state_change();
+        broadcast_track_graph();
     }
 
     Ok(())
@@ -222,7 +222,7 @@ pub fn move_notes_batch(
         } else {
             history.push(ProjectAction::Batch(actions));
         }
-        broadcast_state_change();
+        broadcast_track_graph();
     }
 
     Ok(final_notes)
@@ -258,7 +258,7 @@ pub fn resize_notes_batch(
         } else {
             history.push(ProjectAction::Batch(actions));
         }
-        broadcast_state_change();
+        broadcast_track_graph();
     }
 
     Ok(final_notes)

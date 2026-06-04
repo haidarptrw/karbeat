@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{core::project::PluginInstance, shared::id::AudioSourceId};
+use crate::shared::id::AudioSourceId;
 
 pub type AudioFrame = [f32; 2];
 
@@ -18,9 +18,13 @@ use std::{path::PathBuf, sync::Arc};
 /// ======================================
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub enum AudioSampleMode {
+    /// raw samples (BPM-independent, for standard audio playback)
     #[default]
     Default,
+    /// ticks (BPM-dependent, for time-stretched audio, preserved pitch)
     Stretch,
+    /// ticks (BPM-dependent, for time-stretched audio, do not preserve pitch)
+    Resampled,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -44,6 +48,8 @@ pub struct AudioWaveform {
     pub root_note: u8,
     /// Fine tune of the audio waveform
     pub fine_tune: i16,
+    /// The original BPM of the sample (needed for Stretch and Sampled modes)
+    pub original_bpm: f32,
     /// Start of the audio waveform in samples
     pub trim_start: u32,
     /// End of the audio waveform in samples
@@ -56,9 +62,6 @@ pub struct AudioWaveform {
     pub muted: bool,
     /// How this audio source maps to the timeline (raw samples vs tempo-locked ticks)
     pub sample_mode: AudioSampleMode,
-
-    /// Effects applied to the audio waveform
-    pub effects: Arc<Vec<PluginInstance>>,
 }
 
 impl PartialEq for AudioWaveform {
@@ -77,7 +80,7 @@ impl PartialEq for AudioWaveform {
             && self.normalized == other.normalized
             && self.muted == other.muted
             && self.sample_mode == other.sample_mode
-            && self.effects == other.effects
+            && self.original_bpm == other.original_bpm
     }
 }
 
@@ -99,9 +102,23 @@ impl Default for AudioWaveform {
             normalized: false,
             muted: false,
             sample_mode: AudioSampleMode::Default,
-            effects: Default::default(),
+            original_bpm: 120.0,
         }
     }
+}
+
+/// A context struct providing the audio engine with everything it needs
+/// to render the waveform correctly based on the current sample mode.
+pub struct WaveformPlaybackContext<'a> {
+    /// The trimmed, ready-to-read audio buffer slice
+    pub buffer: &'a [f32],
+    /// Multiplier for the read-pointer speed (e.g., 2.0 = play twice as fast)
+    pub playback_rate: f64,
+    /// Multiplier for the pitch (e.g., 2.0 = one octave up).
+    /// If playback_rate != pitch_rate, the engine must use a time-stretching algorithm.
+    pub pitch_ratio: f64,
+    /// The mode, passed along just in case the engine needs algorithmic context
+    pub mode: AudioSampleMode,
 }
 
 impl AudioWaveform {
@@ -111,5 +128,69 @@ impl AudioWaveform {
         }
         self.id = Some(id);
         Ok(())
+    }
+
+    /// Returns a strictly valid slice of the audio buffer, cropped exactly to
+    /// the trim_start and trim_end boundaries.
+    pub fn get_playable_buffer<'a>(&'a self) -> Option<&'a [f32]> {
+        let raw_buffer = crate::utils::get_waveform_buffer(&self.buffer)?;
+        let channels = self.channels as usize;
+
+        if channels == 0 || raw_buffer.is_empty() {
+            return None;
+        }
+
+        let total_frames = raw_buffer.len() / channels;
+
+        let start_frame = (self.trim_start as usize).min(total_frames);
+        let end_frame = if self.trim_end > 0 {
+            (self.trim_end as usize).min(total_frames).max(start_frame)
+        } else {
+            total_frames
+        };
+
+        let start_idx = start_frame * channels;
+        let end_idx = end_frame * channels;
+
+        if start_idx >= raw_buffer.len() || end_idx > raw_buffer.len() || start_idx >= end_idx {
+            return None;
+        }
+
+        Some(&raw_buffer[start_idx..end_idx])
+    }
+
+    /// Abstracts the logic of AudioSampleModes. The audio engine passes the project's
+    /// current BPM, and this returns the exact parameters needed to render the audio.
+    pub fn get_playback_context<'a>(
+        &'a self,
+        project_bpm: f32,
+    ) -> Option<WaveformPlaybackContext<'a>> {
+        let buffer = self.get_playable_buffer()?;
+
+        let (playback_rate, pitch_ratio) = match self.sample_mode {
+            // Default: Ignores BPM entirely. Plays 1:1 speed, original pitch.
+            AudioSampleMode::Default => (1.0, 1.0),
+
+            // Stretch: Speeds up/slows down to match project BPM, but pitch remains 1.0
+            // (Engine must use phase vocoder/granular synthesis to accommodate this)
+            AudioSampleMode::Stretch => {
+                let ratio = (project_bpm / self.original_bpm.max(1.0)) as f64;
+                (ratio, 1.0)
+            }
+
+            // Resampled: Speeds up/slows down to match project BPM, pitch bends with it
+            // (Classic turntable/tape effect. Engine just reads faster/slower)
+            AudioSampleMode::Resampled => {
+                let ratio = (project_bpm / self.original_bpm.max(1.0)) as f64;
+                (ratio, ratio)
+            }
+        };
+
+        Some(WaveformPlaybackContext {
+            buffer,
+            playback_rate,
+            pitch_ratio,
+            mode: self.sample_mode.clone(),
+        })
     }
 }

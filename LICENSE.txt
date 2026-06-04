@@ -6,11 +6,11 @@ components of the project are available under different licenses, as
 described below.
 
 ===========================================================================
-Part A -- GPLv3 Licensed Components
+Part A -- GPLv3 + Linking Exception Licensed Components
 ===========================================================================
 
 The following components are licensed under the GNU General Public License,
-version 3 (GPLv3):
+version 3 (GPLv3), with a special linking exception that allows dynamically linking and running closed-source, proprietary plugins within the Digidaw engine:
 
   - The main Flutter application (lib/, android/, ios/, linux/, macos/,
     windows/, rust_builder/, and all Dart source files)
@@ -18,14 +18,23 @@ version 3 (GPLv3):
   - karbeat-flutter-ffi (rust/karbeat-flutter-ffi/) -- FFI bridge for Flutter
   - karbeat-plugins     (rust/karbeat-plugins/)  -- First-party/internal plugins
 
+See LICENSE-EXCEPTION.txt for the full exception text.
+
 ===========================================================================
-Part B -- LGPLv3 Licensed Components
+Part B -- GPLv3 Licensed Components
 ===========================================================================
 
-The following components are licensed under the GNU Lesser General Public
-License, version 3 (LGPLv3):
+The following components are licensed under the GNU General Public License,
+version 3 (GPLv3):
 
   - karbeat-dsp          (rust/karbeat-dsp/)          -- DSP algorithms
+
+===========================================================================
+Part C -- Apache-2.0 OR MIT Licensed Components
+===========================================================================
+
+The following components are dual-licensed under the Apache License, version 2.0, or the MIT License, at your option:
+
   - karbeat-host         (rust/karbeat-host/)         -- Plugin host (VST3/LV2/CLAP)
   - karbeat-macros       (rust/karbeat-macros/)        -- Procedural macros
   - karbeat-plugin-api   (rust/karbeat-plugin-api/)    -- Plugin API

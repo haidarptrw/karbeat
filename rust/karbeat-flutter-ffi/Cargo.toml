@@ -20,7 +20,7 @@ log.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 rtrb.workspace = true
-triple_buffer.workspace = true
+
 karbeat-plugins.workspace = true
 smallvec.workspace = true
 memmap2.workspace = true
@@ -29,8 +29,8 @@ chrono.workspace = true
 serde_json.workspace = true
 parking_lot.workspace = true
 once_cell.workspace = true
-ndk-context = {version = "0.1.1"}
-jni = {version = "0.22.4"}
+ndk-context = { version = "0.1.1" }
+jni = { version = "0.22.4" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

@@ -1,24 +1,15 @@
-use std::{ ops::Deref, sync::Arc };
+use std::sync::Arc;
 
 use crate::core::project::plugin::modulation::ModulationEvent;
-use crate::shared::id::*;
-use crate::{
-    commands::AudioCommand,
-    context::utils::send_audio_command,
-    core::project::{
-        automation::{ AutomationPoint, CurveType },
-        mixer::MixerState,
-        plugin::AudioPlugin,
-        track::{ midi::Pattern, AudioTrack },
-        ApplicationState,
-        AssetLibrary,
-        GeneratorId,
-        GeneratorInstanceType,
-        TrackId,
-    },
-    lock::{ get_app_read, get_plugin_registry_read },
+use crate::core::project::{
+    automation::{AutomationCurveType, AutomationPoint},
+    mixer::RoutingConnection,
+    plugin::AudioPlugin,
+    track::{midi::Pattern, AudioTrack},
+    ApplicationState, AssetLibrary, GeneratorId, TrackId,
 };
-use indexmap::IndexMap;
+use crate::shared::id::*;
+use hashbrown::HashMap;
 use karbeat_utils::math::is_power_of_two;
 
 // =============================================================================
@@ -105,7 +96,7 @@ impl AudioPluginState {
     #[inline]
     pub fn get_track_effects_mut(
         &mut self,
-        track_id_index: usize
+        track_id_index: usize,
     ) -> Option<&mut Vec<AudioEffectInstance>> {
         self.track_effects.get_mut(track_id_index)
     }
@@ -143,7 +134,7 @@ impl AudioPluginState {
     #[inline]
     pub fn get_bus_effects_mut(
         &mut self,
-        bus_id_index: usize
+        bus_id_index: usize,
     ) -> Option<&mut Vec<AudioEffectInstance>> {
         self.bus_effects.get_mut(bus_id_index)
     }
@@ -203,7 +194,9 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
     }
 
     // Binary search for the surrounding pair
-    let idx = points.binary_search_by(|p| p.time_ticks.cmp(&time_ticks)).unwrap_or_else(|i| i);
+    let idx = points
+        .binary_search_by(|p| p.time_ticks.cmp(&time_ticks))
+        .unwrap_or_else(|i| i);
 
     if idx == 0 {
         return points[0].value;
@@ -219,30 +212,34 @@ fn interpolate_points(points: &[AutomationPoint], time_ticks: u32) -> f32 {
     let t = ((time_ticks - p1.time_ticks) as f32) / (duration as f32);
 
     match p1.curve_type {
-        CurveType::Linear => p1.value + (p2.value - p1.value) * t,
-        CurveType::Exponential => {
+        AutomationCurveType::Linear => p1.value + (p2.value - p1.value) * t,
+        AutomationCurveType::Exponential => {
             let v1 = p1.value.max(0.0001);
             let v2 = p2.value.max(0.0001);
             v1 * (v2 / v1).powf(t)
         }
-        CurveType::Step => p1.value,
+        AutomationCurveType::Step => p1.value,
     }
 }
 
-/// Structural State: Tracks, Patterns, Mixer, Assets (Heavy, changes rarely)
+/// Structural State: Tracks, Patterns, Routing, Assets (Heavy, changes rarely)
 #[derive(Default, Clone)]
 pub struct AudioGraphState {
     pub tracks: Arc<[Arc<AudioTrack>]>,
-    pub patterns: IndexMap<PatternId, Arc<Pattern>>,
-    pub mixer_state: MixerState,
+    pub patterns: HashMap<PatternId, Arc<Pattern>>,
+    /// Routing connections — owned and mutated directly by the audio thread
+    /// via the UpdateRouting ring-buffer command.
+    pub routing: Vec<RoutingConnection>,
+    /// IDs of all active buses — used for buffer allocation in PreparePlugin.
+    pub bus_ids: Vec<BusId>,
     pub asset_library: Arc<AssetLibrary>,
     /// Automation lanes for real-time parameter modulation
-    pub automation_lanes: IndexMap<AutomationId, AudioAutomationLane>,
+    pub automation_lanes: HashMap<AutomationId, AudioAutomationLane>,
     pub max_sample_index: u32,
     pub sample_rate: u32,
     pub buffer_size: usize,
 
-    pub modulation_events: Vec<ModulationEvent>,
+    pub modulation_events: HashMap<ModulationId, ModulationEvent>,
 }
 
 impl From<&ApplicationState> for AudioGraphState {
@@ -250,35 +247,21 @@ impl From<&ApplicationState> for AudioGraphState {
         let mut tracks_vec: Vec<Arc<AudioTrack>> = app.tracks.values().cloned().collect();
         tracks_vec.sort_by_key(|t| t.id);
 
-        let mut modulation_events = Vec::new();
+        let modulation_events = app.modulation_pool.clone();
 
-        // Convert automation pool to lightweight audio-thread snapshots
-        let automation_lanes: IndexMap<AutomationId, AudioAutomationLane> = app.automation_pool
-            .iter()
-            .filter(|(_, lane)| lane.enabled && !lane.points.is_empty())
-            .map(|(&id, lane)| {
-                // 1. Auto-generate the routing ModulationEvent for this lane!
-                if let Some(target) = &lane.target {
-                    modulation_events.push(ModulationEvent::Automation {
-                        lane_id: id.to_u32(),
-                        target: target.clone(),
-                    });
-                }
+        let mut automation_lanes = HashMap::new();
 
-                // 2. Return the pure data payload without the target
-                (
-                    id,
-                    AudioAutomationLane {
-                        points: lane.points.clone(),
-                        enabled: lane.enabled,
-                        min: lane.min,
-                        max: lane.max,
-                        default_value: lane.default_value,
-                    },
-                )
-            })
-            .collect();
+        for (id, lane) in app.automation_pool.iter() {
+            let audio_auto_lane = AudioAutomationLane {
+                points: lane.points.clone(),
+                enabled: lane.enabled,
+                min: lane.min,
+                max: lane.max,
+                default_value: lane.default_value,
+            };
 
+            automation_lanes.insert(*id, audio_auto_lane);
+        }
         // 3. Append explicit user modulations (LFOs, Peak Controllers) from ApplicationState
         // (Assuming you added `pub modulations: Vec<ModulationEvent>` to ApplicationState)
         // modulation_events.extend(app.modulations.clone());
@@ -286,7 +269,8 @@ impl From<&ApplicationState> for AudioGraphState {
         Self {
             tracks: Arc::from(tracks_vec),
             patterns: app.pattern_pool.clone(),
-            mixer_state: app.mixer.clone(),
+            routing: app.mixer.routing.clone(),
+            bus_ids: app.mixer.buses.keys().copied().collect(),
             asset_library: app.asset_library.clone(),
             automation_lanes,
             max_sample_index: app.max_sample_index,
@@ -315,128 +299,4 @@ impl From<&ApplicationState> for AudioRenderState {
             graph: AudioGraphState::from(app),
         }
     }
-}
-
-/// Add current loaded plugin to the audio engine thread when loading a new project
-pub fn broadcast_plugin_state_loading() {
-    let app_state = get_app_read();
-    let registry = get_plugin_registry_read();
-
-    // get current generator
-    let generators: IndexMap<
-        GeneratorId,
-        Box<dyn AudioPlugin + Send + Sync>
-    > = app_state.generator_pool
-        .iter()
-        .filter_map(|(id, arc)| {
-            let generator_instance = arc.deref().to_owned();
-
-            let GeneratorInstanceType::Plugin(instance) = generator_instance.instance_type else {
-                return None;
-            };
-
-            // get box plugin from registry
-
-            let Some((box_plugin, _)) = registry.create_generator_by_id(instance.registry_id) else {
-                return None;
-            };
-
-            Some((id.to_owned(), box_plugin))
-        })
-        .collect();
-
-    // get track effects
-    let mixer_state = app_state.get_mixer_state();
-    let track_chan = &mixer_state.channels;
-
-    // As usual, doing the same thing but for track_channels
-    // Turn it to IndexMap<TrackId, IndexMap<EffectId, Box<dyn KarbeatPlugin + Send + Sync>>>
-    let track_effects: IndexMap<
-        TrackId,
-        IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>
-    > = track_chan
-        .iter()
-        .map(|(track_id, arc_mixer_chan)| {
-            let mix_chan = arc_mixer_chan.deref().to_owned();
-
-            // iterate through effects
-            // Use filter_map here because the inner registry lookup can fail (return None)
-            let effects_map: IndexMap<
-                EffectId,
-                Box<dyn AudioPlugin + Send + Sync>
-            > = mix_chan.effects
-                .iter()
-                .filter_map(|eff| {
-                    let effect_id = eff.id;
-                    let eff_instance = eff.instance.as_ref();
-
-                    // Get the effect from registry.
-                    // We map the result to a tuple (effect_id, plugin_box) if successful.
-                    registry
-                        .create_effect_by_id(eff_instance.registry_id)
-                        .map(|(plugin_box, _)| (effect_id, plugin_box))
-                })
-                .collect();
-
-            // Return the tuple for the outer IndexMap
-            (track_id.to_owned(), effects_map)
-        })
-        .collect();
-
-    // Do the same for bus_channels
-    let bus_chan = &mixer_state.buses;
-
-    let bus_effects: IndexMap<
-        BusId,
-        IndexMap<EffectId, Box<dyn AudioPlugin + Send + Sync>>
-    > = bus_chan
-        .iter()
-        .map(|(id, arc_mixer_channel)| {
-            let mix_bus = arc_mixer_channel.deref().to_owned();
-
-            let effect_maps: IndexMap<
-                EffectId,
-                Box<dyn AudioPlugin + Send + Sync>
-            > = mix_bus.channel.effects
-                .iter()
-                .filter_map(|eff| {
-                    let effect_id = eff.id;
-                    let eff_instance = eff.instance.as_ref();
-
-                    // Get the effect from registry.
-                    // We map the result to a tuple (effect_id, plugin_box) if successful.
-                    registry
-                        .create_effect_by_id(eff_instance.registry_id)
-                        .map(|(plugin_box, _)| (effect_id, plugin_box))
-                })
-                .collect();
-
-            (id.to_owned(), effect_maps)
-        })
-        .collect();
-
-    let master_channel = mixer_state.master_bus.as_ref();
-    let master_effects: IndexMap<
-        EffectId,
-        Box<dyn AudioPlugin + Send + Sync>
-    > = master_channel.effects
-        .iter()
-        .filter_map(|eff| {
-            let effect_id = eff.id;
-            let eff_instance = eff.instance.as_ref();
-
-            // Get the effect from registry.
-            // We map the result to a tuple (effect_id, plugin_box) if successful.
-            registry
-                .create_effect_by_id(eff_instance.registry_id)
-                .map(|(plugin_box, _)| (effect_id, plugin_box))
-        })
-        .collect();
-
-    send_audio_command(AudioCommand::PreparePlugin {
-        track_effects,
-        master_effects,
-        bus_effects,
-        generators,
-    });
 }

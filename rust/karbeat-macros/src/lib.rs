@@ -621,7 +621,6 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
         _ => panic!("AutoParams can only be derived on structs"),
     };
 
-    // We now store a tuple of (Field, StringID, InnerType)
     let mut param_fields = Vec::new();
 
     for field in fields.iter() {

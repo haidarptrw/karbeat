@@ -520,6 +520,336 @@ as bool,
 }
 
 /// @nodoc
+mixin _$UiMixerChannelTarget {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelTarget);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'UiMixerChannelTarget()';
+}
+
+
+}
+
+/// @nodoc
+class $UiMixerChannelTargetCopyWith<$Res>  {
+$UiMixerChannelTargetCopyWith(UiMixerChannelTarget _, $Res Function(UiMixerChannelTarget) __);
+}
+
+
+/// Adds pattern-matching-related methods to [UiMixerChannelTarget].
+extension UiMixerChannelTargetPatterns on UiMixerChannelTarget {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiMixerChannelTarget_Track value)?  track,TResult Function( UiMixerChannelTarget_Bus value)?  bus,TResult Function( UiMixerChannelTarget_Master value)?  master,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case UiMixerChannelTarget_Track() when track != null:
+return track(_that);case UiMixerChannelTarget_Bus() when bus != null:
+return bus(_that);case UiMixerChannelTarget_Master() when master != null:
+return master(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiMixerChannelTarget_Track value)  track,required TResult Function( UiMixerChannelTarget_Bus value)  bus,required TResult Function( UiMixerChannelTarget_Master value)  master,}){
+final _that = this;
+switch (_that) {
+case UiMixerChannelTarget_Track():
+return track(_that);case UiMixerChannelTarget_Bus():
+return bus(_that);case UiMixerChannelTarget_Master():
+return master(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiMixerChannelTarget_Track value)?  track,TResult? Function( UiMixerChannelTarget_Bus value)?  bus,TResult? Function( UiMixerChannelTarget_Master value)?  master,}){
+final _that = this;
+switch (_that) {
+case UiMixerChannelTarget_Track() when track != null:
+return track(_that);case UiMixerChannelTarget_Bus() when bus != null:
+return bus(_that);case UiMixerChannelTarget_Master() when master != null:
+return master(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( int field0)?  track,TResult Function( int field0)?  bus,TResult Function()?  master,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case UiMixerChannelTarget_Track() when track != null:
+return track(_that.field0);case UiMixerChannelTarget_Bus() when bus != null:
+return bus(_that.field0);case UiMixerChannelTarget_Master() when master != null:
+return master();case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( int field0)  track,required TResult Function( int field0)  bus,required TResult Function()  master,}) {final _that = this;
+switch (_that) {
+case UiMixerChannelTarget_Track():
+return track(_that.field0);case UiMixerChannelTarget_Bus():
+return bus(_that.field0);case UiMixerChannelTarget_Master():
+return master();}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( int field0)?  track,TResult? Function( int field0)?  bus,TResult? Function()?  master,}) {final _that = this;
+switch (_that) {
+case UiMixerChannelTarget_Track() when track != null:
+return track(_that.field0);case UiMixerChannelTarget_Bus() when bus != null:
+return bus(_that.field0);case UiMixerChannelTarget_Master() when master != null:
+return master();case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class UiMixerChannelTarget_Track extends UiMixerChannelTarget {
+  const UiMixerChannelTarget_Track(this.field0): super._();
+  
+
+ final  int field0;
+
+/// Create a copy of UiMixerChannelTarget
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiMixerChannelTarget_TrackCopyWith<UiMixerChannelTarget_Track> get copyWith => _$UiMixerChannelTarget_TrackCopyWithImpl<UiMixerChannelTarget_Track>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelTarget_Track&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiMixerChannelTarget.track(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiMixerChannelTarget_TrackCopyWith<$Res> implements $UiMixerChannelTargetCopyWith<$Res> {
+  factory $UiMixerChannelTarget_TrackCopyWith(UiMixerChannelTarget_Track value, $Res Function(UiMixerChannelTarget_Track) _then) = _$UiMixerChannelTarget_TrackCopyWithImpl;
+@useResult
+$Res call({
+ int field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiMixerChannelTarget_TrackCopyWithImpl<$Res>
+    implements $UiMixerChannelTarget_TrackCopyWith<$Res> {
+  _$UiMixerChannelTarget_TrackCopyWithImpl(this._self, this._then);
+
+  final UiMixerChannelTarget_Track _self;
+  final $Res Function(UiMixerChannelTarget_Track) _then;
+
+/// Create a copy of UiMixerChannelTarget
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiMixerChannelTarget_Track(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiMixerChannelTarget_Bus extends UiMixerChannelTarget {
+  const UiMixerChannelTarget_Bus(this.field0): super._();
+  
+
+ final  int field0;
+
+/// Create a copy of UiMixerChannelTarget
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiMixerChannelTarget_BusCopyWith<UiMixerChannelTarget_Bus> get copyWith => _$UiMixerChannelTarget_BusCopyWithImpl<UiMixerChannelTarget_Bus>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelTarget_Bus&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiMixerChannelTarget.bus(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiMixerChannelTarget_BusCopyWith<$Res> implements $UiMixerChannelTargetCopyWith<$Res> {
+  factory $UiMixerChannelTarget_BusCopyWith(UiMixerChannelTarget_Bus value, $Res Function(UiMixerChannelTarget_Bus) _then) = _$UiMixerChannelTarget_BusCopyWithImpl;
+@useResult
+$Res call({
+ int field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiMixerChannelTarget_BusCopyWithImpl<$Res>
+    implements $UiMixerChannelTarget_BusCopyWith<$Res> {
+  _$UiMixerChannelTarget_BusCopyWithImpl(this._self, this._then);
+
+  final UiMixerChannelTarget_Bus _self;
+  final $Res Function(UiMixerChannelTarget_Bus) _then;
+
+/// Create a copy of UiMixerChannelTarget
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiMixerChannelTarget_Bus(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiMixerChannelTarget_Master extends UiMixerChannelTarget {
+  const UiMixerChannelTarget_Master(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiMixerChannelTarget_Master);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'UiMixerChannelTarget.master()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
 mixin _$UiRoutingNode {
 
 

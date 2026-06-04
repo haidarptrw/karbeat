@@ -5,13 +5,11 @@ use std::time::{Duration, Instant};
 use indexmap::IndexMap;
 
 use crate::audio::event::PluginTarget;
-use crate::audio::exporter::{
-    export_project as export_project_internal, TailHandling,
-};
+use crate::audio::exporter::{export_project as export_project_internal, TailHandling};
 
-use crate::audio::writer::AudioExportConfig ;
-use crate::commands::{AudioCommand, AudioFeedback};
-use crate::context::utils::{broadcast_state_change, send_audio_command};
+use crate::audio::writer::AudioExportConfig;
+use crate::commands::{AudioCommand, AudioFeedback, MixerChannelSeed, MixerChannelTarget};
+use crate::context::utils::{broadcast_full_graph, send_audio_command};
 use crate::core::file_manager::project_loader::{load_daw_project, save_daw_project};
 use crate::core::project::{
     generator::GeneratorInstance, transport::TransportState, ProjectMetadata,
@@ -59,6 +57,7 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
     let mut expected_responses = 0;
 
     // Gather all targets we need to query (using a tight read lock)
+    let mut mixer_channel_targets: Vec<MixerChannelTarget> = Vec::new();
     {
         let app = get_app_read();
 
@@ -67,22 +66,29 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
             expected_responses += 1;
         }
         for (&track_id, channel) in &app.mixer.channels {
-            for effect in &channel.effects {
+            for effect in &channel.channel.effects {
                 pending_requests.push(PluginTarget::TrackEffect(track_id, effect.id));
                 expected_responses += 1;
             }
+            // Also query mixer channel DSP state
+            mixer_channel_targets.push(MixerChannelTarget::Track(track_id));
         }
         for (&bus_id, bus) in &app.mixer.buses {
             for effect in &bus.channel.effects {
                 pending_requests.push(PluginTarget::BusEffect(bus_id, effect.id));
                 expected_responses += 1;
             }
+            // Also query bus channel DSP state
+            mixer_channel_targets.push(MixerChannelTarget::Bus(bus_id));
         }
         for effect in &app.mixer.master_bus.effects {
             pending_requests.push(PluginTarget::MasterEffect(effect.id));
             expected_responses += 1;
-        }
+        } // Query master channel DSP state
+        mixer_channel_targets.push(MixerChannelTarget::Master);
     }
+
+    let expected_mixer_snapshots = mixer_channel_targets.len();
 
     // Fire off all Query Commands to the audio thread
     for (i, target) in pending_requests.into_iter().enumerate() {
@@ -91,18 +97,25 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
             request_id: i as u32,
         });
     }
+    for target in mixer_channel_targets {
+        send_audio_command(AudioCommand::QueryMixerChannel { target });
+    }
 
     // Wait for the audio thread to return the snapshots
     let mut updated_states: Vec<(PluginTarget, Vec<u8>)> = Vec::with_capacity(expected_responses);
+    let mut mixer_snapshots: Vec<crate::commands::MixerChannelSnapshot> =
+        Vec::with_capacity(expected_mixer_snapshots);
     let timeout = Duration::from_secs(2);
     let start_time = Instant::now();
 
     let mut feedback_rx = crate::context::ctx().feedback_consumer.lock();
 
-    while updated_states.len() < expected_responses {
+    while updated_states.len() < expected_responses
+        || mixer_snapshots.len() < expected_mixer_snapshots
+    {
         if start_time.elapsed() > timeout {
             log::warn!(
-                "Timed out waiting for plugin states from audio engine. Saving with available state."
+                "Timed out waiting for plugin/mixer states from audio engine. Saving with available state."
             );
             break;
         }
@@ -113,22 +126,19 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                     AudioFeedback::PluginStateSnapshot { target, state, .. } => {
                         updated_states.push((target, state));
                     }
-                    AudioFeedback::GeneratorParameterSnapshot(_snap) => {
-                        // Not handling explicitly here to avoid blocking
+                    AudioFeedback::MixerChannelSnapshot(snap) => {
+                        mixer_snapshots.push(snap);
                     }
-                    AudioFeedback::EffectParameterSnapshot(_snap) => {
-                        // Not handling explicitly here to avoid blocking
-                    }
+                    AudioFeedback::GeneratorParameterSnapshot(_snap) => {}
+                    AudioFeedback::EffectParameterSnapshot(_snap) => {}
                     _ => {}
                 }
             }
         } else {
-            // The Option is None. We can't read feedback, so we must abort the wait to prevent a deadlock.
             log::error!("Feedback consumer is None. Aborting state synchronization.");
             break;
         }
 
-        // Prevent pegging the CPU while waiting
         std::thread::sleep(Duration::from_millis(2));
     }
 
@@ -166,7 +176,11 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
                 PluginTarget::TrackEffect(track_id, effect_id) => {
                     if let Some(channel) = app.mixer.channels.get_mut(&track_id) {
                         let ch_mut = Arc::make_mut(channel);
-                        if let Some(effect) = ch_mut.effects.iter_mut().find(|e| e.id == effect_id)
+                        if let Some(effect) = ch_mut
+                            .channel
+                            .effects
+                            .iter_mut()
+                            .find(|e| e.id == effect_id)
                         {
                             let instance_mut = Arc::make_mut(&mut effect.instance);
                             instance_mut.plugin_state = state_blob;
@@ -234,6 +248,40 @@ pub fn save_project(path_name: &str) -> anyhow::Result<()> {
             }
         }
 
+        // Apply mixer channel DSP snapshots from the audio thread
+        for snap in mixer_snapshots {
+            match snap.target {
+                MixerChannelTarget::Track(track_id) => {
+                    if let Some(channel_arc) = app.mixer.channels.get_mut(&track_id) {
+                        let ch = std::sync::Arc::make_mut(channel_arc);
+                        ch.channel.volume.set_base(snap.volume);
+                        ch.channel.pan.set_base(snap.pan);
+                        ch.channel.mute = snap.mute;
+                        ch.channel.solo = snap.solo;
+                        ch.channel.inverted_phase = snap.inverted_phase;
+                    }
+                }
+                MixerChannelTarget::Bus(bus_id) => {
+                    if let Some(bus_arc) = app.mixer.buses.get_mut(&bus_id) {
+                        let bus = std::sync::Arc::make_mut(bus_arc);
+                        bus.channel.volume.set_base(snap.volume);
+                        bus.channel.pan.set_base(snap.pan);
+                        bus.channel.mute = snap.mute;
+                        bus.channel.solo = snap.solo;
+                        bus.channel.inverted_phase = snap.inverted_phase;
+                    }
+                }
+                MixerChannelTarget::Master => {
+                    let master = std::sync::Arc::make_mut(&mut app.mixer.master_bus);
+                    master.volume.set_base(snap.volume);
+                    master.pan.set_base(snap.pan);
+                    master.mute = snap.mute;
+                    master.solo = snap.solo;
+                    master.inverted_phase = snap.inverted_phase;
+                }
+            }
+        }
+
         // Finally write the fully synchronized AppState to disk
         save_daw_project(Path::new(path_name), &app)?;
     }
@@ -263,7 +311,7 @@ where
     };
 
     // 4. Fire all necessary sync and loading events to the engine/UI
-    broadcast_state_change();
+    broadcast_full_graph();
     send_audio_command(AudioCommand::SetBPM(bpm));
     let _ = hydrate_live_audio_engine();
 
@@ -281,7 +329,6 @@ where
 {
     // Use read lock since the internal function only requires an immutable &ApplicationState
     let app_state = get_app_read();
-
 
     export_project_internal(
         &app_state,
@@ -304,7 +351,7 @@ pub fn new_blank_project() -> ApplicationState {
     };
 
     // prepare plugin with this new state
-    broadcast_state_change();
+    broadcast_full_graph();
     send_audio_command(AudioCommand::SetBPM(app.transport.bpm));
     let _ = hydrate_live_audio_engine();
 
@@ -345,7 +392,7 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
     // 2. Hydrate Track Effects
     for (track_id, channel_arc) in &app.mixer.channels {
         let mut track_chain = IndexMap::new();
-        for effect in &channel_arc.effects {
+        for effect in &channel_arc.channel.effects {
             if let Some((mut plugin, _)) = registry.create_effect_by_id(effect.instance.registry_id)
             {
                 if !effect.instance.plugin_state.is_empty() {
@@ -401,12 +448,54 @@ pub fn hydrate_live_audio_engine() -> anyhow::Result<()> {
         }
     }
 
+    // Build mixer channel seeds from AppState (read before lock is dropped)
+    let mut track_channels = IndexMap::new();
+    let mut bus_channels = IndexMap::new();
+    let master_channel;
+    {
+        let app = crate::lock::get_app_read();
+        for (&track_id, channel_arc) in &app.mixer.channels {
+            track_channels.insert(
+                track_id,
+                MixerChannelSeed {
+                    volume: channel_arc.channel.volume.get(),
+                    pan: channel_arc.channel.pan.get(),
+                    mute: channel_arc.channel.mute,
+                    solo: channel_arc.channel.solo,
+                    inverted_phase: channel_arc.channel.inverted_phase,
+                },
+            );
+        }
+        for (&bus_id, bus_arc) in &app.mixer.buses {
+            bus_channels.insert(
+                bus_id,
+                MixerChannelSeed {
+                    volume: bus_arc.channel.volume.get(),
+                    pan: bus_arc.channel.pan.get(),
+                    mute: bus_arc.channel.mute,
+                    solo: bus_arc.channel.solo,
+                    inverted_phase: bus_arc.channel.inverted_phase,
+                },
+            );
+        }
+        master_channel = MixerChannelSeed {
+            volume: app.mixer.master_bus.volume.get(),
+            pan: app.mixer.master_bus.pan.get(),
+            mute: app.mixer.master_bus.mute,
+            solo: app.mixer.master_bus.solo,
+            inverted_phase: app.mixer.master_bus.inverted_phase,
+        };
+    }
+
     // Send the fully configured plugins to the Live Audio Engine
-    send_audio_command(AudioCommand::PreparePlugin {
+    send_audio_command(AudioCommand::HydratePlugin {
         generators,
         track_effects,
         bus_effects,
         master_effects,
+        track_channels,
+        bus_channels,
+        master_channel,
     });
 
     Ok(())

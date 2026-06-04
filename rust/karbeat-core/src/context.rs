@@ -8,30 +8,18 @@ use std::sync::{Arc, Once};
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, RwLock};
 use rtrb::Producer;
-use triple_buffer::Input;
 
 use crate::{
-    audio::{event::TransportFeedback, render_state::AudioRenderState},
+    audio::event::TransportFeedback,
     commands::{AudioCommand, AudioFeedback},
     core::{history::HistoryManager, project::ApplicationState},
 };
 use karbeat_plugins::registry::PluginRegistry;
 
-// MixerParamEvent: FFI-friendly event pushed to Flutter when a mixer param changes
-#[derive(Clone, Debug)]
-pub struct MixerParamEvent {
-    /// Track ID. `u32::MAX` means master bus.
-    pub track_id: u32,
-    pub volume: Option<f32>,
-    pub pan: Option<f32>,
-    pub mute: Option<bool>,
-    pub solo: Option<bool>,
-}
-
 /// Centralized application context containing all shared state.
 ///
 /// Access via the [`ctx()`] function to get a reference to the global instance.
-pub struct DawContext<'a> {
+pub struct DawContext {
     /// Main application state (UI/editing source of truth)
     pub app_state: Arc<RwLock<ApplicationState>>,
 
@@ -44,12 +32,6 @@ pub struct DawContext<'a> {
     /// Parameter feedback consumer (Audio → UI)
     pub feedback_consumer: Mutex<Option<rtrb::Consumer<AudioFeedback>>>,
 
-    /// Triple buffer input for audio render state
-    pub render_state_producer: Mutex<Option<Input<AudioRenderState>>>,
-
-    /// Shadow state tracking last sent render state
-    pub current_render_state: Mutex<AudioRenderState>,
-
     /// Audio stream handle
     pub stream_guard: Mutex<Option<cpal::Stream>>,
 
@@ -59,23 +41,21 @@ pub struct DawContext<'a> {
     /// Plugin factory registry
     pub plugin_registry: RwLock<PluginRegistry>,
 
-    /// Mixer parameter event stream sink (Rust → Flutter)
-    pub mixer_event_sink: Mutex<Option<Box<dyn Fn(MixerParamEvent) + Send + Sync + 'a>>>,
+    /// Shared pending feedback buffer for all modules to poll (Rust → Flutter)
+    pub pending_feedback: Mutex<Vec<AudioFeedback>>,
 }
 
-impl<'a> DawContext<'a> {
+impl DawContext {
     fn new() -> Self {
         Self {
             app_state: Arc::new(RwLock::new(ApplicationState::default())),
             history: Mutex::new(HistoryManager::new()),
             command_sender: Mutex::new(None),
             feedback_consumer: Mutex::new(None),
-            render_state_producer: Mutex::new(None),
-            current_render_state: Mutex::new(AudioRenderState::default()),
             stream_guard: Mutex::new(None),
             position_consumer: Mutex::new(None),
             plugin_registry: RwLock::new(PluginRegistry::new_with_defaults()),
-            mixer_event_sink: Mutex::new(None),
+            pending_feedback: Mutex::new(Vec::new()),
         }
     }
 }
@@ -93,19 +73,24 @@ static CONTEXT: Lazy<DawContext> = Lazy::new(DawContext::new);
 /// let app = ctx().app_state.read();
 /// ```
 #[inline]
-pub fn ctx() -> &'static DawContext<'static> {
+pub fn ctx() -> &'static DawContext {
     &CONTEXT
 }
 
 pub mod utils {
+    use std::sync::Arc;
+
     use karbeat_plugin_api::traits::AudioPlugin;
 
     use crate::{
-        audio::render_state::AudioRenderState, commands::AudioCommand, context::ctx,
+        audio::render_state::{AudioAutomationLane, AudioGraphState},
+        commands::AudioCommand,
+        context::ctx,
         lock::get_app_read,
+        shared::id::*,
     };
 
-    /// Helper function to send AudioCommand to context's command sender
+    /// Helper function to send AudioCommand to context's command sender.
     pub fn send_audio_command(command: AudioCommand) {
         if let Some(sender) = ctx().command_sender.lock().as_mut() {
             let _ = sender.push(command);
@@ -142,25 +127,48 @@ pub mod utils {
         Some(plugin)
     }
 
-    /// Broadcast changes in ApplicationState to AudioRenderState (things that
-    /// is used by the Audio Thread)
-    pub fn broadcast_state_change() {
-        // if read failed, we do nothing
+    // ======================================
+    // Granular graph-state broadcast helpers
+    // ======================================
+
+    /// Push an UpdateTrackGraph command to the audio thread from the current AppState.
+    /// Call this whenever tracks, clips, patterns, or max_sample_index change.
+    pub fn broadcast_track_graph() {
         let app = get_app_read();
-        let render_state = AudioRenderState::from(&*app);
+        let mut tracks_vec: Vec<Arc<crate::core::project::track::AudioTrack>> =
+            app.tracks.values().cloned().collect();
+        tracks_vec.sort_by_key(|t| t.id);
 
-        drop(app);
-
-        publish_to_audio_thread(render_state);
+        send_audio_command(AudioCommand::UpdateTrackGraph {
+            tracks: Arc::from(tracks_vec),
+            patterns: app.pattern_pool.clone(),
+            max_sample_index: app.max_sample_index,
+        });
     }
 
-    /// Helper to push state to TripleBuffer
-    fn publish_to_audio_thread(state: AudioRenderState) {
-        if let Some(producer) = ctx().render_state_producer.lock().as_mut() {
-            {
-                let mut input = producer.input_buffer_publisher();
-                *input = state;
-            }
-        }
+    /// Push a ReplaceFullGraph command built from the current AppState.
+    /// Only used for undo/redo and full project loads.
+    pub fn broadcast_full_graph() {
+        let app = get_app_read();
+        let graph = AudioGraphState::from(&*app);
+        drop(app);
+        send_audio_command(AudioCommand::ReplaceFullGraph { graph });
+    }
+
+    /// Push an UpdateAutomationLane command for the given automation ID.
+    pub fn broadcast_automation_lane(id: AutomationId) {
+        let app = get_app_read();
+        let Some(lane_arc) = app.automation_pool.get(&id) else {
+            return;
+        };
+        let lane = AudioAutomationLane {
+            points: lane_arc.points.clone(),
+            enabled: lane_arc.enabled,
+            min: lane_arc.min,
+            max: lane_arc.max,
+            default_value: lane_arc.default_value,
+        };
+        drop(app);
+        send_audio_command(AudioCommand::UpdateAutomationLane { id, lane });
     }
 }

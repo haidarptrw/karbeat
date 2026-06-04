@@ -55,6 +55,13 @@ Thank you for your interest in Karbeat! Here are a few things to keep in mind:
 
 ---
 
+## Licensing
+
+This project uses a split-licensing model to support both open-source collaboration and proprietary plugin development:
+- **Framework & API Crates (`karbeat-plugin-api`, `karbeat-plugin-types`, `karbeat-macros`, `karbeat-utils`, `karbeat-host`)**: Licensed under **Apache-2.0 OR MIT**. You can freely use these to build closed-source or proprietary audio plugins.
+- **DSP Library (`karbeat-dsp`)**: Licensed under **GPLv3**. If you decided to use this in your audio plugin implementation, you should also open-source your plugin
+- **Core Application (`karbeat-core`, `karbeat-flutter-ffi`, Flutter UI) & First-Party Plugins**: Licensed under **GPLv3 with a Linking Exception**. This allows you to dynamically link and run closed-source, proprietary plugins inside the Digidaw DAW engine.
+
 ## Regarding the Future of the Project
 
 We decided to rename the project from Karbeat to DigiDAW. Originally, DigiDAW was going to be the name of the desktop version of the DAW, which would support VST, CLAP, and AU plugins. However, we decided to focus only on the mobile application for now. We are also planning to add an audio plugin interface that supports third-party plugins built as dynamic libraries on both Android and iOS.

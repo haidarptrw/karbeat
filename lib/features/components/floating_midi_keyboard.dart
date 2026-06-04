@@ -15,13 +15,27 @@ class FloatingMidiKeyboard extends ConsumerStatefulWidget {
       _FloatingMidiKeyboardState();
 }
 
+/// State for Floating midi keyboard's properties
+class FloatingMidiKeyboardFieldState {
+  int? selectedGeneratorId;
+
+  int baseKey;
+  int keyRange;
+  bool showed  = false;
+
+  FloatingMidiKeyboardFieldState({
+    this.selectedGeneratorId,
+    int baseKey = 48,
+    int keyRange = 15,
+    required this.showed,
+  }) : baseKey = baseKey.clamp(21, 120),
+       keyRange = keyRange.clamp(12, 24);
+}
+
 class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   double _x = 100;
   double _y = 100;
 
-  int _baseKey = 48; // C3
-  int _keyRange = 15; // 15 semitones
-  int? _selectedGeneratorId;
   final Set<int> _activeNotes = {};
 
   String _getGeneratorName(UiGeneratorInstance instance) {
@@ -31,20 +45,26 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     );
   }
 
+  // Safe resolver that doesn't mutate state during build
+  int? _resolveActiveGeneratorId(GlobalAppState state) {
+    int? genId = state.midiKeyboardState.selectedGeneratorId;
+    if (genId != null && !state.generators.containsKey(genId)) {
+      genId = null;
+    }
+    if (genId == null && state.generators.isNotEmpty) {
+      genId = state.generators.keys.first;
+    }
+    return genId;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final generators = ref.watch(
-      globalStateProvider.select((s) => s.generators),
-    );
 
-    // Ensure selected generator is still valid, else pick first available
-    if (_selectedGeneratorId != null &&
-        !generators.containsKey(_selectedGeneratorId)) {
-      _selectedGeneratorId = null;
-    }
-    if (_selectedGeneratorId == null && generators.isNotEmpty) {
-      _selectedGeneratorId = generators.keys.first;
-    }
+    final state = ref.watch(globalStateProvider);
+    final kState = state.midiKeyboardState;
+    final generators = state.generators;
+
+    final activeGeneratorId = _resolveActiveGeneratorId(state);
 
     return Positioned(
       left: _x,
@@ -55,17 +75,17 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
           if (event is KeyDownEvent) {
             final baseNote = keyMap[event.physicalKey];
             if (baseNote != null) {
-              final note = baseNote + (_baseKey - 48);
+              final note = baseNote + (kState.baseKey - 48);
               if (!_activeNotes.contains(note)) {
-                _handleNoteOn(note);
+                _handleNoteOn(note, activeGeneratorId);
                 return KeyEventResult.handled;
               }
             }
           } else if (event is KeyUpEvent) {
             final baseNote = keyMap[event.physicalKey];
             if (baseNote != null) {
-              final note = baseNote + (_baseKey - 48);
-              _handleNoteOff(note);
+              final note = baseNote + (kState.baseKey - 48);
+              _handleNoteOff(note, activeGeneratorId);
               return KeyEventResult.handled;
             }
           }
@@ -155,31 +175,23 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                     children: [
                       _buildControlKnob(
                         "BASE KEY",
-                        numToMidiKey(_baseKey),
+                        numToMidiKey(kState.baseKey),
                         () {
-                          setState(() {
-                            _baseKey = (_baseKey - 1).clamp(0, 127 - _keyRange);
-                          });
+                          state.setMidiKeyboardBaseKey(kState.baseKey - 1);
                         },
                         () {
-                          setState(() {
-                            _baseKey = (_baseKey + 1).clamp(0, 127 - _keyRange);
-                          });
+                          state.setMidiKeyboardBaseKey(kState.baseKey + 1);
                         },
                       ),
                       const SizedBox(width: 20),
                       _buildControlKnob(
                         "RANGE",
-                        "+$_keyRange",
+                        "+${kState.keyRange}",
                         () {
-                          setState(() {
-                            _keyRange = (_keyRange - 1).clamp(1, 19);
-                          });
+                          state.setMidiKeyboardRange(kState.keyRange - 1);
                         },
                         () {
-                          setState(() {
-                            _keyRange = (_keyRange + 1).clamp(1, 19);
-                          });
+                          state.setMidiKeyboardRange(kState.keyRange + 1);
                         },
                       ),
                       const Spacer(),
@@ -193,7 +205,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<int>(
-                            value: _selectedGeneratorId,
+                            value: activeGeneratorId,
                             hint: const Text(
                               "Select Synth",
                               style: TextStyle(
@@ -212,9 +224,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                               fontFamily: 'monospace',
                             ),
                             onChanged: (val) {
-                              setState(() {
-                                _selectedGeneratorId = val;
-                              });
+                              state.setMidiKeyboardGenerator(val);
                             },
                             items: generators.entries.map((e) {
                               return DropdownMenuItem(
@@ -233,11 +243,11 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                 SizedBox(
                   height: 120,
                   child: _CustomVirtualKeyboard(
-                    startNote: _baseKey,
-                    totalKeys: _keyRange,
+                    startNote: kState.baseKey,
+                    totalKeys: kState.keyRange,
                     activeNotes: _activeNotes,
-                    onNoteOn: _handleNoteOn,
-                    onNoteOff: _handleNoteOff,
+                    onNoteOn: (note) => _handleNoteOn(note, activeGeneratorId),
+                    onNoteOff: (note) => _handleNoteOff(note, activeGeneratorId),
                   ),
                 ),
               ],
@@ -304,12 +314,12 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     );
   }
 
-  void _handleNoteOn(int note) async {
+  void _handleNoteOn(int note, int? generatorId) async {
     setState(() => _activeNotes.add(note));
-    if (_selectedGeneratorId != null) {
+    if (generatorId != null) {
       try {
         await audio_api.playPreviewNoteGenerator(
-          generatorId: _selectedGeneratorId!,
+          generatorId: generatorId,
           noteKey: note,
           velocity: 100,
           isOn: true,
@@ -320,12 +330,12 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     }
   }
 
-  void _handleNoteOff(int note) async {
+  void _handleNoteOff(int note, int? generatorId) async {
     setState(() => _activeNotes.remove(note));
-    if (_selectedGeneratorId != null) {
+    if (generatorId != null) {
       try {
         await audio_api.playPreviewNoteGenerator(
-          generatorId: _selectedGeneratorId!,
+          generatorId: generatorId,
           noteKey: note,
           velocity: 100,
           isOn: false,

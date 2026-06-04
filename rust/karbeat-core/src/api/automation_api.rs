@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
 use crate::{
-    context::utils::broadcast_state_change,
-    core::project::automation::{AutomationLane, AutomationPoint, AutomationTarget},
+    commands::AudioCommand,
+    context::utils::{broadcast_automation_lane, send_audio_command},
+    core::project::{
+        automation::{AutomationLane, AutomationPoint, AutomationTarget},
+        ModulationLink, ModulationSource,
+    },
     lock::{get_app_read, get_app_write},
-    shared::{AutomationId, BusId, TrackId},
+    shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
 
 /// Get all automations lane for all types
@@ -29,12 +33,32 @@ pub fn add_automation_lane_for_track(
     max: f32,
     default_value: f32,
 ) -> anyhow::Result<Arc<AutomationLane>> {
-    let lane = {
+    let (lane, _link_id) = {
         let mut app = get_app_write();
-        app.add_automation_lane_for_track(&track_id, target, label, min, max, default_value)?
+        app.add_automation_lane_for_track(track_id, target, label, min, max, default_value)?
     };
 
-    broadcast_state_change();
+    // Broadcast the new lane to the audio thread by its AutomationId
+    broadcast_automation_lane(lane.id);
+
+    // TODO: add history
+
+    Ok(lane)
+}
+
+pub fn add_automation_lane(
+    target: AutomationTarget,
+    label: impl Into<String>,
+    min: f32,
+    max: f32,
+    default_value: f32,
+) -> anyhow::Result<Arc<AutomationLane>> {
+    let (lane, _link_id) = {
+        let mut app = get_app_write();
+        app.add_automation_lane(target, label, min, max, default_value)?
+    };
+
+    broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
@@ -44,28 +68,32 @@ pub fn add_automation_lane_for_track(
 pub fn add_automation_lane_for_bus(
     bus_id: BusId,
     target: AutomationTarget,
+    label: impl Into<String>,
+    min: f32,
+    max: f32,
+    default_value: f32,
 ) -> anyhow::Result<Arc<AutomationLane>> {
-    let lane = {
+    let (lane, _link_id) = {
         let mut app = get_app_write();
-        app.add_new_automation_track_from_bus(bus_id, target)?
+        app.add_automation_lane_for_bus(bus_id, target, label, min, max, default_value)?
     };
 
-    broadcast_state_change();
+    broadcast_automation_lane(lane.id);
 
     // TODO: add history
 
     Ok(lane)
 }
 
-pub fn remove_automation_lane(automation_id: AutomationId) -> anyhow::Result<()> {
-    {
-        let mut app = get_app_write();
-        app.remove_automation_lane(automation_id)?;
-    }
-
-    broadcast_state_change();
-    Ok(())
-}
+// pub fn remove_automation_lane(automation_id: AutomationId) -> anyhow::Result<()> {
+//     {
+//         let mut app = get_app_write();
+//         app.remove_automation_lane(automation_id)?;
+//     }
+//
+//     send_audio_command(AudioCommand::RemoveAutomationLane { id: automation_id });
+//     Ok(())
+// }
 
 pub fn add_new_automation_point(
     automation_id: AutomationId,
@@ -75,11 +103,11 @@ pub fn add_new_automation_point(
     let auto_point = {
         let mut app = get_app_write();
         let point = AutomationPoint::new(time_ticks, value);
-        app.add_automation_point(automation_id, point.clone())?;
+        app.add_automation_point(automation_id, time_ticks, value)?;
         point
     };
 
-    broadcast_state_change();
+    broadcast_automation_lane(automation_id);
 
     // TODO: Add history
     Ok(auto_point)
@@ -90,7 +118,7 @@ pub fn remove_automation_point(automation_id: AutomationId, index: usize) -> any
         let mut app = get_app_write();
         app.remove_automation_point(automation_id, index)?;
     }
-    broadcast_state_change();
+    broadcast_automation_lane(automation_id);
     Ok(())
 }
 
@@ -99,15 +127,106 @@ pub fn update_automation_point(
     index: usize,
     time_ticks: u32,
     value: f32,
+    tension: f32,
 ) -> anyhow::Result<usize> {
     let new_index = {
         let mut app = get_app_write();
 
         let (_, new_index) =
-            app.update_automation_point(automation_id, index, time_ticks, value)?;
+            app.update_automation_point(automation_id, index, time_ticks, value, tension)?;
         new_index
     };
 
-    broadcast_state_change();
-    Ok(new_index) // FIXME: update the app.update_autoation_point to return new index
+    broadcast_automation_lane(automation_id);
+    Ok(new_index)
+}
+
+pub fn get_automation_lanes_for_track(
+    track_id: TrackId,
+) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
+    let app = get_app_read();
+    app.get_automation_lanes_for_track(track_id)
+}
+
+pub fn get_automation_lanes_for_bus(
+    bus_id: BusId,
+) -> Vec<(ModulationLinkId, AutomationId, Arc<AutomationLane>)> {
+    let app = get_app_read();
+    app.get_automation_lanes_for_bus(bus_id)
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Modulation API
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Get all modulations in the project
+pub fn get_all_linked_modulation_params<Id, T, F>(f: F) -> std::collections::HashMap<Id, T>
+where
+    Id: std::hash::Hash + std::cmp::Eq,
+    F: Fn(&ModulationLinkId, &crate::core::project::ModulationLinkForOrderedLaneView) -> (Id, T),
+{
+    let app = get_app_read();
+    app.modulation_links
+        .iter()
+        .map(|(id, modulation)| f(id, modulation))
+        .collect()
+}
+
+/// Add generic modulation source
+pub fn add_modulation_source(source: ModulationSource) -> ModulationId {
+    let id = {
+        let mut app = get_app_write();
+        app.add_modulation_source(source.clone())
+    };
+
+    // AddModulationSource is already a granular ring-buffer command
+    send_audio_command(AudioCommand::AddModulationSource { id, source });
+    id
+}
+
+/// Remove the modulation source. This function also cascade delete all link
+/// with this source
+pub fn remove_modulation_source(mod_id: ModulationId) {
+    {
+        let mut app = get_app_write();
+        let _ = app.remove_modulation_source(mod_id);
+    }
+    send_audio_command(AudioCommand::RemoveModulationSource(mod_id));
+}
+
+pub fn remove_modulation_link(mod_link_id: ModulationLinkId) {
+    {
+        let mut app = get_app_write();
+        let _ = app.remove_modulation_link(mod_link_id);
+    }
+
+    send_audio_command(AudioCommand::RemoveModulationLink(mod_link_id));
+}
+
+/// Link the target param to a modulation source
+pub fn link_this_param_to_controller(
+    source_id: ModulationId,
+    target: AutomationTarget,
+    depth: f32,
+    base_value: f32,
+) -> anyhow::Result<ModulationLinkId> {
+    let (id, link) = {
+        let mut app = get_app_write();
+        let id = app.link_modulation(source_id, target, depth, base_value)?;
+        let link = app
+            .modulation_links
+            .get(&id)
+            .map(|l| ModulationLink {
+                id,
+                source_id: l.prop.source_id,
+                target: l.prop.target.clone(),
+                depth: l.prop.depth,
+                base_value: l.prop.base_value,
+            })
+            .ok_or_else(|| anyhow::anyhow!("Link not found after insertion"))?;
+        (id, link)
+    };
+
+    send_audio_command(AudioCommand::AddModulationLink { id, link });
+    Ok(id)
 }

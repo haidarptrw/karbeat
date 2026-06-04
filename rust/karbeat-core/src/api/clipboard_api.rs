@@ -1,5 +1,5 @@
 use crate::{
-    context::utils::broadcast_state_change,
+    context::utils::broadcast_track_graph,
     core::{
         history::ProjectAction,
         project::{clip::ClipTimeUnit, Clip, ClipboardContent, Note},
@@ -65,7 +65,7 @@ where
         history.push(ProjectAction::Batch(actions));
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(inserted_notes.iter().map(mapper).collect())
 }
 
@@ -98,7 +98,7 @@ pub fn cut_notes(pattern_id: PatternId, note_ids: Vec<NoteId>) -> anyhow::Result
     }
 
     // 3. Notify UI
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(())
 }
 
@@ -144,7 +144,7 @@ pub fn cut_clips(source_track_id: TrackId, clip_ids: Vec<ClipId>) {
         history.push(ProjectAction::Batch(actions));
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
 }
 
 pub fn paste_clips(
@@ -177,6 +177,6 @@ pub fn paste_clips(
         history.push(ProjectAction::Batch(actions));
     }
 
-    broadcast_state_change();
+    broadcast_track_graph();
     Ok(pasted_clips)
 }
